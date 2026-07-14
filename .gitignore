@@ -29,3 +29,6 @@ dist-ssr/
 # --- Docker ---
 # Postgres data lives in a named volume, not the tree, but ignore any local dumps
 *.dump
+
+# --- Alembic ---
+# Keep migration scripts, but they live under alembic/versions and ARE committed.
