@@ -1,5 +1,6 @@
 // App shell: sticky header with brand + primary nav, and a content container.
 import { NavLink, Outlet } from "react-router-dom";
+import { SearchBox } from "./SearchBox";
 
 const navItems = [
   { to: "/", label: "Leaderboard", end: true },
@@ -27,24 +28,27 @@ export function Layout() {
       <header className="sticky top-0 z-10 border-b border-navy-800 bg-navy-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <BrandMark />
-          <nav className="flex items-center gap-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                    isActive
-                      ? "bg-navy-800 text-accent"
-                      : "text-slate-300 hover:bg-navy-850 hover:text-white"
-                  }`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+          <div className="flex items-center gap-3">
+            <nav className="flex items-center gap-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    `rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      isActive
+                        ? "bg-navy-800 text-accent"
+                        : "text-slate-300 hover:bg-navy-850 hover:text-white"
+                    }`
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+            <SearchBox />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6">

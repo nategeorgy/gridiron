@@ -386,6 +386,7 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] Player leaderboard page built
 - [x] Player profile page built
 - [x] Team leaderboard page built
+- [x] Basic player search (header)
 - [ ] Deployed to Vercel (frontend) + Render/Railway (backend)
 
 ---

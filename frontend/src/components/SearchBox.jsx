@@ -1,0 +1,83 @@
+// Header search: type a name, pick a player, jump to their profile.
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useDebounce } from "../hooks/useDebounce";
+import { usePlayerSearch } from "../hooks/usePlayerSearch";
+
+export function SearchBox() {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const navigate = useNavigate();
+
+  const debounced = useDebounce(query, 250);
+  const { data, isFetching } = usePlayerSearch(debounced);
+  const results = data?.data ?? [];
+
+  // Close the dropdown when clicking outside the search box.
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectPlayer = (playerId) => {
+    navigate(`/players/${playerId}`);
+    setQuery("");
+    setOpen(false);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") setOpen(false);
+    if (event.key === "Enter" && results.length > 0) selectPlayer(results[0].player_id);
+  };
+
+  const showDropdown = open && debounced.trim().length >= 2;
+
+  return (
+    <div ref={containerRef} className="relative w-44 sm:w-64">
+      <input
+        type="text"
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        placeholder="Search players…"
+        className="w-full rounded-md border border-navy-700 bg-navy-850 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-accent focus:ring-1 focus:ring-accent"
+      />
+
+      {showDropdown && (
+        <div className="absolute right-0 z-20 mt-1 w-full overflow-hidden rounded-md border border-navy-700 bg-navy-850 shadow-xl">
+          {results.length === 0 ? (
+            <div className="px-3 py-2.5 text-sm text-slate-500">
+              {isFetching ? "Searching…" : "No players found"}
+            </div>
+          ) : (
+            results.map((player) => (
+              <button
+                key={player.player_id}
+                onClick={() => selectPlayer(player.player_id)}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-navy-800"
+              >
+                <span className="truncate font-medium text-slate-100">{player.name}</span>
+                <span className="flex shrink-0 items-center gap-1.5 text-xs text-slate-400">
+                  <span className="rounded bg-navy-700 px-1.5 py-0.5 font-semibold text-accent">
+                    {player.position}
+                  </span>
+                  <span className="stat-num">{player.team_abbreviation ?? "FA"}</span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
