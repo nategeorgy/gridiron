@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-navy-950 text-slate-100 font-sans antialiased;
+  }
+
+  /* Tabular numbers keep stat columns aligned. */
+  .stat-num {
+    @apply font-mono tabular-nums;
+  }
+}
+
+/* Thin, dark scrollbars to match the theme. */
+::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: theme("colors.navy.900");
+}
+::-webkit-scrollbar-thumb {
+  background: theme("colors.navy.600");
+  border-radius: 9999px;
+}

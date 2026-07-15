@@ -1,0 +1,78 @@
+// Shared UI constants: seasons, positions, metric definitions, and the
+// position-aware column sets shown in the leaderboard.
+
+export const SEASONS = [2025, 2024, 2023, 2022, 2021, 2020];
+
+export const SEASON_TYPES = [
+  { value: "REG", label: "Regular Season" },
+  { value: "POST", label: "Playoffs" },
+];
+
+export const POSITIONS = [
+  { value: "", label: "All Positions" },
+  { value: "QB", label: "QB" },
+  { value: "RB", label: "RB" },
+  { value: "WR", label: "WR" },
+  { value: "TE", label: "TE" },
+];
+
+// Weeks 1-18 regular season; "" = full season aggregate.
+export const WEEKS = [
+  { value: "", label: "Full Season" },
+  ...Array.from({ length: 18 }, (_, i) => ({
+    value: String(i + 1),
+    label: `Week ${i + 1}`,
+  })),
+];
+
+// number = decimal places; "int" = integer; "pct" = fraction shown as %.
+const FORMATS = { int: "int", one: 1, two: 2, three: 3, pct: "pct" };
+
+// Every rankable/displayable metric: key -> { label, short, format }.
+export const METRICS = {
+  fantasy_points_ppr: { label: "Fantasy Points (PPR)", short: "PPR", format: FORMATS.one },
+  fantasy_ppg_ppr: { label: "Fantasy PPG (PPR)", short: "PPG", format: FORMATS.two },
+  fantasy_points_half: { label: "Fantasy Points (Half)", short: "HALF", format: FORMATS.one },
+  fantasy_points_std: { label: "Fantasy Points (Std)", short: "STD", format: FORMATS.one },
+  passing_yards: { label: "Passing Yards", short: "PASS YD", format: FORMATS.int },
+  passing_tds: { label: "Passing TDs", short: "PASS TD", format: FORMATS.int },
+  interceptions: { label: "Interceptions", short: "INT", format: FORMATS.int },
+  completions: { label: "Completions", short: "CMP", format: FORMATS.int },
+  attempts: { label: "Attempts", short: "ATT", format: FORMATS.int },
+  passer_rating: { label: "Passer Rating", short: "RATE", format: FORMATS.one },
+  cpoe: { label: "CPOE", short: "CPOE", format: FORMATS.one },
+  epa: { label: "EPA", short: "EPA", format: FORMATS.one },
+  rushing_yards: { label: "Rushing Yards", short: "RUSH YD", format: FORMATS.int },
+  rushing_tds: { label: "Rushing TDs", short: "RUSH TD", format: FORMATS.int },
+  carries: { label: "Carries", short: "CAR", format: FORMATS.int },
+  red_zone_rush_attempts: { label: "Red Zone Carries", short: "RZ CAR", format: FORMATS.int },
+  receiving_yards: { label: "Receiving Yards", short: "REC YD", format: FORMATS.int },
+  receiving_tds: { label: "Receiving TDs", short: "REC TD", format: FORMATS.int },
+  receptions: { label: "Receptions", short: "REC", format: FORMATS.int },
+  targets: { label: "Targets", short: "TGT", format: FORMATS.int },
+  target_share: { label: "Target Share", short: "TGT%", format: FORMATS.pct },
+  air_yards: { label: "Air Yards", short: "AIR YD", format: FORMATS.int },
+  adot: { label: "ADOT", short: "ADOT", format: FORMATS.one },
+  yards_after_catch: { label: "Yards After Catch", short: "YAC", format: FORMATS.int },
+  wopr: { label: "WOPR", short: "WOPR", format: FORMATS.two },
+  racr: { label: "RACR", short: "RACR", format: FORMATS.two },
+  red_zone_targets: { label: "Red Zone Targets", short: "RZ TGT", format: FORMATS.int },
+};
+
+// Metrics offered in the "sort by" dropdown, grouped for scannability.
+export const SORT_METRICS = [
+  "fantasy_points_ppr", "fantasy_ppg_ppr",
+  "passing_yards", "passing_tds", "passer_rating", "epa", "cpoe",
+  "rushing_yards", "rushing_tds", "carries", "red_zone_rush_attempts",
+  "receiving_yards", "receiving_tds", "receptions", "targets", "target_share",
+];
+
+// Columns displayed per position filter (after the fixed identity columns).
+const FANTASY_COLS = ["fantasy_points_ppr", "fantasy_ppg_ppr"];
+export const COLUMN_SETS = {
+  "": [...FANTASY_COLS, "passing_yards", "rushing_yards", "receiving_yards", "targets"],
+  QB: ["passing_yards", "passing_tds", "interceptions", "passer_rating", "cpoe", "epa", "rushing_yards", ...FANTASY_COLS],
+  RB: ["carries", "rushing_yards", "rushing_tds", "red_zone_rush_attempts", "targets", "receiving_yards", ...FANTASY_COLS],
+  WR: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", "adot", ...FANTASY_COLS],
+  TE: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", ...FANTASY_COLS],
+};
