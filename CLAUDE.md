@@ -381,7 +381,7 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] Project scaffold created
 - [x] Database schema created and migrated
 - [x] Data pipeline built and run (players, games, stats ingested — 2020–2025)
-- [ ] FastAPI backend running with core endpoints
+- [x] FastAPI backend running with core endpoints
 - [ ] React frontend scaffold running
 - [ ] Player leaderboard page built
 - [ ] Player profile page built
