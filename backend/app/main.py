@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.routers import health, players, stats, teams
 
 API_V1_PREFIX = "/api/v1"
@@ -13,10 +14,11 @@ app = FastAPI(
     description="Advanced NFL analytics API.",
 )
 
-# The React dev server (Vite) runs on localhost:5173 during development.
+# Allowed origins come from settings: localhost in dev, the deployed frontend
+# URL(s) in production (set via the CORS_ORIGINS environment variable).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

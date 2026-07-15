@@ -1,0 +1,23 @@
+# Render Blueprint for the GridironIQ backend API.
+# Render reads this file when you create a "Blueprint" from the repo.
+# The database is hosted separately on Supabase; its connection string and the
+# allowed CORS origin are set as (secret) environment variables in the Render
+# dashboard — they are intentionally NOT committed here.
+services:
+  - type: web
+    name: gridiron-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false          # set in dashboard — the Supabase connection string
+      - key: CORS_ORIGINS
+        sync: false          # set in dashboard — the Vercel frontend URL
