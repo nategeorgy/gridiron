@@ -384,7 +384,7 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] FastAPI backend running with core endpoints
 - [x] React frontend scaffold running
 - [x] Player leaderboard page built
-- [ ] Player profile page built
+- [x] Player profile page built
 - [ ] Team leaderboard page built
 - [ ] Deployed to Vercel (frontend) + Render/Railway (backend)
 

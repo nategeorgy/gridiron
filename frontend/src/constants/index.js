@@ -76,3 +76,36 @@ export const COLUMN_SETS = {
   WR: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", "adot", ...FANTASY_COLS],
   TE: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", ...FANTASY_COLS],
 };
+
+// Per-game columns for the profile game log (only per-game metrics — no PPG).
+export const GAMELOG_COLUMN_SETS = {
+  QB: ["completions", "attempts", "passing_yards", "passing_tds", "interceptions", "passer_rating", "rushing_yards", "fantasy_points_ppr"],
+  RB: ["carries", "rushing_yards", "rushing_tds", "red_zone_rush_attempts", "targets", "receptions", "receiving_yards", "fantasy_points_ppr"],
+  WR: ["targets", "receptions", "receiving_yards", "receiving_tds", "air_yards", "target_share", "fantasy_points_ppr"],
+  TE: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", "fantasy_points_ppr"],
+};
+
+// Headline totals shown as summary cards on the profile, per position.
+// agg: "sum" totals the column; "ppg" divides the summed column by games.
+export const SUMMARY_STATS = {
+  QB: [
+    { key: "passing_yards", agg: "sum" }, { key: "passing_tds", agg: "sum" },
+    { key: "interceptions", agg: "sum" }, { key: "rushing_yards", agg: "sum" },
+    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+  ],
+  RB: [
+    { key: "rushing_yards", agg: "sum" }, { key: "rushing_tds", agg: "sum" },
+    { key: "receptions", agg: "sum" }, { key: "receiving_yards", agg: "sum" },
+    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+  ],
+  WR: [
+    { key: "receptions", agg: "sum" }, { key: "targets", agg: "sum" },
+    { key: "receiving_yards", agg: "sum" }, { key: "receiving_tds", agg: "sum" },
+    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+  ],
+  TE: [
+    { key: "receptions", agg: "sum" }, { key: "targets", agg: "sum" },
+    { key: "receiving_yards", agg: "sum" }, { key: "receiving_tds", agg: "sum" },
+    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+  ],
+};

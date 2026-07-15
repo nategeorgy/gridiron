@@ -1,5 +1,6 @@
 // Leaderboard page: filterable, sortable player rankings.
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import { formatStat } from "../utils/format";
@@ -106,7 +107,11 @@ export function Leaderboard() {
                 <td className="stat-num px-3 py-2.5 text-right text-slate-500">
                   {offset + index + 1}
                 </td>
-                <td className="px-3 py-2.5 font-medium text-slate-100">{row.name}</td>
+                <td className="px-3 py-2.5 font-medium">
+                  <Link to={`/players/${row.player_id}`} className="text-slate-100 hover:text-accent hover:underline">
+                    {row.name}
+                  </Link>
+                </td>
                 <td className="px-3 py-2.5">
                   <span className="stat-num text-xs text-slate-400">{row.team_abbreviation ?? "—"}</span>
                   <span className="ml-2 rounded bg-navy-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
