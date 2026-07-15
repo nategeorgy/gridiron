@@ -13,7 +13,7 @@ class Team(Base):
 
     team_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str | None] = mapped_column(String(100))
-    abbreviation: Mapped[str | None] = mapped_column(String(5), index=True)
+    abbreviation: Mapped[str | None] = mapped_column(String(5), unique=True, index=True)
     conference: Mapped[str | None] = mapped_column(String(10))
     division: Mapped[str | None] = mapped_column(String(20))
 

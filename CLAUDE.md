@@ -206,7 +206,7 @@ player_stats (
 
 ## Data Scope
 
-- **Seasons:** 2015–2025 (regular season + playoffs)
+- **Seasons:** 2020–2025 (regular season + playoffs)
 - **Positions:** QB, RB, WR, TE
 - **Source:** `nfl_data_py` (wraps nflverse data)
 
@@ -371,7 +371,7 @@ npm run dev
 cd pipeline
 pip install -r requirements.txt
 python ingest_players.py
-python ingest_stats.py --seasons 2015 2016 2017 2018 2019 2020 2021 2022 2023 2024 2025
+python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 ```
 
 ---
