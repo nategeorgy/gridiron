@@ -77,6 +77,25 @@ export const COLUMN_SETS = {
   TE: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", ...FANTASY_COLS],
 };
 
+// Team leaderboard metric definitions (offensive production).
+export const TEAM_METRICS = {
+  total_yards: { label: "Total Yards", short: "TOT YD", format: "int" },
+  yards_per_game: { label: "Yards / Game", short: "YPG", format: 1 },
+  passing_yards: { label: "Passing Yards", short: "PASS YD", format: "int" },
+  passing_tds: { label: "Passing TDs", short: "PASS TD", format: "int" },
+  rushing_yards: { label: "Rushing Yards", short: "RUSH YD", format: "int" },
+  rushing_tds: { label: "Rushing TDs", short: "RUSH TD", format: "int" },
+  total_tds: { label: "Total TDs", short: "TOT TD", format: "int" },
+  interceptions: { label: "Interceptions", short: "INT", format: "int" },
+  epa: { label: "EPA", short: "EPA", format: 1 },
+};
+
+// Columns shown in the team leaderboard (all are also sortable).
+export const TEAM_COLUMNS = [
+  "total_yards", "yards_per_game", "passing_yards", "passing_tds",
+  "rushing_yards", "rushing_tds", "total_tds", "interceptions", "epa",
+];
+
 // Per-game columns for the profile game log (only per-game metrics — no PPG).
 export const GAMELOG_COLUMN_SETS = {
   QB: ["completions", "attempts", "passing_yards", "passing_tds", "interceptions", "passer_rating", "rushing_yards", "fantasy_points_ppr"],
