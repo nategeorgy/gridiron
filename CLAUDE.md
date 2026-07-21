@@ -2,14 +2,19 @@
 
 ## Project Overview
 
-GridironIQ is an advanced NFL analytics web application — the "Baseball Savant for the NFL." or the "databallr for the NFL."
-The goal is a clean, fast, beautifully designed public-facing stats platform where football
-fans and fantasy managers can explore advanced metrics that are otherwise scattered across
-fragmented, poorly designed sites.
+GridironIQ is a **fantasy-first** NFL analytics web application. The goal is a clean, fast,
+beautifully designed public-facing platform where fantasy managers come first: every stat is
+framed around what it means for fantasy value, and the app answers fantasy questions (who to
+start, who's earning opportunity, who's due to regress) as its primary job.
 
-The product philosophy: free advanced stats with fantasy-relevant framing baked in from day
-one. Think ESPN meets nflfastR — accessible enough for a casual fantasy player, deep enough
-for an analytics nerd.
+Advanced stats and general NFL data are still first-class — the depth is a core differentiator —
+but they exist in service of the fantasy lens rather than alongside it. Think ESPN meets
+nflfastR, led by fantasy: accessible enough for a casual fantasy player, deep enough for an
+analytics nerd.
+
+The product philosophy: free, fantasy-first advanced stats with fantasy-relevant framing baked
+in from day one. Most NFL stats sites treat fantasy as an afterthought; we make it the default
+view and the reason to come back.
 
 **Long-term vision:** A platform as significant as Sleeper or Databallr, eventually
 monetized through premium fantasy tools (league import, trade analyzer, waiver ranker),
@@ -248,8 +253,12 @@ player_stats (
 
 ## MVP Feature Scope
 
-### In Scope — Phase 1 (Build This First)
-1. Data ingestion pipeline (nfl_data_py → PostgreSQL)
+> **The detailed, prioritized plan lives in [`docs/ROADMAP.md`](docs/ROADMAP.md)** —
+> vision, differentiators, architecture spines, and per-milestone work. This section
+> is the summary; keep the two in sync.
+
+### Phase 1 — Shipped (the base stats platform)
+1. Data ingestion pipeline (nflreadpy → PostgreSQL)
 2. FastAPI endpoints for player stats, team stats, filtering
 3. React frontend scaffold with routing and layout
 4. Player stats leaderboard (filterable by position/season/week/metric)
@@ -257,17 +266,34 @@ player_stats (
 6. Team leaderboard page
 7. Basic search (find a player by name)
 
+### Near-term — Fantasy-First Build (current focus)
+Build order per ROADMAP. **Build the foundation before the features on top of it.**
+- **M1 — Scoring & Metric Foundation** (NEXT): scoring-aware fantasy engine (compute
+  fantasy points from a per-request scoring config, not stored columns) + a single
+  metric registry. Ships custom league scoring on the leaderboard.
+- **M2 — Expanded Metrics & Expected Points**: RB market share, rush attempts inside
+  10/5/2, expected fantasy points (`load_ff_opportunity`).
+- **M3 — Fantasy Intelligence**: VORP, Fantasy Opportunity Rating, Positive-Regression
+  Index, Sell-High Index.
+- **M4 — Exploration & Viz**: scatter builder, comparison builder (≤5), enhanced player
+  pages with charts, export.
+
+### Later phases (see ROADMAP for detail)
+- **M5 — Accounts & saved state** (deferred deliberately; use URL/`localStorage` state
+  first, then Supabase Auth to persist it).
+- **M6 — New data domains**: depth charts, strength of schedule, Vegas board, consensus
+  projections (`load_ff_rankings`).
+- **M7 — Games & growth**: college/name trivia, EPA draft, mock draft simulator.
+- **Dream**: trade calculator (on VORP), GridironIQ + user-generated projection models,
+  survivor pool, dynasty value + league import.
+
 ### Out of Scope — Do Not Build Yet
-- User authentication / accounts
-- Games
-- Fantasy league importing (Sleeper, ESPN, Yahoo APIs)
-- Trade analyzer
-- Waiver wire ranker
 - Paywall / subscription system
-- Mobile app
-- DFS optimizer
+- Native mobile app
 - Email alerts
 - Admin dashboard
+- Route trees drawn from tracking data (no free data source — see ROADMAP "Cut ideas")
+- Homemade projection models right now (consensus-first; own model is a later Dream item)
 
 ---
 
@@ -295,11 +321,13 @@ GET /api/v1/games                            ← game schedule/results
 
 ## Design Principles
 
+- **Fantasy-first framing** — this is the identity, not a feature. Surface what every metric
+  means for fantasy value; default to fantasy-relevant sorts, groupings, and defaults (e.g.
+  fantasy points/PPG as the default leaderboard metric, fantasy metrics grouped ahead of raw
+  ones). Raw and advanced numbers are always available, but the fantasy lens leads.
 - **Dark mode first** — dark background, high contrast data
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
-- **Fantasy-relevant framing** — surface what metrics mean for fantasy value,
-  not just raw numbers
 - **Mobile responsive** — works on phone, optimized for desktop
 
 ### Color Palette

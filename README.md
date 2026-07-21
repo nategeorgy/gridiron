@@ -1,7 +1,7 @@
 # GridironIQ
 
-Advanced NFL analytics — the "Baseball Savant for the NFL." Free advanced stats
-with fantasy-relevant framing, in a clean, fast, dark-mode interface.
+Fantasy-first NFL analytics. Free advanced stats framed around fantasy value —
+every metric answers a fantasy question — in a clean, fast, dark-mode interface.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full product spec, schema, and scope.
 
