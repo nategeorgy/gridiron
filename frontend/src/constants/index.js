@@ -29,7 +29,11 @@ export const WEEKS = [
 const FORMATS = { int: "int", one: 1, two: 2, three: 3, pct: "pct" };
 
 // Every rankable/displayable metric: key -> { label, short, format }.
+// This is a seed for the leaderboard; the backend /metrics registry is the
+// authoritative source at runtime (see useMetrics).
 export const METRICS = {
+  fantasy_points: { label: "Fantasy Points", short: "FPTS", format: FORMATS.one },
+  fantasy_ppg: { label: "Fantasy PPG", short: "FPPG", format: FORMATS.two },
   fantasy_points_ppr: { label: "Fantasy Points (PPR)", short: "PPR", format: FORMATS.one },
   fantasy_ppg_ppr: { label: "Fantasy PPG (PPR)", short: "PPG", format: FORMATS.two },
   fantasy_points_half: { label: "Fantasy Points (Half)", short: "HALF", format: FORMATS.one },
@@ -61,14 +65,15 @@ export const METRICS = {
 
 // Metrics offered in the "sort by" dropdown, grouped for scannability.
 export const SORT_METRICS = [
-  "fantasy_points_ppr", "fantasy_ppg_ppr",
+  "fantasy_points", "fantasy_ppg",
   "passing_yards", "passing_tds", "passer_rating", "epa", "cpoe",
   "rushing_yards", "rushing_tds", "carries", "red_zone_rush_attempts",
   "receiving_yards", "receiving_tds", "receptions", "targets", "target_share",
 ];
 
 // Columns displayed per position filter (after the fixed identity columns).
-const FANTASY_COLS = ["fantasy_points_ppr", "fantasy_ppg_ppr"];
+// Fantasy columns are scoring-aware (recomputed from the active league scoring).
+const FANTASY_COLS = ["fantasy_points", "fantasy_ppg"];
 export const COLUMN_SETS = {
   "": [...FANTASY_COLS, "passing_yards", "rushing_yards", "receiving_yards", "targets"],
   QB: ["passing_yards", "passing_tds", "interceptions", "passer_rating", "cpoe", "epa", "rushing_yards", ...FANTASY_COLS],

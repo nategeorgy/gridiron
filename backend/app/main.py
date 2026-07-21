@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import health, players, stats, teams
+from app.routers import health, metrics, players, stats, teams
 
 API_V1_PREFIX = "/api/v1"
 
@@ -28,6 +28,7 @@ app.include_router(health.router, prefix=API_V1_PREFIX)
 app.include_router(players.router, prefix=API_V1_PREFIX)
 app.include_router(teams.router, prefix=API_V1_PREFIX)
 app.include_router(stats.router, prefix=API_V1_PREFIX)
+app.include_router(metrics.router, prefix=API_V1_PREFIX)
 
 
 @app.get("/")
