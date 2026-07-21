@@ -14,38 +14,29 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.metrics import REGISTRY, ids_with_aggregation
 from app.models import Player, PlayerStats, Team
+from app.scoring import (
+    POINTS_COMPONENTS,
+    ScoringConfig,
+    compute_points,
+    parse_scoring,
+    points_expr,
+)
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
-# Counting stats — summed when aggregating a season.
-SUM_METRICS = [
-    "passing_yards", "passing_tds", "interceptions", "completions", "attempts",
-    "rushing_yards", "rushing_tds", "carries", "receiving_yards", "receiving_tds",
-    "receptions", "targets", "fumbles", "fumbles_lost", "air_yards",
-    "yards_after_catch", "epa", "rushing_epa", "receiving_epa",
-    "red_zone_rush_attempts", "red_zone_targets", "routes_run", "snap_count",
-    "slot_snaps", "unrealized_air_yards",
-    "fantasy_points_ppr", "fantasy_points_half", "fantasy_points_std",
-]
+# Aggregation behaviour is derived from the metric registry (single source of truth).
+SUM_METRICS = ids_with_aggregation("sum")  # counting stats, summed over a season
+AVG_METRICS = ids_with_aggregation("avg")  # rate / share stats, averaged over a season
+# Season-derived per-game metrics: id -> the column it divides by games.
+PPG_METRICS = {m.id: m.base for m in REGISTRY if m.aggregation == "derived"}
+# Scoring-aware fantasy metrics — computed per-request from a ScoringConfig.
+SCORING_METRICS = set(ids_with_aggregation("scoring"))
 
-# Rate / share stats — averaged when aggregating a season.
-AVG_METRICS = [
-    "cpoe", "air_yards_share", "target_share", "racr", "wopr", "snap_share",
-    "adot", "passer_rating", "red_zone_rush_share", "targets_per_route_run",
-    "route_participation", "yards_per_route_run", "yards_per_target",
-    "yards_per_reception",
-]
-
-# Season-derived per-game metrics: key -> the per-game column they aggregate.
-PPG_METRICS = {
-    "fantasy_ppg_ppr": "fantasy_points_ppr",
-    "fantasy_ppg_half": "fantasy_points_half",
-    "fantasy_ppg_std": "fantasy_points_std",
-    "routes_run_per_game": "routes_run",
-}
-
-ALLOWED_METRICS = set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS) | {"games_played"}
+ALLOWED_METRICS = (
+    set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS) | SCORING_METRICS | {"games_played"}
+)
 
 
 def _round(value: float | None, digits: int = 3) -> float | None:
@@ -54,7 +45,8 @@ def _round(value: float | None, digits: int = 3) -> float | None:
 
 def _leaderboard_season(
     db: Session, season: int, season_type: str, position: str | None,
-    metric: str, descending: bool, min_games: int, limit: int, offset: int,
+    metric: str, config: ScoringConfig, descending: bool, min_games: int,
+    limit: int, offset: int,
 ) -> tuple[list[dict], int]:
     """Aggregate a full season into one ranked row per player."""
     games = func.count(func.distinct(PlayerStats.game_id))
@@ -85,6 +77,10 @@ def _leaderboard_season(
     # Resolve the ORDER BY expression for the requested metric.
     if metric == "games_played":
         order_expr = games
+    elif metric == "fantasy_points":
+        order_expr = points_expr(config, sum_mode=True)
+    elif metric == "fantasy_ppg":
+        order_expr = points_expr(config, sum_mode=True) / func.nullif(games, 0)
     elif metric in PPG_METRICS:
         base_col = getattr(PlayerStats, PPG_METRICS[metric])
         order_expr = func.sum(base_col) / func.nullif(games, 0)
@@ -100,6 +96,10 @@ def _leaderboard_season(
     for row in rows:
         record = dict(row)
         played = record["games_played"] or 0
+        # Scoring-aware fantasy points from the raw summed components (pre-rounding).
+        points = compute_points(config, record, record.get("position"))
+        record["fantasy_points"] = _round(points)
+        record["fantasy_ppg"] = _round(points / played) if played else None
         for key, column in PPG_METRICS.items():
             total_value = record.get(column)
             record[key] = _round(total_value / played) if played and total_value is not None else None
@@ -111,7 +111,7 @@ def _leaderboard_season(
 
 def _leaderboard_week(
     db: Session, season: int, week: int, season_type: str, position: str | None,
-    metric: str, descending: bool, limit: int, offset: int,
+    metric: str, config: ScoringConfig, descending: bool, limit: int, offset: int,
 ) -> tuple[list[dict], int]:
     """Return raw per-game stat lines for a single week, ranked by metric."""
     filters = [
@@ -122,7 +122,10 @@ def _leaderboard_week(
         filters.append(Player.position == position.upper())
 
     # PPG metrics have no per-game meaning; fall back to their base column.
-    sort_column = getattr(PlayerStats, PPG_METRICS.get(metric, metric))
+    if metric in SCORING_METRICS:
+        sort_column = points_expr(config, sum_mode=False)
+    else:
+        sort_column = getattr(PlayerStats, PPG_METRICS.get(metric, metric))
     order_expr = sort_column.desc().nulls_last() if descending else sort_column.asc().nulls_last()
 
     query = (
@@ -150,6 +153,10 @@ def _leaderboard_week(
             record[key] = _round(getattr(stat_line, key))
         for key, column in PPG_METRICS.items():
             record[key] = _round(getattr(stat_line, column))
+        components = {name: getattr(stat_line, name) for name in POINTS_COMPONENTS}
+        points = _round(compute_points(config, components, position_value))
+        record["fantasy_points"] = points
+        record["fantasy_ppg"] = points  # single game: PPG == points
         results.append(record)
     return results, total
 
@@ -160,7 +167,11 @@ def leaderboard(
     week: int | None = Query(None, ge=1, le=22, description="Omit for a season aggregate"),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
     position: str | None = Query(None, description="QB, RB, WR, or TE"),
-    metric: str = Query("fantasy_points_ppr", description="Metric to rank by"),
+    metric: str = Query("fantasy_points", description="Metric to rank by"),
+    scoring: str = Query(
+        "ppr",
+        description="League scoring as preset[:overrides], e.g. 'ppr' or 'ppr:pass_td=6,te_rec=1.5'",
+    ),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     min_games: int = Query(1, ge=0, description="Season mode: minimum games played"),
     limit: int = Query(50, ge=1, le=200),
@@ -170,20 +181,24 @@ def leaderboard(
     """Filterable player leaderboard (season aggregate or single week)."""
     if metric not in ALLOWED_METRICS:
         raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}'")
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     descending = order == "desc"
     if week is None:
         data, total = _leaderboard_season(
-            db, season, season_type, position, metric, descending, min_games, limit, offset,
+            db, season, season_type, position, metric, config, descending, min_games, limit, offset,
         )
     else:
         data, total = _leaderboard_week(
-            db, season, week, season_type, position, metric, descending, limit, offset,
+            db, season, week, season_type, position, metric, config, descending, limit, offset,
         )
 
     page = (offset // limit) + 1 if limit else 1
     return {
         "data": data, "total": total, "page": page, "limit": limit, "offset": offset,
         "season": season, "week": week, "season_type": season_type,
-        "metric": metric, "order": order,
+        "metric": metric, "order": order, "scoring": config.model_dump(),
     }
