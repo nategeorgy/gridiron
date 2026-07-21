@@ -45,9 +45,13 @@ don't store as components (2-pt conversions, return TDs): those live inside the
 | Fumble lost | `fumbles_lost` | −2 |
 | 2-pt conversions, return TDs | *(not stored)* | fixed inside `fantasy_points_std` |
 
-> **Task 0 is a calibration test**: recompute `std` from components with these weights
-> and confirm it equals stored `fantasy_points_std` across the dataset. If any weight is
-> off, the test reveals it before we build on the baseline.
+> **Task 0 calibration — PASSED (2026-07-16, 36,527 rows):**
+> - Invariant `ppr − std == receptions`: **100.00%** exact (max residual 0.0000).
+> - `half == (std + ppr)/2`: **100.00%** exact.
+> - Standard weights reproduce `fantasy_points_std` exactly for **97.54%** of rows;
+>   every non-zero residual is a positive multiple of 2 or 6 (2-pt conversions ×2,
+>   return/ST TDs ×6) — i.e. components carried inside the `std` baseline, not stored
+>   separately. Baseline weights above are **locked**.
 
 ---
 

@@ -1,12 +1,14 @@
-// Leaderboard page: filterable, sortable player rankings.
+// Leaderboard page: filterable, sortable player rankings in your league scoring.
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { ScoringControl } from "../components/ScoringControl";
 import { useLeaderboard } from "../hooks/useLeaderboard";
+import { useScoring } from "../hooks/useScoring";
+import { useMetrics } from "../hooks/useMetrics";
 import { formatStat } from "../utils/format";
 import {
   COLUMN_SETS,
-  METRICS,
   POSITIONS,
   SEASONS,
   SEASON_TYPES,
@@ -17,15 +19,16 @@ import {
 const PAGE_SIZE = 50;
 
 const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
-const sortOptions = SORT_METRICS.map((key) => ({ value: key, label: METRICS[key].label }));
 
 export function Leaderboard() {
   const [season, setSeason] = useState(String(SEASONS[0]));
   const [week, setWeek] = useState("");
   const [position, setPosition] = useState("");
   const [seasonType, setSeasonType] = useState("REG");
-  const [metric, setMetric] = useState("fantasy_points_ppr");
+  const [metric, setMetric] = useState("fantasy_points");
   const [offset, setOffset] = useState(0);
+  const [scoring, setScoring] = useScoring();
+  const metrics = useMetrics();
 
   const params = useMemo(
     () => ({
@@ -34,16 +37,18 @@ export function Leaderboard() {
       season_type: seasonType,
       ...(position ? { position } : {}),
       metric,
+      scoring,
       order: "desc",
       limit: PAGE_SIZE,
       offset,
     }),
-    [season, week, position, seasonType, metric, offset],
+    [season, week, position, seasonType, metric, scoring, offset],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useLeaderboard(params);
 
   const columns = COLUMN_SETS[position] ?? COLUMN_SETS[""];
+  const sortOptions = SORT_METRICS.map((key) => ({ value: key, label: metrics[key]?.label ?? key }));
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
 
@@ -58,12 +63,19 @@ export function Leaderboard() {
     setOffset(0);
   };
 
+  // Scoring changes should also snap back to the first page.
+  const changeScoring = (spec) => {
+    setScoring(spec);
+    setOffset(0);
+  };
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Player Leaderboard</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Advanced and fantasy stats across the 2020–2025 seasons. Click a column to rank by it.
+          Fantasy and advanced stats across the 2020–2025 seasons, scored in your league
+          settings. Click a column to rank by it.
         </p>
       </div>
 
@@ -74,6 +86,8 @@ export function Leaderboard() {
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
       </div>
+
+      <ScoringControl scoring={scoring} onChange={changeScoring} />
 
       <div className="overflow-x-auto rounded-lg border border-navy-800 bg-navy-900">
         <table className="w-full min-w-[720px] text-left text-sm">
@@ -90,9 +104,9 @@ export function Leaderboard() {
                   className={`cursor-pointer whitespace-nowrap px-3 py-3 text-right transition hover:text-white ${
                     metric === key ? "text-accent" : ""
                   }`}
-                  title={METRICS[key].label}
+                  title={metrics[key]?.label ?? key}
                 >
-                  {METRICS[key].short}
+                  {metrics[key]?.short ?? key}
                   {metric === key ? " ↓" : ""}
                 </th>
               ))}
@@ -126,7 +140,7 @@ export function Leaderboard() {
                       metric === key ? "font-semibold text-accent" : "text-slate-200"
                     }`}
                   >
-                    {formatStat(row[key], METRICS[key].format)}
+                    {formatStat(row[key], metrics[key]?.format)}
                   </td>
                 ))}
               </tr>
