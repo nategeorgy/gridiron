@@ -20,6 +20,13 @@ view and the reason to come back.
 monetized through premium fantasy tools (league import, trade analyzer, waiver ranker),
 B2B data licensing, and/or DFS tooling. With fun football knowledge games. None of that is in scope yet.
 
+> **Key documents:** This file is the spec, scope, and conventions.
+> [`ARCHITECTURE.md`](ARCHITECTURE.md) is the living map of *where everything lives* —
+> every file and folder and what it controls, how the layers fit together, and a
+> "where do I change…?" cheat sheet. Read it to orient in the codebase, and **keep it
+> updated** as the project's structure changes (see the rule in "Notes for Claude Code").
+> [`docs/ROADMAP.md`](docs/ROADMAP.md) holds the vision and milestone plan.
+
 ---
 
 ## Tech Stack
@@ -425,6 +432,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 ## Notes for Claude Code
 
 - Always read this file at the start of every session before writing any code
+- **Keep [`ARCHITECTURE.md`](ARCHITECTURE.md) up to date.** It is the living map of the
+  repo (what every file/folder is and controls). Whenever a change alters the project's
+  structure — a new top-level file/folder, a new backend router/model/schema, a new
+  frontend page/component/hook/service, a new pipeline script, a new env var, or a
+  deployment change — update the relevant section of ARCHITECTURE.md in the *same*
+  change, bump its "Last updated" date, and add a line to its changelog. Follow the
+  "How this document is maintained" checklist at the bottom of that file.
 - When in doubt about scope, refer to the "Out of Scope" section — do not build ahead
 - Frontend and backend are fully decoupled — frontend talks to backend via HTTP only
 - Prefer simple, readable solutions over clever ones
