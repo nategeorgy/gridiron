@@ -20,6 +20,10 @@ const PAGE_SIZE = 50;
 
 const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
 
+// Fixed-PPR equivalents used when the backend doesn't yet support scoring-aware
+// metrics (e.g. during a deploy window). Both exist on the old and new backend.
+const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
+
 export function Leaderboard() {
   const [season, setSeason] = useState(String(SEASONS[0]));
   const [week, setWeek] = useState("");
@@ -28,7 +32,11 @@ export function Leaderboard() {
   const [metric, setMetric] = useState("fantasy_points");
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
-  const metrics = useMetrics();
+  const { metrics, supportsScoring } = useMetrics();
+
+  // Translate scoring-aware metric ids to their fixed-PPR fallback when the
+  // backend can't score them yet, so we never request a metric it would reject.
+  const toBackendMetric = (key) => (!supportsScoring && FANTASY_FALLBACK[key]) || key;
 
   const params = useMemo(
     () => ({
@@ -36,13 +44,13 @@ export function Leaderboard() {
       ...(week ? { week: Number(week) } : {}),
       season_type: seasonType,
       ...(position ? { position } : {}),
-      metric,
+      metric: toBackendMetric(metric),
       scoring,
       order: "desc",
       limit: PAGE_SIZE,
       offset,
     }),
-    [season, week, position, seasonType, metric, scoring, offset],
+    [season, week, position, seasonType, metric, scoring, offset, supportsScoring],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useLeaderboard(params);
@@ -87,7 +95,7 @@ export function Leaderboard() {
         <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
       </div>
 
-      <ScoringControl scoring={scoring} onChange={changeScoring} />
+      {supportsScoring && <ScoringControl scoring={scoring} onChange={changeScoring} />}
 
       <div className="overflow-x-auto rounded-lg border border-navy-800 bg-navy-900">
         <table className="w-full min-w-[720px] text-left text-sm">
@@ -140,7 +148,7 @@ export function Leaderboard() {
                       metric === key ? "font-semibold text-accent" : "text-slate-200"
                     }`}
                   >
-                    {formatStat(row[key], metrics[key]?.format)}
+                    {formatStat(row[toBackendMetric(key)], metrics[key]?.format)}
                   </td>
                 ))}
               </tr>
