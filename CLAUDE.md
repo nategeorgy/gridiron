@@ -275,10 +275,10 @@ player_stats (
 
 ### Near-term — Fantasy-First Build (current focus)
 Build order per ROADMAP. **Build the foundation before the features on top of it.**
-- **M1 — Scoring & Metric Foundation** (NEXT): scoring-aware fantasy engine (compute
+- **M1 — Scoring & Metric Foundation** (✅ SHIPPED): scoring-aware fantasy engine (compute
   fantasy points from a per-request scoring config, not stored columns) + a single
   metric registry. Ships custom league scoring on the leaderboard.
-- **M2 — Expanded Metrics & Expected Points**: RB market share, rush attempts inside
+- **M2 — Expanded Metrics & Expected Points** (NEXT): RB market share, rush attempts inside
   10/5/2, expected fantasy points (`load_ff_opportunity`).
 - **M3 — Fantasy Intelligence**: VORP, Fantasy Opportunity Rating, Positive-Regression
   Index, Sell-High Index.
@@ -440,6 +440,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] Command Center home page (`/`) — Bento dashboard; leaderboard moved off home
 - [x] Liquid Glass UI theme — light ("Clear") / dark ("smoked graphite") + toggle
 - [x] Leaderboard nav split — Fantasy Leaderboards ▾ + NFL Leaderboards ▾ (12 boards)
+- [x] M1 — Scoring & Metric Foundation: scoring-aware fantasy engine (`/metrics` registry
+      + per-request scoring config), custom league scoring live on the leaderboard
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com

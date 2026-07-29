@@ -63,7 +63,7 @@ Plus one data-model rule set now to avoid a later migration:
 Each milestone is independently deployable. Complexity: **S** = days, **M** = 1–2
 weeks, **L** = multi-week.
 
-### 🧱 M1 — Scoring & Metric Foundation (spines A + B) — L — **NEXT**
+### 🧱 M1 — Scoring & Metric Foundation (spines A + B) — L — **✅ SHIPPED**
 The architectural spine; de-risks everything after. Ships custom scoring on day one.
 - **Deps:** none. **Data:** existing `player_stats` — zero data risk.
 - **DB:** no new columns; optional `scoring_presets` reference table (PPR/Half/Std/DK/FD).
@@ -74,7 +74,7 @@ The architectural spine; de-risks everything after. Ships custom scoring on day 
   persisted in URL/`localStorage`; leaderboard reads scoring from that state.
 - **Ships:** custom league scoring live on the leaderboard.
 
-### 📊 M2 — Expanded Metrics & Expected Points — M — **AFTER M1**
+### 📊 M2 — Expanded Metrics & Expected Points — M — **NEXT**
 - **Deps:** M1 (registry). **Data:** derive from `load_pbp` (already ingested) + new
   `load_ff_opportunity`.
 - **DB:** add `rush_att_inside_10/5/2`, `rb_market_share` (derived),
