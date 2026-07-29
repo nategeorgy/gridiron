@@ -61,6 +61,13 @@ export const METRICS = {
   wopr: { label: "WOPR", short: "WOPR", format: FORMATS.two },
   racr: { label: "RACR", short: "RACR", format: FORMATS.two },
   red_zone_targets: { label: "Red Zone Targets", short: "RZ TGT", format: FORMATS.int },
+  red_zone_rush_share: { label: "Red Zone Rush Share", short: "RZ RUN%", format: FORMATS.pct },
+  air_yards_share: { label: "Air Yards Share", short: "AY%", format: FORMATS.pct },
+  yards_per_target: { label: "Yards Per Target", short: "Y/TGT", format: FORMATS.two },
+  yards_per_reception: { label: "Yards Per Reception", short: "Y/REC", format: FORMATS.two },
+  rushing_epa: { label: "Rushing EPA", short: "RU EPA", format: FORMATS.one },
+  receiving_epa: { label: "Receiving EPA", short: "RE EPA", format: FORMATS.one },
+  fumbles_lost: { label: "Fumbles Lost", short: "FUM L", format: FORMATS.int },
 };
 
 // Metrics offered in the "sort by" dropdown, grouped for scannability.

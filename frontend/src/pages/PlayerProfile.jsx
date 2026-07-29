@@ -108,14 +108,14 @@ export function PlayerProfile() {
     return (
       <div className="p-6 text-center text-sm text-neg">
         Player not found.{" "}
-        <Link to="/leaderboard" className="text-accent hover:underline">Back to leaderboard</Link>
+        <Link to="/fantasy/leaders" className="text-accent hover:underline">Back to leaderboard</Link>
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <Link to="/leaderboard" className="inline-block text-sm text-muted transition hover:text-accent">
+      <Link to="/fantasy/leaders" className="inline-block text-sm text-muted transition hover:text-accent">
         ← Leaderboard
       </Link>
 

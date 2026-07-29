@@ -112,7 +112,7 @@ export function Home() {
           </p>
         </div>
         <Link
-          to="/leaderboard"
+          to="/fantasy/leaders"
           className="glass-pill inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition hover:!text-accent"
           title="Adjust your league scoring on the leaderboard"
         >
@@ -224,12 +224,12 @@ export function Home() {
             Every leaderboard and metric recomputes to your exact scoring. Currently{" "}
             <span className="font-semibold text-accent">{scoringLabel(scoring)}</span>.
           </p>
-          <Link to="/leaderboard" className="btn-ghost mt-3 inline-flex w-fit px-3.5 py-2 text-sm font-semibold transition hover:!text-accent">
+          <Link to="/fantasy/leaders" className="btn-ghost mt-3 inline-flex w-fit px-3.5 py-2 text-sm font-semibold transition hover:!text-accent">
             Adjust scoring on the leaderboard →
           </Link>
         </Card>
         <LinkTile
-          to="/leaderboard"
+          to="/fantasy/leaders"
           icon={<span className="text-base">🏆</span>}
           title="Player Leaderboard"
           desc="Ranked in your scoring"
