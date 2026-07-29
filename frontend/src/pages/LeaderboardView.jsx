@@ -1,4 +1,7 @@
-// Leaderboard page: filterable, sortable player rankings in your league scoring.
+// Generalized leaderboard, driven by a board config (see constants/boards.js).
+// Every /fantasy/* and /nfl/* route renders this with a different board.
+// Fantasy boards show the league-scoring editor and scoring-aware columns; NFL
+// boards show raw stats with the same filters (season / week / position / type).
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
@@ -7,36 +10,29 @@ import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useScoring } from "../hooks/useScoring";
 import { useMetrics } from "../hooks/useMetrics";
 import { formatStat } from "../utils/format";
-import {
-  COLUMN_SETS,
-  POSITIONS,
-  SEASONS,
-  SEASON_TYPES,
-  SORT_METRICS,
-  WEEKS,
-} from "../constants";
+import { POSITIONS, SEASONS, SEASON_TYPES, WEEKS } from "../constants";
 
 const PAGE_SIZE = 50;
-
 const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
 
-// Fixed-PPR equivalents used when the backend doesn't yet support scoring-aware
-// metrics (e.g. during a deploy window). Both exist on the old and new backend.
+// Fixed-PPR equivalents used on fantasy boards when the backend can't score yet
+// (e.g. a deploy window). Both exist on the old and new backend.
 const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
 
-export function Leaderboard() {
+export function LeaderboardView({ board }) {
   const [season, setSeason] = useState(String(SEASONS[0]));
   const [week, setWeek] = useState("");
-  const [position, setPosition] = useState("");
+  const [position, setPosition] = useState(board.defaultPosition);
   const [seasonType, setSeasonType] = useState("REG");
-  const [metric, setMetric] = useState("fantasy_points");
+  const [metric, setMetric] = useState(board.defaultSort);
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
   const { metrics, supportsScoring } = useMetrics();
 
-  // Translate scoring-aware metric ids to their fixed-PPR fallback when the
-  // backend can't score them yet, so we never request a metric it would reject.
-  const toBackendMetric = (key) => (!supportsScoring && FANTASY_FALLBACK[key]) || key;
+  // Scoring-aware ids fall back to their fixed-PPR column when the backend can't
+  // score them; on NFL boards there are no scoring-aware columns, so this is a no-op.
+  const toBackendMetric = (key) =>
+    (board.scoring && !supportsScoring && FANTASY_FALLBACK[key]) || key;
 
   const params = useMemo(
     () => ({
@@ -45,22 +41,21 @@ export function Leaderboard() {
       season_type: seasonType,
       ...(position ? { position } : {}),
       metric: toBackendMetric(metric),
-      scoring,
+      ...(board.scoring ? { scoring } : {}),
       order: "desc",
       limit: PAGE_SIZE,
       offset,
     }),
-    [season, week, position, seasonType, metric, scoring, offset, supportsScoring],
+    [season, week, position, seasonType, metric, scoring, offset, supportsScoring, board],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useLeaderboard(params);
 
-  const columns = COLUMN_SETS[position] ?? COLUMN_SETS[""];
-  const sortOptions = SORT_METRICS.map((key) => ({ value: key, label: metrics[key]?.label ?? key }));
+  const columns = board.columns;
+  const sortOptions = columns.map((key) => ({ value: key, label: metrics[key]?.label ?? key }));
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
 
-  // Update a filter and reset pagination to the first page.
   const withReset = (setter) => (value) => {
     setter(value);
     setOffset(0);
@@ -71,7 +66,6 @@ export function Leaderboard() {
     setOffset(0);
   };
 
-  // Scoring changes should also snap back to the first page.
   const changeScoring = (spec) => {
     setScoring(spec);
     setOffset(0);
@@ -80,11 +74,8 @@ export function Leaderboard() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-fg">Player Leaderboard</h1>
-        <p className="mt-1 text-sm text-muted">
-          Fantasy and advanced stats across the 2020–2025 seasons, scored in your league
-          settings. Click a column to rank by it.
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
+        <p className="mt-1 text-sm text-muted">{board.description}</p>
       </div>
 
       <div className="glass-card flex flex-wrap gap-3 p-4">
@@ -95,7 +86,7 @@ export function Leaderboard() {
         <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
       </div>
 
-      {supportsScoring && <ScoringControl scoring={scoring} onChange={changeScoring} />}
+      {board.scoring && supportsScoring && <ScoringControl scoring={scoring} onChange={changeScoring} />}
 
       <div className="glass-card overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-sm">
@@ -122,13 +113,8 @@ export function Leaderboard() {
           </thead>
           <tbody className={isPlaceholderData ? "opacity-60 transition" : "transition"}>
             {rows.map((row, index) => (
-              <tr
-                key={row.player_id}
-                className="border-b border-line last:border-0 hover:bg-surface-2"
-              >
-                <td className="stat-num px-3 py-2.5 text-right text-faint">
-                  {offset + index + 1}
-                </td>
+              <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
+                <td className="stat-num px-3 py-2.5 text-right text-faint">{offset + index + 1}</td>
                 <td className="px-3 py-2.5 font-medium">
                   <Link to={`/players/${row.player_id}`} className="text-fg hover:text-accent hover:underline">
                     {row.name}
@@ -158,9 +144,7 @@ export function Leaderboard() {
 
         {isLoading && <div className="p-6 text-center text-sm text-muted">Loading…</div>}
         {isError && (
-          <div className="p-6 text-center text-sm text-neg">
-            Failed to load leaderboard: {error?.message}
-          </div>
+          <div className="p-6 text-center text-sm text-neg">Failed to load: {error?.message}</div>
         )}
         {!isLoading && !isError && rows.length === 0 && (
           <div className="p-6 text-center text-sm text-muted">No results for these filters.</div>

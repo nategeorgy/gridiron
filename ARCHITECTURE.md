@@ -134,16 +134,17 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | Path | Layer | What it does |
 | --- | --- | --- |
 | `main.jsx` | entry | Boots React. Wraps the app in `BrowserRouter` (routing) and `QueryClientProvider` (React Query). Imports global CSS. |
-| `App.jsx` | routing | The route table. Maps URLs to pages: `/` → **Home** (Command Center), `/leaderboard` → Leaderboard, `/players/:playerId` → PlayerProfile, `/teams` → Teams. All wrapped in `Layout`. |
+| `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`. All wrapped in `Layout`. |
 | `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | **`pages/`** | pages | Top-level screens, one per route. |
 | `pages/Home.jsx` | page | **The home screen (`/`) — the Command Center.** A Bento dashboard that opens on the fantasy question: the current fantasy-points leader (spotlight), live fantasy leaders, entry tiles, the active league scoring, and labeled roadmap teasers (Buy-Low/Sell-High, coming in M3). |
-| `pages/Leaderboard.jsx` | page | Player leaderboard (at `/leaderboard`): filterable/sortable rankings scored in the user's league settings. The flagship data view. |
+| `pages/LeaderboardView.jsx` | page | The generalized leaderboard, driven by a **board config** (`constants/boards.js`). Every `/fantasy/*` and `/nfl/*` route renders this with a different board — fantasy boards show the league-scoring editor + scoring-aware columns; NFL boards show raw stats with the same filters (season / week / position / type). |
 | `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, a weekly fantasy trend chart, and a game-by-game log. |
 | `pages/Teams.jsx` | page | Team leaderboard — ranked team offensive production for a season. |
 | **`components/`** | UI | Reusable pieces used by pages. |
-| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home / Leaderboard / Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
+| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the two leaderboard dropdowns, Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
 | `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
+| `components/ui/NavDropdown.jsx` | UI (base) | The **Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
 | `components/ScoringControl.jsx` | UI | The league-scoring editor: preset picker (PPR/Half/Std/TE-Premium) + an expandable custom-weights panel. Emits a scoring spec string. |
 | `components/SearchBox.jsx` | UI | Header player search — type a name, pick a result, jump to that player's profile. |
 | `components/ui/Select.jsx` | UI (base) | A styled labeled `<select>` dropdown used all over the filter bars. |
@@ -164,7 +165,8 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `services/teams.js` | network | Teams list + team leaderboard calls. |
 | `services/metrics.js` | network | Fetches the metric registry. |
 | **`constants/`** | config | App-wide constant data (no logic/network). |
-| `constants/index.js` | config | Seasons, positions, weeks, the metric label/format map, the sort-metric list, and the **per-position column sets** shown in each leaderboard/game-log table. |
+| `constants/index.js` | config | Seasons, positions, weeks, the metric label/format map (seed for `useMetrics`), and the team-leaderboard + game-log column sets. |
+| `constants/boards.js` | config | **The 12 leaderboard "boards"** (4 Fantasy + 8 NFL) — each declares its columns (metric ids), default sort/position, and whether it's a scoring (fantasy) board. Drives both the nav dropdowns and `LeaderboardView`. Adding a leaderboard = add a board here. |
 | `constants/scoring.js` | config | League-scoring presets + editable weights, and the (de)serialize helpers that mirror the backend's scoring grammar. **Must stay in sync with `backend/app/scoring.py`.** |
 | **`utils/`** | util | Pure helpers. |
 | `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. |
@@ -284,7 +286,8 @@ dashboard (production).
 | --- | --- | --- | --- |
 | `DATABASE_URL` | backend, pipeline | `postgresql://gridiron:gridiron@localhost:5432/gridiron` | Supabase connection string (set in Render dashboard) |
 | `ENVIRONMENT` | backend | `development` | `production` |
-| `CORS_ORIGINS` | backend | `http://localhost:5173` | the deployed Vercel URL |
+| `CORS_ORIGINS` | backend | `http://localhost:5173` | the deployed Vercel URL (exact origins) |
+| `CORS_ORIGIN_REGEX` | backend | *(unset — code default matches this project's Vercel URLs)* | override only to change the allowed-origin regex; lets Vercel **preview** deploys call the API |
 | `VITE_API_BASE_URL` | frontend | `http://localhost:8000` | the deployed Render URL |
 
 The template with all of these and copy instructions is [`.env.example`](.env.example).
@@ -357,6 +360,7 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
 | Change how **fantasy points** are scored | `backend/app/scoring.py` **and** mirror it in `frontend/src/constants/scoring.js`. |
 | Add a new **API endpoint** | a router in `backend/app/routers/` (+ register it in `main.py`), a Pydantic schema in `schemas/`, then a service in `frontend/src/services/` + a hook. |
 | Add a new **page/screen** | a component in `frontend/src/pages/`, a route in `frontend/src/App.jsx`, a nav link in `components/Layout.jsx`. |
+| Add a new **leaderboard** (or change its columns) | add/edit a board in `frontend/src/constants/boards.js` (columns, default sort/position, fantasy vs NFL). The route, nav dropdown item, and page all pick it up automatically. |
 | Change the **look/theme** | `frontend/src/index.css` (Liquid Glass tokens per theme + `.glass-*` classes) + `frontend/tailwind.config.js` (semantic token names). Use the `.glass-*` classes and `text-fg`/`text-muted`/`text-accent`/`border-line` tokens — never hardcode theme colors. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | Change **data scope** (seasons, etc.) | re-run `pipeline/` scripts with new `--seasons`; update `frontend/src/constants/index.js` `SEASONS`. |
 
@@ -393,6 +397,13 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-07-28** — Leaderboard nav split. Replaced the single leaderboard with
+  **Fantasy Leaderboards ▾** (Leaders / Passing / Receiving / Rushing) and **NFL
+  Leaderboards ▾** (All / Passing / Receiving / Rushing × General/Advanced), driven
+  by `constants/boards.js` + a generalized `pages/LeaderboardView.jsx` and a new
+  `components/ui/NavDropdown.jsx`. Frontend-only (the leaderboard API already
+  returns/ranks every registry metric). Also documented the `CORS_ORIGIN_REGEX`
+  backend var (§8).
 - **2026-07-28** — Liquid Glass theme + Command Center home. Added the light/dark
   Liquid Glass theme system (`src/index.css` tokens + `.glass-*` classes,
   `hooks/useTheme.js`, `components/ThemeToggle.jsx`, semantic Tailwind tokens, a

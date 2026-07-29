@@ -1,15 +1,16 @@
-// App shell: frosted sticky header with brand + primary nav, search, and the
-// light/dark theme toggle. Renders the active page inside a centered container.
+// App shell: frosted sticky header with brand + primary nav (Home, the two
+// leaderboard dropdowns, Teams), search, and the light/dark theme toggle.
 // The page background (the Liquid Glass "environment") is painted on <body>.
 import { NavLink, Outlet } from "react-router-dom";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
+import { NavDropdown } from "./ui/NavDropdown";
+import { NAV_GROUPS } from "../constants/boards";
 
-const navItems = [
-  { to: "/", label: "Home", end: true },
-  { to: "/leaderboard", label: "Leaderboard" },
-  { to: "/teams", label: "Teams" },
-];
+const navLinkClass = ({ isActive }) =>
+  `rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+    isActive ? "glass-pill !text-accent" : "text-muted hover:text-fg"
+  }`;
 
 function BrandMark() {
   return (
@@ -33,23 +34,21 @@ export function Layout() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <BrandMark />
           <div className="flex items-center gap-2">
-            <nav className="flex items-center gap-1">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-                      isActive
-                        ? "glass-pill !text-accent"
-                        : "text-muted hover:text-fg"
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
+            <nav className="flex items-center gap-0.5">
+              <NavLink to="/" end className={navLinkClass}>
+                Home
+              </NavLink>
+              {NAV_GROUPS.map((group) => (
+                <NavDropdown
+                  key={group.match}
+                  label={group.label}
+                  items={group.items}
+                  match={group.match}
+                />
               ))}
+              <NavLink to="/teams" className={navLinkClass}>
+                Teams
+              </NavLink>
             </nav>
             <SearchBox />
             <ThemeToggle />

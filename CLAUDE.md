@@ -339,7 +339,11 @@ GET /api/v1/games                            ← game schedule/results
   [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md).
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**
   (a Bento dashboard that opens on "who's leading in your scoring"), *not* the
-  leaderboard. The leaderboard lives at `/leaderboard`.
+  leaderboard. Leaderboards are split into two nav dropdowns: **Fantasy
+  Leaderboards** (`/fantasy/*` — Leaders / Passing / Receiving / Rushing, with the
+  league-scoring editor) and **NFL Leaderboards** (`/nfl/*` — All / Passing /
+  Receiving / Rushing, each General & Advanced, raw stats). All 12 are configured in
+  `frontend/src/constants/boards.js`.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -429,12 +433,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] Data pipeline built and run (players, games, stats ingested — 2020–2025)
 - [x] FastAPI backend running with core endpoints
 - [x] React frontend scaffold running
-- [x] Player leaderboard page built (now at `/leaderboard`)
+- [x] Player leaderboard page built (now split into Fantasy + NFL boards)
 - [x] Player profile page built
 - [x] Team leaderboard page built
 - [x] Basic player search (header)
 - [x] Command Center home page (`/`) — Bento dashboard; leaderboard moved off home
 - [x] Liquid Glass UI theme — light ("Clear") / dark ("smoked graphite") + toggle
+- [x] Leaderboard nav split — Fantasy Leaderboards ▾ + NFL Leaderboards ▾ (12 boards)
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
