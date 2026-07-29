@@ -14,11 +14,14 @@ app = FastAPI(
     description="Advanced NFL analytics API.",
 )
 
-# Allowed origins come from settings: localhost in dev, the deployed frontend
-# URL(s) in production (set via the CORS_ORIGINS environment variable).
+# Allowed origins come from settings: an exact list (CORS_ORIGINS — localhost in
+# dev, the deployed frontend in prod) plus a regex (CORS_ORIGIN_REGEX) that matches
+# this project's Vercel URLs, so preview deploys are allowed without listing each
+# ephemeral URL.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=settings.cors_origin_regex_or_none,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
