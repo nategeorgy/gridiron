@@ -8,9 +8,7 @@ import { formatStat } from "../utils/format";
 import { GAMELOG_COLUMN_SETS, METRICS, SUMMARY_STATS } from "../constants";
 
 function Panel({ children, className = "" }) {
-  return (
-    <div className={`rounded-lg border border-navy-800 bg-navy-900 ${className}`}>{children}</div>
-  );
+  return <div className={`glass-card ${className}`}>{children}</div>;
 }
 
 function ProfileHeader({ player }) {
@@ -20,22 +18,22 @@ function ProfileHeader({ player }) {
         <img
           src={player.headshot_url}
           alt={player.name}
-          className="h-20 w-20 rounded-full border border-navy-700 bg-navy-800 object-cover"
+          className="h-20 w-20 rounded-full border border-edge bg-surface-2 object-cover"
         />
       ) : (
-        <div className="flex h-20 w-20 items-center justify-center rounded-full border border-navy-700 bg-navy-800 text-2xl font-bold text-slate-500">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full border border-edge bg-surface-2 text-2xl font-bold text-faint">
           {player.name?.[0]}
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{player.name}</h1>
-        <div className="mt-1 flex items-center gap-2 text-sm text-slate-400">
-          <span className="rounded bg-navy-800 px-2 py-0.5 text-xs font-semibold text-accent">
+        <h1 className="text-2xl font-bold tracking-tight text-fg">{player.name}</h1>
+        <div className="mt-1 flex items-center gap-2 text-sm text-muted">
+          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs font-semibold text-accent">
             {player.position}
           </span>
           <span className="stat-num">{player.team_abbreviation ?? "FA"}</span>
           {player.jersey_number != null && (
-            <span className="stat-num text-slate-500">#{player.jersey_number}</span>
+            <span className="stat-num text-faint">#{player.jersey_number}</span>
           )}
         </div>
       </div>
@@ -56,15 +54,15 @@ function SummaryCards({ position, games }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
       <Panel className="p-3">
-        <div className="text-xs uppercase tracking-wide text-slate-500">Games</div>
-        <div className="stat-num mt-1 text-xl font-semibold text-slate-100">{gameCount}</div>
+        <div className="text-xs uppercase tracking-wide text-faint">Games</div>
+        <div className="stat-num mt-1 text-xl font-semibold text-fg">{gameCount}</div>
       </Panel>
       {values.map((stat) => (
         <Panel key={stat.key} className="p-3">
-          <div className="text-xs uppercase tracking-wide text-slate-500">
+          <div className="text-xs uppercase tracking-wide text-faint">
             {METRICS[stat.key].short}
           </div>
-          <div className="stat-num mt-1 text-xl font-semibold text-slate-100">
+          <div className="stat-num mt-1 text-xl font-semibold text-fg">
             {formatStat(stat.value, METRICS[stat.key].format)}
           </div>
         </Panel>
@@ -104,27 +102,27 @@ export function PlayerProfile() {
   const columns = GAMELOG_COLUMN_SETS[position] ?? GAMELOG_COLUMN_SETS.WR;
 
   if (playerQuery.isLoading) {
-    return <div className="p-6 text-center text-sm text-slate-400">Loading…</div>;
+    return <div className="p-6 text-center text-sm text-muted">Loading…</div>;
   }
   if (playerQuery.isError) {
     return (
-      <div className="p-6 text-center text-sm text-red-400">
+      <div className="p-6 text-center text-sm text-neg">
         Player not found.{" "}
-        <Link to="/" className="text-accent hover:underline">Back to leaderboard</Link>
+        <Link to="/leaderboard" className="text-accent hover:underline">Back to leaderboard</Link>
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <Link to="/" className="inline-block text-sm text-slate-400 hover:text-accent">
+      <Link to="/leaderboard" className="inline-block text-sm text-muted transition hover:text-accent">
         ← Leaderboard
       </Link>
 
       <ProfileHeader player={player} />
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Season Stats</h2>
+        <h2 className="text-lg font-semibold text-fg">Season Stats</h2>
         {seasons.length > 0 && (
           <Select
             value={String(activeSeason)}
@@ -135,7 +133,7 @@ export function PlayerProfile() {
       </div>
 
       {seasonGames.length === 0 ? (
-        <Panel className="p-8 text-center text-sm text-slate-400">
+        <Panel className="p-8 text-center text-sm text-muted">
           No regular-season game data for this player.
         </Panel>
       ) : (
@@ -143,7 +141,7 @@ export function PlayerProfile() {
           <SummaryCards position={position} games={seasonGames} />
 
           <Panel className="p-4">
-            <div className="mb-2 text-sm font-medium text-slate-300">
+            <div className="mb-2 text-sm font-medium text-muted">
               PPR Fantasy Points by Week — {activeSeason}
             </div>
             <FantasyTrendChart games={seasonGames} />
@@ -152,7 +150,7 @@ export function PlayerProfile() {
           <Panel className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
-                <tr className="border-b border-navy-700 text-xs uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
                   <th className="px-3 py-3 text-right">WK</th>
                   <th className="px-3 py-3">Opp</th>
                   {columns.map((key) => (
@@ -164,11 +162,11 @@ export function PlayerProfile() {
               </thead>
               <tbody>
                 {seasonGames.map((game) => (
-                  <tr key={game.game_id} className="border-b border-navy-850 last:border-0 hover:bg-navy-850/60">
-                    <td className="stat-num px-3 py-2.5 text-right text-slate-400">{game.week}</td>
-                    <td className="stat-num px-3 py-2.5 text-slate-300">{game.opponent_abbreviation ?? "—"}</td>
+                  <tr key={game.game_id} className="border-b border-line last:border-0 hover:bg-surface-2">
+                    <td className="stat-num px-3 py-2.5 text-right text-muted">{game.week}</td>
+                    <td className="stat-num px-3 py-2.5 text-muted">{game.opponent_abbreviation ?? "—"}</td>
                     {columns.map((key) => (
-                      <td key={key} className="stat-num px-3 py-2.5 text-right text-slate-200">
+                      <td key={key} className="stat-num px-3 py-2.5 text-right text-fg">
                         {formatStat(game[key], METRICS[key].format)}
                       </td>
                     ))}

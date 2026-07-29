@@ -24,7 +24,7 @@ export function ScoringControl({ scoring, onChange }) {
   };
 
   return (
-    <div className="rounded-lg border border-navy-800 bg-navy-900 p-4">
+    <div className="glass-card p-4">
       <div className="flex flex-wrap items-end gap-3">
         <Select
           label="League Scoring"
@@ -35,17 +35,17 @@ export function ScoringControl({ scoring, onChange }) {
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
-          className="rounded-md border border-navy-700 px-3 py-2 text-sm text-slate-300 transition hover:border-accent hover:text-white"
+          className="btn-ghost px-3 py-2 text-sm transition hover:!text-accent"
         >
           {open ? "Hide custom scoring" : "Customize"}
         </button>
-        <span className="pb-2 text-xs text-slate-400">
+        <span className="pb-2 text-xs text-muted">
           Active: <span className="font-semibold text-accent">{scoringLabel(scoring)}</span>
           {isCustom && (
             <button
               type="button"
               onClick={() => onChange(preset)}
-              className="ml-2 text-slate-500 underline transition hover:text-slate-300"
+              className="ml-2 text-faint underline transition hover:text-muted"
             >
               reset
             </button>
@@ -54,10 +54,10 @@ export function ScoringControl({ scoring, onChange }) {
       </div>
 
       {open && (
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-navy-800 pt-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-4 sm:grid-cols-3 lg:grid-cols-5">
           {EDITABLE_WEIGHTS.map(({ key, label, step, optional }) => (
             <label key={key} className="flex flex-col gap-1">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
                 {label}
               </span>
               <input
@@ -66,7 +66,7 @@ export function ScoringControl({ scoring, onChange }) {
                 value={config[key] ?? ""}
                 placeholder={optional ? "= reception" : undefined}
                 onChange={(event) => setWeight(key, event.target.value)}
-                className="w-full rounded-md border border-navy-700 bg-navy-850 px-2 py-1.5 text-sm text-slate-100 outline-none transition focus:border-accent focus:ring-1 focus:ring-accent"
+                className="glass-input w-full px-2 py-1.5 text-sm"
               />
             </label>
           ))}
