@@ -2,16 +2,18 @@
 
 Sources:
   - load_player_stats(week): general, advanced, and fantasy metrics
-  - load_pbp: red-zone rushing/target derivations (see CLAUDE.md)
+  - load_pbp: red-zone, inside-yardline, and unrealized-air-yard derivations
 
-Metrics sourced from PFR/NGS/snap-count feeds (routes run, snap share, slot
-snaps, etc.) are left NULL here and populated by a later enrichment pass.
+Two sibling scripts enrich these rows afterwards: ``ingest_expected.py`` (expected
+components + market share) and ``ingest_usage.py`` (snaps + routes). ``slot_snaps``
+stays NULL — no free data source provides per-player alignment.
 """
 
 import argparse
 import logging
 
 import nflreadpy as nfl
+import polars as pl
 
 from db import get_engine, load_team_id_map, upsert
 
@@ -71,19 +73,22 @@ def _total_epa(record: dict) -> float | None:
     return sum(present) if present else None
 
 
-def compute_red_zone(seasons: list[int]) -> tuple[dict, dict, dict]:
-    """Derive red-zone rush/target counts from play-by-play.
+def compute_pbp_derived(seasons: list[int]) -> dict[str, dict]:
+    """Derive the play-by-play metrics that no weekly feed provides.
 
-    Returns three lookups:
-      player_rush[(game_id, player_id)]  -> red-zone rush attempts
-      player_targets[(game_id, player_id)] -> red-zone targets
-      team_rush[(game_id, team)]         -> team red-zone rush attempts
+    Returns a dict of lookups, all keyed by ``(game_id, player_id)`` except the team
+    red-zone total:
+
+      rz_rush          -> red-zone rush attempts
+      rz_targets       -> red-zone targets
+      rz_team_rush     -> team red-zone rush attempts, keyed ``(game_id, team)``
+      inside_10/5/2    -> rush attempts from inside the opponent's 10 / 5 / 2
+      unrealized_air   -> air yards on the player's *incomplete* targets
     """
     pbp = nfl.load_pbp(seasons).select(
         ["game_id", "posteam", "yardline_100", "rush_attempt", "pass_attempt",
-         "rusher_player_id", "receiver_player_id"]
+         "complete_pass", "air_yards", "rusher_player_id", "receiver_player_id"]
     )
-    red_zone = pbp.filter(pbp["yardline_100"] <= RED_ZONE_YARDLINE)
 
     def counts(frame, group_columns: list[str]) -> dict:
         grouped = frame.group_by(group_columns).len()
@@ -95,28 +100,55 @@ def compute_red_zone(seasons: list[int]) -> tuple[dict, dict, dict]:
             result[key] = row["len"]
         return result
 
-    rushes = red_zone.filter(red_zone["rush_attempt"] == 1)
-    passes = red_zone.filter(red_zone["pass_attempt"] == 1)
+    rushes = pbp.filter(pbp["rush_attempt"] == 1)
+    red_zone = pbp.filter(pbp["yardline_100"] <= RED_ZONE_YARDLINE)
+    rz_rushes = red_zone.filter(red_zone["rush_attempt"] == 1)
+    rz_passes = red_zone.filter(red_zone["pass_attempt"] == 1)
 
-    player_rush = counts(rushes, ["game_id", "rusher_player_id"])
-    team_rush = counts(rushes, ["game_id", "posteam"])
-    player_targets = counts(passes, ["game_id", "receiver_player_id"])
-    logger.info("red-zone: %d player-rush, %d player-target game rows",
-                len(player_rush), len(player_targets))
-    return player_rush, player_targets, team_rush
+    def rushes_inside(yardline: int) -> dict:
+        inside = rushes.filter(rushes["yardline_100"] <= yardline)
+        return counts(inside, ["game_id", "rusher_player_id"])
+
+    # Unrealized air yards: how much downfield opportunity was thrown at a player and
+    # not converted — a target that fell incomplete still bought him nothing.
+    incomplete = pbp.filter((pbp["pass_attempt"] == 1) & (pbp["complete_pass"] == 0))
+    unrealized = (
+        incomplete.group_by(["game_id", "receiver_player_id"])
+        .agg(air_yards=pl.col("air_yards").sum())
+    )
+    unrealized_air = {
+        (row["game_id"], row["receiver_player_id"]): row["air_yards"]
+        for row in unrealized.iter_rows(named=True)
+        if row["game_id"] is not None and row["receiver_player_id"] is not None
+    }
+
+    derived = {
+        "rz_rush": counts(rz_rushes, ["game_id", "rusher_player_id"]),
+        "rz_targets": counts(rz_passes, ["game_id", "receiver_player_id"]),
+        "rz_team_rush": counts(rz_rushes, ["game_id", "posteam"]),
+        "inside_10": rushes_inside(10),
+        "inside_5": rushes_inside(5),
+        "inside_2": rushes_inside(2),
+        "unrealized_air": unrealized_air,
+    }
+    logger.info(
+        "play-by-play derived: %d red-zone rush rows, %d inside-5 rows, %d unrealized-air rows",
+        len(derived["rz_rush"]), len(derived["inside_5"]), len(unrealized_air),
+    )
+    return derived
 
 
-def ingest_stats(seasons: list[int], include_red_zone: bool = True) -> int:
+def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
     """Load weekly stats for the given seasons and upsert player_stats rows."""
     weekly = nfl.load_player_stats(seasons, summary_level="week")
     team_map = load_team_id_map()
     valid_players = _existing_ids("players", "player_id")
     valid_games = _existing_ids("games", "game_id")
 
-    if include_red_zone:
-        player_rush, player_targets, team_rush = compute_red_zone(seasons)
-    else:
-        player_rush, player_targets, team_rush = {}, {}, {}
+    pbp_derived = compute_pbp_derived(seasons) if include_pbp else {}
+
+    def lookup(name: str, key: tuple) -> float | int | None:
+        return pbp_derived.get(name, {}).get(key)
 
     rows: dict[tuple, dict] = {}
     skipped = 0
@@ -136,8 +168,8 @@ def ingest_stats(seasons: list[int], include_red_zone: bool = True) -> int:
         receiving_yards = record.get("receiving_yards")
         receiving_air_yards = record.get("receiving_air_yards")
 
-        rz_rush = player_rush.get((game_id, player_id))
-        team_rz_rush = team_rush.get((game_id, team_abbr))
+        rz_rush = lookup("rz_rush", (game_id, player_id))
+        team_rz_rush = lookup("rz_team_rush", (game_id, team_abbr))
 
         std = record.get("fantasy_points")
         ppr = record.get("fantasy_points_ppr")
@@ -185,10 +217,14 @@ def ingest_stats(seasons: list[int], include_red_zone: bool = True) -> int:
             ),
             "yards_per_target": _safe_div(receiving_yards, targets),
             "yards_per_reception": _safe_div(receiving_yards, receptions),
-            # Advanced (red zone from pbp)
+            # Advanced (derived from play-by-play)
             "red_zone_rush_attempts": rz_rush,
-            "red_zone_targets": player_targets.get((game_id, player_id)),
+            "red_zone_targets": lookup("rz_targets", (game_id, player_id)),
             "red_zone_rush_share": _safe_div(rz_rush, team_rz_rush),
+            "rush_att_inside_10": lookup("inside_10", (game_id, player_id)),
+            "rush_att_inside_5": lookup("inside_5", (game_id, player_id)),
+            "rush_att_inside_2": lookup("inside_2", (game_id, player_id)),
+            "unrealized_air_yards": lookup("unrealized_air", (game_id, player_id)),
             # Fantasy
             "fantasy_points_std": std,
             "fantasy_points_ppr": ppr,
@@ -213,8 +249,9 @@ if __name__ == "__main__":
         help="Seasons to ingest (default: 2020-2025).",
     )
     parser.add_argument(
-        "--skip-red-zone", action="store_true",
-        help="Skip the play-by-play red-zone derivation (faster).",
+        "--skip-pbp", action="store_true",
+        help="Skip the play-by-play derivations — red zone, inside 10/5/2, "
+             "unrealized air yards (faster, leaves those columns NULL).",
     )
     args = parser.parse_args()
-    ingest_stats(args.seasons, include_red_zone=not args.skip_red_zone)
+    ingest_stats(args.seasons, include_pbp=not args.skip_pbp)

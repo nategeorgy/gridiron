@@ -7,6 +7,11 @@ Supports two modes:
 
 Season-derived metrics (fantasy_ppg_*, routes_run_per_game) are computed here
 by aggregating player_stats rows — never stored as columns (see CLAUDE.md).
+
+Fantasy points and expected fantasy points (xFP) are both computed per-request from
+the active ScoringConfig — the actual side from the real stat components, the
+expected side from the stored ffopportunity components — so the two are always
+comparable in the user's own league scoring.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,9 +22,12 @@ from app.database import get_db
 from app.metrics import REGISTRY, ids_with_aggregation
 from app.models import Player, PlayerStats, Team
 from app.scoring import (
+    EXPECTED_COMPONENTS,
     POINTS_COMPONENTS,
     ScoringConfig,
+    compute_expected_points,
     compute_points,
+    expected_points_expr,
     parse_scoring,
     points_expr,
 )
@@ -33,14 +41,40 @@ AVG_METRICS = ids_with_aggregation("avg")  # rate / share stats, averaged over a
 PPG_METRICS = {m.id: m.base for m in REGISTRY if m.aggregation == "derived"}
 # Scoring-aware fantasy metrics — computed per-request from a ScoringConfig.
 SCORING_METRICS = set(ids_with_aggregation("scoring"))
+# Expected-points metrics (M2) — same engine, applied to the expected components.
+EXPECTED_METRICS = set(ids_with_aggregation("expected"))
 
 ALLOWED_METRICS = (
-    set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS) | SCORING_METRICS | {"games_played"}
+    set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS)
+    | SCORING_METRICS | EXPECTED_METRICS | {"games_played"}
 )
 
 
 def _round(value: float | None, digits: int = 3) -> float | None:
     return round(value, digits) if value is not None else None
+
+
+def _fantasy_order_expr(metric: str, config: ScoringConfig, sum_mode: bool, games=None):
+    """ORDER BY expression for a scoring-aware or expected-points metric.
+
+    ``games`` (the per-season game count) is only needed by the per-game metrics in
+    season mode; in single-week mode every metric is already a one-game value.
+    """
+    actual = points_expr(config, sum_mode=sum_mode)
+    expected = expected_points_expr(config, sum_mode=sum_mode)
+    per_game = (lambda expression: expression / func.nullif(games, 0)) if games is not None else (lambda expression: expression)
+
+    if metric == "fantasy_points":
+        return actual
+    if metric == "fantasy_ppg":
+        return per_game(actual)
+    if metric == "expected_fantasy_points":
+        return expected
+    if metric == "expected_fantasy_ppg":
+        return per_game(expected)
+    if metric == "fantasy_points_over_expected":
+        return actual - expected
+    raise ValueError(f"'{metric}' is not a scoring-aware metric")
 
 
 def _leaderboard_season(
@@ -77,10 +111,8 @@ def _leaderboard_season(
     # Resolve the ORDER BY expression for the requested metric.
     if metric == "games_played":
         order_expr = games
-    elif metric == "fantasy_points":
-        order_expr = points_expr(config, sum_mode=True)
-    elif metric == "fantasy_ppg":
-        order_expr = points_expr(config, sum_mode=True) / func.nullif(games, 0)
+    elif metric in SCORING_METRICS or metric in EXPECTED_METRICS:
+        order_expr = _fantasy_order_expr(metric, config, sum_mode=True, games=games)
     elif metric in PPG_METRICS:
         base_col = getattr(PlayerStats, PPG_METRICS[metric])
         order_expr = func.sum(base_col) / func.nullif(games, 0)
@@ -97,9 +129,19 @@ def _leaderboard_season(
         record = dict(row)
         played = record["games_played"] or 0
         # Scoring-aware fantasy points from the raw summed components (pre-rounding).
-        points = compute_points(config, record, record.get("position"))
+        position = record.get("position")
+        points = compute_points(config, record, position)
         record["fantasy_points"] = _round(points)
         record["fantasy_ppg"] = _round(points / played) if played else None
+        # Expected points, same scoring config applied to the expected components.
+        expected = compute_expected_points(config, record, position)
+        record["expected_fantasy_points"] = _round(expected)
+        record["expected_fantasy_ppg"] = (
+            _round(expected / played) if played and expected is not None else None
+        )
+        record["fantasy_points_over_expected"] = (
+            _round(points - expected) if expected is not None else None
+        )
         for key, column in PPG_METRICS.items():
             total_value = record.get(column)
             record[key] = _round(total_value / played) if played and total_value is not None else None
@@ -122,8 +164,8 @@ def _leaderboard_week(
         filters.append(Player.position == position.upper())
 
     # PPG metrics have no per-game meaning; fall back to their base column.
-    if metric in SCORING_METRICS:
-        sort_column = points_expr(config, sum_mode=False)
+    if metric in SCORING_METRICS or metric in EXPECTED_METRICS:
+        sort_column = _fantasy_order_expr(metric, config, sum_mode=False)
     else:
         sort_column = getattr(PlayerStats, PPG_METRICS.get(metric, metric))
     order_expr = sort_column.desc().nulls_last() if descending else sort_column.asc().nulls_last()
@@ -157,6 +199,13 @@ def _leaderboard_week(
         points = _round(compute_points(config, components, position_value))
         record["fantasy_points"] = points
         record["fantasy_ppg"] = points  # single game: PPG == points
+        expected_components = {name: getattr(stat_line, name) for name in EXPECTED_COMPONENTS}
+        expected = _round(compute_expected_points(config, expected_components, position_value))
+        record["expected_fantasy_points"] = expected
+        record["expected_fantasy_ppg"] = expected  # single game: xPPG == xFP
+        record["fantasy_points_over_expected"] = (
+            _round(points - expected) if expected is not None and points is not None else None
+        )
         results.append(record)
     return results, total
 

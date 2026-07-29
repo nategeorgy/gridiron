@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
 ---
 
@@ -229,6 +229,7 @@ machine (your laptop, Supabase) can be brought to the exact same schema with
 | `alembic/env.py` | Migration runtime config — points Alembic at the models + `DATABASE_URL`. |
 | `alembic/versions/bd93cb7cea4b_*.py` | Migration #1 — **creates the core tables** (teams, games, players, player_stats). |
 | `alembic/versions/4a2fb3bf6c6b_*.py` | Migration #2 — adds a unique constraint on team abbreviation. |
+| `alembic/versions/521f727f5461_*.py` | Migration #3 (M2) — adds the expected stat components, the three market-share columns, and carries inside the 10/5/2. |
 | `alembic/script.py.mako` | Template used when generating a new migration. |
 
 ---
@@ -245,15 +246,19 @@ so **the migrated schema is the single source of truth.** Every script is
 | --- | --- |
 | `README.md` | How to set up and run the pipeline, run order, and which columns each script fills. |
 | `requirements.txt` | Pipeline Python dependencies. |
-| `db.py` | Shared DB helpers — connection + the idempotent `upsert` used by all scripts. |
+| `db.py` | Shared DB helpers — connection, the idempotent `upsert` used by all scripts, and `load_stat_keys()` (the guard that keeps enrichment passes from inserting half-empty stat lines). |
 | `ingest_teams.py` | **Run 1st.** Loads all NFL teams (everything else resolves team IDs from here). |
 | `ingest_players.py` | **Run 2nd.** Loads QB/RB/WR/TE players. |
 | `ingest_schedules.py` | **Run 3rd.** Loads games (schedule + results) for the given `--seasons`. |
-| `ingest_stats.py` | **Run 4th.** Loads per-player, per-game stat lines. Also downloads play-by-play to derive red-zone metrics (`--skip-red-zone` to skip). |
+| `ingest_stats.py` | **Run 4th.** Loads per-player, per-game stat lines. Also downloads play-by-play to derive red-zone metrics, carries inside the 10/5/2, and unrealized air yards (`--skip-pbp` to skip). |
+| `ingest_expected.py` | **Run 5th** (enrichment). Expected stat *components* from `load_ff_opportunity` + the three market-share metrics. Only updates existing stat lines. |
+| `ingest_usage.py` | **Run 6th** (enrichment). Snap counts (PFR, joined via a `pfr_id → gsis_id` crosswalk) and route usage (participation × play-by-play), then derives TPRR/YPRR. `--skip-routes` for snaps only. |
 
-**Data scope:** seasons **2020–2025**, positions **QB/RB/WR/TE**. Some advanced
-columns (snap share, routes run, slot snaps, etc.) are intentionally left `NULL`
-pending a later enrichment pass — see `pipeline/README.md`.
+**Data scope:** seasons **2020–2025**, positions **QB/RB/WR/TE**. As of M2 every
+advanced column is populated except `slot_snaps`, which no free data source provides
+(see [`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md) §3 and
+`pipeline/README.md`). Note that `routes_run` is *pass-play participation*, not charted
+routes — the same doc explains what that over- and under-states.
 
 ---
 
@@ -342,9 +347,11 @@ instead of being retrofitted. You'll see these referenced in the code:
 - **Spine C — Stateless-first persistence** (`frontend/src/hooks/useScoring.js`).
   State lives in the URL + `localStorage` (shareable, no login), before accounts exist.
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full vision and milestone plan, and
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full vision and milestone plan,
 [`docs/design/M1-scoring-foundation.md`](docs/design/M1-scoring-foundation.md) for the
-M1 (current milestone) design.
+scoring engine + registry design, and
+[`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md) for expected
+points, market share, and the snap/route enrichment (M2 — most recently shipped).
 
 ---
 
@@ -397,6 +404,17 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-07-29** — M2: expanded metrics & expected points. New pipeline scripts
+  `ingest_expected.py` (expected components + market share, from `load_ff_opportunity`)
+  and `ingest_usage.py` (snap counts + route usage); `ingest_stats.py` extended with
+  carries inside 10/5/2 and unrealized air yards (`--skip-red-zone` → `--skip-pbp`);
+  new `db.load_stat_keys()`. Backend: expected-points support in `app/scoring.py`, an
+  `expected` aggregation + `modelled` flag in `app/metrics.py`, ranking for it in
+  `routers/stats.py`, and a scoring-aware game log in `routers/players.py`. Migration
+  #3 (`521f727f5461`). Frontend: a 13th board (`/fantasy/expected`), expected columns
+  across the existing boards, and a scoring-aware player page with an Expected vs
+  Actual panel + xFP overlay on `FantasyTrendChart`. New design note:
+  `docs/design/M2-expanded-metrics.md`.
 - **2026-07-28** — Leaderboard nav split. Replaced the single leaderboard with
   **Fantasy Leaderboards ▾** (Leaders / Passing / Receiving / Rushing) and **NFL
   Leaderboards ▾** (All / Passing / Receiving / Rushing × General/Advanced), driven

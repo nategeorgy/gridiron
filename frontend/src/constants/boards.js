@@ -6,9 +6,9 @@
 // FANTASY board (shows the league-scoring editor and scoring-aware columns) or an
 // NFL board (raw stats, no scoring — just the filters).
 //
-// Only metrics that are actually populated in the data are used here; several
-// advanced columns (snap share, routes run, TPRR/YPRR, slot snaps, unrealized air
-// yards) are intentionally omitted because the pipeline leaves them NULL for now.
+// Only metrics that are actually populated in the data are used here. As of M2 the
+// snap, route, expected-points and market-share columns are all populated; the one
+// remaining exception is slot_snaps, which no free data source provides.
 
 /**
  * @typedef {Object} Board
@@ -33,8 +33,27 @@ export const FANTASY_BOARDS = [
     menuDesc: "Total points & PPG in your scoring",
     title: "Fantasy Leaders",
     description: "Total fantasy points and per-game average, scored in your league settings.",
-    columns: ["fantasy_points", "fantasy_ppg"],
+    columns: ["fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected"],
     defaultSort: "fantasy_points",
+    defaultPosition: "",
+    scoring: true,
+  },
+  {
+    id: "fantasy-expected",
+    label: "Expected Points",
+    path: "/fantasy/expected",
+    menuDesc: "Who the opportunity says should be scoring",
+    title: "Expected Fantasy Points",
+    description:
+      "What each player's usage was worth in your scoring, next to what they actually " +
+      "scored. Big positive gaps are efficiency and touchdown luck that may not hold; " +
+      "big negative gaps are players whose opportunity says more points are coming.",
+    columns: [
+      "expected_fantasy_points", "expected_fantasy_ppg", "fantasy_points", "fantasy_ppg",
+      "fantasy_points_over_expected", "receptions_exp", "receiving_yards_exp",
+      "receiving_tds_exp", "rushing_yards_exp", "rushing_tds_exp",
+    ],
+    defaultSort: "expected_fantasy_points",
     defaultPosition: "",
     scoring: true,
   },
@@ -46,7 +65,8 @@ export const FANTASY_BOARDS = [
     title: "Fantasy Passing",
     description: "Quarterback fantasy production and passing efficiency, scored in your league.",
     columns: [
-      "fantasy_points", "fantasy_ppg", "passing_yards", "passing_tds", "interceptions",
+      "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
+      "passing_yards", "passing_tds", "interceptions",
       "rushing_yards", "rushing_tds", "passer_rating", "cpoe", "epa",
     ],
     defaultSort: "fantasy_points",
@@ -61,8 +81,10 @@ export const FANTASY_BOARDS = [
     title: "Fantasy Receiving",
     description: "Receiving fantasy production and the opportunity behind it, scored in your league.",
     columns: [
-      "fantasy_points", "fantasy_ppg", "receptions", "targets", "receiving_yards", "receiving_tds",
-      "target_share", "air_yards", "yards_after_catch", "red_zone_targets", "wopr",
+      "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
+      "receptions", "targets", "receiving_yards", "receiving_tds",
+      "target_share", "routes_run", "route_participation", "targets_per_route_run",
+      "yards_per_route_run", "air_yards", "red_zone_targets", "wopr",
     ],
     defaultSort: "fantasy_points",
     defaultPosition: "WR",
@@ -76,8 +98,10 @@ export const FANTASY_BOARDS = [
     title: "Fantasy Rushing",
     description: "Rushing fantasy production and the opportunity behind it, scored in your league.",
     columns: [
-      "fantasy_points", "fantasy_ppg", "carries", "rushing_yards", "rushing_tds",
-      "red_zone_rush_attempts", "red_zone_rush_share", "rushing_epa", "receptions", "receiving_yards",
+      "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
+      "carries", "rushing_yards", "rushing_tds", "rush_attempt_share", "opportunity_share",
+      "rush_att_inside_10", "rush_att_inside_5", "rush_att_inside_2",
+      "red_zone_rush_share", "receptions", "receiving_yards",
     ],
     defaultSort: "fantasy_points",
     defaultPosition: "RB",
@@ -110,8 +134,8 @@ export const NFL_BOARDS = [
     title: "NFL — All Advanced",
     description: "Advanced efficiency, value, and opportunity metrics across positions.",
     columns: [
-      "epa", "cpoe", "target_share", "air_yards", "yards_after_catch", "adot",
-      "wopr", "red_zone_targets", "rushing_epa", "receiving_epa",
+      "epa", "cpoe", "snap_count", "snap_share", "target_share", "air_yards", "adot",
+      "wopr", "opportunity_share", "market_share", "red_zone_targets", "rushing_epa", "receiving_epa",
     ],
     defaultSort: "epa",
     defaultPosition: "",
@@ -157,11 +181,12 @@ export const NFL_BOARDS = [
     id: "nfl-receiving-advanced",
     label: "Receiving Advanced",
     path: "/nfl/receiving-advanced",
-    menuDesc: "Target share, air yards, WOPR",
+    menuDesc: "Routes, target share, air yards, WOPR",
     title: "NFL Receiving — Advanced",
     description: "Receiving opportunity and efficiency metrics.",
     columns: [
-      "target_share", "air_yards", "air_yards_share", "adot", "yards_after_catch",
+      "routes_run", "route_participation", "targets_per_route_run", "yards_per_route_run",
+      "target_share", "air_yards", "air_yards_share", "unrealized_air_yards", "adot",
       "wopr", "racr", "yards_per_target", "red_zone_targets", "receiving_epa",
     ],
     defaultSort: "target_share",
@@ -175,7 +200,7 @@ export const NFL_BOARDS = [
     menuDesc: "Carries, yards, TDs",
     title: "NFL Rushing — General",
     description: "Rushing box-score stats.",
-    columns: ["carries", "rushing_yards", "rushing_tds", "red_zone_rush_attempts"],
+    columns: ["carries", "rushing_yards", "rushing_tds", "red_zone_rush_attempts", "rush_att_inside_5"],
     defaultSort: "rushing_yards",
     defaultPosition: "",
     scoring: false,
@@ -184,10 +209,14 @@ export const NFL_BOARDS = [
     id: "nfl-rushing-advanced",
     label: "Rushing Advanced",
     path: "/nfl/rushing-advanced",
-    menuDesc: "Rushing EPA, red-zone share",
+    menuDesc: "Rushing EPA, market share, goal line",
     title: "NFL Rushing — Advanced",
-    description: "Rushing efficiency and red-zone opportunity.",
-    columns: ["carries", "rushing_yards", "rushing_epa", "red_zone_rush_attempts", "red_zone_rush_share"],
+    description: "Rushing efficiency, market share, and goal-line opportunity.",
+    columns: [
+      "carries", "rushing_yards", "rushing_epa", "rush_attempt_share", "market_share",
+      "red_zone_rush_attempts", "red_zone_rush_share",
+      "rush_att_inside_10", "rush_att_inside_5", "rush_att_inside_2",
+    ],
     defaultSort: "rushing_epa",
     defaultPosition: "",
     scoring: false,

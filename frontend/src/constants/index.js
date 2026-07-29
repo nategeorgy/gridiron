@@ -1,5 +1,6 @@
-// Shared UI constants: seasons, positions, metric definitions, and the
-// position-aware column sets shown in the leaderboard.
+// Shared UI constants: seasons, positions, metric definitions, and the column sets
+// for the team leaderboard and the player-profile game log. Leaderboard columns live
+// in constants/boards.js, one set per board.
 
 export const SEASONS = [2025, 2024, 2023, 2022, 2021, 2020];
 
@@ -68,26 +69,41 @@ export const METRICS = {
   rushing_epa: { label: "Rushing EPA", short: "RU EPA", format: FORMATS.one },
   receiving_epa: { label: "Receiving EPA", short: "RE EPA", format: FORMATS.one },
   fumbles_lost: { label: "Fumbles Lost", short: "FUM L", format: FORMATS.int },
+  // Expected points (M2) — scoring-aware, computed from modelled opportunity.
+  expected_fantasy_points: { label: "Expected Fantasy Points", short: "xFPTS", format: FORMATS.one },
+  expected_fantasy_ppg: { label: "Expected Fantasy PPG", short: "xFPPG", format: FORMATS.two },
+  fantasy_points_over_expected: { label: "Points Over Expected", short: "FP±", format: FORMATS.one },
+  // Expected components (M2) — the modelled estimates xFP is built from.
+  passing_yards_exp: { label: "Expected Passing Yards", short: "xPASS YD", format: FORMATS.int },
+  passing_tds_exp: { label: "Expected Passing TDs", short: "xPASS TD", format: FORMATS.one },
+  interceptions_exp: { label: "Expected Interceptions", short: "xINT", format: FORMATS.one },
+  rushing_yards_exp: { label: "Expected Rushing Yards", short: "xRUSH YD", format: FORMATS.int },
+  rushing_tds_exp: { label: "Expected Rushing TDs", short: "xRUSH TD", format: FORMATS.one },
+  receiving_yards_exp: { label: "Expected Receiving Yards", short: "xREC YD", format: FORMATS.int },
+  receiving_tds_exp: { label: "Expected Receiving TDs", short: "xREC TD", format: FORMATS.one },
+  receptions_exp: { label: "Expected Receptions", short: "xREC", format: FORMATS.one },
+  // Rushing opportunity by field position (M2).
+  rush_att_inside_10: { label: "Carries Inside 10", short: "IN10", format: FORMATS.int },
+  rush_att_inside_5: { label: "Carries Inside 5", short: "IN5", format: FORMATS.int },
+  rush_att_inside_2: { label: "Carries Inside 2", short: "IN2", format: FORMATS.int },
+  // Market share (M2).
+  rush_attempt_share: { label: "Rush Share", short: "RUSH%", format: FORMATS.pct },
+  opportunity_share: { label: "Opportunity Share", short: "OPP%", format: FORMATS.pct },
+  market_share: { label: "Market Share", short: "MKT%", format: FORMATS.pct },
+  // Snap and route usage (M2 — populated by pipeline/ingest_usage.py).
+  snap_count: { label: "Snap Count", short: "SNAP", format: FORMATS.int },
+  snap_share: { label: "Snap Share", short: "SNAP%", format: FORMATS.pct },
+  routes_run: { label: "Routes Run", short: "RTS", format: FORMATS.int },
+  routes_run_per_game: { label: "Routes Run / Game", short: "RTS/G", format: FORMATS.one },
+  route_participation: { label: "Route Participation", short: "RTE%", format: FORMATS.pct },
+  targets_per_route_run: { label: "Targets Per Route Run", short: "TPRR", format: FORMATS.two },
+  yards_per_route_run: { label: "Yards Per Route Run", short: "YPRR", format: FORMATS.two },
+  unrealized_air_yards: { label: "Unrealized Air Yards", short: "UAY", format: FORMATS.int },
 };
 
-// Metrics offered in the "sort by" dropdown, grouped for scannability.
-export const SORT_METRICS = [
-  "fantasy_points", "fantasy_ppg",
-  "passing_yards", "passing_tds", "passer_rating", "epa", "cpoe",
-  "rushing_yards", "rushing_tds", "carries", "red_zone_rush_attempts",
-  "receiving_yards", "receiving_tds", "receptions", "targets", "target_share",
-];
-
-// Columns displayed per position filter (after the fixed identity columns).
-// Fantasy columns are scoring-aware (recomputed from the active league scoring).
-const FANTASY_COLS = ["fantasy_points", "fantasy_ppg"];
-export const COLUMN_SETS = {
-  "": [...FANTASY_COLS, "passing_yards", "rushing_yards", "receiving_yards", "targets"],
-  QB: ["passing_yards", "passing_tds", "interceptions", "passer_rating", "cpoe", "epa", "rushing_yards", ...FANTASY_COLS],
-  RB: ["carries", "rushing_yards", "rushing_tds", "red_zone_rush_attempts", "targets", "receiving_yards", ...FANTASY_COLS],
-  WR: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", "adot", ...FANTASY_COLS],
-  TE: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", ...FANTASY_COLS],
-};
+// Leaderboard columns and sort options are no longer defined here — each board in
+// constants/boards.js declares its own columns, and LeaderboardView builds the "sort
+// by" dropdown from them.
 
 // Team leaderboard metric definitions (offensive production).
 export const TEAM_METRICS = {
@@ -109,34 +125,42 @@ export const TEAM_COLUMNS = [
 ];
 
 // Per-game columns for the profile game log (only per-game metrics — no PPG).
+// fantasy_points and expected_fantasy_points are scoring-aware: the backend computes
+// them per request from the active league scoring, so both are in the user's scoring.
+const GAMELOG_FANTASY_COLS = ["fantasy_points", "expected_fantasy_points"];
 export const GAMELOG_COLUMN_SETS = {
-  QB: ["completions", "attempts", "passing_yards", "passing_tds", "interceptions", "passer_rating", "rushing_yards", "fantasy_points_ppr"],
-  RB: ["carries", "rushing_yards", "rushing_tds", "red_zone_rush_attempts", "targets", "receptions", "receiving_yards", "fantasy_points_ppr"],
-  WR: ["targets", "receptions", "receiving_yards", "receiving_tds", "air_yards", "target_share", "fantasy_points_ppr"],
-  TE: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", "fantasy_points_ppr"],
+  QB: ["completions", "attempts", "passing_yards", "passing_tds", "interceptions", "passer_rating", "rushing_yards", ...GAMELOG_FANTASY_COLS],
+  RB: ["carries", "rushing_yards", "rushing_tds", "rush_att_inside_5", "targets", "receptions", "receiving_yards", "opportunity_share", ...GAMELOG_FANTASY_COLS],
+  WR: ["targets", "receptions", "receiving_yards", "receiving_tds", "air_yards", "target_share", "routes_run", ...GAMELOG_FANTASY_COLS],
+  TE: ["targets", "receptions", "receiving_yards", "receiving_tds", "target_share", "routes_run", ...GAMELOG_FANTASY_COLS],
 };
 
 // Headline totals shown as summary cards on the profile, per position.
 // agg: "sum" totals the column; "ppg" divides the summed column by games.
+const SUMMARY_FANTASY_STATS = [
+  { key: "fantasy_points", agg: "sum" },
+  { key: "fantasy_ppg", agg: "ppg", base: "fantasy_points" },
+  { key: "expected_fantasy_points", agg: "sum" },
+];
 export const SUMMARY_STATS = {
   QB: [
     { key: "passing_yards", agg: "sum" }, { key: "passing_tds", agg: "sum" },
     { key: "interceptions", agg: "sum" }, { key: "rushing_yards", agg: "sum" },
-    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+    ...SUMMARY_FANTASY_STATS,
   ],
   RB: [
     { key: "rushing_yards", agg: "sum" }, { key: "rushing_tds", agg: "sum" },
     { key: "receptions", agg: "sum" }, { key: "receiving_yards", agg: "sum" },
-    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+    ...SUMMARY_FANTASY_STATS,
   ],
   WR: [
     { key: "receptions", agg: "sum" }, { key: "targets", agg: "sum" },
     { key: "receiving_yards", agg: "sum" }, { key: "receiving_tds", agg: "sum" },
-    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+    ...SUMMARY_FANTASY_STATS,
   ],
   TE: [
     { key: "receptions", agg: "sum" }, { key: "targets", agg: "sum" },
     { key: "receiving_yards", agg: "sum" }, { key: "receiving_tds", agg: "sum" },
-    { key: "fantasy_points_ppr", agg: "sum" }, { key: "fantasy_ppg_ppr", agg: "ppg", base: "fantasy_points_ppr" },
+    ...SUMMARY_FANTASY_STATS,
   ],
 };

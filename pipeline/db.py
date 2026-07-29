@@ -74,6 +74,21 @@ def upsert(table_name: str, rows: list[dict], conflict_columns: list[str]) -> in
     return len(rows)
 
 
+def load_stat_keys() -> set[tuple[str, str]]:
+    """Return every existing ``(player_id, game_id)`` pair in player_stats.
+
+    Enrichment passes (expected points, snaps, routes) only *update* stat lines that
+    ``ingest_stats.py`` already created. Filtering to these keys keeps an enrichment
+    run from inserting half-empty rows for players outside our scope.
+    """
+    table = _reflect_table("player_stats")
+    with get_engine().connect() as connection:
+        result = connection.execute(
+            table.select().with_only_columns(table.c.player_id, table.c.game_id)
+        )
+        return {(player_id, game_id) for player_id, game_id in result}
+
+
 def load_team_id_map() -> dict[str, int]:
     """Return a mapping of team abbreviation -> team_id from the teams table."""
     table = _reflect_table("teams")

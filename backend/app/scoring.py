@@ -55,6 +55,29 @@ POINTS_COMPONENTS: tuple[str, ...] = (
     "fantasy_points_std", "receptions", *WEIGHT_COLUMNS.values(),
 )
 
+# --- Expected fantasy points (M2) ---
+# The expected side has no stored "expected fantasy_points_std" baseline, so xFP is
+# built from the *full* weights rather than deltas. Same config, same TE-premium, so
+# xFP and actual points are always directly comparable in the user's own scoring.
+EXPECTED_WEIGHT_COLUMNS: dict[str, str] = {
+    "pass_yd": "passing_yards_exp",
+    "pass_td": "passing_tds_exp",
+    "pass_int": "interceptions_exp",
+    "rush_yd": "rushing_yards_exp",
+    "rush_td": "rushing_tds_exp",
+    "rec_yd": "receiving_yards_exp",
+    "rec_td": "receiving_tds_exp",
+}
+
+# Two-point conversions are not a configurable weight (they are baked into the actual
+# side's standard baseline), so the expected side scores them at the standard 2 points.
+TWO_POINT_CONV_WEIGHT = 2.0
+
+# Expected components needed to compute xFP (for building a per-row dict).
+EXPECTED_COMPONENTS: tuple[str, ...] = (
+    "receptions_exp", "two_point_conv_exp", *EXPECTED_WEIGHT_COLUMNS.values(),
+)
+
 # Named presets. Each is a sparse override of the standard weights.
 PRESETS: dict[str, dict[str, float]] = {
     "std": {},
@@ -182,4 +205,53 @@ def compute_points(config: ScoringConfig, components: dict, position: str | None
     points = value("fantasy_points_std") + rec_weight * value("receptions")
     for field, column_name in WEIGHT_COLUMNS.items():
         points += (getattr(config, field) - STANDARD_WEIGHTS[field]) * value(column_name)
+    return points
+
+
+def expected_points_expr(config: ScoringConfig, sum_mode: bool) -> ColumnElement:
+    """Build the expected-fantasy-points (xFP) SQL expression for ORDER BY / SELECT.
+
+    Mirrors :func:`points_expr` — ``sum_mode=True`` aggregates a season, ``False``
+    scores a single game — but multiplies the *expected* components by the config's
+    full weights. Rows with no ffopportunity coverage contribute 0 here (SQL cannot
+    distinguish "no data" from "no production" inside a SUM); the displayed value
+    from :func:`compute_expected_points` is ``None`` in that case.
+    """
+    from sqlalchemy import func
+
+    def col(name: str) -> ColumnElement:
+        column = getattr(PlayerStats, name)
+        aggregated = func.sum(column) if sum_mode else column
+        return func.coalesce(aggregated, 0)
+
+    expression: ColumnElement = _reception_weight(config) * col("receptions_exp")
+    expression = expression + TWO_POINT_CONV_WEIGHT * col("two_point_conv_exp")
+    for field, column_name in EXPECTED_WEIGHT_COLUMNS.items():
+        expression = expression + getattr(config, field) * col(column_name)
+    return expression
+
+
+def compute_expected_points(
+    config: ScoringConfig, components: dict, position: str | None
+) -> float | None:
+    """Compute xFP in Python from already-summed/raw expected components.
+
+    Returns ``None`` when the row has no expected data at all, so "not modelled"
+    stays visibly different from "expected zero".
+
+    Note: ffopportunity models no expected fumbles, so xFP carries no fumble
+    penalty while actual points do — a small, consistent upward bias in xFP.
+    """
+    if all(components.get(name) is None for name in EXPECTED_COMPONENTS):
+        return None
+
+    def value(name: str) -> float:
+        raw = components.get(name)
+        return float(raw) if raw is not None else 0.0
+
+    rec_weight = config.te_rec if (config.te_rec is not None and position == "TE") else config.rec
+    points = rec_weight * value("receptions_exp")
+    points += TWO_POINT_CONV_WEIGHT * value("two_point_conv_exp")
+    for field, column_name in EXPECTED_WEIGHT_COLUMNS.items():
+        points += getattr(config, field) * value(column_name)
     return points

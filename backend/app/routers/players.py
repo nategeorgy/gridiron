@@ -9,6 +9,13 @@ from app.models import Game, Player, PlayerStats, Team
 from app.schemas.common import PaginatedResponse, paginated
 from app.schemas.player import PlayerOut
 from app.schemas.stats import StatLineOut
+from app.scoring import (
+    EXPECTED_COMPONENTS,
+    POINTS_COMPONENTS,
+    compute_expected_points,
+    compute_points,
+    parse_scoring,
+)
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -72,11 +79,21 @@ def get_player_game_log(
     player_id: str,
     season: int | None = Query(None),
     season_type: str | None = Query(None, pattern="^(REG|POST)$"),
+    scoring: str = Query(
+        "ppr",
+        description="League scoring as preset[:overrides] — sets fantasy_points and "
+                    "expected_fantasy_points on each stat line",
+    ),
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[StatLineOut]:
     """Return a player's per-game stat lines (game log), newest season first."""
-    if db.get(Player, player_id) is None:
+    player = db.get(Player, player_id)
+    if player is None:
         raise HTTPException(status_code=404, detail="Player not found")
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     team_abbr = dict(db.execute(select(Team.team_id, Team.abbreviation)).all())
 
@@ -101,6 +118,13 @@ def get_player_game_log(
         line = StatLineOut.model_validate(stat_line)
         line.game_date = game_date
         line.opponent_abbreviation = team_abbr.get(opponent_id)
+        # Fantasy + expected points in the requested scoring, from the same engine
+        # the leaderboard uses (M1 spine A).
+        components = {name: getattr(stat_line, name) for name in POINTS_COMPONENTS}
+        line.fantasy_points = round(compute_points(config, components, player.position), 3)
+        expected_components = {name: getattr(stat_line, name) for name in EXPECTED_COMPONENTS}
+        expected = compute_expected_points(config, expected_components, player.position)
+        line.expected_fantasy_points = round(expected, 3) if expected is not None else None
         items.append(line)
 
     return paginated(items, len(items), limit=len(items) or 1, offset=0)

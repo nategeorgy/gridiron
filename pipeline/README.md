@@ -25,17 +25,26 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_players.py                     # 2. players (QB/RB/WR/TE)
 .venv/bin/python ingest_schedules.py --seasons 2024    # 3. games
 .venv/bin/python ingest_stats.py --seasons 2024        # 4. per-game stats
+.venv/bin/python ingest_expected.py --seasons 2024     # 5. expected + market share
+.venv/bin/python ingest_usage.py --seasons 2024        # 6. snaps + routes
 ```
+
+Steps 5 and 6 are **enrichment passes**: they only update stat lines step 4 already
+created, so they must run after it (in either order).
 
 Full backfill (project scope is 2020–2025):
 
 ```bash
 .venv/bin/python ingest_schedules.py --seasons 2020 2021 2022 2023 2024 2025
 .venv/bin/python ingest_stats.py     --seasons 2020 2021 2022 2023 2024 2025
+.venv/bin/python ingest_expected.py  --seasons 2020 2021 2022 2023 2024 2025
+.venv/bin/python ingest_usage.py     --seasons 2020 2021 2022 2023 2024 2025
 ```
 
-`ingest_stats.py` downloads play-by-play to derive red-zone metrics. Pass
-`--skip-red-zone` to skip that (faster, leaves red-zone columns NULL).
+`ingest_stats.py` downloads play-by-play to derive red-zone, inside-10/5/2, and
+unrealized-air-yard metrics. Pass `--skip-pbp` to skip that (faster, leaves those
+columns NULL). `ingest_usage.py --skip-routes` does snaps only, skipping the
+participation + play-by-play download.
 
 ## Column coverage
 
@@ -47,17 +56,36 @@ Full backfill (project scope is 2020–2025):
 - **Advanced (derived)** — adot, passer_rating, yards_per_target,
   yards_per_reception
 - **Advanced (from play-by-play)** — red_zone_rush_attempts, red_zone_targets,
-  red_zone_rush_share
+  red_zone_rush_share, rush_att_inside_10 / _5 / _2, unrealized_air_yards
 - **Fantasy** — fantasy_points_std / _ppr / _half
 
-### Left NULL — pending a Phase 4b enrichment pass
+`ingest_expected.py` populates:
 
-These come from separate feeds (PFR advanced stats, Next Gen Stats, snap counts)
-that join on non-GSIS player IDs:
+- **Expected components** — passing_yards_exp, passing_tds_exp, interceptions_exp,
+  rushing_yards_exp, rushing_tds_exp, receiving_yards_exp, receiving_tds_exp,
+  receptions_exp, two_point_conv_exp. These are *model estimates* (nflverse
+  ffopportunity), and the API flags them as `modelled` so the UI labels them.
+  Expected fantasy **points** are never stored — the backend computes them from these
+  components and the requested league scoring.
+- **Market share** — rush_attempt_share, opportunity_share, market_share
 
-`snap_count`, `snap_share`, `routes_run`, `route_participation`,
-`targets_per_route_run`, `yards_per_route_run`, `slot_snaps`,
-`unrealized_air_yards`.
+`ingest_usage.py` populates:
+
+- **Snaps** (PFR, via a pfr_id → gsis_id crosswalk) — snap_count, snap_share
+- **Routes** (participation × play-by-play) — routes_run, route_participation, and the
+  derived targets_per_route_run, yards_per_route_run
+
+> **`routes_run` is pass-play participation, not charted routes.** A back who stays in
+> to block counts as having run a route, so routes are slightly overstated (and TPRR
+> slightly understated) for run-blocking backs and tight ends. Accurate for receivers.
+> QBs are skipped. See `docs/design/M2-expanded-metrics.md` §3.
+
+### Left NULL — no free data source
+
+`slot_snaps`. Per-player alignment isn't published by any free nflverse feed —
+participation carries formation and personnel groupings but not who lined up where,
+PFR advanced receiving has no alignment column, and FTN charting is play-level with no
+player attribution.
 
 Season-level derived metrics (`fantasy_ppg_*`, `routes_run_per_game`) are **not**
 stored here — they are computed in the API by aggregating these per-game rows.

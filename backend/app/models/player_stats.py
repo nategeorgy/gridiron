@@ -63,6 +63,12 @@ class PlayerStats(Base):
     red_zone_rush_share: Mapped[float | None] = mapped_column(Float)
     red_zone_rush_attempts: Mapped[int | None] = mapped_column(Integer)
     red_zone_targets: Mapped[int | None] = mapped_column(Integer)
+    rush_att_inside_10: Mapped[int | None] = mapped_column(Integer)
+    rush_att_inside_5: Mapped[int | None] = mapped_column(Integer)
+    rush_att_inside_2: Mapped[int | None] = mapped_column(Integer)
+    rush_attempt_share: Mapped[float | None] = mapped_column(Float)
+    opportunity_share: Mapped[float | None] = mapped_column(Float)
+    market_share: Mapped[float | None] = mapped_column(Float)
     targets_per_route_run: Mapped[float | None] = mapped_column(Float)
     slot_snaps: Mapped[int | None] = mapped_column(Integer)
     routes_run: Mapped[int | None] = mapped_column(Integer)
@@ -71,6 +77,20 @@ class PlayerStats(Base):
     yards_per_route_run: Mapped[float | None] = mapped_column(Float)
     yards_per_target: Mapped[float | None] = mapped_column(Float)
     yards_per_reception: Mapped[float | None] = mapped_column(Float)
+
+    # --- Expected stat components (M2) ---
+    # Model estimates from nflverse ffopportunity. Stored as *components* — never as
+    # expected fantasy points — so expected points recompute in any league scoring
+    # through the same engine as actual points (see app/scoring.py).
+    passing_yards_exp: Mapped[float | None] = mapped_column(Float)
+    passing_tds_exp: Mapped[float | None] = mapped_column(Float)
+    interceptions_exp: Mapped[float | None] = mapped_column(Float)
+    rushing_yards_exp: Mapped[float | None] = mapped_column(Float)
+    rushing_tds_exp: Mapped[float | None] = mapped_column(Float)
+    receiving_yards_exp: Mapped[float | None] = mapped_column(Float)
+    receiving_tds_exp: Mapped[float | None] = mapped_column(Float)
+    receptions_exp: Mapped[float | None] = mapped_column(Float)
+    two_point_conv_exp: Mapped[float | None] = mapped_column(Float)
 
     # --- Fantasy stats ---
     fantasy_points_ppr: Mapped[float | None] = mapped_column(Float)

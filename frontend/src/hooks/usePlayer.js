@@ -10,10 +10,14 @@ export function usePlayer(playerId) {
   });
 }
 
-export function usePlayerGameLog(playerId) {
+// `scoring` is the active league-scoring spec: the backend uses it to set
+// fantasy_points and expected_fantasy_points on every stat line, so the game log is
+// in the user's own scoring (M1 spine A). It is part of the query key so switching
+// scoring refetches.
+export function usePlayerGameLog(playerId, scoring) {
   return useQuery({
-    queryKey: ["player-gamelog", playerId],
-    queryFn: () => getPlayerGameLog(playerId),
+    queryKey: ["player-gamelog", playerId, scoring],
+    queryFn: () => getPlayerGameLog(playerId, scoring ? { scoring } : {}),
     enabled: Boolean(playerId),
   });
 }
