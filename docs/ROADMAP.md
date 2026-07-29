@@ -4,7 +4,7 @@
 > summary; this file holds the vision, architecture spines, and the milestone
 > plan. Update this when priorities change, then reconcile `CLAUDE.md`.
 
-Last updated: 2026-07-16
+Last updated: 2026-07-28
 
 ---
 
@@ -241,3 +241,11 @@ tells people it exists.
   at M2, go active at M3 (the indices are the content engine), lean into visuals at M4.
   Social is a distribution layer, not a milestone — do not gate it on M5 (accounts),
   since shareable public pages need no login. See "Growth & Social presence".
+- **2026-07-28 — Visual identity: Liquid Glass + Command Center home.** Adopted a
+  frosted "Liquid Glass" surface system with two themes — dark "smoked graphite"
+  (default) and light "Clear" — chosen from a 23-skin Bento exploration. The home
+  page (`/`) is now a fantasy **Command Center** (Bento dashboard); the leaderboard
+  moved to `/leaderboard`. Kept the **electric-green** brand accent in both themes
+  (single `--accent` token) rather than the blue the source skins used — trivially
+  swappable. League scoring is reframed as one feature among many, not the headline.
+  See [`design/ui-theme-liquid-glass.md`](design/ui-theme-liquid-glass.md).

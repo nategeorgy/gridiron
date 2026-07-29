@@ -24,22 +24,22 @@ export function Teams() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Team Leaderboard</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Team Leaderboard</h1>
+        <p className="mt-1 text-sm text-muted">
           Offensive production by team. Click a column to rank by it.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3 rounded-lg border border-navy-800 bg-navy-900 p-4">
+      <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
         <Select label="Type" value={seasonType} onChange={setSeasonType} options={SEASON_TYPES} />
         <Select label="Sort by" value={metric} onChange={setMetric} options={sortOptions} />
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-navy-800 bg-navy-900">
+      <div className="glass-card overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
-            <tr className="border-b border-navy-700 text-xs uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
               <th className="px-3 py-3 text-right">#</th>
               <th className="px-3 py-3">Team</th>
               <th className="px-3 py-3 text-right">G</th>
@@ -47,7 +47,7 @@ export function Teams() {
                 <th
                   key={key}
                   onClick={() => setMetric(key)}
-                  className={`cursor-pointer whitespace-nowrap px-3 py-3 text-right transition hover:text-white ${
+                  className={`cursor-pointer whitespace-nowrap px-3 py-3 text-right transition hover:text-fg ${
                     metric === key ? "text-accent" : ""
                   }`}
                   title={TEAM_METRICS[key].label}
@@ -60,18 +60,18 @@ export function Teams() {
           </thead>
           <tbody className={isPlaceholderData ? "opacity-60 transition" : "transition"}>
             {rows.map((row, index) => (
-              <tr key={row.team_id} className="border-b border-navy-850 last:border-0 hover:bg-navy-850/60">
-                <td className="stat-num px-3 py-2.5 text-right text-slate-500">{index + 1}</td>
+              <tr key={row.team_id} className="border-b border-line last:border-0 hover:bg-surface-2">
+                <td className="stat-num px-3 py-2.5 text-right text-faint">{index + 1}</td>
                 <td className="px-3 py-2.5">
-                  <span className="font-medium text-slate-100">{row.name}</span>
-                  <span className="stat-num ml-2 text-xs text-slate-500">{row.abbreviation}</span>
+                  <span className="font-medium text-fg">{row.name}</span>
+                  <span className="stat-num ml-2 text-xs text-faint">{row.abbreviation}</span>
                 </td>
-                <td className="stat-num px-3 py-2.5 text-right text-slate-400">{row.games}</td>
+                <td className="stat-num px-3 py-2.5 text-right text-muted">{row.games}</td>
                 {TEAM_COLUMNS.map((key) => (
                   <td
                     key={key}
                     className={`stat-num px-3 py-2.5 text-right ${
-                      metric === key ? "font-semibold text-accent" : "text-slate-200"
+                      metric === key ? "font-semibold text-accent" : "text-fg"
                     }`}
                   >
                     {formatStat(row[key], TEAM_METRICS[key].format)}
@@ -82,9 +82,9 @@ export function Teams() {
           </tbody>
         </table>
 
-        {isLoading && <div className="p-6 text-center text-sm text-slate-400">Loading…</div>}
+        {isLoading && <div className="p-6 text-center text-sm text-muted">Loading…</div>}
         {isError && (
-          <div className="p-6 text-center text-sm text-red-400">
+          <div className="p-6 text-center text-sm text-neg">
             Failed to load: {error?.message}
           </div>
         )}

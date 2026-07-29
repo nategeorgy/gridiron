@@ -332,14 +332,25 @@ GET /api/v1/games                            ← game schedule/results
   means for fantasy value; default to fantasy-relevant sorts, groupings, and defaults (e.g.
   fantasy points/PPG as the default leaderboard metric, fantasy metrics grouped ahead of raw
   ones). Raw and advanced numbers are always available, but the fantasy lens leads.
-- **Dark mode first** — dark background, high contrast data
+- **Liquid Glass, dark by default** — a frosted, translucent "Liquid Glass" surface
+  system (Apple iOS 26 / Tahoe-style) with **two themes**: dark ("smoked graphite",
+  the default) and light ("Clear"), toggled from the header and persisted in
+  `localStorage`. High-contrast data in both. See
+  [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md).
+- **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**
+  (a Bento dashboard that opens on "who's leading in your scoring"), *not* the
+  leaderboard. The leaderboard lives at `/leaderboard`.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
 
 ### Color Palette
-- **dark navy background, electric green accent, white text**
-- Inspired by: **fotmob.com**
+- **Electric green accent** (`--accent`) on frosted translucent surfaces over a
+  colored "environment" — dark ("smoked graphite") and light ("Clear") themes.
+  Colors are CSS variables (see `frontend/src/index.css`); never hardcode
+  theme-dependent colors. The green is deliberately kept as the brand accent in
+  both themes.
+- Inspired by: **fotmob.com** (density) + Apple **Liquid Glass** (material).
 
 ### Typography
 - **Inter** (primary) — clean, modern sans-serif for UI and data labels
@@ -418,10 +429,12 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] Data pipeline built and run (players, games, stats ingested — 2020–2025)
 - [x] FastAPI backend running with core endpoints
 - [x] React frontend scaffold running
-- [x] Player leaderboard page built
+- [x] Player leaderboard page built (now at `/leaderboard`)
 - [x] Player profile page built
 - [x] Team leaderboard page built
 - [x] Basic player search (header)
+- [x] Command Center home page (`/`) — Bento dashboard; leaderboard moved off home
+- [x] Liquid Glass UI theme — light ("Clear") / dark ("smoked graphite") + toggle
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com

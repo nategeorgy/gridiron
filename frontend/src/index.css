@@ -2,30 +2,185 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================================
+   Liquid Glass theme system.
+   Two themes — dark (default, "smoked graphite") and light ("clear") — driven
+   entirely by CSS custom properties. Components read the tokens below (or the
+   .glass-* classes) so a single `data-theme` swap on <html> re-skins the app.
+   See docs/design/ui-theme-liquid-glass.md.
+   ========================================================================= */
 @layer base {
-  html {
+  /* --- Dark (default) --- */
+  :root {
     color-scheme: dark;
+    --bg: #0a0a0c;
+    /* The colorful "environment" the frosted glass refracts. Fixed to the
+       viewport (see body) so cards blur a stable backdrop as the page scrolls. */
+    --env:
+      radial-gradient(40% 50% at 16% 18%, rgba(96, 116, 158, 0.30), transparent 62%),
+      radial-gradient(44% 52% at 84% 22%, rgba(120, 96, 150, 0.24), transparent 62%),
+      radial-gradient(48% 56% at 78% 90%, rgba(80, 120, 140, 0.20), transparent 64%),
+      linear-gradient(140deg, #15161b, #0a0a0c);
+
+    --surface: rgba(44, 46, 54, 0.55);   /* frosted card fill */
+    --surface-2: rgba(74, 76, 86, 0.45); /* raised / hover fill */
+    --surface-solid: #16171c;            /* opaque popovers (dropdowns, menus) */
+    --border: rgba(255, 255, 255, 0.14); /* glass edge */
+    --border-strong: rgba(255, 255, 255, 0.24);
+    --divider: rgba(255, 255, 255, 0.08);/* table/row hairlines */
+    --edge: rgba(255, 255, 255, 0.55);   /* top specular highlight */
+
+    --fg: #f2f3f6;
+    --muted: #a8acb6;
+    --faint: #71757f;
+
+    --accent: #00e389;        /* GridironIQ electric green, kept as the brand */
+    --accent-strong: #2dffa6;
+    --accent-ink: #04140c;    /* text on an accent fill */
+
+    --pos: #00e389;
+    --neg: #f87171;
+    --warn: #f5a524;
+
+    --shadow: 0 20px 55px -22px rgba(0, 0, 0, 0.7);
+    --radius: 20px;
+    --blur: 24px;
+  }
+
+  /* --- Light ("Clear") --- */
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #dde3ec;
+    --env:
+      radial-gradient(42% 52% at 16% 14%, rgba(188, 205, 232, 0.75), transparent 62%),
+      radial-gradient(44% 54% at 86% 22%, rgba(210, 214, 224, 0.80), transparent 62%),
+      radial-gradient(50% 58% at 78% 90%, rgba(196, 210, 230, 0.60), transparent 64%),
+      linear-gradient(135deg, #eef1f6, #dde3ec);
+
+    --surface: rgba(255, 255, 255, 0.55);
+    --surface-2: rgba(255, 255, 255, 0.72);
+    --surface-solid: #ffffff;
+    --border: rgba(255, 255, 255, 0.80);
+    --border-strong: rgba(255, 255, 255, 0.95);
+    --divider: rgba(20, 30, 50, 0.10);
+    --edge: rgba(255, 255, 255, 0.90);
+
+    --fg: #141821;
+    --muted: #4a5568;
+    --faint: #8a94a6;
+
+    --accent: #00b06a;        /* deeper green so it holds contrast on light */
+    --accent-strong: #00925a;
+    --accent-ink: #ffffff;
+
+    --pos: #0a9d63;
+    --neg: #dc4c4c;
+    --warn: #b9770a;
+
+    --shadow: 0 18px 44px -22px rgba(20, 30, 60, 0.35);
+    --radius: 20px;
+    --blur: 20px;
   }
 
   body {
-    @apply bg-navy-950 text-slate-100 font-sans antialiased;
+    @apply font-sans antialiased;
+    min-height: 100vh;
+    color: var(--fg);
+    background-color: var(--bg);
+    background-image: var(--env);
+    background-attachment: fixed;
+    background-size: cover;
   }
 
   /* Tabular numbers keep stat columns aligned. */
   .stat-num {
     @apply font-mono tabular-nums;
   }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
 }
 
-/* Thin, dark scrollbars to match the theme. */
+/* =========================================================================
+   Liquid Glass component classes — the shared "material".
+   ========================================================================= */
+@layer components {
+  .glass-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(1.6);
+    backdrop-filter: blur(var(--blur)) saturate(1.6);
+    box-shadow: inset 0 1px 0 var(--edge), var(--shadow);
+  }
+
+  .glass-header {
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(1.6);
+    backdrop-filter: blur(var(--blur)) saturate(1.6);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .glass-pill {
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .glass-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    border-radius: 12px;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .glass-input::placeholder {
+    color: var(--faint);
+  }
+  .glass-input:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+
+  .glass-popover {
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+  }
+
+  .btn-accent {
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 8px 20px -8px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-ghost {
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--fg);
+  }
+  .btn-ghost:disabled {
+    opacity: 0.4;
+  }
+}
+
+/* Thin scrollbars that follow the theme. */
 ::-webkit-scrollbar {
   height: 10px;
   width: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: theme("colors.navy.900");
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: theme("colors.navy.600");
+  background: var(--border-strong);
   border-radius: 9999px;
 }

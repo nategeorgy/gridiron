@@ -39,7 +39,7 @@ export function SearchBox() {
   const showDropdown = open && debounced.trim().length >= 2;
 
   return (
-    <div ref={containerRef} className="relative w-44 sm:w-64">
+    <div ref={containerRef} className="relative hidden w-44 sm:block sm:w-64">
       <input
         type="text"
         value={query}
@@ -50,13 +50,13 @@ export function SearchBox() {
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder="Search players…"
-        className="w-full rounded-md border border-navy-700 bg-navy-850 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-accent focus:ring-1 focus:ring-accent"
+        className="glass-input w-full px-3 py-1.5 text-sm"
       />
 
       {showDropdown && (
-        <div className="absolute right-0 z-20 mt-1 w-full overflow-hidden rounded-md border border-navy-700 bg-navy-850 shadow-xl">
+        <div className="glass-popover absolute right-0 z-30 mt-1 w-full overflow-hidden">
           {results.length === 0 ? (
-            <div className="px-3 py-2.5 text-sm text-slate-500">
+            <div className="px-3 py-2.5 text-sm text-faint">
               {isFetching ? "Searching…" : "No players found"}
             </div>
           ) : (
@@ -64,11 +64,11 @@ export function SearchBox() {
               <button
                 key={player.player_id}
                 onClick={() => selectPlayer(player.player_id)}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-navy-800"
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-surface-2"
               >
-                <span className="truncate font-medium text-slate-100">{player.name}</span>
-                <span className="flex shrink-0 items-center gap-1.5 text-xs text-slate-400">
-                  <span className="rounded bg-navy-700 px-1.5 py-0.5 font-semibold text-accent">
+                <span className="truncate font-medium text-fg">{player.name}</span>
+                <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
+                  <span className="rounded bg-surface-2 px-1.5 py-0.5 font-semibold text-accent">
                     {player.position}
                   </span>
                   <span className="stat-num">{player.team_abbreviation ?? "FA"}</span>

@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-07-22
+Last updated: 2026-07-28
 
 ---
 
@@ -87,7 +87,7 @@ Following one real interaction makes the whole architecture click. **"User opens
 leaderboard and sorts by fantasy points in their custom PPR scoring":**
 
 1. Browser loads the React app (`frontend/`). The router (`App.jsx`) shows the
-   `Leaderboard` page.
+   `Leaderboard` page at `/leaderboard` (the home route `/` is the Command Center).
 2. The page reads the user's chosen filters (season, position, scoring) and calls a
    **hook** (`useLeaderboard`), which calls a **service** (`services/stats.js`),
    which uses the shared **axios client** (`services/api.js`) to make an HTTP GET to:
@@ -121,7 +121,7 @@ Recharts (charts). Package manager: **npm**. Dev server runs on **port 5173**.
 | `package.json` | Declares dependencies and npm scripts (`npm run dev`, `build`, etc.). |
 | `package-lock.json` | Exact locked dependency versions (don't edit by hand). |
 | `vite.config.js` | Vite config — React plugin, dev server on port 5173. |
-| `tailwind.config.js` | Tailwind theme — the custom color palette (navy backgrounds, electric-green `accent`), fonts (Inter, mono). This is where the dark-mode look is defined. |
+| `tailwind.config.js` | Tailwind theme — fonts (Inter, mono) and **semantic color tokens** (`fg`, `muted`, `faint`, `surface`, `line`, `accent`, `pos/neg/warn`) that resolve to the active theme's CSS variables. The actual Liquid Glass look lives in `src/index.css`. |
 | `postcss.config.js` | Runs Tailwind + autoprefixer during the build. |
 | `vercel.json` | Tells **Vercel** (the frontend host) to route all paths to `index.html` (needed for a single-page app so deep links work). |
 | `public/favicon.svg` | The browser-tab icon. |
@@ -134,14 +134,16 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | Path | Layer | What it does |
 | --- | --- | --- |
 | `main.jsx` | entry | Boots React. Wraps the app in `BrowserRouter` (routing) and `QueryClientProvider` (React Query). Imports global CSS. |
-| `App.jsx` | routing | The route table. Maps URLs to pages: `/` → Leaderboard, `/players/:playerId` → PlayerProfile, `/teams` → Teams. All wrapped in `Layout`. |
-| `index.css` | styling | Global styles + Tailwind directives + the `.stat-num` mono-font helper for aligned numbers. |
+| `App.jsx` | routing | The route table. Maps URLs to pages: `/` → **Home** (Command Center), `/leaderboard` → Leaderboard, `/players/:playerId` → PlayerProfile, `/teams` → Teams. All wrapped in `Layout`. |
+| `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | **`pages/`** | pages | Top-level screens, one per route. |
-| `pages/Leaderboard.jsx` | page | The home screen: filterable/sortable player rankings, scored in the user's league settings. The app's flagship view. |
+| `pages/Home.jsx` | page | **The home screen (`/`) — the Command Center.** A Bento dashboard that opens on the fantasy question: the current fantasy-points leader (spotlight), live fantasy leaders, entry tiles, the active league scoring, and labeled roadmap teasers (Buy-Low/Sell-High, coming in M3). |
+| `pages/Leaderboard.jsx` | page | Player leaderboard (at `/leaderboard`): filterable/sortable rankings scored in the user's league settings. The flagship data view. |
 | `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, a weekly fantasy trend chart, and a game-by-game log. |
 | `pages/Teams.jsx` | page | Team leaderboard — ranked team offensive production for a season. |
 | **`components/`** | UI | Reusable pieces used by pages. |
-| `components/Layout.jsx` | UI | The app shell: sticky top header with brand, nav links, and the search box; renders the current page inside. |
+| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home / Leaderboard / Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
+| `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
 | `components/ScoringControl.jsx` | UI | The league-scoring editor: preset picker (PPR/Half/Std/TE-Premium) + an expandable custom-weights panel. Emits a scoring spec string. |
 | `components/SearchBox.jsx` | UI | Header player search — type a name, pick a result, jump to that player's profile. |
 | `components/ui/Select.jsx` | UI (base) | A styled labeled `<select>` dropdown used all over the filter bars. |
@@ -153,6 +155,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/usePlayerSearch.js` | data | Fetches header search results (fires only at ≥2 chars). |
 | `hooks/useMetrics.js` | data | Fetches the metric registry from the backend; exposes a `supportsScoring` capability flag. Seeded with bundled constants so the UI is never blank. |
 | `hooks/useScoring.js` | state | The active league scoring. **URL query param is the source of truth** (so views are shareable), backed by `localStorage`. Defaults to PPR. (Architecture "spine C": stateless-first.) |
+| `hooks/useTheme.js` | state | The active UI theme (light/dark). Writes `data-theme` on `<html>` and persists to `localStorage` (`gridiron.theme`); defaults to dark. |
 | `hooks/useDebounce.js` | util | Debounces a fast-changing value (used to throttle search-as-you-type). |
 | **`services/`** | network | The **only** place HTTP calls live. One function per endpoint. |
 | `services/api.js` | network | The shared axios instance; sets the base URL to `{VITE_API_BASE_URL}/api/v1`. Everything else imports this. |
@@ -354,7 +357,7 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
 | Change how **fantasy points** are scored | `backend/app/scoring.py` **and** mirror it in `frontend/src/constants/scoring.js`. |
 | Add a new **API endpoint** | a router in `backend/app/routers/` (+ register it in `main.py`), a Pydantic schema in `schemas/`, then a service in `frontend/src/services/` + a hook. |
 | Add a new **page/screen** | a component in `frontend/src/pages/`, a route in `frontend/src/App.jsx`, a nav link in `components/Layout.jsx`. |
-| Change the **look/theme** | `frontend/tailwind.config.js` (colors/fonts) + `frontend/src/index.css`. |
+| Change the **look/theme** | `frontend/src/index.css` (Liquid Glass tokens per theme + `.glass-*` classes) + `frontend/tailwind.config.js` (semantic token names). Use the `.glass-*` classes and `text-fg`/`text-muted`/`text-accent`/`border-line` tokens — never hardcode theme colors. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | Change **data scope** (seasons, etc.) | re-run `pipeline/` scripts with new `--seasons`; update `frontend/src/constants/index.js` `SEASONS`. |
 
 ---
@@ -390,6 +393,12 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-07-28** — Liquid Glass theme + Command Center home. Added the light/dark
+  Liquid Glass theme system (`src/index.css` tokens + `.glass-*` classes,
+  `hooks/useTheme.js`, `components/ThemeToggle.jsx`, semantic Tailwind tokens, a
+  pre-paint theme script in `index.html`); added the Command Center home
+  (`pages/Home.jsx`) at `/` and moved the leaderboard to `/leaderboard`. New design
+  note: `docs/design/ui-theme-liquid-glass.md`.
 - **2026-07-22** — Initial architecture map created, reflecting the state after M1
   (scoring engine + metric registry): documented all three apps, the DB, config,
   hosting, the three architecture spines, and the "where do I change…?" cheat sheet.

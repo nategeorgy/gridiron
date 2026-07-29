@@ -80,14 +80,14 @@ export function Leaderboard() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Player Leaderboard</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Player Leaderboard</h1>
+        <p className="mt-1 text-sm text-muted">
           Fantasy and advanced stats across the 2020–2025 seasons, scored in your league
           settings. Click a column to rank by it.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3 rounded-lg border border-navy-800 bg-navy-900 p-4">
+      <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
         <Select label="Timeframe" value={week} onChange={withReset(setWeek)} options={WEEKS} />
         <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
@@ -97,10 +97,10 @@ export function Leaderboard() {
 
       {supportsScoring && <ScoringControl scoring={scoring} onChange={changeScoring} />}
 
-      <div className="overflow-x-auto rounded-lg border border-navy-800 bg-navy-900">
+      <div className="glass-card overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
-            <tr className="border-b border-navy-700 text-xs uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
               <th className="px-3 py-3 text-right">#</th>
               <th className="px-3 py-3">Player</th>
               <th className="px-3 py-3">Team</th>
@@ -109,7 +109,7 @@ export function Leaderboard() {
                 <th
                   key={key}
                   onClick={() => sortByColumn(key)}
-                  className={`cursor-pointer whitespace-nowrap px-3 py-3 text-right transition hover:text-white ${
+                  className={`cursor-pointer whitespace-nowrap px-3 py-3 text-right transition hover:text-fg ${
                     metric === key ? "text-accent" : ""
                   }`}
                   title={metrics[key]?.label ?? key}
@@ -124,28 +124,28 @@ export function Leaderboard() {
             {rows.map((row, index) => (
               <tr
                 key={row.player_id}
-                className="border-b border-navy-850 last:border-0 hover:bg-navy-850/60"
+                className="border-b border-line last:border-0 hover:bg-surface-2"
               >
-                <td className="stat-num px-3 py-2.5 text-right text-slate-500">
+                <td className="stat-num px-3 py-2.5 text-right text-faint">
                   {offset + index + 1}
                 </td>
                 <td className="px-3 py-2.5 font-medium">
-                  <Link to={`/players/${row.player_id}`} className="text-slate-100 hover:text-accent hover:underline">
+                  <Link to={`/players/${row.player_id}`} className="text-fg hover:text-accent hover:underline">
                     {row.name}
                   </Link>
                 </td>
                 <td className="px-3 py-2.5">
-                  <span className="stat-num text-xs text-slate-400">{row.team_abbreviation ?? "—"}</span>
-                  <span className="ml-2 rounded bg-navy-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                  <span className="stat-num text-xs text-muted">{row.team_abbreviation ?? "—"}</span>
+                  <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-faint">
                     {row.position}
                   </span>
                 </td>
-                <td className="stat-num px-3 py-2.5 text-right text-slate-400">{row.games_played}</td>
+                <td className="stat-num px-3 py-2.5 text-right text-muted">{row.games_played}</td>
                 {columns.map((key) => (
                   <td
                     key={key}
                     className={`stat-num px-3 py-2.5 text-right ${
-                      metric === key ? "font-semibold text-accent" : "text-slate-200"
+                      metric === key ? "font-semibold text-accent" : "text-fg"
                     }`}
                   >
                     {formatStat(row[toBackendMetric(key)], metrics[key]?.format)}
@@ -156,24 +156,24 @@ export function Leaderboard() {
           </tbody>
         </table>
 
-        {isLoading && <div className="p-6 text-center text-sm text-slate-400">Loading…</div>}
+        {isLoading && <div className="p-6 text-center text-sm text-muted">Loading…</div>}
         {isError && (
-          <div className="p-6 text-center text-sm text-red-400">
+          <div className="p-6 text-center text-sm text-neg">
             Failed to load leaderboard: {error?.message}
           </div>
         )}
         {!isLoading && !isError && rows.length === 0 && (
-          <div className="p-6 text-center text-sm text-slate-400">No results for these filters.</div>
+          <div className="p-6 text-center text-sm text-muted">No results for these filters.</div>
         )}
       </div>
 
-      <div className="flex items-center justify-between text-sm text-slate-400">
+      <div className="flex items-center justify-between text-sm text-muted">
         <span>
           {total > 0 && (
             <>
-              Showing <span className="stat-num text-slate-200">{offset + 1}</span>–
-              <span className="stat-num text-slate-200">{Math.min(offset + PAGE_SIZE, total)}</span> of{" "}
-              <span className="stat-num text-slate-200">{total}</span>
+              Showing <span className="stat-num text-fg">{offset + 1}</span>–
+              <span className="stat-num text-fg">{Math.min(offset + PAGE_SIZE, total)}</span> of{" "}
+              <span className="stat-num text-fg">{total}</span>
             </>
           )}
         </span>
@@ -181,14 +181,14 @@ export function Leaderboard() {
           <button
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
             disabled={offset === 0}
-            className="rounded-md border border-navy-700 px-3 py-1.5 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-40"
+            className="btn-ghost px-3 py-1.5 text-sm transition enabled:hover:!text-accent disabled:opacity-40"
           >
             Prev
           </button>
           <button
             onClick={() => setOffset(offset + PAGE_SIZE)}
             disabled={offset + PAGE_SIZE >= total}
-            className="rounded-md border border-navy-700 px-3 py-1.5 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-40"
+            className="btn-ghost px-3 py-1.5 text-sm transition enabled:hover:!text-accent disabled:opacity-40"
           >
             Next
           </button>
