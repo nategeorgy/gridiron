@@ -192,14 +192,35 @@ player_stats (
   red_zone_rush_share       FLOAT,   -- Share of team red zone rushing attempts
   red_zone_rush_attempts    INT,     -- Red zone rushing attempts
   red_zone_targets          INT,     -- Targets inside the red zone
+  rush_att_inside_10        INT,     -- Rushing attempts inside the opponent's 10
+  rush_att_inside_5         INT,     -- Rushing attempts inside the opponent's 5
+  rush_att_inside_2         INT,     -- Rushing attempts inside the opponent's 2
+  rush_attempt_share        FLOAT,   -- Share of team rushing attempts
+  opportunity_share         FLOAT,   -- Share of team (carries + targets)
+  market_share              FLOAT,   -- Share of team yards from scrimmage
   targets_per_route_run     FLOAT,   -- Targets divided by routes run
-  slot_snaps                INT,     -- Snaps taken from slot alignment
-  routes_run                INT,     -- Total routes run
+  slot_snaps                INT,     -- Snaps from slot alignment (always NULL — no free source)
+  routes_run                INT,     -- Pass-play participation (see M2 design doc)
   route_participation       FLOAT,   -- % of team pass plays player ran a route
   unrealized_air_yards      FLOAT,   -- Air yards on incompletions (lost opportunity)
   yards_per_route_run       FLOAT,   -- Receiving yards divided by routes run
   yards_per_target          FLOAT,   -- Receiving yards divided by targets
   yards_per_reception       FLOAT,   -- Receiving yards divided by receptions
+
+  -- Expected Stat Components (model estimates from nflverse ffopportunity)
+  -- NOTE: store expected *components*, never expected fantasy points. Expected
+  -- fantasy points are computed by the scoring engine from these components and the
+  -- per-request scoring config, exactly like actual points — so the two are always
+  -- comparable in the user's own league scoring.
+  passing_yards_exp         FLOAT,
+  passing_tds_exp           FLOAT,
+  interceptions_exp         FLOAT,
+  rushing_yards_exp         FLOAT,
+  rushing_tds_exp           FLOAT,
+  receiving_yards_exp       FLOAT,
+  receiving_tds_exp         FLOAT,
+  receptions_exp            FLOAT,
+  two_point_conv_exp        FLOAT,
 
   -- Fantasy Stats
   fantasy_points_ppr        FLOAT,
@@ -242,6 +263,8 @@ player_stats (
 - Red Zone Rushing Share
 - Red Zone Rushing Attempts
 - Red Zone Targets
+- Rushing Attempts Inside 10 / 5 / 2
+- Rush Share, Opportunity Share, Market Share
 - Targets Per Route Run
 - Slot Snaps
 - Routes Run
@@ -253,8 +276,10 @@ player_stats (
 - Yards Per Reception
 
 **Fantasy**
-- Fantasy points (PPR, Half-PPR, Standard)
-- Fantasy points per game (PPR, Half-PPR, Standard)
+- Fantasy points (PPR, Half-PPR, Standard, or any custom league scoring)
+- Fantasy points per game (PPR, Half-PPR, Standard, or any custom league scoring)
+- Expected fantasy points + expected PPG (scoring-aware, from expected components)
+- Points over expected (actual − expected)
 
 ---
 
@@ -278,10 +303,12 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
 - **M1 — Scoring & Metric Foundation** (✅ SHIPPED): scoring-aware fantasy engine (compute
   fantasy points from a per-request scoring config, not stored columns) + a single
   metric registry. Ships custom league scoring on the leaderboard.
-- **M2 — Expanded Metrics & Expected Points** (NEXT): RB market share, rush attempts inside
-  10/5/2, expected fantasy points (`load_ff_opportunity`).
-- **M3 — Fantasy Intelligence**: VORP, Fantasy Opportunity Rating, Positive-Regression
-  Index, Sell-High Index.
+- **M2 — Expanded Metrics & Expected Points** (✅ SHIPPED): scoring-aware expected
+  fantasy points (`load_ff_opportunity` components through the same engine as actual
+  points), market share (rush / opportunity / yards), rush attempts inside 10/5/2, and
+  the snap + route usage columns that had been left NULL.
+- **M3 — Fantasy Intelligence** (NEXT): VORP, Fantasy Opportunity Rating,
+  Positive-Regression Index, Sell-High Index.
 - **M4 — Exploration & Viz**: scatter builder, comparison builder (≤5), enhanced player
   pages with charts, export.
 
@@ -340,10 +367,10 @@ GET /api/v1/games                            ← game schedule/results
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**
   (a Bento dashboard that opens on "who's leading in your scoring"), *not* the
   leaderboard. Leaderboards are split into two nav dropdowns: **Fantasy
-  Leaderboards** (`/fantasy/*` — Leaders / Passing / Receiving / Rushing, with the
-  league-scoring editor) and **NFL Leaderboards** (`/nfl/*` — All / Passing /
-  Receiving / Rushing, each General & Advanced, raw stats). All 12 are configured in
-  `frontend/src/constants/boards.js`.
+  Leaderboards** (`/fantasy/*` — Leaders / Expected Points / Passing / Receiving /
+  Rushing, with the league-scoring editor) and **NFL Leaderboards** (`/nfl/*` — All /
+  Passing / Receiving / Rushing, each General & Advanced, raw stats). All 13 are
+  configured in `frontend/src/constants/boards.js`.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -439,9 +466,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] Basic player search (header)
 - [x] Command Center home page (`/`) — Bento dashboard; leaderboard moved off home
 - [x] Liquid Glass UI theme — light ("Clear") / dark ("smoked graphite") + toggle
-- [x] Leaderboard nav split — Fantasy Leaderboards ▾ + NFL Leaderboards ▾ (12 boards)
+- [x] Leaderboard nav split — Fantasy Leaderboards ▾ + NFL Leaderboards ▾ (13 boards)
 - [x] M1 — Scoring & Metric Foundation: scoring-aware fantasy engine (`/metrics` registry
       + per-request scoring config), custom league scoring live on the leaderboard
+- [x] M2 — Expanded Metrics & Expected Points: scoring-aware expected fantasy points
+      (+ Expected Points board and expected-vs-actual player pages), market share,
+      inside-10/5/2 carries, snap + route usage backfilled 2020–2025
+      (see [`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md))
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com

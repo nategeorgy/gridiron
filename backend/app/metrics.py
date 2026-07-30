@@ -10,15 +10,17 @@ field here instead of hard-coded lists, and the frontend fetches the registry fr
 decimal places. ``aggregation``:
   - ``sum``     counting stat, summed over a season
   - ``avg``     rate/share stat, averaged over a season
-  - ``derived`` per-game metric = SUM(``base``) / games
-  - ``scoring`` computed by the fantasy engine from a ScoringConfig
+  - ``derived``  per-game metric = SUM(``base``) / games
+  - ``scoring``  computed by the fantasy engine from a ScoringConfig
+  - ``expected`` computed by the fantasy engine from the *expected* components
+                 (M2) under the same ScoringConfig
 """
 
 from typing import Literal
 
 from pydantic import BaseModel
 
-Aggregation = Literal["sum", "avg", "derived", "scoring"]
+Aggregation = Literal["sum", "avg", "derived", "scoring", "expected"]
 Format = Literal["int", "pct"] | int
 
 
@@ -36,6 +38,10 @@ class MetricDef(BaseModel):
     higher_is_better: bool = True
     rankable: bool = True
     base: str | None = None  # for aggregation="derived": the column divided by games
+    # True for metrics that are *model estimates* rather than counted events (the
+    # ffopportunity expected values). The UI labels these so they are never mistaken
+    # for observed data. See docs/design/M2-expanded-metrics.md.
+    modelled: bool = False
 
 
 def _m(id: str, label: str, short: str, fmt: Format, category: str, agg: Aggregation, **kw) -> MetricDef:
@@ -62,6 +68,47 @@ REGISTRY: list[MetricDef] = [
        description="Half-PPR fantasy points per game.", rankable=False),
     _m("fantasy_ppg_std", "Fantasy PPG (Std)", "PPGs", 2, "fantasy", "derived", base="fantasy_points_std",
        description="Standard fantasy points per game.", rankable=False),
+
+    # Fantasy — expected points (M2), scored in the active league scoring
+    _m("expected_fantasy_points", "Expected Fantasy Points", "xFPTS", 1, "fantasy", "expected",
+       modelled=True,
+       description="Fantasy points a player's opportunity was worth, in the active "
+                   "league scoring — modelled from where and how they were used, not "
+                   "from what they actually produced."),
+    _m("expected_fantasy_ppg", "Expected Fantasy PPG", "xFPPG", 2, "fantasy", "expected",
+       modelled=True,
+       description="Expected fantasy points per game in the active league scoring."),
+    _m("fantasy_points_over_expected", "Points Over Expected", "FP±", 1, "fantasy", "expected",
+       modelled=True,
+       description="Actual fantasy points minus expected. Positive = outproducing the "
+                   "opportunity (efficiency or touchdown luck that may not hold); "
+                   "negative = the usage says more points should be coming."),
+
+    # Expected components — the stored ffopportunity estimates xFP is built from
+    _m("passing_yards_exp", "Expected Passing Yards", "xPASS YD", "int", "passing", "sum",
+       applies_to=["QB"], modelled=True, description="Modelled passing yards from pass attempts."),
+    _m("passing_tds_exp", "Expected Passing TDs", "xPASS TD", 1, "passing", "sum",
+       applies_to=["QB"], modelled=True, description="Modelled passing touchdowns from pass attempts."),
+    _m("interceptions_exp", "Expected Interceptions", "xINT", 1, "passing", "sum",
+       applies_to=["QB"], higher_is_better=False, modelled=True,
+       description="Modelled interceptions from pass attempts."),
+    _m("rushing_yards_exp", "Expected Rushing Yards", "xRUSH YD", "int", "rushing", "sum",
+       applies_to=["RB", "QB", "WR"], modelled=True,
+       description="Modelled rushing yards from carries and where they came from."),
+    _m("rushing_tds_exp", "Expected Rushing TDs", "xRUSH TD", 1, "rushing", "sum",
+       applies_to=["RB", "QB", "WR"], modelled=True,
+       description="Modelled rushing touchdowns from carry volume and field position."),
+    _m("receiving_yards_exp", "Expected Receiving Yards", "xREC YD", "int", "receiving", "sum",
+       applies_to=["WR", "TE", "RB"], modelled=True,
+       description="Modelled receiving yards from target volume and depth."),
+    _m("receiving_tds_exp", "Expected Receiving TDs", "xREC TD", 1, "receiving", "sum",
+       applies_to=["WR", "TE", "RB"], modelled=True,
+       description="Modelled receiving touchdowns from target volume and field position."),
+    _m("receptions_exp", "Expected Receptions", "xREC", 1, "receiving", "sum",
+       applies_to=["WR", "TE", "RB"], modelled=True,
+       description="Modelled catches from target volume and difficulty."),
+    _m("two_point_conv_exp", "Expected 2-Pt Conversions", "x2PT", 2, "fantasy", "sum",
+       modelled=True, rankable=False, description="Modelled two-point conversions."),
 
     # Passing
     _m("passing_yards", "Passing Yards", "PASS YD", "int", "passing", "sum", applies_to=["QB"],
@@ -92,6 +139,14 @@ REGISTRY: list[MetricDef] = [
        description="Share of the team's red-zone rushing attempts."),
     _m("rushing_epa", "Rushing EPA", "RU EPA", 1, "rushing", "sum", applies_to=["RB", "QB"],
        description="Expected points added on rushes."),
+    _m("rush_att_inside_10", "Carries Inside 10", "IN10", "int", "rushing", "sum", applies_to=["RB", "QB"],
+       description="Rushing attempts from inside the opponent's 10-yard line."),
+    _m("rush_att_inside_5", "Carries Inside 5", "IN5", "int", "rushing", "sum", applies_to=["RB", "QB"],
+       description="Rushing attempts from inside the opponent's 5-yard line — the highest-value carries in fantasy."),
+    _m("rush_att_inside_2", "Carries Inside 2", "IN2", "int", "rushing", "sum", applies_to=["RB", "QB"],
+       description="Rushing attempts from inside the opponent's 2-yard line."),
+    _m("rush_attempt_share", "Rush Share", "RUSH%", "pct", "rushing", "avg", applies_to=["RB", "QB", "WR"],
+       description="Share of the team's rushing attempts."),
 
     # Receiving
     _m("receiving_yards", "Receiving Yards", "REC YD", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
@@ -144,6 +199,13 @@ REGISTRY: list[MetricDef] = [
        description="Offensive snaps played."),
     _m("snap_share", "Snap Share", "SNAP%", "pct", "usage", "avg",
        description="Share of the team's offensive snaps."),
+    _m("opportunity_share", "Opportunity Share", "OPP%", "pct", "usage", "avg",
+       applies_to=["RB", "WR", "TE"],
+       description="Share of the team's touches and targets (carries + targets) — the "
+                   "single best read on how much of the offense runs through a player."),
+    _m("market_share", "Market Share", "MKT%", "pct", "usage", "avg",
+       applies_to=["RB", "WR", "TE"],
+       description="Share of the team's yards from scrimmage (rushing + receiving)."),
     _m("epa", "EPA", "EPA", 1, "usage", "sum",
        description="Total expected points added."),
     _m("fumbles", "Fumbles", "FUM", "int", "usage", "sum",

@@ -4,7 +4,7 @@
 > summary; this file holds the vision, architecture spines, and the milestone
 > plan. Update this when priorities change, then reconcile `CLAUDE.md`.
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
 ---
 
@@ -74,17 +74,29 @@ The architectural spine; de-risks everything after. Ships custom scoring on day 
   persisted in URL/`localStorage`; leaderboard reads scoring from that state.
 - **Ships:** custom league scoring live on the leaderboard.
 
-### 📊 M2 — Expanded Metrics & Expected Points — M — **NEXT**
-- **Deps:** M1 (registry). **Data:** derive from `load_pbp` (already ingested) + new
-  `load_ff_opportunity`.
-- **DB:** add `rush_att_inside_10/5/2`, `rb_market_share` (derived),
-  `expected_fantasy_points` (+ optional `xfp_pass/rush/rec`). Follow the 4-place rule.
-- **Backend:** expose new fields; add "expected vs actual" delta.
-- **Frontend:** new leaderboard columns; expected-vs-actual framing on player pages.
-- **Data limits:** `ff_opportunity` is a model estimate — label it. **Alt source:**
-  derive expected points from air yards + usage if ffopportunity breaks.
+### 📊 M2 — Expanded Metrics & Expected Points — M — **✅ SHIPPED**
+Design note: [`design/M2-expanded-metrics.md`](design/M2-expanded-metrics.md).
+- **Deps:** M1 (registry). **Data:** `load_pbp` + `load_ff_opportunity` +
+  `load_snap_counts` + `load_participation`.
+- **DB:** added `rush_att_inside_10/5/2`, three market-share columns
+  (`rush_attempt_share`, `opportunity_share`, `market_share`), and nine **expected
+  components**. Deliberately **no** `expected_fantasy_points` column — expected points
+  are computed from the components by the M1 scoring engine, so xFP recomputes in the
+  user's exact league scoring and stays comparable to actual points.
+- **Backend:** expected-points support in the scoring engine, an `expected`
+  aggregation + `modelled` flag in the registry, xFP / xFPPG / points-over-expected on
+  the leaderboard, and a scoring-aware player game log.
+- **Frontend:** a new "Expected Points" fantasy board, expected + usage columns across
+  the existing boards, and expected-vs-actual on player pages (panel, xFP overlay on
+  the trend chart, xFPTS in the game log).
+- **Also folded in:** the snap and route columns the pipeline had been leaving NULL
+  (`snap_count`, `snap_share`, `routes_run`, `route_participation`, TPRR, YPRR) plus
+  `unrealized_air_yards`. Only `slot_snaps` remains unavailable.
+- **Data limits:** `ff_opportunity` is a model estimate — labelled as `modelled` in
+  the registry and on every surface. ffopportunity models no expected fumbles, a small
+  known upward bias in xFP. `routes_run` is pass-play participation, not charted routes.
 
-### 🧠 M3 — Fantasy Intelligence (the moat) — M–L
+### 🧠 M3 — Fantasy Intelligence (the moat) — M–L — **NEXT**
 Most original, most on-brand. Rule/formula-based on existing data.
 - **Deps:** M1 + M2. **Data:** existing — low risk.
 - **Features:** **VORP** (scoring-aware value vs positional replacement), **Fantasy
@@ -151,19 +163,28 @@ Each sub-feature is its own deployable slice:
 | Historical Vegas lines | `load_schedules` | 🟢 |
 | Rush attempts by yard-line | `load_pbp` | 🟢 Derive |
 | Snap share / NGS / PFR adv | `load_snap_counts` / `load_nextgen_stats` / `load_pfr_advstats` | 🟢 (NGS 2016+, PFR 2018+) |
+| Snap counts | `load_snap_counts` (PFR, `pfr_id` crosswalk) | 🟢 Shipped M2 |
+| Pass-play participation ("routes run") | `load_participation` × `load_pbp` | 🟢 Shipped M2 — populated **2020–2025**, GSIS ids join directly (see note below) |
 | Catchable targets | `load_ftn_charting` | 🟡 2022+ only |
-| Slot vs wide alignment | NGS / PFR / FTN proxies | 🟡 Partial |
+| Slot vs wide alignment | — | 🔴 No free source (see M2 design note §3) |
 | Live upcoming odds (survivor) | external odds API | 🟡 New dependency |
 | Route trees (drawn) | player tracking | 🔴 Not available free |
 | Dynasty value | — | 🔴 No free authoritative source |
+
+> **Correction (2026-07-29).** This table previously recorded the participation feed as
+> frozen after ~2023, which ruled out route metrics for current seasons. That is not
+> the case: `load_participation` returns fully-populated `offense_players` through
+> 2025 (45,919 plays in 2024; 45,184 in 2025). Route metrics shipped in M2 for all six
+> seasons on that basis — as pass-play participation, not charted routes.
 
 ---
 
 ## Cut / reframed ideas (and why)
 
 - **Route trees (drawn):** need per-player X/Y tracking data nflverse doesn't publish
-  (participation feed frozen by the NFL after ~2023, and never had route coordinates).
-  → **Reframed** to pass-location charts + route participation.
+  (the participation feed lists who was on the field, never route coordinates).
+  → **Reframed** to pass-location charts + route participation (participation shipped
+  in M2; pass-location charts are M4).
 - **Catchable targets:** only via FTN charting, **2022+**. Ship as a recent-seasons
   metric with the gap labeled; true history needs PFF (paid).
 - **Homemade projections early:** trust risk + effort out of proportion when consensus
@@ -241,6 +262,23 @@ tells people it exists.
   at M2, go active at M3 (the indices are the content engine), lean into visuals at M4.
   Social is a distribution layer, not a milestone — do not gate it on M5 (accounts),
   since shareable public pages need no login. See "Growth & Social presence".
+- **2026-07-29 — Expected points are stored as components, not points.** M2 stores
+  ffopportunity's expected *components* and runs them through the M1 scoring engine
+  rather than storing its precomputed `total_fantasy_points_exp`. Reason: a stored
+  points total is locked to one scoring system, so in a custom league "expected" and
+  "actual" would be measured on different rulers and the gap between them — the whole
+  point of the feature — would be meaningless. Verified: xFP deltas across
+  PPR/Standard/TE-premium equal `expected receptions × Δweight` exactly.
+- **2026-07-29 — Market share is three metrics, not one.** `rush_attempt_share`
+  (carries / team carries), `opportunity_share` ((carries + targets) / team total), and
+  `market_share` (share of team yards from scrimmage) — volume, touch mix, and
+  production, each answering a different workload question.
+- **2026-07-29 — Snap/route enrichment folded into M2.** The columns the pipeline had
+  been leaving NULL were blocking 8 registry metrics and several board columns, and
+  M3's Fantasy Opportunity Rating needs them. Six of the eight are now populated for
+  2020–2025; `slot_snaps` has no free source and stays NULL. Prompted by finding that
+  this file's "participation frozen after ~2023" note was wrong (see the correction
+  under "Data reality check").
 - **2026-07-28 — Visual identity: Liquid Glass + Command Center home.** Adopted a
   frosted "Liquid Glass" surface system with two themes — dark "smoked graphite"
   (default) and light "Clear" — chosen from a 23-skin Bento exploration. The home

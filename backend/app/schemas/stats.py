@@ -53,6 +53,12 @@ class StatLineOut(BaseModel):
     red_zone_rush_share: float | None = None
     red_zone_rush_attempts: int | None = None
     red_zone_targets: int | None = None
+    rush_att_inside_10: int | None = None
+    rush_att_inside_5: int | None = None
+    rush_att_inside_2: int | None = None
+    rush_attempt_share: float | None = None
+    opportunity_share: float | None = None
+    market_share: float | None = None
     targets_per_route_run: float | None = None
     slot_snaps: int | None = None
     routes_run: int | None = None
@@ -62,7 +68,23 @@ class StatLineOut(BaseModel):
     yards_per_target: float | None = None
     yards_per_reception: float | None = None
 
+    # Expected components (M2 — ffopportunity model estimates)
+    passing_yards_exp: float | None = None
+    passing_tds_exp: float | None = None
+    interceptions_exp: float | None = None
+    rushing_yards_exp: float | None = None
+    rushing_tds_exp: float | None = None
+    receiving_yards_exp: float | None = None
+    receiving_tds_exp: float | None = None
+    receptions_exp: float | None = None
+    two_point_conv_exp: float | None = None
+
     # Fantasy
     fantasy_points_ppr: float | None = None
     fantasy_points_half: float | None = None
     fantasy_points_std: float | None = None
+
+    # Scoring-aware, computed per-request from the requested league scoring
+    # (not stored columns — see app/scoring.py).
+    fantasy_points: float | None = None
+    expected_fantasy_points: float | None = None
