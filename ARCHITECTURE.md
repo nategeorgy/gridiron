@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ---
 
@@ -86,8 +86,9 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 Following one real interaction makes the whole architecture click. **"User opens the
 leaderboard and sorts by fantasy points in their custom PPR scoring":**
 
-1. Browser loads the React app (`frontend/`). The router (`App.jsx`) shows the
-   `Leaderboard` page at `/leaderboard` (the home route `/` is the Command Center).
+1. Browser loads the React app (`frontend/`). The router (`App.jsx`) shows
+   `LeaderboardView` at `/fantasy/leaders` (the home route `/` is the Command Center;
+   the old `/leaderboard` URL redirects here).
 2. The page reads the user's chosen filters (season, position, scoring) and calls a
    **hook** (`useLeaderboard`), which calls a **service** (`services/stats.js`),
    which uses the shared **axios client** (`services/api.js`) to make an HTTP GET to:
@@ -432,7 +433,7 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
-- **2026-07-29** — M3: fantasy intelligence. New backend modules `app/league.py`
+- **2026-07-30** — M3: fantasy intelligence. New backend modules `app/league.py`
   (league size + starting lineup → replacement rank per position) and
   `app/intelligence.py` (VORP, Fantasy Opportunity Rating, Positive-Regression Index,
   Sell-High Index, trailing windows, career-baseline efficiency, usage trend, and the

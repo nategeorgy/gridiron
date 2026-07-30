@@ -1,6 +1,6 @@
 # M2 Design — Expanded Metrics & Expected Points
 
-Status: **shipped (local)** · Milestone: M2 (see [ROADMAP](../ROADMAP.md)) · 2026-07-29
+Status: **shipped to production** · Milestone: M2 (see [ROADMAP](../ROADMAP.md)) · 2026-07-29
 
 Goal: add the *opportunity* layer. M1 made fantasy points scoring-aware; M2 answers
 **"was that production earned, and is it repeatable?"** — expected fantasy points in

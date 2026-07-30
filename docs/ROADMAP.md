@@ -4,7 +4,7 @@
 > summary; this file holds the vision, architecture spines, and the milestone
 > plan. Update this when priorities change, then reconcile `CLAUDE.md`.
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ---
 
@@ -294,7 +294,13 @@ tells people it exists.
   (carries / team carries), `opportunity_share` ((carries + targets) / team total), and
   `market_share` (share of team yards from scrimmage) — volume, touch mix, and
   production, each answering a different workload question.
-- **2026-07-29 — League context is a per-request config, not a constant.** M3 could have
+- **2026-07-29 — Snap/route enrichment folded into M2.** The columns the pipeline had
+  been leaving NULL were blocking 8 registry metrics and several board columns, and
+  M3's Fantasy Opportunity Rating needs them. Six of the eight are now populated for
+  2020–2025; `slot_snaps` has no free source and stays NULL. Prompted by finding that
+  this file's "participation frozen after ~2023" note was wrong (see the correction
+  under "Data reality check").
+- **2026-07-30 — League context is a per-request config, not a constant.** M3 could have
   hard-coded the conventional replacement baselines (QB12/RB24/WR36/TE12). Instead
   league size + starting lineup became a second per-request config alongside scoring
   (`app/league.py`, `useLeague`), because a fixed 12-team assumption contradicts the
@@ -302,22 +308,16 @@ tells people it exists.
   lineup's flex-eligible starters — matches how flex is actually used and needs no
   external assumptions. Verified: a superflex league moves the QB baseline 17.32 → 14.20
   PPG and flips the top VORP player from a receiver to Lamar Jackson.
-- **2026-07-29 — Intelligence scores are percentiles, and never materialised.**
+- **2026-07-30 — Intelligence scores are percentiles, and never materialised.**
   Percentile ranks within position (not z-scores) because these distributions are skewed
   and "84th percentile among receivers" is directly actionable. Nothing is stored: the
   scores depend on both the scoring *and* league config, so a stored score would need a
   row per context — the same trap the expected-components decision avoided. Query-time
   cost measured at ~90 ms for a full season, so caching is unnecessary for now.
-- **2026-07-29 — Buy/sell signals must show their work.** Every score returns its
+- **2026-07-30 — Buy/sell signals must show their work.** Every score returns its
   weighted inputs with values and percentiles, rendered on the player page. A rule-based
   signal is only better than a black-box projection if the rules are visible; this also
   keeps us honest about the weights being judgement rather than a fit.
-- **2026-07-29 — Snap/route enrichment folded into M2.** The columns the pipeline had
-  been leaving NULL were blocking 8 registry metrics and several board columns, and
-  M3's Fantasy Opportunity Rating needs them. Six of the eight are now populated for
-  2020–2025; `slot_snaps` has no free source and stays NULL. Prompted by finding that
-  this file's "participation frozen after ~2023" note was wrong (see the correction
-  under "Data reality check").
 - **2026-07-28 — Visual identity: Liquid Glass + Command Center home.** Adopted a
   frosted "Liquid Glass" surface system with two themes — dark "smoked graphite"
   (default) and light "Clear" — chosen from a 23-skin Bento exploration. The home

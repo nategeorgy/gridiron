@@ -488,7 +488,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - [x] Basic player search (header)
 - [x] Command Center home page (`/`) — Bento dashboard; leaderboard moved off home
 - [x] Liquid Glass UI theme — light ("Clear") / dark ("smoked graphite") + toggle
-- [x] Leaderboard nav split — Fantasy Leaderboards ▾ + NFL Leaderboards ▾ (13 boards)
+- [x] Leaderboard nav split — Fantasy Leaderboards ▾ + NFL Leaderboards ▾ (13 boards at
+      the time; now 17 alongside the Insight ▾ dropdown added in M3)
 - [x] M1 — Scoring & Metric Foundation: scoring-aware fantasy engine (`/metrics` registry
       + per-request scoring config), custom league scoring live on the leaderboard
 - [x] M2 — Expanded Metrics & Expected Points: scoring-aware expected fantasy points

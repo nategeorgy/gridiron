@@ -1,6 +1,6 @@
 # M3 Design — Fantasy Intelligence
 
-Status: **shipped (local)** · Milestone: M3 (see [ROADMAP](../ROADMAP.md)) · 2026-07-29
+Status: **shipped to production** · Milestone: M3 (see [ROADMAP](../ROADMAP.md)) · 2026-07-30
 
 Goal: the **moat layer**. M1 made fantasy points scoring-aware, M2 answered "was that
 production earned?" — M3 answers the questions a manager actually asks: **who's worth

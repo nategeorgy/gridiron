@@ -1,9 +1,15 @@
 # GridironIQ
 
 Fantasy-first NFL analytics. Free advanced stats framed around fantasy value —
-every metric answers a fantasy question — in a clean, fast, dark-mode interface.
+every metric answers a fantasy question, recomputed in **your league's exact
+scoring and lineup** — in a clean, fast interface with light and dark themes.
 
-See [`CLAUDE.md`](./CLAUDE.md) for the full product spec, schema, and scope.
+**Live:** [gridiron-livid.vercel.app](https://gridiron-livid.vercel.app) ·
+API [gridiron-api-t6hz.onrender.com](https://gridiron-api-t6hz.onrender.com/docs)
+
+See [`CLAUDE.md`](./CLAUDE.md) for the full product spec, schema, and scope,
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) for where everything lives, and
+[`docs/ROADMAP.md`](./docs/ROADMAP.md) for the milestone plan.
 
 ## Architecture
 
@@ -77,15 +83,23 @@ cd backend && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.
 .venv/bin/alembic upgrade head
 
 # Pipeline deps + data ingestion (see pipeline/README.md for details)
+# Run in this order — each step depends on the rows the previous one wrote.
 cd ../pipeline && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python ingest_teams.py
 .venv/bin/python ingest_players.py
 .venv/bin/python ingest_schedules.py --seasons 2020 2021 2022 2023 2024 2025
 .venv/bin/python ingest_stats.py     --seasons 2020 2021 2022 2023 2024 2025
+.venv/bin/python ingest_expected.py  --seasons 2020 2021 2022 2023 2024 2025
+.venv/bin/python ingest_usage.py     --seasons 2020 2021 2022 2023 2024 2025
 
 # Frontend deps
 cd ../frontend && npm install
 ```
+
+> **Don't skip the last two.** `ingest_expected.py` (expected components + market
+> share) and `ingest_usage.py` (snaps + routes) fill columns the Expected Points
+> board and *every* Insight score depend on. Skip them and those pages render
+> empty rather than erroring — a confusing failure to debug.
 
 > **Your data persists.** Postgres data lives in the `gridiron_pgdata` Docker
 > volume, so it survives reboots and `docker compose down`. The only command
@@ -94,7 +108,18 @@ cd ../frontend && npm install
 
 ## Status
 
-Phase 1 MVP is feature-complete locally: data pipeline, FastAPI API, and a
-React UI with a player leaderboard, player profiles, a team leaderboard, and
-player search. Next up: deployment (Vercel + Render/Railway + Supabase).
-Track detailed progress in `CLAUDE.md`.
+**Deployed and live** — frontend on Vercel, API on Render, database on Supabase.
+Both auto-deploy on push to `main`.
+
+Shipped so far:
+
+| | |
+| --- | --- |
+| **Phase 1** | Data pipeline (2020–2025), FastAPI API, player + team leaderboards, player profiles, search, the Liquid Glass theme, and the Command Center home |
+| **M1** | Scoring-aware fantasy engine — every fantasy number recomputes to your exact league scoring, from a single metric registry |
+| **M2** | Expected fantasy points (scoring-aware), market share, goal-line carries, snap + route usage |
+| **M3** | Fantasy intelligence — VORP, Fantasy Opportunity Rating, Buy-Low and Sell-High indices, plus league context (size + starting lineup) |
+
+**Next up: M4 — Exploration & Viz** (scatter builder, player comparison, richer
+player-page charts, export). See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the
+full plan and [`CLAUDE.md`](./CLAUDE.md) for detailed status.
