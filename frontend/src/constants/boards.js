@@ -22,6 +22,11 @@
  * @property {string} defaultSort  metric id to sort by initially
  * @property {string} defaultPosition  '' | 'QB' | 'RB' | 'WR' | 'TE'
  * @property {boolean} scoring     true = fantasy board (league scoring editor + scoring-aware cols)
+ * @property {boolean} [insight]   true = M3 Insight board (served by /stats/intelligence:
+ *                                 adds the league-context editor and the trailing-window
+ *                                 timeframe, and is rendered by pages/InsightView)
+ * @property {string[]} [signed]   columns tinted positive/negative
+ * @property {string} [lede]       a sentence of guidance shown above an Insight board
  */
 
 /** @type {Board[]} */
@@ -106,6 +111,111 @@ export const FANTASY_BOARDS = [
     defaultSort: "fantasy_points",
     defaultPosition: "RB",
     scoring: true,
+  },
+];
+
+// --- Insight boards (M3) ---
+// These are served by /stats/intelligence, not the leaderboard: their scores rank a
+// player against their whole position pool, and they respond to league size and
+// starting lineup as well as scoring. Each board answers one question.
+/** @type {Board[]} */
+export const INSIGHT_BOARDS = [
+  {
+    id: "insight-vorp",
+    label: "VORP",
+    path: "/insight/vorp",
+    menuDesc: "Value over a startable replacement",
+    title: "Value Over Replacement",
+    description:
+      "What each player was worth above the last startable player at their position — " +
+      "in your scoring and your league size. The honest way to compare a tight end " +
+      "with a running back.",
+    lede:
+      "Replacement level moves with your league: deeper lineups push the baseline down " +
+      "and make stars worth more. Set your lineup below to see it change.",
+    columns: [
+      "vorp", "vorp_ppg", "replacement_ppg", "fantasy_ppg", "fantasy_points",
+      "expected_fantasy_ppg", "fantasy_opportunity_rating",
+    ],
+    defaultSort: "vorp",
+    defaultPosition: "",
+    scoring: true,
+    insight: true,
+    signed: ["vorp", "vorp_ppg"],
+  },
+  {
+    id: "insight-opportunity",
+    label: "Opportunity Rating",
+    path: "/insight/opportunity",
+    menuDesc: "Who the offense actually runs through",
+    title: "Fantasy Opportunity Rating",
+    description:
+      "0–100 on how much of an offense runs through a player, regardless of what it " +
+      "produced. Half expected fantasy points in your scoring, half the usage shares " +
+      "that matter at their position.",
+    lede:
+      "Opportunity is the most repeatable thing in fantasy — it predicts next week far " +
+      "better than last week's points do.",
+    columns: [
+      "fantasy_opportunity_rating", "expected_fantasy_ppg", "fantasy_ppg",
+      "opportunity_share", "target_share", "route_participation", "air_yards_share",
+      "rush_attempt_share", "rush_att_inside_10", "red_zone_targets", "snap_share",
+    ],
+    defaultSort: "fantasy_opportunity_rating",
+    defaultPosition: "",
+    scoring: true,
+    insight: true,
+  },
+  {
+    id: "insight-buy-low",
+    label: "Buy Low",
+    path: "/insight/buy-low",
+    menuDesc: "Real usage, points haven't caught up",
+    title: "Buy Low — Positive Regression",
+    description:
+      "0–100 on players earning more than they're scoring: real opportunity, output " +
+      "below what that opportunity is worth, touchdown-starved, and still cheap to " +
+      "acquire.",
+    lede:
+      "A points-under-expected gap only matters when the usage behind it is real — " +
+      "which is why opportunity rating carries 30% of this score.",
+    columns: [
+      "positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg",
+      "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected",
+      "opportunity_share", "target_share", "vorp_ppg",
+    ],
+    defaultSort: "positive_regression_index",
+    defaultPosition: "",
+    scoring: true,
+    insight: true,
+    signed: ["fantasy_points_over_expected", "tds_over_expected", "vorp_ppg"],
+  },
+  {
+    id: "insight-sell-high",
+    label: "Sell High",
+    path: "/insight/sell-high",
+    menuDesc: "Scoring above what the usage supports",
+    title: "Sell High",
+    description:
+      "0–100 on players whose production is running ahead of their opportunity — " +
+      "touchdown luck and above-baseline efficiency, with a role that's already " +
+      "shrinking. Trade while the name is hot.",
+    lede:
+      "Touchdown rate and per-touch efficiency regress hardest. Usage trend is the " +
+      "tiebreak: outproducing your opportunity while losing snaps is the clearest sell.",
+    columns: [
+      "sell_high_index", "fantasy_ppg", "expected_fantasy_ppg",
+      "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline",
+      "opportunity_trend", "fantasy_opportunity_rating", "vorp_ppg",
+    ],
+    defaultSort: "sell_high_index",
+    defaultPosition: "",
+    scoring: true,
+    insight: true,
+    signed: [
+      "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline",
+      "opportunity_trend", "vorp_ppg",
+    ],
   },
 ];
 
@@ -223,10 +333,11 @@ export const NFL_BOARDS = [
   },
 ];
 
-export const ALL_BOARDS = [...FANTASY_BOARDS, ...NFL_BOARDS];
+export const ALL_BOARDS = [...INSIGHT_BOARDS, ...FANTASY_BOARDS, ...NFL_BOARDS];
 
-// Nav dropdown groups.
+// Nav dropdown groups. Insight leads — it is the reason to come back.
 export const NAV_GROUPS = [
+  { label: "Insight", items: INSIGHT_BOARDS, match: "/insight" },
   { label: "Fantasy Leaderboards", items: FANTASY_BOARDS, match: "/fantasy" },
   { label: "NFL Leaderboards", items: NFL_BOARDS, match: "/nfl" },
 ];

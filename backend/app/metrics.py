@@ -14,13 +14,17 @@ decimal places. ``aggregation``:
   - ``scoring``  computed by the fantasy engine from a ScoringConfig
   - ``expected`` computed by the fantasy engine from the *expected* components
                  (M2) under the same ScoringConfig
+  - ``intelligence`` computed by the M3 intelligence engine from a ScoringConfig *and*
+                 a LeagueConfig, over a season or a trailing window of weeks. These
+                 are served by ``/stats/intelligence``, not by the leaderboard,
+                 because they need the whole position pool to be ranked at once.
 """
 
 from typing import Literal
 
 from pydantic import BaseModel
 
-Aggregation = Literal["sum", "avg", "derived", "scoring", "expected"]
+Aggregation = Literal["sum", "avg", "derived", "scoring", "expected", "intelligence"]
 Format = Literal["int", "pct"] | int
 
 
@@ -32,7 +36,7 @@ class MetricDef(BaseModel):
     short: str
     description: str
     format: Format
-    category: Literal["fantasy", "passing", "rushing", "receiving", "usage"]
+    category: Literal["fantasy", "insight", "passing", "rushing", "receiving", "usage"]
     aggregation: Aggregation
     applies_to: list[str] | Literal["all"] = "all"
     higher_is_better: bool = True
@@ -83,6 +87,46 @@ REGISTRY: list[MetricDef] = [
        description="Actual fantasy points minus expected. Positive = outproducing the "
                    "opportunity (efficiency or touchdown luck that may not hold); "
                    "negative = the usage says more points should be coming."),
+
+    # Insight — fantasy intelligence (M3). Scoring-aware *and* league-aware; served by
+    # /stats/intelligence. See docs/design/M3-fantasy-intelligence.md for the formulas.
+    _m("vorp", "Value Over Replacement", "VORP", 1, "insight", "intelligence",
+       description="Fantasy points this player produced above what the last startable "
+                   "player at their position would have — in your scoring and your "
+                   "league size. The honest way to compare a tight end to a running back."),
+    _m("vorp_ppg", "VORP Per Game", "VORP/G", 2, "insight", "intelligence",
+       description="Value over replacement on a per-game basis, so an injured star "
+                   "isn't punished for the weeks they missed."),
+    _m("replacement_ppg", "Replacement Level", "REPL", 2, "insight", "intelligence",
+       rankable=False,
+       description="Points per game of the last startable player at this position in "
+                   "your league — the baseline VORP is measured against."),
+    _m("fantasy_opportunity_rating", "Fantasy Opportunity Rating", "FOR", 1, "insight",
+       "intelligence", modelled=True,
+       description="0–100: how much of the offense runs through this player, "
+                   "regardless of what it produced. Half expected fantasy points, half "
+                   "the usage shares that matter at their position."),
+    _m("positive_regression_index", "Positive-Regression Index", "BUY", 1, "insight",
+       "intelligence", modelled=True,
+       description="0–100 buy-low signal: real opportunity, scoring below what that "
+                   "opportunity is worth, touchdown-starved, and still cheap."),
+    _m("sell_high_index", "Sell-High Index", "SELL", 1, "insight", "intelligence",
+       modelled=True,
+       description="0–100 sell-high signal: outscoring the opportunity on touchdown "
+                   "luck and above-baseline efficiency, with usage already shrinking."),
+    _m("tds_over_expected", "TDs Over Expected", "TD±", 2, "insight", "intelligence",
+       modelled=True,
+       description="Total touchdowns minus modelled touchdowns. The single most "
+                   "volatile source of fantasy points, and the first thing to regress."),
+    _m("efficiency_over_baseline", "Efficiency vs Career", "EFF±", 3, "insight",
+       "intelligence",
+       description="Fantasy points per opportunity compared with this player's own "
+                   "earlier seasons. Positive means they're finishing plays better than "
+                   "they ever have — which usually doesn't last."),
+    _m("opportunity_trend", "Usage Trend", "TREND", "pct", "insight", "intelligence",
+       description="Change in share of the offense from the first half of the window to "
+                   "the second — for QBs, the relative change in pass attempts per "
+                   "game. Negative means the role is shrinking."),
 
     # Expected components — the stored ffopportunity estimates xFP is built from
     _m("passing_yards_exp", "Expected Passing Yards", "xPASS YD", "int", "passing", "sum",

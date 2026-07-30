@@ -1,13 +1,15 @@
 // Command Center — the app's home. A Bento dashboard that opens on the fantasy
-// question: who's leading in *your* league scoring. Live panels (fantasy leaders,
-// the leader spotlight) use the real leaderboard API; roadmap panels (Buy-Low,
-// Sell-High, expected points) are labeled teasers until their milestone ships.
+// question: who's leading in *your* league scoring. Every panel is live: fantasy
+// leaders and the leader spotlight come from the leaderboard API, the Insight tile
+// from the M3 intelligence API.
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useLeaderboard } from "../hooks/useLeaderboard";
+import { useIntelligence } from "../hooks/useInsight";
 import { useScoring } from "../hooks/useScoring";
+import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
-import { formatStat } from "../utils/format";
+import { formatSigned, formatStat } from "../utils/format";
 import { scoringLabel } from "../constants/scoring";
 import { SEASONS } from "../constants";
 
@@ -31,8 +33,6 @@ function CardHead({ title, badge }) {
 function Badge({ children, tone = "live" }) {
   const tones = {
     live: "text-accent",
-    m2: "text-[#5aa9ff]",
-    m3: "text-warn",
   };
   return (
     <span className={`rounded-md border border-edge px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tones[tone]}`}>
@@ -60,27 +60,64 @@ function LinkTile({ to, icon, title, desc }) {
   );
 }
 
-// A roadmap teaser — communicates a coming feature without faking data.
-function TeaserCard({ title, badge, blurb, examples }) {
+// One ranked signal row inside the Insight tile.
+function SignalRow({ row, score, detail, to }) {
   return (
-    <Card className="relative overflow-hidden">
-      <CardHead title={title} badge={badge} />
+    <Link
+      to={to}
+      className="flex items-center justify-between gap-2 rounded-lg bg-surface-2/60 px-2.5 py-1.5 transition hover:bg-surface-2"
+    >
+      <span className="min-w-0 truncate text-xs font-medium text-fg">
+        {row.name}
+        <PosTag pos={row.position} />
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span className="stat-num text-[11px] text-muted">{detail}</span>
+        <span className="stat-num text-xs font-semibold text-accent">{formatStat(score, 0)}</span>
+      </span>
+    </Link>
+  );
+}
+
+// A live buy-low / sell-high tile (M3). Sorted by the index, in the user's own
+// scoring and league — the same numbers the Insight boards show.
+function SignalCard({ title, blurb, boardPath, metric, detailFor, params, cta }) {
+  const { data, isLoading, isError } = useIntelligence({ ...params, metric, limit: 4 });
+  const rows = data?.data ?? [];
+
+  return (
+    <Card className="flex flex-col">
+      <CardHead title={title} badge={<Badge tone="live">Live</Badge>} />
       <p className="text-xs text-muted">{blurb}</p>
-      <div className="mt-3 space-y-1.5" aria-hidden="true">
-        {examples.map((label) => (
-          <div key={label} className="flex items-center justify-between rounded-lg bg-surface-2/60 px-2.5 py-1.5">
-            <span className="text-xs font-medium text-faint">{label}</span>
-            <span className="text-[11px] font-semibold text-faint">— soon</span>
-          </div>
+      <div className="mt-3 flex-1 space-y-1.5">
+        {isLoading && <div className="py-4 text-center text-xs text-muted">Loading…</div>}
+        {isError && <div className="py-4 text-center text-xs text-muted">Couldn't load signals.</div>}
+        {!isLoading && !isError && rows.length === 0 && (
+          <div className="py-4 text-center text-xs text-muted">No signals for this season yet.</div>
+        )}
+        {rows.map((row) => (
+          <SignalRow
+            key={row.player_id}
+            row={row}
+            score={row[metric]}
+            detail={detailFor(row)}
+            to={`/players/${row.player_id}`}
+          />
         ))}
       </div>
+      <Link
+        to={boardPath}
+        className="btn-ghost mt-3 inline-flex w-fit px-3 py-1.5 text-xs font-semibold transition hover:!text-accent"
+      >
+        {cta} →
+      </Link>
     </Card>
   );
 }
 
 export function Home() {
   const [scoring] = useScoring();
-  const { metrics, supportsScoring } = useMetrics();
+  const { supportsScoring } = useMetrics();
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
   const ppgKey = supportsScoring ? "fantasy_ppg" : FANTASY_FALLBACK.fantasy_ppg;
 
@@ -100,6 +137,12 @@ export function Home() {
   const { data, isLoading, isError } = useLeaderboard(params);
   const rows = data?.data ?? [];
   const leader = rows[0];
+
+  const [league] = useLeague();
+  const insightParams = useMemo(
+    () => ({ season: SEASON, season_type: "REG", scoring, league, order: "desc" }),
+    [scoring, league],
+  );
 
   return (
     <div className="space-y-5">
@@ -241,18 +284,24 @@ export function Home() {
           desc="Offensive production"
         />
 
-        {/* Roadmap teasers — honest placeholders, no fabricated picks. */}
-        <TeaserCard
-          title="Buy-Low · Positive Regression"
-          badge={<Badge tone="m3">M3</Badge>}
-          blurb="Players whose opportunity (air yards, target share, red-zone usage) is outrunning their fantasy finishes — buy before the points catch up."
-          examples={["Positive-Regression Index", "Fantasy Opportunity Rating"]}
+        {/* Insight signals (M3) — live, in the user's scoring and league. */}
+        <SignalCard
+          title="Buy Low · Positive Regression"
+          blurb="Real opportunity, points haven't caught up. Buy before they do."
+          boardPath="/insight/buy-low"
+          cta="Full buy-low board"
+          metric="positive_regression_index"
+          params={insightParams}
+          detailFor={(row) => `${formatSigned(row.fantasy_points_over_expected, 0)} vs xFP`}
         />
-        <TeaserCard
-          title="Sell-High Watch"
-          badge={<Badge tone="m3">M3</Badge>}
-          blurb="Players riding an unsustainable touchdown rate or efficiency above their baseline — sell while the value is inflated."
-          examples={["Sell-High Index", "Expected vs actual (M2)"]}
+        <SignalCard
+          title="Sell High · Regression Risk"
+          blurb="Outscoring the usage on touchdown luck and efficiency that rarely holds."
+          boardPath="/insight/sell-high"
+          cta="Full sell-high board"
+          metric="sell_high_index"
+          params={insightParams}
+          detailFor={(row) => `${formatSigned(row.tds_over_expected, 1)} TD vs xTD`}
         />
       </div>
     </div>

@@ -281,6 +281,15 @@ player_stats (
 - Expected fantasy points + expected PPG (scoring-aware, from expected components)
 - Points over expected (actual − expected)
 
+**Insight** (M3 — derived at query time from a scoring config *and* a league config;
+no stored columns. See [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md))
+- VORP + VORP per game (value over the last startable player at the position)
+- Replacement level (that player's PPG, in your scoring and league)
+- Fantasy Opportunity Rating (0–100)
+- Positive-Regression Index (0–100, buy-low)
+- Sell-High Index (0–100)
+- TDs over expected, Efficiency vs career baseline, Usage trend
+
 ---
 
 ## MVP Feature Scope
@@ -307,10 +316,13 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
   fantasy points (`load_ff_opportunity` components through the same engine as actual
   points), market share (rush / opportunity / yards), rush attempts inside 10/5/2, and
   the snap + route usage columns that had been left NULL.
-- **M3 — Fantasy Intelligence** (NEXT): VORP, Fantasy Opportunity Rating,
-  Positive-Regression Index, Sell-High Index.
-- **M4 — Exploration & Viz**: scatter builder, comparison builder (≤5), enhanced player
-  pages with charts, export.
+- **M3 — Fantasy Intelligence** (✅ SHIPPED): VORP, Fantasy Opportunity Rating,
+  Positive-Regression Index, Sell-High Index — all computed at query time from
+  percentile ranks within a position pool. Introduced **league context** (size +
+  starting lineup) as a second per-request config alongside scoring, because value has
+  to be measured against a league-specific replacement level.
+- **M4 — Exploration & Viz** (NEXT): scatter builder, comparison builder (≤5), enhanced
+  player pages with charts, export.
 
 ### Later phases (see ROADMAP for detail)
 - **M5 — Accounts & saved state** (deferred deliberately; use URL/`localStorage` state
@@ -345,11 +357,18 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
 GET /api/v1/players                          ← list/search players
 GET /api/v1/players/{player_id}              ← player profile
 GET /api/v1/players/{player_id}/stats        ← player game log
+GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdown
 GET /api/v1/stats/leaderboard                ← filterable leaderboard
+GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / buy / sell)
+GET /api/v1/metrics                          ← metric registry
 GET /api/v1/teams                            ← all teams
 GET /api/v1/teams/{team_id}/stats            ← team stats
 GET /api/v1/games                            ← game schedule/results
 ```
+
+Two per-request configs shape fantasy output, both parsed from compact spec strings:
+- `scoring=preset[:overrides]` — e.g. `ppr`, `ppr:pass_td=6,te_rec=1.5` (see `app/scoring.py`)
+- `league=teams[:slot=value]` — e.g. `12`, `10:rb=2,flex=2`, `12:superflex=1` (see `app/league.py`)
 
 ---
 
@@ -366,11 +385,14 @@ GET /api/v1/games                            ← game schedule/results
   [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md).
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**
   (a Bento dashboard that opens on "who's leading in your scoring"), *not* the
-  leaderboard. Leaderboards are split into two nav dropdowns: **Fantasy
-  Leaderboards** (`/fantasy/*` — Leaders / Expected Points / Passing / Receiving /
-  Rushing, with the league-scoring editor) and **NFL Leaderboards** (`/nfl/*` — All /
-  Passing / Receiving / Rushing, each General & Advanced, raw stats). All 13 are
-  configured in `frontend/src/constants/boards.js`.
+  leaderboard. Boards live in three nav dropdowns: **Insight** (`/insight/*` — VORP /
+  Opportunity Rating / Buy Low / Sell High, the M3 derived signals, with both the
+  scoring and league editors), **Fantasy Leaderboards** (`/fantasy/*` — Leaders /
+  Expected Points / Passing / Receiving / Rushing, with the league-scoring editor) and
+  **NFL Leaderboards** (`/nfl/*` — All / Passing / Receiving / Rushing, each General &
+  Advanced, raw stats). All 17 are configured in
+  `frontend/src/constants/boards.js`; Insight is listed first — it is the reason to
+  come back.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -473,6 +495,12 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       (+ Expected Points board and expected-vs-actual player pages), market share,
       inside-10/5/2 carries, snap + route usage backfilled 2020–2025
       (see [`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md))
+- [x] M3 — Fantasy Intelligence: VORP, Fantasy Opportunity Rating, Positive-Regression
+      (buy-low) and Sell-High indices; league context (size + starting lineup) as a
+      second per-request config; four Insight boards, player-page badges + a full
+      explanation breakdown, and live signal tiles on the Command Center. No new DB
+      columns — everything is query-time
+      (see [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md))
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -493,8 +521,17 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - When in doubt about scope, refer to the "Out of Scope" section — do not build ahead
 - Frontend and backend are fully decoupled — frontend talks to backend via HTTP only
 - Prefer simple, readable solutions over clever ones
-- When adding a new metric, add it to the database schema, the pipeline, the API
-  response, AND the frontend constants file — all four places
+- When adding a new **stored** metric, add it to the database schema, the pipeline, the
+  API response, AND the frontend constants file — all four places. **Derived** metrics
+  (`derived` / `scoring` / `expected` / `intelligence` aggregations) skip the schema and
+  pipeline: they are a registry entry plus the code that computes them (`app/scoring.py`,
+  `app/aggregation.py`, or `app/intelligence.py`) plus the frontend constants
+- Insight scores (M3) are never stored. They depend on both the scoring config and the
+  league config, so a stored score would need a row per context — the same reason M2
+  stores expected *components* rather than expected points. All weights and thresholds
+  live as documented constants at the top of `app/intelligence.py`
+- The scoring grammar (`app/scoring.py`) and league grammar (`app/league.py`) each have
+  a frontend mirror (`constants/scoring.js`, `constants/league.js`) — change both together
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

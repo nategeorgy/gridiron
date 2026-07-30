@@ -120,7 +120,7 @@ Recharts (charts). Package manager: **npm**. Dev server runs on **port 5173**.
 | `index.html` | The single HTML page Vite serves; React mounts into it. |
 | `package.json` | Declares dependencies and npm scripts (`npm run dev`, `build`, etc.). |
 | `package-lock.json` | Exact locked dependency versions (don't edit by hand). |
-| `vite.config.js` | Vite config — React plugin, dev server on port 5173. |
+| `vite.config.js` | Vite config — React plugin, dev server on port 5173 (or `PORT`, so a second dev server can run alongside the first). |
 | `tailwind.config.js` | Tailwind theme — fonts (Inter, mono) and **semantic color tokens** (`fg`, `muted`, `faint`, `surface`, `line`, `accent`, `pos/neg/warn`) that resolve to the active theme's CSS variables. The actual Liquid Glass look lives in `src/index.css`. |
 | `postcss.config.js` | Runs Tailwind + autoprefixer during the build. |
 | `vercel.json` | Tells **Vercel** (the frontend host) to route all paths to `index.html` (needed for a single-page app so deep links work). |
@@ -137,15 +137,19 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`. All wrapped in `Layout`. |
 | `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | **`pages/`** | pages | Top-level screens, one per route. |
-| `pages/Home.jsx` | page | **The home screen (`/`) — the Command Center.** A Bento dashboard that opens on the fantasy question: the current fantasy-points leader (spotlight), live fantasy leaders, entry tiles, the active league scoring, and labeled roadmap teasers (Buy-Low/Sell-High, coming in M3). |
+| `pages/Home.jsx` | page | **The home screen (`/`) — the Command Center.** A Bento dashboard that opens on the fantasy question: the current fantasy-points leader (spotlight), live fantasy leaders, entry tiles, the active league scoring, and **live Buy-Low / Sell-High signal tiles** from the M3 intelligence API. |
 | `pages/LeaderboardView.jsx` | page | The generalized leaderboard, driven by a **board config** (`constants/boards.js`). Every `/fantasy/*` and `/nfl/*` route renders this with a different board — fantasy boards show the league-scoring editor + scoring-aware columns; NFL boards show raw stats with the same filters (season / week / position / type). |
-| `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, a weekly fantasy trend chart, and a game-by-game log. |
+| `pages/InsightView.jsx` | page | ⭐ **The generalized Insight board (M3)**, driven by the same board config. Every `/insight/*` route renders this. Unlike the leaderboard it calls `/stats/intelligence`, adds the **league-context editor** and a **trailing-window timeframe** (full season / last 4 / last 8 weeks), and always states the pool it ranked against (window, games threshold, replacement level). |
+| `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, the **Insight panel** (M3 scores + breakdown), an Expected vs Actual panel, a weekly fantasy trend chart, and a game-by-game log. |
 | `pages/Teams.jsx` | page | Team leaderboard — ranked team offensive production for a season. |
 | **`components/`** | UI | Reusable pieces used by pages. |
-| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the two leaderboard dropdowns, Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
+| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the three board dropdowns — Insight / Fantasy / NFL — and Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
 | `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
-| `components/ui/NavDropdown.jsx` | UI (base) | The **Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
+| `components/ui/NavDropdown.jsx` | UI (base) | The **Insight ▾ / Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
+| `components/StatTable.jsx` | UI | The ranked stat table + pager **shared by the leaderboard and Insight boards**: click-to-sort headers, accented active column, and positive/negative tinting for columns whose sign carries the meaning. |
 | `components/ScoringControl.jsx` | UI | The league-scoring editor: preset picker (PPR/Half/Std/TE-Premium) + an expandable custom-weights panel. Emits a scoring spec string. |
+| `components/LeagueControl.jsx` | UI | ⭐ **The league-context editor (M3)**: team count + starting lineup (QB/RB/WR/TE/FLEX/SUPERFLEX), showing the **replacement level it produces per position** so the link between lineup and value is visible. Emits a league spec string. |
+| `components/InsightPanel.jsx` | UI | The player page's fantasy-intelligence panel: VORP / Opportunity Rating / Buy-Low / Sell-High with meters, the badges they imply ("Buy Low", "Sell High", "Elite Opportunity", "Below Replacement", "Small Sample"), and a collapsible **per-score breakdown** showing every weighted input with its value and percentile. |
 | `components/SearchBox.jsx` | UI | Header player search — type a name, pick a result, jump to that player's profile. |
 | `components/ui/Select.jsx` | UI (base) | A styled labeled `<select>` dropdown used all over the filter bars. |
 | `components/charts/FantasyTrendChart.jsx` | UI (chart) | Recharts bar chart of fantasy points by week on the player profile. |
@@ -155,21 +159,25 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/usePlayer.js` | data | Fetches a player profile + game log. |
 | `hooks/usePlayerSearch.js` | data | Fetches header search results (fires only at ≥2 chars). |
 | `hooks/useMetrics.js` | data | Fetches the metric registry from the backend; exposes a `supportsScoring` capability flag. Seeded with bundled constants so the UI is never blank. |
+| `hooks/useInsight.js` | data | Fetches the intelligence board (`useIntelligence`) and one player's scores (`usePlayerIntelligence`). |
 | `hooks/useScoring.js` | state | The active league scoring. **URL query param is the source of truth** (so views are shareable), backed by `localStorage`. Defaults to PPR. (Architecture "spine C": stateless-first.) |
+| `hooks/useLeague.js` | state | The active **league context** (size + starting lineup), same spine-C pattern as `useScoring`: URL param backed by `localStorage`. Defaults to 12-team. |
 | `hooks/useTheme.js` | state | The active UI theme (light/dark). Writes `data-theme` on `<html>` and persists to `localStorage` (`gridiron.theme`); defaults to dark. |
 | `hooks/useDebounce.js` | util | Debounces a fast-changing value (used to throttle search-as-you-type). |
 | **`services/`** | network | The **only** place HTTP calls live. One function per endpoint. |
 | `services/api.js` | network | The shared axios instance; sets the base URL to `{VITE_API_BASE_URL}/api/v1`. Everything else imports this. |
 | `services/stats.js` | network | `getLeaderboard(params)` → `/stats/leaderboard`. |
+| `services/insight.js` | network | `getIntelligence(params)` → `/stats/intelligence`; `getPlayerIntelligence(id, params)` → `/players/{id}/intelligence`. |
 | `services/players.js` | network | Player profile, game log, and search calls. |
 | `services/teams.js` | network | Teams list + team leaderboard calls. |
 | `services/metrics.js` | network | Fetches the metric registry. |
 | **`constants/`** | config | App-wide constant data (no logic/network). |
-| `constants/index.js` | config | Seasons, positions, weeks, the metric label/format map (seed for `useMetrics`), and the team-leaderboard + game-log column sets. |
-| `constants/boards.js` | config | **The 12 leaderboard "boards"** (4 Fantasy + 8 NFL) — each declares its columns (metric ids), default sort/position, and whether it's a scoring (fantasy) board. Drives both the nav dropdowns and `LeaderboardView`. Adding a leaderboard = add a board here. |
+| `constants/index.js` | config | Seasons, positions, weeks, Insight timeframes, the metric label/format map (seed for `useMetrics`), and the team-leaderboard + game-log column sets. |
+| `constants/boards.js` | config | **The 17 "boards"** (4 Insight + 5 Fantasy + 8 NFL) — each declares its columns (metric ids), default sort/position, whether it's a scoring (fantasy) board, and whether it's an `insight` board (rendered by `InsightView` against `/stats/intelligence`). Drives the three nav dropdowns and both board pages. Adding a board here is all it takes. |
 | `constants/scoring.js` | config | League-scoring presets + editable weights, and the (de)serialize helpers that mirror the backend's scoring grammar. **Must stay in sync with `backend/app/scoring.py`.** |
+| `constants/league.js` | config | League size + starting-lineup defaults and the (de)serialize helpers that mirror the backend's league grammar. **Must stay in sync with `backend/app/league.py`.** |
 | **`utils/`** | util | Pure helpers. |
-| `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. |
+| `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. Plus `formatPercentile` (0.92 → "92nd") and `formatSigned` (explicit `+` on gaps). |
 
 ---
 
@@ -194,10 +202,13 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | Path | What it does |
 | --- | --- |
 | `main.py` | **App entry point.** Creates the FastAPI app, configures CORS (which frontend origins may call it), and wires up all the routers under `/api/v1`. |
-| `config.py` | Loads settings from environment variables / `.env` (database URL, environment, allowed CORS origins) via Pydantic. |
+| `config.py` | Loads settings from environment variables / `.env` (database URL, environment, allowed CORS origins) via Pydantic. In **development** it also allows any `localhost` port, so a dev server on an auto-assigned port isn't blocked by CORS. |
 | `database.py` | Creates the SQLAlchemy engine + session factory, and the `get_db()` dependency every endpoint uses to get a database session. |
 | `scoring.py` | ⭐ **The scoring-aware fantasy engine (architecture "spine A").** Turns a league-scoring string like `"ppr:pass_td=6,te_rec=1.5"` into a `ScoringConfig`, and computes fantasy points from raw stat components — both as a SQL expression (for sorting/ranking in the DB) and in Python (for display). Fantasy points are **computed live, never stored per-scoring.** |
+| `league.py` | ⭐ **League context (M3).** Turns a league string like `"10:rb=2,flex=2"` into a `LeagueConfig` (teams + starting lineup) and derives the **replacement rank per position** — flex slots shared across RB/WR/TE in proportion to the lineup's flex-eligible starters, superflex credited to QB. The second per-request config alongside scoring; it's what makes *value* league-aware. |
 | `metrics.py` | ⭐ **The metric registry (architecture "spine B").** One canonical definition per metric (id, label, short label, description, format, category, how it aggregates, which positions it applies to). The single source of truth for metric metadata — the leaderboard reads aggregation behavior from here, and the frontend fetches it via `/metrics`. **Adding a stat starts here.** |
+| `aggregation.py` | The **shared season/window aggregation layer**: which registry metrics are summed vs averaged vs per-game derived, and `finalize_row()`, which fills in the scoring-aware and expected-points columns. Used by both the leaderboard and the intelligence engine so the two can't drift apart. |
+| `intelligence.py` | ⭐ **The fantasy-intelligence engine (M3).** VORP, Fantasy Opportunity Rating, Positive-Regression (buy-low) Index, and Sell-High Index — built from percentile ranks within each position pool, plus career-baseline efficiency and usage trend. Also resolves trailing windows and produces the per-input `breakdown()` the player page renders. All weights and thresholds are constants at the top of the file; see [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md). |
 | **`models/`** | **SQLAlchemy ORM models** — Python classes mapped to database tables. |
 | `models/base.py` | The shared `Base` class all models inherit from. |
 | `models/team.py` | `teams` table (name, abbreviation, conference, division). |
@@ -212,9 +223,9 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `schemas/common.py` | Shared pieces — e.g. the paginated-list envelope `{ data, total, page, … }`. |
 | **`routers/`** | **The API endpoints**, grouped by resource. Each file is a set of related routes. |
 | `routers/health.py` | `GET /health` — confirms the API and DB are alive. Used by Render's health check. |
-| `routers/players.py` | `GET /players` (search/list), `/players/{id}` (profile), `/players/{id}/stats` (game log). |
+| `routers/players.py` | `GET /players` (search/list), `/players/{id}` (profile), `/players/{id}/stats` (game log), `/players/{id}/intelligence` (M3 scores + breakdown). |
 | `routers/teams.py` | `GET /teams` (list), `/teams/leaderboard` (ranked team offense), `/teams/{id}/stats` (one team's season totals). |
-| `routers/stats.py` | ⭐ `GET /stats/leaderboard` — the filterable player leaderboard. Two modes: **season aggregate** (one row per player) and **single week** (raw game lines). Uses the scoring engine + metric registry. The most important endpoint. |
+| `routers/stats.py` | ⭐ `GET /stats/leaderboard` — the filterable player leaderboard. Two modes: **season aggregate** (one row per player) and **single week** (raw game lines). Uses the scoring engine + metric registry. The most important endpoint. Also `GET /stats/intelligence` (M3) — the Insight board; it computes the whole position pool first (scores are relative), then sorts and paginates in Python. |
 | `routers/metrics.py` | `GET /metrics` — serves the whole metric registry to the frontend. |
 | `utils/` | Shared backend helpers (currently just a placeholder `.gitkeep`). |
 
@@ -344,14 +355,23 @@ instead of being retrofitted. You'll see these referenced in the code:
 - **Spine B — Single metric registry** (`backend/app/metrics.py`, served via
   `/metrics`, consumed by `useMetrics`). One definition per metric, shared by every
   view. Replaces the old "add a metric in four places" problem.
-- **Spine C — Stateless-first persistence** (`frontend/src/hooks/useScoring.js`).
-  State lives in the URL + `localStorage` (shareable, no login), before accounts exist.
+- **Spine C — Stateless-first persistence** (`frontend/src/hooks/useScoring.js`,
+  `frontend/src/hooks/useLeague.js`). State lives in the URL + `localStorage`
+  (shareable, no login), before accounts exist.
+
+M3 added a **second per-request config** next to scoring: **league context**
+(`backend/app/league.py`, `frontend/src/constants/league.js`) — league size and
+starting lineup. Scoring answers "how many points is this worth?"; league context
+answers "worth more than *what*?". Any future value-based feature (the trade
+calculator, dynasty value) needs both, and they thread through the API the same way.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full vision and milestone plan,
 [`docs/design/M1-scoring-foundation.md`](docs/design/M1-scoring-foundation.md) for the
-scoring engine + registry design, and
+scoring engine + registry design,
 [`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md) for expected
-points, market share, and the snap/route enrichment (M2 — most recently shipped).
+points, market share, and the snap/route enrichment, and
+[`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md) for
+the VORP / opportunity / buy-low / sell-high engine (M3 — most recently shipped).
 
 ---
 
@@ -363,11 +383,13 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
 | I want to… | Touch these |
 | --- | --- |
 | Add a new **stored stat** (a real column) | 1) `backend/app/models/player_stats.py` (column) → 2) new Alembic migration → 3) `pipeline/ingest_stats.py` (populate it) → 4) `backend/app/metrics.py` (registry entry) → 5) `frontend/src/constants/index.js` (label/column). |
-| Add a **derived / scoring** metric (no column) | `backend/app/metrics.py` (registry entry, `aggregation="derived"` or `"scoring"`) + wire into `backend/app/routers/stats.py`; expose in `frontend/src/constants/index.js`. |
+| Add a **derived / scoring** metric (no column) | `backend/app/metrics.py` (registry entry, `aggregation="derived"` or `"scoring"`) + wire into `backend/app/aggregation.py` / `routers/stats.py`; expose in `frontend/src/constants/index.js`. |
+| Add or tune an **Insight score** (M3) | `backend/app/intelligence.py` (the weights/terms are constants at the top) + a `backend/app/metrics.py` entry with `aggregation="intelligence"`; expose in `frontend/src/constants/index.js` and add it to a board's columns in `constants/boards.js`. No DB or pipeline work — these are query-time. |
 | Change how **fantasy points** are scored | `backend/app/scoring.py` **and** mirror it in `frontend/src/constants/scoring.js`. |
+| Change **replacement level / league rules** | `backend/app/league.py` **and** mirror it in `frontend/src/constants/league.js`. |
 | Add a new **API endpoint** | a router in `backend/app/routers/` (+ register it in `main.py`), a Pydantic schema in `schemas/`, then a service in `frontend/src/services/` + a hook. |
 | Add a new **page/screen** | a component in `frontend/src/pages/`, a route in `frontend/src/App.jsx`, a nav link in `components/Layout.jsx`. |
-| Add a new **leaderboard** (or change its columns) | add/edit a board in `frontend/src/constants/boards.js` (columns, default sort/position, fantasy vs NFL). The route, nav dropdown item, and page all pick it up automatically. |
+| Add a new **board** (or change its columns) | add/edit a board in `frontend/src/constants/boards.js` (columns, default sort/position, fantasy vs NFL vs `insight`). The route, nav dropdown item, and page all pick it up automatically. |
 | Change the **look/theme** | `frontend/src/index.css` (Liquid Glass tokens per theme + `.glass-*` classes) + `frontend/tailwind.config.js` (semantic token names). Use the `.glass-*` classes and `text-fg`/`text-muted`/`text-accent`/`border-line` tokens — never hardcode theme colors. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | Change **data scope** (seasons, etc.) | re-run `pipeline/` scripts with new `--seasons`; update `frontend/src/constants/index.js` `SEASONS`. |
 
@@ -381,6 +403,12 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
   under a league's scoring rules. GridironIQ computes these live from raw stats.
 - **PPG** — fantasy **points per game** (a season total divided by games played).
 - **EPA** — Expected Points Added; an advanced measure of a play's value.
+- **VORP** — Value Over Replacement Player: points above the last *startable* player at
+  the same position in your league. How you compare a tight end to a running back.
+- **Replacement level** — the points-per-game of that last startable player. Depends on
+  league size and starting lineup, which is why GridironIQ makes you set them.
+- **Regression** — the tendency for unusually good or bad luck (especially touchdown
+  rate) to fade back toward normal. "Buy low" and "sell high" are bets on it.
 - **Target share / Air yards / Snap share / Routes run** — "opportunity" metrics: how
   much of a team's usage a player commands (predictive of future fantasy value).
 - **Red-zone** — inside the opponent's 20-yard line, where scoring chances are high.
@@ -404,6 +432,24 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-07-29** — M3: fantasy intelligence. New backend modules `app/league.py`
+  (league size + starting lineup → replacement rank per position) and
+  `app/intelligence.py` (VORP, Fantasy Opportunity Rating, Positive-Regression Index,
+  Sell-High Index, trailing windows, career-baseline efficiency, usage trend, and the
+  explanation breakdown), plus `app/aggregation.py` — the season/window aggregate
+  extracted out of `routers/stats.py` so the leaderboard and the new board share one
+  implementation. Nine new registry entries (`insight` category, `intelligence`
+  aggregation) and two endpoints: `GET /stats/intelligence`,
+  `GET /players/{id}/intelligence`. **No migration** — every score is query-time.
+  Frontend: a third nav dropdown (**Insight ▾**) with four boards
+  (`/insight/vorp|opportunity|buy-low|sell-high`) rendered by a new
+  `pages/InsightView.jsx`; new `components/LeagueControl.jsx`,
+  `components/InsightPanel.jsx` (player-page scores, badges, per-input breakdown) and
+  `components/StatTable.jsx` (extracted, now shared with `LeaderboardView`); new
+  `hooks/useLeague.js`, `hooks/useInsight.js`, `services/insight.js`,
+  `constants/league.js`; Home's M3 teasers replaced with live signal tiles. Also:
+  `config.py` allows any localhost port in development (CORS) and `vite.config.js`
+  honours `PORT`. New design note: `docs/design/M3-fantasy-intelligence.md`.
 - **2026-07-29** — M2: expanded metrics & expected points. New pipeline scripts
   `ingest_expected.py` (expected components + market share, from `load_ff_opportunity`)
   and `ingest_usage.py` (snap counts + route usage); `ingest_stats.py` extended with

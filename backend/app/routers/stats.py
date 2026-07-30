@@ -1,6 +1,6 @@
-"""Stats endpoints: the filterable leaderboard.
+"""Stats endpoints: the filterable leaderboard and the fantasy-intelligence board.
 
-Supports two modes:
+The leaderboard supports two modes:
   - Season aggregate (no ``week``): one row per player, counting stats summed,
     rate stats averaged, plus season-derived per-game metrics.
   - Single week (``week`` provided): raw per-game stat lines.
@@ -12,14 +12,32 @@ Fantasy points and expected fantasy points (xFP) are both computed per-request f
 the active ScoringConfig — the actual side from the real stat components, the
 expected side from the stored ffopportunity components — so the two are always
 comparable in the user's own league scoring.
+
+``/stats/intelligence`` (M3) adds the derived signals — VORP, opportunity rating,
+buy-low and sell-high indices. It is a separate endpoint because those scores rank a
+player against their whole position pool, so it cannot be paginated in SQL the way
+the leaderboard is: the pool is computed first, then the page is cut from it.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.aggregation import (
+    AVG_METRICS,
+    EXPECTED_METRICS,
+    INSIGHT_METRICS,
+    PPG_METRICS,
+    SCORING_METRICS,
+    SUM_METRICS,
+    aggregate_select,
+    finalize_row,
+    games_expr,
+    window_filters,
+)
 from app.database import get_db
-from app.metrics import REGISTRY, ids_with_aggregation
+from app.intelligence import build_intelligence, resolve_window
+from app.league import parse_league
 from app.models import Player, PlayerStats, Team
 from app.scoring import (
     EXPECTED_COMPONENTS,
@@ -34,20 +52,13 @@ from app.scoring import (
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
-# Aggregation behaviour is derived from the metric registry (single source of truth).
-SUM_METRICS = ids_with_aggregation("sum")  # counting stats, summed over a season
-AVG_METRICS = ids_with_aggregation("avg")  # rate / share stats, averaged over a season
-# Season-derived per-game metrics: id -> the column it divides by games.
-PPG_METRICS = {m.id: m.base for m in REGISTRY if m.aggregation == "derived"}
-# Scoring-aware fantasy metrics — computed per-request from a ScoringConfig.
-SCORING_METRICS = set(ids_with_aggregation("scoring"))
-# Expected-points metrics (M2) — same engine, applied to the expected components.
-EXPECTED_METRICS = set(ids_with_aggregation("expected"))
-
 ALLOWED_METRICS = (
     set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS)
     | SCORING_METRICS | EXPECTED_METRICS | {"games_played"}
 )
+# The intelligence board can also rank by any of the plain aggregate metrics, so its
+# supporting columns are sortable next to the scores.
+ALLOWED_INSIGHT_METRICS = ALLOWED_METRICS | INSIGHT_METRICS
 
 
 def _round(value: float | None, digits: int = 3) -> float | None:
@@ -83,28 +94,9 @@ def _leaderboard_season(
     limit: int, offset: int,
 ) -> tuple[list[dict], int]:
     """Aggregate a full season into one ranked row per player."""
-    games = func.count(func.distinct(PlayerStats.game_id))
-    filters = [PlayerStats.season == season, PlayerStats.season_type == season_type]
-    if position:
-        filters.append(Player.position == position.upper())
-
-    labeled = [func.sum(getattr(PlayerStats, name)).label(name) for name in SUM_METRICS]
-    labeled += [func.avg(getattr(PlayerStats, name)).label(name) for name in AVG_METRICS]
-
-    grouping = (Player.player_id, Player.name, Player.position, Team.abbreviation)
-    base = (
-        select(
-            Player.player_id, Player.name.label("name"),
-            Player.position.label("position"),
-            Team.abbreviation.label("team_abbreviation"),
-            games.label("games_played"), *labeled,
-        )
-        .join(Player, PlayerStats.player_id == Player.player_id)
-        .outerjoin(Team, Player.team_id == Team.team_id)
-        .where(*filters)
-        .group_by(*grouping)
-        .having(games >= min_games)
-    )
+    games = games_expr()
+    filters = window_filters(season, season_type, position=position)
+    base = aggregate_select(filters, games).having(games >= min_games)
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
 
@@ -124,31 +116,9 @@ def _leaderboard_season(
 
     rows = db.execute(base.order_by(order_expr).limit(limit).offset(offset)).mappings().all()
 
-    results: list[dict] = []
-    for row in rows:
-        record = dict(row)
-        played = record["games_played"] or 0
-        # Scoring-aware fantasy points from the raw summed components (pre-rounding).
-        position = record.get("position")
-        points = compute_points(config, record, position)
-        record["fantasy_points"] = _round(points)
-        record["fantasy_ppg"] = _round(points / played) if played else None
-        # Expected points, same scoring config applied to the expected components.
-        expected = compute_expected_points(config, record, position)
-        record["expected_fantasy_points"] = _round(expected)
-        record["expected_fantasy_ppg"] = (
-            _round(expected / played) if played and expected is not None else None
-        )
-        record["fantasy_points_over_expected"] = (
-            _round(points - expected) if expected is not None else None
-        )
-        for key, column in PPG_METRICS.items():
-            total_value = record.get(column)
-            record[key] = _round(total_value / played) if played and total_value is not None else None
-        for key in SUM_METRICS + AVG_METRICS:
-            record[key] = _round(record.get(key))
-        results.append(record)
-    return results, total
+    # The scoring-aware, expected, and per-game columns are filled in by the shared
+    # aggregation layer, so the leaderboard and the intelligence board can't drift.
+    return [finalize_row(dict(row), config) for row in rows], total
 
 
 def _leaderboard_week(
@@ -156,12 +126,9 @@ def _leaderboard_week(
     metric: str, config: ScoringConfig, descending: bool, limit: int, offset: int,
 ) -> tuple[list[dict], int]:
     """Return raw per-game stat lines for a single week, ranked by metric."""
-    filters = [
-        PlayerStats.season == season, PlayerStats.week == week,
-        PlayerStats.season_type == season_type,
-    ]
-    if position:
-        filters.append(Player.position == position.upper())
+    filters = window_filters(
+        season, season_type, position=position, week_from=week, week_to=week
+    )
 
     # PPG metrics have no per-game meaning; fall back to their base column.
     if metric in SCORING_METRICS or metric in EXPECTED_METRICS:
@@ -250,4 +217,79 @@ def leaderboard(
         "data": data, "total": total, "page": page, "limit": limit, "offset": offset,
         "season": season, "week": week, "season_type": season_type,
         "metric": metric, "order": order, "scoring": config.model_dump(),
+    }
+
+
+@router.get("/intelligence")
+def intelligence(
+    season: int = Query(..., description="Season year, e.g. 2024"),
+    last_weeks: int | None = Query(
+        None, ge=1, le=22,
+        description="Trailing window: score only the last N played weeks. Omit for the full season.",
+    ),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    position: str | None = Query(None, description="QB, RB, WR, or TE"),
+    metric: str = Query("positive_regression_index", description="Metric to rank by"),
+    scoring: str = Query(
+        "ppr",
+        description="League scoring as preset[:overrides], e.g. 'ppr' or 'ppr:pass_td=6,te_rec=1.5'",
+    ),
+    league: str = Query(
+        "12",
+        description="League context as teams[:slot=value], e.g. '12' or '10:rb=2,wr=3,flex=2'",
+    ),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+    min_games: int | None = Query(
+        None, ge=0, description="Games needed to be ranked. Defaults to ~a third of the window."
+    ),
+    include_unqualified: bool = Query(
+        False, description="Include players below the games threshold (never in the ranking pools)"
+    ),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Fantasy-intelligence board: VORP, opportunity rating, and buy/sell indices.
+
+    Scores are relative to a position pool, so the whole pool is computed and then
+    sorted and paginated in Python. Filtering by ``position`` narrows the *output*
+    only — a receiver's percentile never depends on who else the caller asked about.
+    """
+    if metric not in ALLOWED_INSIGHT_METRICS:
+        raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}'")
+    try:
+        config = parse_scoring(scoring)
+        league_config = parse_league(league)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    window = resolve_window(db, season, season_type, last_weeks)
+    rows, context = build_intelligence(
+        db, window, config, league_config, min_games=min_games, position=position
+    )
+
+    if not include_unqualified:
+        rows = [row for row in rows if row.get("qualified")]
+
+    descending = order == "desc"
+
+    def sort_key(row: dict) -> tuple[int, float]:
+        """Rank by the metric; players with no value for it sort last either way
+        (matching the leaderboard's NULLS LAST behaviour)."""
+        value = row.get(metric)
+        if value is None:
+            return (1, 0.0)
+        return (0, -value if descending else value)
+
+    rows.sort(key=sort_key)
+
+    total = len(rows)
+    page_rows = rows[offset : offset + limit]
+    page = (offset // limit) + 1 if limit else 1
+    return {
+        "data": page_rows, "total": total, "page": page, "limit": limit, "offset": offset,
+        "season": season, "season_type": season_type, "window": window.as_dict(),
+        "metric": metric, "order": order,
+        "scoring": config.model_dump(), "league": league_config.model_dump(),
+        "min_games": context["min_games"], "replacement": context["replacement"],
     }

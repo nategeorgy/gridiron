@@ -30,8 +30,18 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_regex_or_none(self) -> str | None:
-        """The origin regex, or None when unset (so CORS falls back to the list)."""
-        return self.cors_origin_regex.strip() or None
+        """The origin regex, or None when unset (so CORS falls back to the list).
+
+        In development, any localhost port is also allowed: a second dev server (or a
+        preview tool) is often assigned a free port rather than the default 5173, and
+        blocking it looks exactly like a broken API. This never applies in production,
+        where ENVIRONMENT is not "development".
+        """
+        pattern = self.cors_origin_regex.strip()
+        if self.environment == "development":
+            localhost = r"http://(localhost|127\.0\.0\.1):\d+"
+            pattern = f"{pattern}|{localhost}" if pattern else localhost
+        return pattern or None
 
 
 settings = Settings()  # type: ignore[call-arg]

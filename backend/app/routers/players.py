@@ -1,10 +1,12 @@
-"""Player endpoints: search, profile, and per-game game log."""
+"""Player endpoints: search, profile, per-game game log, and fantasy intelligence."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.intelligence import breakdown, build_intelligence, resolve_window
+from app.league import parse_league
 from app.models import Game, Player, PlayerStats, Team
 from app.schemas.common import PaginatedResponse, paginated
 from app.schemas.player import PlayerOut
@@ -72,6 +74,78 @@ def get_player(player_id: str, db: Session = Depends(get_db)) -> PlayerOut:
         raise HTTPException(status_code=404, detail="Player not found")
     player, abbr = row
     return _to_player_out(player, abbr)
+
+
+@router.get("/{player_id}/intelligence")
+def get_player_intelligence(
+    player_id: str,
+    season: int = Query(..., description="Season year, e.g. 2024"),
+    last_weeks: int | None = Query(
+        None, ge=1, le=22, description="Trailing window: the last N played weeks"
+    ),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    scoring: str = Query("ppr", description="League scoring as preset[:overrides]"),
+    league: str = Query("12", description="League context as teams[:slot=value]"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """This player's M3 scores, with the component breakdown behind each one.
+
+    The scores are only meaningful against a pool, so the pool is built exactly as the
+    board builds it and this player is then read out of it. A player below the games
+    threshold is still scored against that pool and flagged ``qualified: false``.
+    """
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+    try:
+        config = parse_scoring(scoring)
+        league_config = parse_league(league)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    window = resolve_window(db, season, season_type, last_weeks)
+    rows, context = build_intelligence(db, window, config, league_config)
+
+    record = next((row for row in rows if row["player_id"] == player_id), None)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No {season} {season_type} stats for this player in that window",
+        )
+
+    position_pool = context["replacement"].get(record.get("position"), {})
+    return {
+        "player_id": player_id,
+        "name": record.get("name"),
+        "position": record.get("position"),
+        "window": window.as_dict(),
+        "scoring": config.model_dump(),
+        "league": league_config.model_dump(),
+        "qualified": record.get("qualified", False),
+        "min_games": context["min_games"],
+        "games_played": record.get("games_played"),
+        "pool_size": position_pool.get("pool_size"),
+        "replacement": position_pool,
+        "scores": {
+            "vorp": record.get("vorp"),
+            "vorp_ppg": record.get("vorp_ppg"),
+            "fantasy_opportunity_rating": record.get("fantasy_opportunity_rating"),
+            "positive_regression_index": record.get("positive_regression_index"),
+            "sell_high_index": record.get("sell_high_index"),
+        },
+        "supporting": {
+            "fantasy_ppg": record.get("fantasy_ppg"),
+            "expected_fantasy_ppg": record.get("expected_fantasy_ppg"),
+            "fantasy_points_over_expected": record.get("fantasy_points_over_expected"),
+            "tds_over_expected": record.get("tds_over_expected"),
+            "efficiency_over_baseline": record.get("efficiency_over_baseline"),
+            "opportunity_trend": record.get("opportunity_trend"),
+            "replacement_ppg": record.get("replacement_ppg"),
+        },
+        "breakdown": breakdown(
+            record, context["inputs"][player_id], context["percentiles"][player_id]
+        ),
+    }
 
 
 @router.get("/{player_id}/stats", response_model=PaginatedResponse[StatLineOut])
