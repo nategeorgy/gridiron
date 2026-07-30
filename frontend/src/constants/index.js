@@ -26,6 +26,15 @@ export const WEEKS = [
   })),
 ];
 
+// Timeframes for the Insight boards (M3). "" = the full season; a number is a
+// trailing window of that many *played* weeks, which is how buy-low and sell-high
+// questions are actually asked.
+export const INSIGHT_TIMEFRAMES = [
+  { value: "", label: "Full Season" },
+  { value: "4", label: "Last 4 Weeks" },
+  { value: "8", label: "Last 8 Weeks" },
+];
+
 // number = decimal places; "int" = integer; "pct" = fraction shown as %.
 const FORMATS = { int: "int", one: 1, two: 2, three: 3, pct: "pct" };
 
@@ -99,6 +108,17 @@ export const METRICS = {
   targets_per_route_run: { label: "Targets Per Route Run", short: "TPRR", format: FORMATS.two },
   yards_per_route_run: { label: "Yards Per Route Run", short: "YPRR", format: FORMATS.two },
   unrealized_air_yards: { label: "Unrealized Air Yards", short: "UAY", format: FORMATS.int },
+  // Fantasy intelligence (M3) — scoring-aware *and* league-aware, served by
+  // /stats/intelligence rather than the leaderboard.
+  vorp: { label: "Value Over Replacement", short: "VORP", format: FORMATS.one },
+  vorp_ppg: { label: "VORP Per Game", short: "VORP/G", format: FORMATS.two },
+  replacement_ppg: { label: "Replacement Level", short: "REPL", format: FORMATS.two },
+  fantasy_opportunity_rating: { label: "Fantasy Opportunity Rating", short: "FOR", format: FORMATS.one },
+  positive_regression_index: { label: "Positive-Regression Index", short: "BUY", format: FORMATS.one },
+  sell_high_index: { label: "Sell-High Index", short: "SELL", format: FORMATS.one },
+  tds_over_expected: { label: "TDs Over Expected", short: "TD±", format: FORMATS.two },
+  efficiency_over_baseline: { label: "Efficiency vs Career", short: "EFF±", format: FORMATS.three },
+  opportunity_trend: { label: "Usage Trend", short: "TREND", format: FORMATS.pct },
 };
 
 // Leaderboard columns and sort options are no longer defined here — each board in

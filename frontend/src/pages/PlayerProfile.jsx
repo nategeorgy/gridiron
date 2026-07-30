@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
+import { InsightPanel } from "../components/InsightPanel";
 import { FantasyTrendChart } from "../components/charts/FantasyTrendChart";
 import { usePlayer, usePlayerGameLog } from "../hooks/usePlayer";
 import { useScoring } from "../hooks/useScoring";
@@ -212,6 +213,8 @@ export function PlayerProfile() {
           <ScoringControl scoring={scoring} onChange={setScoring} />
 
           <SummaryCards position={position} games={seasonGames} />
+
+          <InsightPanel playerId={playerId} season={activeSeason} scoring={scoring} />
 
           <ExpectedVsActual games={seasonGames} />
 

@@ -96,19 +96,38 @@ Design note: [`design/M2-expanded-metrics.md`](design/M2-expanded-metrics.md).
   the registry and on every surface. ffopportunity models no expected fumbles, a small
   known upward bias in xFP. `routes_run` is pass-play participation, not charted routes.
 
-### 🧠 M3 — Fantasy Intelligence (the moat) — M–L — **NEXT**
+### 🧠 M3 — Fantasy Intelligence (the moat) — M–L — **✅ SHIPPED**
+Design note: [`design/M3-fantasy-intelligence.md`](design/M3-fantasy-intelligence.md).
 Most original, most on-brand. Rule/formula-based on existing data.
-- **Deps:** M1 + M2. **Data:** existing — low risk.
-- **Features:** **VORP** (scoring-aware value vs positional replacement), **Fantasy
-  Opportunity Rating** (0–100 composite), **Positive-Regression Index** (low TD rate +
-  high air yards/target share/RZ usage + low finish), **Sell-High Index** (unsustainable
-  TD rate + efficiency above career baseline + declining opportunity).
-- **DB:** none required (compute on the fly; materialize weekly if slow).
-- **Backend:** `/stats/intelligence` endpoints; replacement baseline from the
-  leaderboard distribution.
-- **Frontend:** Buy/Sell/Regression boards; badges on player pages.
+- **Deps:** M1 + M2. **Data:** existing — no new ingestion.
+- **Shipped:** **VORP** (+ VORP/game), **Fantasy Opportunity Rating** (0–100),
+  **Positive-Regression Index** (buy-low), **Sell-High Index** — every score computed
+  from percentile ranks within the player's position pool, in the user's own scoring.
+- **DB:** **none.** Every score is query-time. Materialising them would mean one row
+  per scoring-context per league-context — the trap M2 avoided by storing components.
+- **New second spine-A-style config: league context** (`app/league.py`) — league size +
+  starting lineup, resolved into a replacement rank per position (12-team standard →
+  QB12/RB28/WR42/TE14, flex shared across RB/WR/TE by lineup proportion, superflex to
+  QB). Scoring says how much a point is worth; league context says worth more than
+  *what*. Every later value feature (trade calculator, dynasty) needs both.
+- **Backend:** `GET /stats/intelligence` (season or trailing 4/8-week window) and
+  `GET /players/{id}/intelligence` (scores + the per-input breakdown the player page
+  renders). `app/aggregation.py` extracted so the leaderboard and this board share one
+  aggregation implementation.
+- **Frontend:** a third nav dropdown — **Insight ▾** — with four boards (VORP /
+  Opportunity Rating / Buy Low / Sell High), the league-context editor showing the
+  replacement level it produces, badges + a full explanation panel on player pages, and
+  live buy-low/sell-high tiles on the Command Center.
+- **Validated, not just shipped:** scored on weeks 1–9 and measured on weeks 10–18,
+  FOR predicts rest-of-season PPG almost monotonically (Q1 ≈2.4 → Q5 ≈13.4 PPG, all of
+  2022–2024). Controlling for first-half production, high-index players beat low-index
+  players by ~+2 PPG (buy-low) and −2 PPG (sell-high) among high producers. See the
+  design note's backtest section — including where the buy signal is weakest.
+- **Data limits:** weights are documented judgement, not fitted; anything built on the
+  expected-points gap inherits ffopportunity's no-expected-fumbles bias; rookies have
+  no career-efficiency baseline (it renormalises away).
 
-### 🔬 M4 — Exploration & Viz — M
+### 🔬 M4 — Exploration & Viz — M — **NEXT**
 - **Deps:** M1/M2. **Data:** existing.
 - **Features:** **scatter builder** (any 2 registry metrics × player base), **comparison
   builder** (≤5 players, default + custom stats), **enhanced player pages** (usage/
@@ -162,6 +181,8 @@ Each sub-feature is its own deployable slice:
 | Depth charts | `load_depth_charts` (2001+) | 🟢 |
 | Historical Vegas lines | `load_schedules` | 🟢 |
 | Rush attempts by yard-line | `load_pbp` | 🟢 Derive |
+| Replacement level / VORP | derived from the position-pool distribution + league config | 🟢 Shipped M3 |
+| Buy-low / sell-high signals | derived (expected-points gap + usage + career baseline) | 🟢 Shipped M3 |
 | Snap share / NGS / PFR adv | `load_snap_counts` / `load_nextgen_stats` / `load_pfr_advstats` | 🟢 (NGS 2016+, PFR 2018+) |
 | Snap counts | `load_snap_counts` (PFR, `pfr_id` crosswalk) | 🟢 Shipped M2 |
 | Pass-play participation ("routes run") | `load_participation` × `load_pbp` | 🟢 Shipped M2 — populated **2020–2025**, GSIS ids join directly (see note below) |
@@ -273,6 +294,24 @@ tells people it exists.
   (carries / team carries), `opportunity_share` ((carries + targets) / team total), and
   `market_share` (share of team yards from scrimmage) — volume, touch mix, and
   production, each answering a different workload question.
+- **2026-07-29 — League context is a per-request config, not a constant.** M3 could have
+  hard-coded the conventional replacement baselines (QB12/RB24/WR36/TE12). Instead
+  league size + starting lineup became a second per-request config alongside scoring
+  (`app/league.py`, `useLeague`), because a fixed 12-team assumption contradicts the
+  product's core promise. Flex slots are shared across RB/WR/TE in proportion to the
+  lineup's flex-eligible starters — matches how flex is actually used and needs no
+  external assumptions. Verified: a superflex league moves the QB baseline 17.32 → 14.20
+  PPG and flips the top VORP player from a receiver to Lamar Jackson.
+- **2026-07-29 — Intelligence scores are percentiles, and never materialised.**
+  Percentile ranks within position (not z-scores) because these distributions are skewed
+  and "84th percentile among receivers" is directly actionable. Nothing is stored: the
+  scores depend on both the scoring *and* league config, so a stored score would need a
+  row per context — the same trap the expected-components decision avoided. Query-time
+  cost measured at ~90 ms for a full season, so caching is unnecessary for now.
+- **2026-07-29 — Buy/sell signals must show their work.** Every score returns its
+  weighted inputs with values and percentiles, rendered on the player page. A rule-based
+  signal is only better than a black-box projection if the rules are visible; this also
+  keeps us honest about the weights being judgement rather than a fit.
 - **2026-07-29 — Snap/route enrichment folded into M2.** The columns the pipeline had
   been leaving NULL were blocking 8 registry metrics and several board columns, and
   M3's Fantasy Opportunity Rating needs them. Six of the eight are now populated for
