@@ -6,6 +6,8 @@ import { useMemo, useState } from "react";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
+import { ExportButton } from "../components/ExportButton";
+import { buildBoardExport } from "../utils/csv";
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useScoring } from "../hooks/useScoring";
 import { useMetrics } from "../hooks/useMetrics";
@@ -73,6 +75,12 @@ export function LeaderboardView({ board }) {
     setOffset(0);
   };
 
+  // CSV of the page currently on screen, with its filters recorded in the header.
+  const exportData = useMemo(
+    () => buildBoardExport(rows, columns, metrics, toBackendMetric),
+    [rows, columns, metrics, supportsScoring, board],
+  );
+
   return (
     <div className="space-y-5">
       <div>
@@ -86,6 +94,18 @@ export function LeaderboardView({ board }) {
         <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
+        <div className="ml-auto flex items-end">
+          <ExportButton
+            filename={`gridironiq-${board.id}-${season}${week ? `-wk${week}` : ""}`}
+            rows={exportData.rows}
+            columns={exportData.columns}
+            context={[
+              `GridironIQ — ${board.title}`,
+              `${season} ${seasonType}${week ? ` · week ${week}` : " · full season"}${position ? ` · ${position}` : ""}`,
+              `sorted by ${metrics[metric]?.label ?? metric}${board.scoring ? ` · scoring: ${scoring}` : ""}`,
+            ]}
+          />
+        </div>
       </div>
 
       {board.scoring && supportsScoring && <ScoringControl scoring={scoring} onChange={changeScoring} />}

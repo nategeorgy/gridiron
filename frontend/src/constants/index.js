@@ -99,6 +99,9 @@ export const METRICS = {
   rush_attempt_share: { label: "Rush Share", short: "RUSH%", format: FORMATS.pct },
   opportunity_share: { label: "Opportunity Share", short: "OPP%", format: FORMATS.pct },
   market_share: { label: "Market Share", short: "MKT%", format: FORMATS.pct },
+  // Composite usage metrics (M4) — registry formulas over the metrics above.
+  high_value_touches_per_game: { label: "High-Value Touches / Game", short: "HVT/G", format: FORMATS.two },
+  touches_per_snap: { label: "Touches Per Snap", short: "TCH/SNAP", format: FORMATS.three },
   // Snap and route usage (M2 — populated by pipeline/ingest_usage.py).
   snap_count: { label: "Snap Count", short: "SNAP", format: FORMATS.int },
   snap_share: { label: "Snap Share", short: "SNAP%", format: FORMATS.pct },

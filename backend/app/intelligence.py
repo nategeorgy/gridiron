@@ -55,6 +55,7 @@ from app.aggregation import (
     round_value,
     window_filters,
 )
+from app.custom_metrics import CustomMetric
 from app.league import LeagueConfig, replacement_ranks
 from app.models import Player, PlayerStats
 from app.scoring import ScoringConfig, points_expr
@@ -504,6 +505,7 @@ def build_intelligence(
     league: LeagueConfig,
     min_games: int | None = None,
     position: str | None = None,
+    custom: list[CustomMetric] | None = None,
 ) -> tuple[list[dict], dict]:
     """Score every player in the window. Returns ``(rows, context)``.
 
@@ -519,7 +521,7 @@ def build_intelligence(
     ranks = replacement_ranks(league)
 
     rows = [
-        finalize_row(dict(row), config)
+        finalize_row(dict(row), config, custom)
         for row in db.execute(aggregate_window_select(window)).mappings().all()
     ]
 

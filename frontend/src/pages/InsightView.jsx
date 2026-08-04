@@ -9,6 +9,8 @@ import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { LeagueControl } from "../components/LeagueControl";
 import { StatTable, TablePager } from "../components/StatTable";
+import { ExportButton } from "../components/ExportButton";
+import { buildBoardExport } from "../utils/csv";
 import { useIntelligence } from "../hooks/useInsight";
 import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
@@ -58,6 +60,9 @@ export function InsightView({ board }) {
     setOffset(0);
   };
 
+  // CSV of the page currently on screen, with its filters recorded in the header.
+  const exportData = useMemo(() => buildBoardExport(rows, columns, metrics), [rows, columns, metrics]);
+
   return (
     <div className="space-y-5">
       <div>
@@ -77,6 +82,19 @@ export function InsightView({ board }) {
         <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
+        <div className="ml-auto flex items-end">
+          <ExportButton
+            filename={`gridironiq-${board.id}-${season}`}
+            rows={exportData.rows}
+            columns={exportData.columns}
+            context={[
+              `GridironIQ — ${board.title}`,
+              `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} played weeks` : " · full season"}${position ? ` · ${position}` : ""}`,
+              `sorted by ${metrics[metric]?.label ?? metric} · scoring: ${scoring} · league: ${league}`,
+              "Scores are percentiles within each player's position pool, not absolute values.",
+            ]}
+          />
+        </div>
       </div>
 
       {/* Scoring and league sit side by side: both are "what league am I in?", and

@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-07-30
+Last updated: 2026-08-04
 
 ---
 
@@ -135,29 +135,39 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | Path | Layer | What it does |
 | --- | --- | --- |
 | `main.jsx` | entry | Boots React. Wraps the app in `BrowserRouter` (routing) and `QueryClientProvider` (React Query). Imports global CSS. |
-| `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`. All wrapped in `Layout`. |
+| `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/insight/*` → `InsightView`; **`/explore/*` → the M4 tools** (`ScatterView`, `CompareView`, mapped from `EXPLORE_ITEMS`); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`. All wrapped in `Layout`. |
 | `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | **`pages/`** | pages | Top-level screens, one per route. |
 | `pages/Home.jsx` | page | **The home screen (`/`) — the Command Center.** A Bento dashboard that opens on the fantasy question: the current fantasy-points leader (spotlight), live fantasy leaders, entry tiles, the active league scoring, and **live Buy-Low / Sell-High signal tiles** from the M3 intelligence API. |
 | `pages/LeaderboardView.jsx` | page | The generalized leaderboard, driven by a **board config** (`constants/boards.js`). Every `/fantasy/*` and `/nfl/*` route renders this with a different board — fantasy boards show the league-scoring editor + scoring-aware columns; NFL boards show raw stats with the same filters (season / week / position / type). |
 | `pages/InsightView.jsx` | page | ⭐ **The generalized Insight board (M3)**, driven by the same board config. Every `/insight/*` route renders this. Unlike the leaderboard it calls `/stats/intelligence`, adds the **league-context editor** and a **trailing-window timeframe** (full season / last 4 / last 8 weeks), and always states the pool it ranked against (window, games threshold, replacement level). |
-| `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, the **Insight panel** (M3 scores + breakdown), an Expected vs Actual panel, a weekly fantasy trend chart, and a game-by-game log. |
+| `pages/ScatterView.jsx` | page | ⭐ **The scatter builder (M4)** at `/explore/scatter`. A **curated** tool: users pick a position group and a *question*, not axes — the presets live in `constants/scatters.js`. Players are drawn as their own headshots, with median quadrant guides and click-through to a player page. |
+| `pages/CompareView.jsx` | page | ⭐ **The comparison builder (M4)** at `/explore/compare`. Up to five players side by side, with headshots. Each row shows who **leads** that stat and by how much over the runner-up (direction from the registry's `higher_is_better`, so fewest fumbles wins). Only metrics applying to *every* compared position are shown. Plus an overlaid weekly chart and a percentile radar. Selection lives in the URL. |
+| `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, the **Insight panel** (M3 scores + breakdown), an Expected vs Actual panel, a weekly fantasy trend chart, **the M4 usage-trend and target-depth charts**, and a game-by-game log. |
 | `pages/Teams.jsx` | page | Team leaderboard — ranked team offensive production for a season. |
 | **`components/`** | UI | Reusable pieces used by pages. |
-| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the three board dropdowns — Insight / Fantasy / NFL — and Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
+| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the four dropdowns — Insight / Explore / Fantasy / NFL — and Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
 | `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
-| `components/ui/NavDropdown.jsx` | UI (base) | The **Insight ▾ / Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
+| `components/ui/NavDropdown.jsx` | UI (base) | The **Insight ▾ / Explore ▾ / Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
 | `components/StatTable.jsx` | UI | The ranked stat table + pager **shared by the leaderboard and Insight boards**: click-to-sort headers, accented active column, and positive/negative tinting for columns whose sign carries the meaning. |
 | `components/ScoringControl.jsx` | UI | The league-scoring editor: preset picker (PPR/Half/Std/TE-Premium) + an expandable custom-weights panel. Emits a scoring spec string. |
 | `components/LeagueControl.jsx` | UI | ⭐ **The league-context editor (M3)**: team count + starting lineup (QB/RB/WR/TE/FLEX/SUPERFLEX), showing the **replacement level it produces per position** so the link between lineup and value is visible. Emits a league spec string. |
 | `components/InsightPanel.jsx` | UI | The player page's fantasy-intelligence panel: VORP / Opportunity Rating / Buy-Low / Sell-High with meters, the badges they imply ("Buy Low", "Sell High", "Elite Opportunity", "Below Replacement", "Small Sample"), and a collapsible **per-score breakdown** showing every weighted input with its value and percentile. |
+| `components/PlayerPicker.jsx` | UI | Search-and-add player selector for the comparison builder, capped at five, with chips coloured to match each player's chart series. |
+| `components/ExportButton.jsx` | UI | **CSV export of the current view**, on every board and both Explore views. Writes the active filters/scoring/league into a header comment so a download is self-describing. |
 | `components/SearchBox.jsx` | UI | Header player search — type a name, pick a result, jump to that player's profile. |
 | `components/ui/Select.jsx` | UI (base) | A styled labeled `<select>` dropdown used all over the filter bars. |
-| `components/charts/FantasyTrendChart.jsx` | UI (chart) | Recharts bar chart of fantasy points by week on the player profile. |
+| `components/charts/FantasyTrendChart.jsx` | UI (chart) | Recharts bar chart of fantasy points by week on the player profile, with expected points overlaid as a dashed line. |
+| `components/charts/MetricScatter.jsx` | UI (chart) | The scatter itself: **players drawn as circular headshots** (with an initialled disc fallback), median reference lines, an optional x=y diagonal for same-unit presets, optional bubble sizing, and faint quadrant captions. The photo carries identity, so no colour encoding is needed — which also sidesteps the colour-vision problem four position hues would create (see the M4 design note §6). |
+| `components/charts/TargetDepthChart.jsx` | UI (chart) | Targets vs catches per air-yard bucket (behind LOS / 0–9 / 10–19 / 20+) on the player page — where a receiver's opportunity actually lives. |
+| `components/charts/UsageTrendChart.jsx` | UI (chart) | Weekly usage shares (snap / target / route or rush / opportunity) for one player. All series share one 0–100% axis — never a second y-scale. |
+| `components/charts/CompareTrendChart.jsx` | UI (chart) | Overlaid weekly fantasy points for up to five compared players. Also exports `SERIES_COLORS`, the fixed categorical order keyed to the player (never to their rank). |
+| `components/charts/CompareRadar.jsx` | UI (chart) | Percentile radar across a curated per-position axis set — percentiles, not raw stats, so the shape is readable across positions. |
 | **`hooks/`** | data | Custom React hooks — reusable stateful logic, mostly React Query wrappers around services. |
 | `hooks/useLeaderboard.js` | data | Fetches the player leaderboard. |
 | `hooks/useTeamLeaderboard.js` | data | Fetches the team leaderboard. |
-| `hooks/usePlayer.js` | data | Fetches a player profile + game log. |
+| `hooks/usePlayer.js` | data | Fetches a player profile, game log, and **target-depth buckets** (`usePlayerTargetDepth`). |
+| `hooks/useExplore.js` | data | Fetches the M4 Explore views: `useScatter` → `/stats/scatter`, `useCompare` → `/stats/compare`. |
 | `hooks/usePlayerSearch.js` | data | Fetches header search results (fires only at ≥2 chars). |
 | `hooks/useMetrics.js` | data | Fetches the metric registry from the backend; exposes a `supportsScoring` capability flag. Seeded with bundled constants so the UI is never blank. |
 | `hooks/useInsight.js` | data | Fetches the intelligence board (`useIntelligence`) and one player's scores (`usePlayerIntelligence`). |
@@ -167,18 +177,20 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/useDebounce.js` | util | Debounces a fast-changing value (used to throttle search-as-you-type). |
 | **`services/`** | network | The **only** place HTTP calls live. One function per endpoint. |
 | `services/api.js` | network | The shared axios instance; sets the base URL to `{VITE_API_BASE_URL}/api/v1`. Everything else imports this. |
-| `services/stats.js` | network | `getLeaderboard(params)` → `/stats/leaderboard`. |
+| `services/stats.js` | network | `getLeaderboard(params)` → `/stats/leaderboard`; `getScatter(params)` → `/stats/scatter`; `getCompare(params)` → `/stats/compare`. |
 | `services/insight.js` | network | `getIntelligence(params)` → `/stats/intelligence`; `getPlayerIntelligence(id, params)` → `/players/{id}/intelligence`. |
-| `services/players.js` | network | Player profile, game log, and search calls. |
+| `services/players.js` | network | Player profile, game log, search, and **target-depth** calls. |
 | `services/teams.js` | network | Teams list + team leaderboard calls. |
 | `services/metrics.js` | network | Fetches the metric registry. |
 | **`constants/`** | config | App-wide constant data (no logic/network). |
 | `constants/index.js` | config | Seasons, positions, weeks, Insight timeframes, the metric label/format map (seed for `useMetrics`), and the team-leaderboard + game-log column sets. |
-| `constants/boards.js` | config | **The 17 "boards"** (4 Insight + 5 Fantasy + 8 NFL) — each declares its columns (metric ids), default sort/position, whether it's a scoring (fantasy) board, and whether it's an `insight` board (rendered by `InsightView` against `/stats/intelligence`). Drives the three nav dropdowns and both board pages. Adding a board here is all it takes. |
+| `constants/boards.js` | config | **The 17 "boards"** (4 Insight + 5 Fantasy + 8 NFL) — each declares its columns (metric ids), default sort/position, whether it's a scoring (fantasy) board, and whether it's an `insight` board (rendered by `InsightView` against `/stats/intelligence`). Also holds **`EXPLORE_ITEMS`** (M4), which are tools rather than boards (no columns) and route to their own pages. Drives the four nav dropdowns. Adding a board here is all it takes. |
 | `constants/scoring.js` | config | League-scoring presets + editable weights, and the (de)serialize helpers that mirror the backend's scoring grammar. **Must stay in sync with `backend/app/scoring.py`.** |
 | `constants/league.js` | config | League size + starting-lineup defaults and the (de)serialize helpers that mirror the backend's league grammar. **Must stay in sync with `backend/app/league.py`.** |
+| `constants/scatters.js` | config | ⭐ **The pre-canned scatters (M4)** — six position groups (All / QB / RB / WR / TE / Flex), each with a handful of curated charts. The scatter builder deliberately offers *questions*, not free axis choice: two metrics picked at random usually produce a meaningless cloud, and the curation is the product. |
 | **`utils/`** | util | Pure helpers. |
 | `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. Plus `formatPercentile` (0.92 → "92nd") and `formatSigned` (explicit `+` on gaps). |
+| `utils/csv.js` | util | CSV export (M4): `toCsv` (with quote escaping), `buildBoardExport` (rows/columns for any ranked board), `downloadCsv`, `slugify`. |
 
 ---
 
@@ -208,7 +220,8 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `scoring.py` | ⭐ **The scoring-aware fantasy engine (architecture "spine A").** Turns a league-scoring string like `"ppr:pass_td=6,te_rec=1.5"` into a `ScoringConfig`, and computes fantasy points from raw stat components — both as a SQL expression (for sorting/ranking in the DB) and in Python (for display). Fantasy points are **computed live, never stored per-scoring.** |
 | `league.py` | ⭐ **League context (M3).** Turns a league string like `"10:rb=2,flex=2"` into a `LeagueConfig` (teams + starting lineup) and derives the **replacement rank per position** — flex slots shared across RB/WR/TE in proportion to the lineup's flex-eligible starters, superflex credited to QB. The second per-request config alongside scoring; it's what makes *value* league-aware. |
 | `metrics.py` | ⭐ **The metric registry (architecture "spine B").** One canonical definition per metric (id, label, short label, description, format, category, how it aggregates, which positions it applies to). The single source of truth for metric metadata — the leaderboard reads aggregation behavior from here, and the frontend fetches it via `/metrics`. **Adding a stat starts here.** |
-| `aggregation.py` | The **shared season/window aggregation layer**: which registry metrics are summed vs averaged vs per-game derived, and `finalize_row()`, which fills in the scoring-aware and expected-points columns. Used by both the leaderboard and the intelligence engine so the two can't drift apart. |
+| `aggregation.py` | The **shared season/window aggregation layer**: which registry metrics are summed vs averaged vs per-game derived, and `finalize_row()`, which fills in the scoring-aware, expected-points, and composite/custom columns. Also `metric_expr()` — **the one place that maps any metric id to a SQL expression**, so the leaderboard's ORDER BY and the scatter's SELECT can never disagree about what a metric means. Used by the leaderboard, the intelligence engine, and both Explore endpoints. |
+| `custom_metrics.py` | ⭐ **The custom-metric engine (M4)** — the third per-request config, after scoring and league. Parses `custom=name=formula[;…]` into a weighted sum over an optional divisor. Deliberately **structured, not free-form**: every term is a registry id, so there is no expression parser and no `eval`. Also holds `BUILTIN_COMPOSITES`, the registry's `composite` metrics parsed at import time — so a built-in and a user's metric run through one evaluator. See [`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md). |
 | `intelligence.py` | ⭐ **The fantasy-intelligence engine (M3).** VORP, Fantasy Opportunity Rating, Positive-Regression (buy-low) Index, and Sell-High Index — built from percentile ranks within each position pool, plus career-baseline efficiency and usage trend. Also resolves trailing windows and produces the per-input `breakdown()` the player page renders. All weights and thresholds are constants at the top of the file; see [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md). |
 | **`models/`** | **SQLAlchemy ORM models** — Python classes mapped to database tables. |
 | `models/base.py` | The shared `Base` class all models inherit from. |
@@ -216,6 +229,7 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `models/player.py` | `players` table (name, position, team, headshot, …). |
 | `models/game.py` | `games` table (season, week, home/away teams, scores, date). |
 | `models/player_stats.py` | ⭐ `player_stats` table — **one row per player per game**, with ~50 stat columns (general, advanced, fantasy). The heart of the data. Season-level derived metrics (e.g. PPG) are deliberately **not** columns — they're computed in the API. |
+| `models/player_target_depth.py` | `player_target_depth` table (M4) — targets and production at the grain **(player, game, depth bucket, direction)**. Exists because `air_yards` is stored as a per-game total and a total can't be un-summed into buckets. Direction is stored even though the shipped chart sums it away, so the directional grid needs no second migration. |
 | `models/__init__.py` | Imports all models so Alembic and the app can see them. |
 | **`schemas/`** | **Pydantic schemas** — define the *shape of JSON* going in/out of the API (separate from the DB models). |
 | `schemas/player.py` | Player response shape. |
@@ -224,9 +238,9 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `schemas/common.py` | Shared pieces — e.g. the paginated-list envelope `{ data, total, page, … }`. |
 | **`routers/`** | **The API endpoints**, grouped by resource. Each file is a set of related routes. |
 | `routers/health.py` | `GET /health` — confirms the API and DB are alive. Used by Render's health check. |
-| `routers/players.py` | `GET /players` (search/list), `/players/{id}` (profile), `/players/{id}/stats` (game log), `/players/{id}/intelligence` (M3 scores + breakdown). |
+| `routers/players.py` | `GET /players` (search/list), `/players/{id}` (profile), `/players/{id}/stats` (game log), `/players/{id}/intelligence` (M3 scores + breakdown), `/players/{id}/target-depth` (M4 depth buckets). |
 | `routers/teams.py` | `GET /teams` (list), `/teams/leaderboard` (ranked team offense), `/teams/{id}/stats` (one team's season totals). |
-| `routers/stats.py` | ⭐ `GET /stats/leaderboard` — the filterable player leaderboard. Two modes: **season aggregate** (one row per player) and **single week** (raw game lines). Uses the scoring engine + metric registry. The most important endpoint. Also `GET /stats/intelligence` (M3) — the Insight board; it computes the whole position pool first (scores are relative), then sorts and paginates in Python. |
+| `routers/stats.py` | ⭐ `GET /stats/leaderboard` — the filterable player leaderboard. Two modes: **season aggregate** (one row per player) and **single week** (raw game lines). Uses the scoring engine + metric registry. The most important endpoint. Also `GET /stats/intelligence` (M3) — the Insight board; it computes the whole position pool first (scores are relative), then sorts and paginates in Python. Plus the two M4 Explore endpoints: **`/stats/scatter`** (any two metrics, season or per-player-week; routes through the intelligence engine only when an axis needs it) and **`/stats/compare`** (≤5 players with within-position percentiles and weekly series). |
 | `routers/metrics.py` | `GET /metrics` — serves the whole metric registry to the frontend. |
 | `utils/` | Shared backend helpers (currently just a placeholder `.gitkeep`). |
 
@@ -242,6 +256,7 @@ machine (your laptop, Supabase) can be brought to the exact same schema with
 | `alembic/versions/bd93cb7cea4b_*.py` | Migration #1 — **creates the core tables** (teams, games, players, player_stats). |
 | `alembic/versions/4a2fb3bf6c6b_*.py` | Migration #2 — adds a unique constraint on team abbreviation. |
 | `alembic/versions/521f727f5461_*.py` | Migration #3 (M2) — adds the expected stat components, the three market-share columns, and carries inside the 10/5/2. |
+| `alembic/versions/7852e5b550b0_*.py` | Migration #4 (M4) — creates `player_target_depth` (targets by depth bucket × direction). |
 | `alembic/script.py.mako` | Template used when generating a new migration. |
 
 ---
@@ -265,6 +280,7 @@ so **the migrated schema is the single source of truth.** Every script is
 | `ingest_stats.py` | **Run 4th.** Loads per-player, per-game stat lines. Also downloads play-by-play to derive red-zone metrics, carries inside the 10/5/2, and unrealized air yards (`--skip-pbp` to skip). |
 | `ingest_expected.py` | **Run 5th** (enrichment). Expected stat *components* from `load_ff_opportunity` + the three market-share metrics. Only updates existing stat lines. |
 | `ingest_usage.py` | **Run 6th** (enrichment). Snap counts (PFR, joined via a `pfr_id → gsis_id` crosswalk) and route usage (participation × play-by-play), then derives TPRR/YPRR. `--skip-routes` for snaps only. |
+| `ingest_target_depth.py` | **Run 7th** (M4). Aggregates play-by-play targets into `player_target_depth` by air-yard bucket × pass direction. Writes its own table rather than columns on `player_stats` — the grain is different. |
 
 **Data scope:** seasons **2020–2025**, positions **QB/RB/WR/TE**. As of M2 every
 advanced column is populated except `slot_snaps`, which no free data source provides
@@ -283,9 +299,11 @@ routes — the same doc explains what that over- and under-states.
   `docker compose down -v` (note the `-v`) wipes it.
 - **Production:** hosted on **Supabase**. The backend on Render connects to it via a
   `DATABASE_URL` set in Render's dashboard (never committed).
-- **Schema:** four tables — `teams`, `players`, `games`, `player_stats` (defined in
-  `backend/app/models/`, created/altered via Alembic migrations). The full annotated
-  schema, including every `player_stats` column, is in [`CLAUDE.md`](CLAUDE.md).
+- **Schema:** five tables — `teams`, `players`, `games`, `player_stats`, and
+  `player_target_depth` (defined in `backend/app/models/`, created/altered via Alembic
+  migrations). The full annotated schema, including every `player_stats` column, is in
+  [`CLAUDE.md`](CLAUDE.md). `player_target_depth` (M4) is the one table at a different
+  grain — one row per player, game, depth bucket, and pass direction.
 
 **Important schema rule (repeated everywhere for a reason):** per-game stats are
 stored; **season-level derived metrics** (`fantasy_ppg_*`, `routes_run_per_game`) and
@@ -386,8 +404,12 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
 | Add a new **stored stat** (a real column) | 1) `backend/app/models/player_stats.py` (column) → 2) new Alembic migration → 3) `pipeline/ingest_stats.py` (populate it) → 4) `backend/app/metrics.py` (registry entry) → 5) `frontend/src/constants/index.js` (label/column). |
 | Add a **derived / scoring** metric (no column) | `backend/app/metrics.py` (registry entry, `aggregation="derived"` or `"scoring"`) + wire into `backend/app/aggregation.py` / `routers/stats.py`; expose in `frontend/src/constants/index.js`. |
 | Add or tune an **Insight score** (M3) | `backend/app/intelligence.py` (the weights/terms are constants at the top) + a `backend/app/metrics.py` entry with `aggregation="intelligence"`; expose in `frontend/src/constants/index.js` and add it to a board's columns in `constants/boards.js`. No DB or pipeline work — these are query-time. |
+| Add a **composite** metric (a formula over existing metrics) | one `backend/app/metrics.py` entry with `aggregation="composite"` and a `formula` string — it's parsed and evaluated by `custom_metrics.py`, so there is no other code to write. Then a label in `frontend/src/constants/index.js` and the metric id in a board's columns. |
 | Change how **fantasy points** are scored | `backend/app/scoring.py` **and** mirror it in `frontend/src/constants/scoring.js`. |
 | Change **replacement level / league rules** | `backend/app/league.py` **and** mirror it in `frontend/src/constants/league.js`. |
+| Change the **custom-metric grammar** | `backend/app/custom_metrics.py`. It has no frontend mirror today — the builder UI was deferred, and the engine's only current job is evaluating the registry's `composite` metrics. |
+| Add or change a **pre-canned scatter** | `frontend/src/constants/scatters.js` — one entry (position group, x/y, optional size, the question it answers, optional quadrant captions). No backend change: `/stats/scatter` already serves any registry pair. |
+| Add a **chart** | a component in `frontend/src/components/charts/`. Use the `--series-1..5` CSS tokens for categorical series (fixed order, never cycled) and theme variables for everything else — never hardcode a colour. Adding a 6th categorical hue needs re-validation, not a guess. |
 | Add a new **API endpoint** | a router in `backend/app/routers/` (+ register it in `main.py`), a Pydantic schema in `schemas/`, then a service in `frontend/src/services/` + a hook. |
 | Add a new **page/screen** | a component in `frontend/src/pages/`, a route in `frontend/src/App.jsx`, a nav link in `components/Layout.jsx`. |
 | Add a new **board** (or change its columns) | add/edit a board in `frontend/src/constants/boards.js` (columns, default sort/position, fantasy vs NFL vs `insight`). The route, nav dropdown item, and page all pick it up automatically. |
@@ -432,6 +454,39 @@ repo. Update it in the *same change* that alters the project's structure — spe
 - Bump the **Last updated** date at the top and add a line to the changelog below.
 
 ### Changelog
+
+- **2026-08-04** — M4 revision after review. **Scatter builder is now curated**: no free
+  axis/size pickers, replaced by `frontend/src/constants/scatters.js` — six position
+  groups (All / QB / RB / WR / TE / Flex) with 19 pre-canned charts, each stating the
+  question it answers. Players render as **headshot bubbles** (`MetricScatter`), fed by
+  a new `headshot_url` on the scatter and compare payloads. `/stats/scatter` gained
+  `rank_by` (so a capped plot shows the top N rather than an arbitrary slice — a latent
+  bug) and `position=FLEX`. **Comparison table rebuilt**: percentile bars replaced by
+  *lead margins* (leader's value plus how far clear of the runner-up, direction from the
+  registry's `higher_is_better`), headshots in the header, a "leads N" tally, and
+  backend-computed section grouping. Compared players now get only metrics that apply to
+  **every** position involved (`_compare_metrics`), so QB-vs-WR no longer renders empty
+  passing/receiving rows. The **custom-metric builder UI was removed** (deferred to a
+  later milestone) — `constants/custom.js`, `hooks/useCustomMetrics.js` and
+  `components/CustomMetricControl.jsx` deleted; the backend engine stays, because the
+  registry's `composite` metrics are evaluated by it.
+
+- **2026-07-30** — M4: exploration & viz. New **Explore ▾** nav group with two tools:
+  `pages/ScatterView.jsx` (`/explore/scatter`) and `pages/CompareView.jsx`
+  (`/explore/compare`), backed by new endpoints `GET /stats/scatter` and
+  `GET /stats/compare`. New **custom-metric engine** (`backend/app/custom_metrics.py`)
+  — a third per-request config alongside scoring
+  and league, and a new `composite` registry aggregation that ships two built-ins
+  (High-Value Touches / Game, Touches Per Snap) through the same evaluator.
+  `aggregation.py` gained `metric_expr()`, the single metric→SQL mapping the
+  leaderboard and scatter now share. New table `player_target_depth` (migration
+  `7852e5b550b0`) fed by `pipeline/ingest_target_depth.py`, serving
+  `GET /players/{id}/target-depth`. New charts: `MetricScatter`, `TargetDepthChart`,
+  `UsageTrendChart`, `CompareTrendChart`, `CompareRadar`, plus `--series-1..5`
+  categorical tokens in `index.css` (validated for colour-vision deficiency and
+  contrast in both themes). CSV export (`utils/csv.js` + `components/ExportButton.jsx`)
+  on all 17 boards and both Explore views. New design note:
+  `docs/design/M4-exploration-viz.md`.
 
 - **2026-07-30** — M3: fantasy intelligence. New backend modules `app/league.py`
   (league size + starting lineup → replacement rank per position) and

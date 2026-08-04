@@ -27,10 +27,11 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_stats.py --seasons 2024        # 4. per-game stats
 .venv/bin/python ingest_expected.py --seasons 2024     # 5. expected + market share
 .venv/bin/python ingest_usage.py --seasons 2024        # 6. snaps + routes
+.venv/bin/python ingest_target_depth.py --seasons 2024 # 7. target depth (M4)
 ```
 
-Steps 5 and 6 are **enrichment passes**: they only update stat lines step 4 already
-created, so they must run after it (in either order).
+Steps 5–7 are **enrichment passes**: they only touch player-games step 4 already
+created, so they must run after it (in any order among themselves).
 
 Full backfill (project scope is 2020–2025):
 
@@ -39,6 +40,7 @@ Full backfill (project scope is 2020–2025):
 .venv/bin/python ingest_stats.py     --seasons 2020 2021 2022 2023 2024 2025
 .venv/bin/python ingest_expected.py  --seasons 2020 2021 2022 2023 2024 2025
 .venv/bin/python ingest_usage.py     --seasons 2020 2021 2022 2023 2024 2025
+.venv/bin/python ingest_target_depth.py --seasons 2020 2021 2022 2023 2024 2025
 ```
 
 `ingest_stats.py` downloads play-by-play to derive red-zone, inside-10/5/2, and
@@ -79,6 +81,22 @@ participation + play-by-play download.
 > to block counts as having run a route, so routes are slightly overstated (and TPRR
 > slightly understated) for run-blocking backs and tight ends. Accurate for receivers.
 > QBs are skipped. See `docs/design/M2-expanded-metrics.md` §3.
+
+`ingest_target_depth.py` populates the **`player_target_depth` table** (not columns on
+`player_stats` — the grain is different):
+
+- One row per (player, game, depth bucket, direction), with targets, receptions,
+  receiving_yards, receiving_tds, and air_yards.
+- Buckets are `behind_los` (< 0 air yards), `short_0_9`, `intermediate_10_19`,
+  `deep_20_plus`; directions are `left` / `middle` / `right`.
+- Direction is stored even though the shipped depth-of-target chart sums it away —
+  it costs one extra group key on a play-by-play pass we already make, and adding it
+  later would mean a second migration and a second full backfill.
+
+> A target is counted only when the play has both a receiver id and an air-yards value.
+> That excludes ~10% of *pass plays* (sacks, scrambles, throwaways) but those are not
+> targets at all: bucketed targets reconcile **exactly** against `player_stats`
+> (2024: 16,903 = 16,903). See `docs/design/M4-exploration-viz.md` §5.
 
 ### Left NULL — no free data source
 

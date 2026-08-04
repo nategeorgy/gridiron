@@ -32,6 +32,10 @@ export function useMetrics() {
         format: metric.format,
         description: metric.description,
         category: metric.category,
+        // Which direction counts as "leading" this stat — fewest interceptions wins,
+        // most receiving yards wins. Used by the comparison table's lead margins.
+        higherIsBetter: metric.higher_is_better !== false,
+        appliesTo: metric.applies_to,
       };
     }
   }
