@@ -18,3 +18,9 @@ export async function getPlayers(params) {
   const { data } = await api.get("/players", { params });
   return data;
 }
+
+/** Fetch a player's targets bucketed by pass depth (M4). */
+export async function getPlayerTargetDepth(playerId, params) {
+  const { data } = await api.get(`/players/${playerId}/target-depth`, { params });
+  return data;
+}

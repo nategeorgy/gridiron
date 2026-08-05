@@ -19,25 +19,40 @@ player against their whole position pool, so it cannot be paginated in SQL the w
 the leaderboard is: the pool is computed first, then the page is cut from it.
 """
 
+from bisect import bisect_left, bisect_right
+from statistics import median
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.aggregation import (
     AVG_METRICS,
+    COMPOSITE_METRICS,
     EXPECTED_METRICS,
     INSIGHT_METRICS,
+    POSITIONS,
     PPG_METRICS,
     SCORING_METRICS,
     SUM_METRICS,
     aggregate_select,
     finalize_row,
     games_expr,
+    metric_expr,
     window_filters,
+)
+from app.custom_metrics import (
+    BUILTIN_COMPOSITES,
+    CustomMetric,
+    compute_custom,
+    formula_label,
+    formula_text,
+    parse_custom,
 )
 from app.database import get_db
 from app.intelligence import build_intelligence, resolve_window
-from app.league import parse_league
+from app.league import FLEX_ELIGIBLE, parse_league
+from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
 from app.scoring import (
     EXPECTED_COMPONENTS,
@@ -45,16 +60,14 @@ from app.scoring import (
     ScoringConfig,
     compute_expected_points,
     compute_points,
-    expected_points_expr,
     parse_scoring,
-    points_expr,
 )
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
 ALLOWED_METRICS = (
     set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS)
-    | SCORING_METRICS | EXPECTED_METRICS | {"games_played"}
+    | SCORING_METRICS | EXPECTED_METRICS | COMPOSITE_METRICS | {"games_played"}
 )
 # The intelligence board can also rank by any of the plain aggregate metrics, so its
 # supporting columns are sortable next to the scores.
@@ -65,33 +78,10 @@ def _round(value: float | None, digits: int = 3) -> float | None:
     return round(value, digits) if value is not None else None
 
 
-def _fantasy_order_expr(metric: str, config: ScoringConfig, sum_mode: bool, games=None):
-    """ORDER BY expression for a scoring-aware or expected-points metric.
-
-    ``games`` (the per-season game count) is only needed by the per-game metrics in
-    season mode; in single-week mode every metric is already a one-game value.
-    """
-    actual = points_expr(config, sum_mode=sum_mode)
-    expected = expected_points_expr(config, sum_mode=sum_mode)
-    per_game = (lambda expression: expression / func.nullif(games, 0)) if games is not None else (lambda expression: expression)
-
-    if metric == "fantasy_points":
-        return actual
-    if metric == "fantasy_ppg":
-        return per_game(actual)
-    if metric == "expected_fantasy_points":
-        return expected
-    if metric == "expected_fantasy_ppg":
-        return per_game(expected)
-    if metric == "fantasy_points_over_expected":
-        return actual - expected
-    raise ValueError(f"'{metric}' is not a scoring-aware metric")
-
-
 def _leaderboard_season(
     db: Session, season: int, season_type: str, position: str | None,
     metric: str, config: ScoringConfig, descending: bool, min_games: int,
-    limit: int, offset: int,
+    limit: int, offset: int, custom: list[CustomMetric],
 ) -> tuple[list[dict], int]:
     """Aggregate a full season into one ranked row per player."""
     games = games_expr()
@@ -100,41 +90,33 @@ def _leaderboard_season(
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
 
-    # Resolve the ORDER BY expression for the requested metric.
-    if metric == "games_played":
-        order_expr = games
-    elif metric in SCORING_METRICS or metric in EXPECTED_METRICS:
-        order_expr = _fantasy_order_expr(metric, config, sum_mode=True, games=games)
-    elif metric in PPG_METRICS:
-        base_col = getattr(PlayerStats, PPG_METRICS[metric])
-        order_expr = func.sum(base_col) / func.nullif(games, 0)
-    elif metric in AVG_METRICS:
-        order_expr = func.avg(getattr(PlayerStats, metric))
-    else:  # a summed counting stat
-        order_expr = func.sum(getattr(PlayerStats, metric))
+    # One expression builder serves every metric kind — stored, scoring-aware,
+    # expected, per-game derived, and composite/custom (M4).
+    custom_map = {definition.id: definition for definition in custom}
+    order_expr = metric_expr(metric, config, sum_mode=True, games=games, custom=custom_map)
     order_expr = order_expr.desc().nulls_last() if descending else order_expr.asc().nulls_last()
 
     rows = db.execute(base.order_by(order_expr).limit(limit).offset(offset)).mappings().all()
 
     # The scoring-aware, expected, and per-game columns are filled in by the shared
     # aggregation layer, so the leaderboard and the intelligence board can't drift.
-    return [finalize_row(dict(row), config) for row in rows], total
+    return [finalize_row(dict(row), config, custom) for row in rows], total
 
 
 def _leaderboard_week(
     db: Session, season: int, week: int, season_type: str, position: str | None,
     metric: str, config: ScoringConfig, descending: bool, limit: int, offset: int,
+    custom: list[CustomMetric],
 ) -> tuple[list[dict], int]:
     """Return raw per-game stat lines for a single week, ranked by metric."""
     filters = window_filters(
         season, season_type, position=position, week_from=week, week_to=week
     )
 
-    # PPG metrics have no per-game meaning; fall back to their base column.
-    if metric in SCORING_METRICS or metric in EXPECTED_METRICS:
-        sort_column = _fantasy_order_expr(metric, config, sum_mode=False)
-    else:
-        sort_column = getattr(PlayerStats, PPG_METRICS.get(metric, metric))
+    # In single-week mode every metric is already a one-game value, so the same
+    # expression builder runs with sum_mode=False (PPG metrics fall back to their base).
+    custom_map = {definition.id: definition for definition in custom}
+    sort_column = metric_expr(metric, config, sum_mode=False, custom=custom_map)
     order_expr = sort_column.desc().nulls_last() if descending else sort_column.asc().nulls_last()
 
     query = (
@@ -173,6 +155,11 @@ def _leaderboard_week(
         record["fantasy_points_over_expected"] = (
             _round(points - expected) if expected is not None and points is not None else None
         )
+        # Composites last — they may reference any column filled in above.
+        for metric_id, definition in BUILTIN_COMPOSITES.items():
+            record[metric_id] = _round(compute_custom(definition, record))
+        for definition in custom:
+            record[definition.id] = _round(compute_custom(definition, record))
         results.append(record)
     return results, total
 
@@ -188,6 +175,11 @@ def leaderboard(
         "ppr",
         description="League scoring as preset[:overrides], e.g. 'ppr' or 'ppr:pass_td=6,te_rec=1.5'",
     ),
+    custom: str = Query(
+        "",
+        description="Custom metrics as name=formula[;...], e.g. "
+                    "'hvt=red_zone_targets+rush_att_inside_5/games'",
+    ),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     min_games: int = Query(1, ge=0, description="Season mode: minimum games played"),
     limit: int = Query(50, ge=1, le=200),
@@ -195,21 +187,26 @@ def leaderboard(
     db: Session = Depends(get_db),
 ) -> dict:
     """Filterable player leaderboard (season aggregate or single week)."""
-    if metric not in ALLOWED_METRICS:
-        raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}'")
     try:
         config = parse_scoring(scoring)
+        custom_metrics = parse_custom(custom)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # A custom metric is rankable in the same request that defines it.
+    if metric not in ALLOWED_METRICS | {definition.id for definition in custom_metrics}:
+        raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}'")
 
     descending = order == "desc"
     if week is None:
         data, total = _leaderboard_season(
-            db, season, season_type, position, metric, config, descending, min_games, limit, offset,
+            db, season, season_type, position, metric, config, descending, min_games,
+            limit, offset, custom_metrics,
         )
     else:
         data, total = _leaderboard_week(
-            db, season, week, season_type, position, metric, config, descending, limit, offset,
+            db, season, week, season_type, position, metric, config, descending,
+            limit, offset, custom_metrics,
         )
 
     page = (offset // limit) + 1 if limit else 1
@@ -217,7 +214,548 @@ def leaderboard(
         "data": data, "total": total, "page": page, "limit": limit, "offset": offset,
         "season": season, "week": week, "season_type": season_type,
         "metric": metric, "order": order, "scoring": config.model_dump(),
+        "custom": _custom_payload(custom_metrics),
     }
+
+
+def _custom_payload(custom: list[CustomMetric]) -> list[dict]:
+    """Describe the active custom metrics so the client can label their columns."""
+    return [
+        {
+            "id": definition.id,
+            "name": definition.name,
+            "formula": formula_text(definition),
+            "label": formula_label(definition),
+        }
+        for definition in custom
+    ]
+
+
+# Candidate metrics for the comparison builder, in display order. The set actually
+# returned is this list filtered to metrics that apply to *every* position being
+# compared (see ``_compare_metrics``) — so a QB-vs-WR comparison drops passing and
+# receiving stats and keeps what both players genuinely do.
+COMPARE_METRIC_ORDER: list[str] = [
+    # Fantasy first — the product's default lens.
+    "fantasy_points", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected",
+    # Passing
+    "passing_yards", "passing_tds", "interceptions", "completions", "attempts",
+    "passer_rating", "cpoe",
+    # Rushing
+    "carries", "rushing_yards", "rushing_tds", "rush_attempt_share",
+    "rush_att_inside_10", "rush_att_inside_5", "red_zone_rush_share",
+    # Receiving
+    "receptions", "targets", "receiving_yards", "receiving_tds", "target_share",
+    "air_yards", "air_yards_share", "adot", "targets_per_route_run",
+    "yards_per_route_run", "route_participation", "red_zone_targets",
+    # Usage / general
+    "snap_count", "snap_share", "opportunity_share", "market_share",
+    "high_value_touches_per_game", "touches_per_snap", "epa", "fumbles_lost",
+]
+
+# Section headings for the comparison table, so a long metric list stays navigable.
+COMPARE_SECTIONS: list[tuple[str, tuple[str, ...]]] = [
+    ("Fantasy", ("fantasy_points", "fantasy_ppg", "expected_fantasy_ppg",
+                 "fantasy_points_over_expected")),
+    ("Passing", ("passing_yards", "passing_tds", "interceptions", "completions",
+                 "attempts", "passer_rating", "cpoe")),
+    ("Rushing", ("carries", "rushing_yards", "rushing_tds", "rush_attempt_share",
+                 "rush_att_inside_10", "rush_att_inside_5", "red_zone_rush_share")),
+    ("Receiving", ("receptions", "targets", "receiving_yards", "receiving_tds",
+                   "target_share", "air_yards", "air_yards_share", "adot",
+                   "targets_per_route_run", "yards_per_route_run",
+                   "route_participation", "red_zone_targets")),
+    ("Usage", ("snap_count", "snap_share", "opportunity_share", "market_share",
+               "high_value_touches_per_game", "touches_per_snap", "epa", "fumbles_lost")),
+]
+
+MAX_COMPARE_PLAYERS = 5
+
+
+def _compare_metrics(positions: set[str]) -> list[str]:
+    """Metrics that apply to *every* position in the comparison, in display order.
+
+    Comparing a quarterback with a receiver should not show target share (the QB has
+    none) or passing yards (the receiver has none) — it should show what they have in
+    common: fantasy output, rushing, and the usage metrics defined for all positions.
+    Applicability comes from the registry's ``applies_to``, so this needs no maintenance
+    as metrics are added.
+    """
+    metrics: list[str] = []
+    for metric_id in COMPARE_METRIC_ORDER:
+        definition = REGISTRY_BY_ID.get(metric_id)
+        if definition is None:
+            continue
+        applies = definition.applies_to
+        if applies == "all" or positions.issubset(set(applies)):
+            metrics.append(metric_id)
+    return metrics
+
+
+@router.get("/compare")
+def compare(
+    players: str = Query(..., description="Comma-separated player ids (max 5)"),
+    season: int = Query(..., description="Season year, e.g. 2024"),
+    last_weeks: int | None = Query(
+        None, ge=1, le=22, description="Trailing window of played weeks. Omit for the full season."
+    ),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    metrics: str = Query("", description="Comma-separated metric ids. Defaults per position."),
+    scoring: str = Query("ppr", description="League scoring as preset[:overrides]"),
+    custom: str = Query("", description="Custom metrics as name=formula[;...]"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Compare up to five players: season stats, within-position percentiles, weekly series.
+
+    Percentiles are computed *within position* against that position's qualified pool,
+    which is what makes a cross-position comparison honest — a tight end's 80th
+    percentile and a receiver's 80th percentile are the comparable quantities, the same
+    argument VORP makes in M3.
+    """
+    player_ids = [pid.strip() for pid in players.split(",") if pid.strip()]
+    if not player_ids:
+        raise HTTPException(status_code=400, detail="At least one player id is required.")
+    if len(player_ids) > MAX_COMPARE_PLAYERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At most {MAX_COMPARE_PLAYERS} players can be compared at once.",
+        )
+    try:
+        config = parse_scoring(scoring)
+        custom_metrics = parse_custom(custom)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    window = resolve_window(db, season, season_type, last_weeks)
+    games = games_expr()
+    rows = [
+        finalize_row(dict(row), config, custom_metrics)
+        for row in db.execute(
+            aggregate_select(
+                window_filters(
+                    window.season, window.season_type,
+                    week_from=window.week_from, week_to=window.week_to,
+                    positions=POSITIONS,
+                ),
+                games,
+            )
+        ).mappings().all()
+    ]
+    by_id = {record["player_id"]: record for record in rows}
+
+    missing = [pid for pid in player_ids if pid not in by_id]
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No {season} {season_type} stats in that window for: {', '.join(missing)}",
+        )
+
+    custom_ids = [definition.id for definition in custom_metrics]
+    selected = [metric.strip() for metric in metrics.split(",") if metric.strip()]
+    if selected:
+        unknown = [m for m in selected if m not in ALLOWED_METRICS | set(custom_ids)]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown metric(s): {', '.join(unknown)}")
+        metric_ids = selected
+    else:
+        # Only metrics that apply to every position in the comparison, so a mixed-
+        # position lineup shows common ground instead of half-empty rows.
+        compared_positions = {
+            by_id[pid].get("position") for pid in player_ids if by_id[pid].get("position")
+        }
+        metric_ids = [*_compare_metrics(compared_positions), *custom_ids]
+
+    pools = _compare_pools(rows, metric_ids, window.default_min_games)
+    weekly = _compare_weekly(db, player_ids, window, config)
+    photos = dict(
+        db.execute(
+            select(Player.player_id, Player.headshot_url).where(Player.player_id.in_(player_ids))
+        ).all()
+    )
+
+    return {
+        "data": [
+            {
+                "player_id": pid,
+                "name": by_id[pid].get("name"),
+                "position": by_id[pid].get("position"),
+                "team_abbreviation": by_id[pid].get("team_abbreviation"),
+                "games_played": by_id[pid].get("games_played"),
+                "headshot_url": photos.get(pid) or None,
+                "stats": {metric: by_id[pid].get(metric) for metric in metric_ids},
+                "percentiles": {
+                    metric: _percentile(
+                        pools.get((by_id[pid].get("position"), metric), []),
+                        by_id[pid].get(metric),
+                    )
+                    for metric in metric_ids
+                },
+                "weekly": weekly.get(pid, []),
+            }
+            for pid in player_ids
+        ],
+        "metrics": metric_ids,
+        "sections": _compare_section_layout(metric_ids),
+        "season": season,
+        "season_type": season_type,
+        "window": window.as_dict(),
+        "min_games": window.default_min_games,
+        "scoring": config.model_dump(),
+        "custom": _custom_payload(custom_metrics),
+    }
+
+
+def _compare_section_layout(metric_ids: list[str]) -> list[dict]:
+    """Group the active metrics into display sections, dropping any that end up empty.
+
+    A comparison's metric list varies with the positions involved, so the sections have
+    to be computed per request rather than hard-coded in the UI.
+    """
+    active = set(metric_ids)
+    sections = [
+        {"label": label, "metrics": [m for m in members if m in active]}
+        for label, members in COMPARE_SECTIONS
+    ]
+    # Anything not claimed by a section (e.g. custom metrics) goes in its own group.
+    claimed = {m for section in sections for m in section["metrics"]}
+    leftover = [m for m in metric_ids if m not in claimed]
+    if leftover:
+        sections.append({"label": "Custom", "metrics": leftover})
+    return [section for section in sections if section["metrics"]]
+
+
+def _compare_pools(
+    rows: list[dict], metric_ids: list[str], min_games: int
+) -> dict[tuple[str, str], list[float]]:
+    """Sorted value lists per (position, metric), over qualified players only.
+
+    Low-games players are excluded from the *pool* but can still be placed against it,
+    so an early-season comparison degrades to a noisy percentile rather than a wrong one.
+    """
+    pools: dict[tuple[str, str], list[float]] = {}
+    for record in rows:
+        if (record.get("games_played") or 0) < min_games:
+            continue
+        position = record.get("position")
+        if position not in POSITIONS:
+            continue
+        for metric in metric_ids:
+            value = record.get(metric)
+            if value is not None:
+                pools.setdefault((position, metric), []).append(float(value))
+    for values in pools.values():
+        values.sort()
+    return pools
+
+
+def _percentile(sorted_values: list[float], value: float | None) -> float | None:
+    """Mid-rank percentile of ``value`` in the pool, 0-100. Matches app.intelligence."""
+    if value is None or not sorted_values:
+        return None
+    below = bisect_left(sorted_values, float(value))
+    equal = bisect_right(sorted_values, float(value)) - below
+    return round(100.0 * (below + 0.5 * equal) / len(sorted_values), 1)
+
+
+def _compare_weekly(
+    db: Session, player_ids: list[str], window, config: ScoringConfig
+) -> dict[str, list[dict]]:
+    """Per-week fantasy and expected points for each compared player, in their scoring."""
+    rows = db.execute(
+        select(PlayerStats, Player.position)
+        .join(Player, PlayerStats.player_id == Player.player_id)
+        .where(
+            PlayerStats.player_id.in_(player_ids),
+            PlayerStats.season == window.season,
+            PlayerStats.season_type == window.season_type,
+            PlayerStats.week >= window.week_from,
+            PlayerStats.week <= window.week_to,
+        )
+        .order_by(PlayerStats.week)
+    ).all()
+
+    series: dict[str, list[dict]] = {pid: [] for pid in player_ids}
+    for stat_line, position in rows:
+        components = {name: getattr(stat_line, name) for name in POINTS_COMPONENTS}
+        expected_components = {name: getattr(stat_line, name) for name in EXPECTED_COMPONENTS}
+        expected = compute_expected_points(config, expected_components, position)
+        series[stat_line.player_id].append({
+            "week": stat_line.week,
+            "fantasy_points": _round(compute_points(config, components, position)),
+            "expected_fantasy_points": _round(expected),
+        })
+    return series
+
+
+@router.get("/scatter")
+def scatter(
+    season: int = Query(..., description="Season year, e.g. 2024"),
+    x: str = Query("expected_fantasy_ppg", description="Metric on the x axis"),
+    y: str = Query("fantasy_ppg", description="Metric on the y axis"),
+    size: str | None = Query(None, description="Optional metric driving bubble size"),
+    mode: str = Query("season", pattern="^(season|game)$",
+                      description="'season' = one point per player; 'game' = one point per player-week"),
+    rank_by: str = Query(
+        "fantasy_points",
+        description="Metric deciding which points survive the cap — the plot shows the top N by this.",
+    ),
+    last_weeks: int | None = Query(
+        None, ge=1, le=22, description="Trailing window of played weeks. Omit for the full season."
+    ),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    position: str | None = Query(None, description="QB, RB, WR, TE, or FLEX (RB/WR/TE)"),
+    scoring: str = Query("ppr", description="League scoring as preset[:overrides]"),
+    league: str = Query("12", description="League context as teams[:slot=value]"),
+    custom: str = Query("", description="Custom metrics as name=formula[;...]"),
+    min_games: int = Query(4, ge=0, description="Season mode: minimum games played"),
+    limit: int = Query(400, ge=1, le=3000),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Plot any two metrics against each other, one point per player (or player-week).
+
+    Takes the cheap aggregation path unless an axis needs an M3 intelligence score, in
+    which case it routes through the intelligence engine — whose pools are always built
+    from every position, so a point's percentile never depends on the current filter.
+
+    Medians for both axes are returned so the client can draw quadrant guides without
+    holding the full distribution.
+    """
+    try:
+        config = parse_scoring(scoring)
+        league_config = parse_league(league)
+        custom_metrics = parse_custom(custom)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    custom_ids = {definition.id for definition in custom_metrics}
+    axes = {"x": x, "y": y}
+    if size:
+        axes["size"] = size
+    for axis, metric in axes.items():
+        if metric not in ALLOWED_INSIGHT_METRICS | custom_ids:
+            raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}' on the {axis} axis")
+        if mode == "game" and metric in INSIGHT_METRICS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{metric}' is a season-level score and cannot be plotted per game.",
+            )
+    if rank_by not in ALLOWED_INSIGHT_METRICS | custom_ids:
+        raise HTTPException(status_code=400, detail=f"Unknown metric '{rank_by}' for rank_by")
+    if mode == "game" and rank_by in INSIGHT_METRICS:
+        raise HTTPException(
+            status_code=400, detail=f"'{rank_by}' is a season-level score and cannot rank per-game points."
+        )
+
+    positions = _resolve_positions(position)
+    window = resolve_window(db, season, season_type, last_weeks)
+    needs_intelligence = any(
+        metric in INSIGHT_METRICS for metric in (*axes.values(), rank_by)
+    )
+
+    if mode == "game":
+        rows = _scatter_game_rows(
+            db, window, positions, axes, config, custom_metrics, rank_by, limit
+        )
+    elif needs_intelligence:
+        pool, _ = build_intelligence(
+            db, window, config, league_config, min_games=min_games, custom=custom_metrics
+        )
+        rows = [
+            _scatter_point(record, axes, rank_by=rank_by)
+            for record in pool
+            if record.get("qualified")
+            and (positions is None or record.get("position") in positions)
+        ]
+    else:
+        rows = _scatter_season_rows(
+            db, window, positions, axes, config, custom_metrics, min_games, rank_by
+        )
+
+    # Drop points with no value on either axis — a scatter cannot place them, and
+    # silently plotting them at zero would invent data.
+    rows = [row for row in rows if row["x"] is not None and row["y"] is not None]
+    truncated = len(rows) > limit
+    # Season mode aggregates the whole pool before slicing, so its total is exact.
+    # Per-game mode stops reading at limit+1, so once truncated it genuinely does not
+    # know the total — report None rather than the fetch size dressed up as a count.
+    total = None if (truncated and mode == "game") else len(rows)
+
+    # Rank before capping. Without this a capped plot shows an arbitrary slice of the
+    # pool rather than the players anyone came to look at. Game mode is already ordered
+    # in SQL; season/intelligence rows are ranked here.
+    if mode != "game":
+        rows.sort(key=lambda row: (row.get("rank_value") is None, -(row.get("rank_value") or 0.0)))
+    rows = rows[:limit]
+
+    for row in rows:
+        row.pop("rank_value", None)
+    _attach_headshots(db, rows)
+
+    return {
+        "data": rows,
+        "total": total,
+        "truncated": truncated,
+        "limit": limit,
+        "mode": mode,
+        "rank_by": rank_by,
+        "position": position,
+        "season": season,
+        "season_type": season_type,
+        "window": window.as_dict(),
+        "axes": {axis: _axis_meta(metric, custom_metrics) for axis, metric in axes.items()},
+        "medians": {
+            axis: _median([row[axis] for row in rows]) for axis in axes
+        },
+        "scoring": config.model_dump(),
+        "league": league_config.model_dump(),
+        "custom": _custom_payload(custom_metrics),
+        "min_games": min_games,
+    }
+
+
+def _axis_meta(metric: str, custom: list[CustomMetric]) -> dict:
+    """Label an axis from the registry, or from the formula for a custom metric."""
+    for definition in custom:
+        if definition.id == metric:
+            return {
+                "metric": definition.id,
+                "label": formula_label(definition),
+                "formula": formula_text(definition),
+                "format": 3,
+                "custom": True,
+            }
+    registry_entry = REGISTRY_BY_ID.get(metric)
+    return {
+        "metric": metric,
+        "label": registry_entry.label if registry_entry else metric,
+        "short": registry_entry.short if registry_entry else metric,
+        "format": registry_entry.format if registry_entry else 2,
+        "modelled": bool(registry_entry and registry_entry.modelled),
+        "custom": False,
+    }
+
+
+def _median(values: list[float | None]) -> float | None:
+    """Median of the plotted values, ignoring gaps. ``None`` when there is nothing to plot."""
+    present = sorted(value for value in values if value is not None)
+    return round(median(present), 3) if present else None
+
+
+def _resolve_positions(position: str | None) -> tuple[str, ...] | None:
+    """Resolve a position filter, expanding the pseudo-position ``FLEX`` to RB/WR/TE.
+
+    ``None`` means "every covered position" — the caller applies no position filter.
+    """
+    if not position:
+        return None
+    value = position.strip().upper()
+    if value == "FLEX":
+        return FLEX_ELIGIBLE
+    if value not in POSITIONS:
+        raise HTTPException(status_code=400, detail=f"Unknown position '{position}'")
+    return (value,)
+
+
+def _attach_headshots(db: Session, rows: list[dict]) -> None:
+    """Fill each point's ``headshot_url`` in one query, after the rows are capped.
+
+    Done here rather than in the shared aggregation select so the leaderboard and the
+    intelligence board don't have to grow a column (and a GROUP BY key) they never use.
+    """
+    player_ids = {row["player_id"] for row in rows if row.get("player_id")}
+    if not player_ids:
+        return
+    photos = dict(
+        db.execute(
+            select(Player.player_id, Player.headshot_url).where(
+                Player.player_id.in_(player_ids)
+            )
+        ).all()
+    )
+    for row in rows:
+        row["headshot_url"] = photos.get(row.get("player_id")) or None
+
+
+def _scatter_point(
+    record: dict, axes: dict[str, str], rank_by: str | None = None, week: int | None = None
+) -> dict:
+    """Reduce a full stat row to the identity plus the plotted axis values."""
+    point = {
+        "player_id": record.get("player_id"),
+        "name": record.get("name"),
+        "position": record.get("position"),
+        "team_abbreviation": record.get("team_abbreviation"),
+        "games_played": record.get("games_played"),
+        **{axis: record.get(metric) for axis, metric in axes.items()},
+    }
+    if rank_by is not None:
+        point["rank_value"] = record.get(rank_by)
+    if week is not None:
+        point["week"] = week
+    return point
+
+
+def _scatter_season_rows(
+    db: Session, window, positions: tuple[str, ...] | None, axes: dict[str, str],
+    config: ScoringConfig, custom: list[CustomMetric], min_games: int, rank_by: str,
+) -> list[dict]:
+    """One point per player, aggregated over the window."""
+    games = games_expr()
+    filters = window_filters(
+        window.season, window.season_type, positions=positions or POSITIONS,
+        week_from=window.week_from, week_to=window.week_to,
+    )
+    query = aggregate_select(filters, games).having(games >= min_games)
+    rows = db.execute(query).mappings().all()
+    return [
+        _scatter_point(finalize_row(dict(row), config, custom), axes, rank_by=rank_by)
+        for row in rows
+    ]
+
+
+def _scatter_game_rows(
+    db: Session, window, positions: tuple[str, ...] | None, axes: dict[str, str],
+    config: ScoringConfig, custom: list[CustomMetric], rank_by: str, limit: int,
+) -> list[dict]:
+    """One point per player-week — the distribution view a season aggregate hides."""
+    custom_map = {definition.id: definition for definition in custom}
+    labeled = [
+        metric_expr(metric, config, sum_mode=False, custom=custom_map).label(axis)
+        for axis, metric in axes.items()
+    ]
+    rank_expr = metric_expr(rank_by, config, sum_mode=False, custom=custom_map)
+    query = (
+        select(
+            Player.player_id,
+            Player.name.label("name"),
+            Player.position.label("position"),
+            Team.abbreviation.label("team_abbreviation"),
+            PlayerStats.week,
+            *labeled,
+        )
+        .join(Player, PlayerStats.player_id == Player.player_id)
+        .outerjoin(Team, Player.team_id == Team.team_id)
+        .where(*window_filters(
+            window.season, window.season_type, positions=positions or POSITIONS,
+            week_from=window.week_from, week_to=window.week_to,
+        ))
+        # Rank in SQL so the cap keeps the most relevant player-weeks, not an
+        # arbitrary slice. One extra row distinguishes "at the cap" from "truncated".
+        .order_by(rank_expr.desc().nulls_last())
+        .limit(limit + 1)
+    )
+    return [
+        {
+            "player_id": row["player_id"],
+            "name": row["name"],
+            "position": row["position"],
+            "team_abbreviation": row["team_abbreviation"],
+            "games_played": 1,
+            "week": row["week"],
+            **{axis: _round(row[axis]) for axis in axes},
+        }
+        for row in db.execute(query).mappings().all()
+    ]
 
 
 @router.get("/intelligence")

@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.intelligence import breakdown, build_intelligence, resolve_window
 from app.league import parse_league
-from app.models import Game, Player, PlayerStats, Team
+from app.models import Game, Player, PlayerStats, PlayerTargetDepth, Team
+from app.models.player_target_depth import DEPTH_BUCKETS
 from app.schemas.common import PaginatedResponse, paginated
 from app.schemas.player import PlayerOut
 from app.schemas.stats import StatLineOut
@@ -145,6 +146,70 @@ def get_player_intelligence(
         "breakdown": breakdown(
             record, context["inputs"][player_id], context["percentiles"][player_id]
         ),
+    }
+
+
+@router.get("/{player_id}/target-depth")
+def get_player_target_depth(
+    player_id: str,
+    season: int = Query(..., description="Season year, e.g. 2024"),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """This player's targets and production by pass depth (M4).
+
+    Direction is summed away here — it is stored so the directional grid needs no
+    migration later, but the shipped chart is depth-only. Buckets with no targets are
+    still returned, so the chart keeps a stable four-bucket shape rather than
+    collapsing when a player never ran anything deep.
+    """
+    if db.get(Player, player_id) is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    rows = db.execute(
+        select(
+            PlayerTargetDepth.depth_bucket,
+            func.sum(PlayerTargetDepth.targets).label("targets"),
+            func.sum(PlayerTargetDepth.receptions).label("receptions"),
+            func.sum(PlayerTargetDepth.receiving_yards).label("receiving_yards"),
+            func.sum(PlayerTargetDepth.receiving_tds).label("receiving_tds"),
+            func.sum(PlayerTargetDepth.air_yards).label("air_yards"),
+        )
+        .where(
+            PlayerTargetDepth.player_id == player_id,
+            PlayerTargetDepth.season == season,
+            PlayerTargetDepth.season_type == season_type,
+        )
+        .group_by(PlayerTargetDepth.depth_bucket)
+    ).mappings().all()
+
+    by_bucket = {row["depth_bucket"]: row for row in rows}
+    total_targets = sum(int(row["targets"] or 0) for row in rows)
+
+    buckets = []
+    for bucket in DEPTH_BUCKETS:
+        row = by_bucket.get(bucket)
+        targets = int(row["targets"]) if row and row["targets"] is not None else 0
+        receptions = int(row["receptions"]) if row and row["receptions"] is not None else 0
+        yards = int(row["receiving_yards"]) if row and row["receiving_yards"] is not None else 0
+        buckets.append({
+            "depth_bucket": bucket,
+            "targets": targets,
+            "receptions": receptions,
+            "receiving_yards": yards,
+            "receiving_tds": int(row["receiving_tds"]) if row and row["receiving_tds"] is not None else 0,
+            "air_yards": int(row["air_yards"]) if row and row["air_yards"] is not None else 0,
+            "target_share": round(targets / total_targets, 4) if total_targets else None,
+            "catch_rate": round(receptions / targets, 4) if targets else None,
+            "yards_per_target": round(yards / targets, 2) if targets else None,
+        })
+
+    return {
+        "player_id": player_id,
+        "season": season,
+        "season_type": season_type,
+        "total_targets": total_targets,
+        "data": buckets,
     }
 
 

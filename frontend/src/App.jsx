@@ -1,12 +1,20 @@
 // Route table for the app.
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { CompareView } from "./pages/CompareView";
 import { Home } from "./pages/Home";
 import { InsightView } from "./pages/InsightView";
 import { LeaderboardView } from "./pages/LeaderboardView";
 import { PlayerProfile } from "./pages/PlayerProfile";
+import { ScatterView } from "./pages/ScatterView";
 import { Teams } from "./pages/Teams";
-import { ALL_BOARDS } from "./constants/boards";
+import { ALL_BOARDS, EXPLORE_ITEMS } from "./constants/boards";
+
+// Explore tools are pages rather than boards, so they map to their own components.
+const EXPLORE_VIEWS = {
+  "explore-scatter": ScatterView,
+  "explore-compare": CompareView,
+};
 
 export function App() {
   return (
@@ -24,6 +32,18 @@ export function App() {
               key={board.id}
               path={board.path.replace(/^\//, "")}
               element={<View key={board.id} board={board} />}
+            />
+          );
+        })}
+
+        {/* Explore tools (M4): scatter + comparison builders. */}
+        {EXPLORE_ITEMS.map((item) => {
+          const View = EXPLORE_VIEWS[item.id];
+          return (
+            <Route
+              key={item.id}
+              path={item.path.replace(/^\//, "")}
+              element={<View key={item.id} board={item} />}
             />
           );
         })}

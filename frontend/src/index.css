@@ -42,6 +42,17 @@
     --neg: #f87171;
     --warn: #f5a524;
 
+    /* Categorical chart series (M4). A fixed order, never cycled — a series keeps
+       its hue when the set is filtered. Deliberately NOT the accent/pos/neg/warn
+       tokens: those carry meaning ("good", "bad") that a series identity must not
+       borrow. Validated for colour-vision deficiency and contrast against this
+       theme's card surface; see docs/design/M4-exploration-viz.md §6. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+
     --shadow: 0 20px 55px -22px rgba(0, 0, 0, 0.7);
     --radius: 20px;
     --blur: 24px;
@@ -76,6 +87,14 @@
     --pos: #0a9d63;
     --neg: #dc4c4c;
     --warn: #b9770a;
+
+    /* The same five hues, re-stepped for the light surface — not an automatic
+       flip of the dark values. Validated independently against the light card. */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
 
     --shadow: 0 18px 44px -22px rgba(20, 30, 60, 0.35);
     --radius: 20px;

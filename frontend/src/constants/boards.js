@@ -89,7 +89,8 @@ export const FANTASY_BOARDS = [
       "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
       "receptions", "targets", "receiving_yards", "receiving_tds",
       "target_share", "routes_run", "route_participation", "targets_per_route_run",
-      "yards_per_route_run", "air_yards", "red_zone_targets", "wopr",
+      "yards_per_route_run", "air_yards", "red_zone_targets",
+      "high_value_touches_per_game", "wopr",
     ],
     defaultSort: "fantasy_points",
     defaultPosition: "WR",
@@ -105,8 +106,9 @@ export const FANTASY_BOARDS = [
     columns: [
       "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
       "carries", "rushing_yards", "rushing_tds", "rush_attempt_share", "opportunity_share",
-      "rush_att_inside_10", "rush_att_inside_5", "rush_att_inside_2",
-      "red_zone_rush_share", "receptions", "receiving_yards",
+      "high_value_touches_per_game", "rush_att_inside_10", "rush_att_inside_5",
+      "rush_att_inside_2", "red_zone_rush_share", "touches_per_snap",
+      "receptions", "receiving_yards",
     ],
     defaultSort: "fantasy_points",
     defaultPosition: "RB",
@@ -245,7 +247,8 @@ export const NFL_BOARDS = [
     description: "Advanced efficiency, value, and opportunity metrics across positions.",
     columns: [
       "epa", "cpoe", "snap_count", "snap_share", "target_share", "air_yards", "adot",
-      "wopr", "opportunity_share", "market_share", "red_zone_targets", "rushing_epa", "receiving_epa",
+      "wopr", "opportunity_share", "market_share", "touches_per_snap",
+      "red_zone_targets", "rushing_epa", "receiving_epa",
     ],
     defaultSort: "epa",
     defaultPosition: "",
@@ -335,9 +338,39 @@ export const NFL_BOARDS = [
 
 export const ALL_BOARDS = [...INSIGHT_BOARDS, ...FANTASY_BOARDS, ...NFL_BOARDS];
 
+// --- Explore (M4) ---
+// Not boards: these are tools, not ranked tables, so they have no `columns` and are
+// routed to their own pages. They share the nav-item shape so the dropdown can render
+// them alongside the boards.
+export const EXPLORE_ITEMS = [
+  {
+    id: "explore-scatter",
+    label: "Scatter",
+    path: "/explore/scatter",
+    menuDesc: "Plot any two metrics against each other",
+    title: "Scatter Builder",
+    description:
+      "Pick a question and see the whole player pool answer it at once. The dashed " +
+      "lines are the medians, so the corners are the story — and every dot is a player " +
+      "you can click.",
+  },
+  {
+    id: "explore-compare",
+    label: "Compare",
+    path: "/explore/compare",
+    menuDesc: "Up to five players, side by side",
+    title: "Comparison Builder",
+    description:
+      "Line up to five players side by side. Every stat shows who leads it and by how " +
+      "much, and only stats that apply to all of them are shown — so a quarterback and " +
+      "a receiver get compared on common ground.",
+  },
+];
+
 // Nav dropdown groups. Insight leads — it is the reason to come back.
 export const NAV_GROUPS = [
   { label: "Insight", items: INSIGHT_BOARDS, match: "/insight" },
+  { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" },
   { label: "Fantasy Leaderboards", items: FANTASY_BOARDS, match: "/fantasy" },
   { label: "NFL Leaderboards", items: NFL_BOARDS, match: "/nfl" },
 ];

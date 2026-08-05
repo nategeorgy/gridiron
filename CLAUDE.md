@@ -233,6 +233,28 @@ player_stats (
 
   UNIQUE(player_id, game_id)
 )
+
+-- Target distribution by pass depth and direction (M4).
+-- A different grain from player_stats, which is why it is its own table: air_yards is
+-- stored there as a per-game total, and a total cannot be un-summed into buckets.
+-- Direction is stored even though the shipped chart sums it away — it is one extra
+-- group key on a play-by-play pass we already make, and adding it later would mean a
+-- second migration and a second full backfill.
+player_target_depth (
+  player_id       VARCHAR(50) REFERENCES players(player_id),
+  game_id         VARCHAR(50) REFERENCES games(game_id),
+  depth_bucket    VARCHAR(20),   -- behind_los | short_0_9 | intermediate_10_19 | deep_20_plus
+  direction       VARCHAR(10),   -- left | middle | right
+  season          INT,
+  week            INT,
+  season_type     VARCHAR(20),
+  targets         INT,
+  receptions      INT,
+  receiving_yards INT,
+  receiving_tds   INT,
+  air_yards       INT,
+  PRIMARY KEY (player_id, game_id, depth_bucket, direction)
+)
 ```
 
 ---
@@ -274,12 +296,24 @@ player_stats (
 - Yards Per Route Run
 - Yards Per Target
 - Yards Per Reception
+- High-Value Touches / Game — `(red_zone_targets + rush_att_inside_5) / games`
+- Touches Per Snap — `(targets + carries) / snap_count`
+- Target distribution by pass depth (behind LOS / 0–9 / 10–19 / 20+) and direction
 
 **Fantasy**
 - Fantasy points (PPR, Half-PPR, Standard, or any custom league scoring)
 - Fantasy points per game (PPR, Half-PPR, Standard, or any custom league scoring)
 - Expected fantasy points + expected PPG (scoring-aware, from expected components)
 - Points over expected (actual − expected)
+
+**Composite** (M4 — a registry `formula` string evaluated by `app/custom_metrics.py`.
+The same engine can serve user-composed metrics via a `custom=` request config, but
+that builder UI is deferred. See
+[`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md))
+- Any weighted sum of registry metrics over an optional divisor, e.g.
+  `0.6*target_share+0.4*rush_attempt_share` or `fantasy_points/snap_count`
+- Aggregated **first**, then combined — `Σyards / Σtargets`, never the mean of
+  per-game ratios
 
 **Insight** (M3 — derived at query time from a scoring config *and* a league config;
 no stored columns. See [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md))
@@ -321,12 +355,16 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
   percentile ranks within a position pool. Introduced **league context** (size +
   starting lineup) as a second per-request config alongside scoring, because value has
   to be measured against a league-specific replacement level.
-- **M4 — Exploration & Viz** (NEXT): scatter builder, comparison builder (≤5), enhanced
-  player pages with charts, export.
+- **M4 — Exploration & Viz** (✅ SHIPPED): a **curated** scatter builder (19 pre-canned
+  charts across six position groups, players drawn as headshot bubbles), comparison
+  builder (≤5 players: lead-margin table + trend + radar), enhanced player pages
+  (usage-share and depth-of-target charts), and CSV export everywhere. The
+  custom-metric **engine** ships (it evaluates the registry's `composite` metrics); its
+  builder **UI** is deferred, as is PNG export until there's a brand to watermark with.
 
 ### Later phases (see ROADMAP for detail)
-- **M5 — Accounts & saved state** (deferred deliberately; use URL/`localStorage` state
-  first, then Supabase Auth to persist it).
+- **M5 — Accounts & saved state** (NEXT; deferred deliberately — URL/`localStorage`
+  state first, then Supabase Auth to persist it).
 - **M6 — New data domains**: depth charts, strength of schedule, Vegas board, consensus
   projections (`load_ff_rankings`).
 - **M7 — Games & growth**: college/name trivia, EPA draft, mock draft simulator.
@@ -358,17 +396,23 @@ GET /api/v1/players                          ← list/search players
 GET /api/v1/players/{player_id}              ← player profile
 GET /api/v1/players/{player_id}/stats        ← player game log
 GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdown
+GET /api/v1/players/{player_id}/target-depth ← M4 targets by pass depth
 GET /api/v1/stats/leaderboard                ← filterable leaderboard
 GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / buy / sell)
+GET /api/v1/stats/scatter                    ← M4 any two metrics, season or per-week
+GET /api/v1/stats/compare                    ← M4 up to 5 players + percentiles
 GET /api/v1/metrics                          ← metric registry
 GET /api/v1/teams                            ← all teams
 GET /api/v1/teams/{team_id}/stats            ← team stats
 GET /api/v1/games                            ← game schedule/results
 ```
 
-Two per-request configs shape fantasy output, both parsed from compact spec strings:
+Three per-request configs shape fantasy output, all parsed from compact spec strings:
 - `scoring=preset[:overrides]` — e.g. `ppr`, `ppr:pass_td=6,te_rec=1.5` (see `app/scoring.py`)
 - `league=teams[:slot=value]` — e.g. `12`, `10:rb=2,flex=2`, `12:superflex=1` (see `app/league.py`)
+- `custom=name=formula[;…]` — e.g. `hvt=red_zone_targets+rush_att_inside_5/games`
+  (see `app/custom_metrics.py`). A weighted sum over an optional divisor — **structured,
+  never free-form arithmetic**, so there is no expression parser and no `eval`.
 
 ---
 
@@ -385,14 +429,15 @@ Two per-request configs shape fantasy output, both parsed from compact spec stri
   [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md).
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**
   (a Bento dashboard that opens on "who's leading in your scoring"), *not* the
-  leaderboard. Boards live in three nav dropdowns: **Insight** (`/insight/*` — VORP /
+  leaderboard. Boards live in four nav dropdowns: **Insight** (`/insight/*` — VORP /
   Opportunity Rating / Buy Low / Sell High, the M3 derived signals, with both the
-  scoring and league editors), **Fantasy Leaderboards** (`/fantasy/*` — Leaders /
-  Expected Points / Passing / Receiving / Rushing, with the league-scoring editor) and
-  **NFL Leaderboards** (`/nfl/*` — All / Passing / Receiving / Rushing, each General &
-  Advanced, raw stats). All 17 are configured in
-  `frontend/src/constants/boards.js`; Insight is listed first — it is the reason to
-  come back.
+  scoring and league editors), **Explore** (`/explore/*` — the M4 Scatter and Compare
+  builders, tools rather than ranked tables), **Fantasy Leaderboards** (`/fantasy/*` —
+  Leaders / Expected Points / Passing / Receiving / Rushing, with the league-scoring
+  editor) and **NFL Leaderboards** (`/nfl/*` — All / Passing / Receiving / Rushing,
+  each General & Advanced, raw stats). All 17 boards plus the 2 Explore tools are
+  configured in `frontend/src/constants/boards.js`; Insight is listed first — it is the
+  reason to come back.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -496,6 +541,12 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       (+ Expected Points board and expected-vs-actual player pages), market share,
       inside-10/5/2 carries, snap + route usage backfilled 2020–2025
       (see [`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md))
+- [x] M4 — Exploration & Viz: scatter builder + comparison builder (a fourth nav
+      dropdown, **Explore ▾**), usage and target-depth charts on player pages, CSV
+      export on every board, and a custom-metric builder (`custom=`, a third
+      per-request config) that also defines two new built-in metrics. One new table,
+      `player_target_depth`, backfilled 2020–2025
+      (see [`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md))
 - [x] M3 — Fantasy Intelligence: VORP, Fantasy Opportunity Rating, Positive-Regression
       (buy-low) and Sell-High indices; league context (size + starting lineup) as a
       second per-request config; four Insight boards, player-page badges + a full
@@ -524,15 +575,40 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - Prefer simple, readable solutions over clever ones
 - When adding a new **stored** metric, add it to the database schema, the pipeline, the
   API response, AND the frontend constants file — all four places. **Derived** metrics
-  (`derived` / `scoring` / `expected` / `intelligence` aggregations) skip the schema and
-  pipeline: they are a registry entry plus the code that computes them (`app/scoring.py`,
-  `app/aggregation.py`, or `app/intelligence.py`) plus the frontend constants
+  (`derived` / `scoring` / `expected` / `intelligence` / `composite` aggregations) skip
+  the schema and pipeline: they are a registry entry plus the code that computes them
+  (`app/scoring.py`, `app/aggregation.py`, `app/intelligence.py`, or
+  `app/custom_metrics.py`) plus the frontend constants
+- A **`composite`** metric (M4) is the cheapest kind to add: one registry entry with a
+  `formula` string (`"red_zone_targets+rush_att_inside_5/games"`), parsed at import time
+  by `app/custom_metrics.py` and evaluated by the same engine that serves user-defined
+  custom metrics. No other backend code. A typo fails at startup, not at request time
+- `app/aggregation.py`'s `metric_expr()` is the **single** place a metric id becomes a
+  SQL expression. Add a new aggregation kind there, not in a router — the leaderboard,
+  the scatter, and the intelligence engine all depend on it agreeing with itself
 - Insight scores (M3) are never stored. They depend on both the scoring config and the
   league config, so a stored score would need a row per context — the same reason M2
   stores expected *components* rather than expected points. All weights and thresholds
   live as documented constants at the top of `app/intelligence.py`
 - The scoring grammar (`app/scoring.py`) and league grammar (`app/league.py`) each have
-  a frontend mirror (`constants/scoring.js`, `constants/league.js`) — change both together
+  a frontend mirror (`constants/scoring.js`, `constants/league.js`) — change both
+  together, or a spec the editor builds will 400 on request. The custom-metric grammar
+  (`app/custom_metrics.py`) has **no** mirror today: its builder UI was deferred, and
+  the engine's only current job is evaluating the registry's `composite` metrics
+- The **Scatter builder is curated, not open-ended** — users pick a position group and
+  a question, never raw axes (`frontend/src/constants/scatters.js`). Two metrics chosen
+  at random usually make a meaningless cloud; the curation *is* the feature. Adding a
+  chart is one entry there, with no backend change
+- The **Comparison table shows lead margins, not percentiles** — the leader's value plus
+  how far clear they are of the runner-up. Direction comes from the registry's
+  `higher_is_better`, so "leading" fumbles means the fewest. It also shows only metrics
+  whose `applies_to` covers *every* compared position, so mixed-position comparisons
+  never render empty rows
+- Chart series colours come from the `--series-1..5` CSS tokens (a fixed categorical
+  order, never cycled, keyed to the entity rather than its rank). They were validated
+  for colour-vision separation and contrast against both themes' surfaces — adding a
+  sixth hue means re-validating, not guessing. Never reuse `--accent`/`--pos`/`--neg`
+  for a series: those carry meaning a series identity must not borrow
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

@@ -18,13 +18,19 @@ decimal places. ``aggregation``:
                  a LeagueConfig, over a season or a trailing window of weeks. These
                  are served by ``/stats/intelligence``, not by the leaderboard,
                  because they need the whole position pool to be ranked at once.
+  - ``composite`` (M4) a weighted sum of other metrics over an optional divisor,
+                 declared here as a ``formula`` string and evaluated by
+                 ``app.custom_metrics`` — the same evaluator that serves user-defined
+                 custom metrics, so a built-in and a user's metric cannot drift.
 """
 
 from typing import Literal
 
 from pydantic import BaseModel
 
-Aggregation = Literal["sum", "avg", "derived", "scoring", "expected", "intelligence"]
+Aggregation = Literal[
+    "sum", "avg", "derived", "scoring", "expected", "intelligence", "composite"
+]
 Format = Literal["int", "pct"] | int
 
 
@@ -42,6 +48,11 @@ class MetricDef(BaseModel):
     higher_is_better: bool = True
     rankable: bool = True
     base: str | None = None  # for aggregation="derived": the column divided by games
+    # For aggregation="composite": the formula, in the same grammar users write for
+    # custom metrics — "term[+term...][/denominator]", where a term is
+    # "[weight*]metric_id" and the denominator is a metric id or the literal "games".
+    # Parsed at import time by app.custom_metrics, so a typo fails at startup.
+    formula: str | None = None
     # True for metrics that are *model estimates* rather than counted events (the
     # ffopportunity expected values). The UI labels these so they are never mistaken
     # for observed data. See docs/design/M2-expanded-metrics.md.
@@ -250,6 +261,22 @@ REGISTRY: list[MetricDef] = [
     _m("market_share", "Market Share", "MKT%", "pct", "usage", "avg",
        applies_to=["RB", "WR", "TE"],
        description="Share of the team's yards from scrimmage (rushing + receiving)."),
+
+    # Composite usage metrics (M4) — defined as formulas over the metrics above and
+    # evaluated by the same engine as user-defined custom metrics.
+    _m("high_value_touches_per_game", "High-Value Touches / Game", "HVT/G", 2, "usage",
+       "composite", formula="red_zone_targets+rush_att_inside_5/games",
+       applies_to=["RB", "WR", "TE"],
+       description="Red-zone targets plus carries inside the 5, per game. The two "
+                   "highest-value touch types in fantasy counted together — volume "
+                   "measured where points are actually scored, not between the 20s."),
+    _m("touches_per_snap", "Touches Per Snap", "TCH/SNAP", 3, "usage",
+       "composite", formula="targets+carries/snap_count",
+       applies_to=["RB", "WR", "TE"],
+       description="Targets plus carries divided by snaps played — how efficiently a "
+                   "role converts playing time into opportunity. A back who touches "
+                   "the ball on a third of his snaps is used very differently from "
+                   "one who blocks on most of them."),
     _m("epa", "EPA", "EPA", 1, "usage", "sum",
        description="Total expected points added."),
     _m("fumbles", "Fumbles", "FUM", "int", "usage", "sum",

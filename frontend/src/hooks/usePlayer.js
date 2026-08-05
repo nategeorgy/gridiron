@@ -1,6 +1,6 @@
 // React Query hooks for player profile + game log.
 import { useQuery } from "@tanstack/react-query";
-import { getPlayer, getPlayerGameLog } from "../services/players";
+import { getPlayer, getPlayerGameLog, getPlayerTargetDepth } from "../services/players";
 
 export function usePlayer(playerId) {
   return useQuery({
@@ -19,5 +19,16 @@ export function usePlayerGameLog(playerId, scoring) {
     queryKey: ["player-gamelog", playerId, scoring],
     queryFn: () => getPlayerGameLog(playerId, scoring ? { scoring } : {}),
     enabled: Boolean(playerId),
+  });
+}
+
+// Targets bucketed by pass depth for one season (M4). Not scoring-aware — these are
+// counted events, not fantasy points — so scoring is deliberately not in the key.
+export function usePlayerTargetDepth(playerId, season, seasonType = "REG") {
+  return useQuery({
+    queryKey: ["player-target-depth", playerId, season, seasonType],
+    queryFn: () =>
+      getPlayerTargetDepth(playerId, { season, season_type: seasonType }),
+    enabled: Boolean(playerId && season),
   });
 }

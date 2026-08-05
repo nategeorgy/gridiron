@@ -127,17 +127,42 @@ Most original, most on-brand. Rule/formula-based on existing data.
   expected-points gap inherits ffopportunity's no-expected-fumbles bias; rookies have
   no career-efficiency baseline (it renormalises away).
 
-### 🔬 M4 — Exploration & Viz — M — **NEXT**
-- **Deps:** M1/M2. **Data:** existing.
-- **Features:** **scatter builder** (any 2 registry metrics × player base), **comparison
-  builder** (≤5 players, default + custom stats), **enhanced player pages** (usage/
-  opportunity charts, **pass-location chart** from pbp `pass_location`/`air_yards`),
-  PNG/CSV export.
-- **DB:** none. **Backend:** flexible `/stats/scatter`. **Frontend:** Recharts scatter +
-  compare tables; export via canvas/CSV; state in URL (shareable).
-- **Data limits:** pass *charts* yes; route *trees* no (see Cut Ideas).
+### 🔬 M4 — Exploration & Viz — M — **✅ SHIPPED**
+Design note: [`design/M4-exploration-viz.md`](design/M4-exploration-viz.md).
+The layer that lets someone ask their own question instead of picking from ours.
+- **Deps:** M1/M2/M3. **Data:** existing, plus one pbp-derived table (below).
+- **Shipped:** a **curated scatter builder** — 19 pre-canned charts across six position
+  groups (All / QB / RB / WR / TE / Flex), players drawn as **headshot bubbles**, median
+  quadrant guides, click-through; **comparison builder** (≤5 players: a **lead-margin**
+  table with headshots, overlaid weekly trend, and a percentile radar); **enhanced
+  player pages** (weekly usage-share chart + depth-of-target chart); **CSV export** on
+  all 17 boards and both Explore views.
+- **Custom-metric engine — differentiator #4, half pulled forward.** The engine ships:
+  a `custom=` request config alongside scoring and league, deliberately **structured** —
+  `Σ(weight × metric) ÷ (metric | games)` — so there is no expression parser and no
+  `eval` on a public endpoint. Two built-ins run on it via a new `composite` registry
+  aggregation: **High-Value Touches / Game**
+  (`(red_zone_targets + rush_att_inside_5) / games`) and **Touches Per Snap**
+  (`(targets + carries) / snap_count`). The **builder UI is deferred** — see the
+  2026-08-04 decision on curation.
+- **DB:** one table, `player_target_depth` (migration `7852e5b550b0`) — a deliberate
+  deviation from the "DB: none" plan, because `air_yards` is stored as a per-game total
+  and a total cannot be un-summed into buckets. Stored at (player, game, depth bucket,
+  **direction**) so the directional grid never needs a second backfill.
+- **Backend:** `/stats/scatter`, `/stats/compare`, `/players/{id}/target-depth`,
+  `app/custom_metrics.py`, and `metric_expr()` in `app/aggregation.py` — one
+  metric→SQL mapping now shared by the leaderboard and the scatter.
+- **Verified:** target-depth ingestion reconciles **exactly** against `player_stats`
+  (2024: 16,903 bucketed targets vs 16,903 stored; receiving yards within 3 of 126,385).
+  Custom-metric SQL `ORDER BY` and the Python display value agree on every row.
+- **Deferred deliberately:** **PNG export** — chart-to-PNG only earns its complexity
+  once there is a handle/domain to watermark with (growth playbook #2); until then a
+  user's own screenshot is as good.
+- **Data limits:** pass *charts* yes; route *trees* no (see Cut Ideas). Custom metrics
+  are unvalidated by construction — any two metrics can be divided, so they carry no
+  "good direction" and are never used in Insight scoring.
 
-### 🔐 M5 — Accounts & Saved State — M
+### 🔐 M5 — Accounts & Saved State — M — **NEXT**
 - **Deps:** M1–M4 (state worth saving). 
 - **DB:** `users`, `saved_views` (scoring, scatters, rankings, comparisons), `favorites`.
 - **Backend:** Supabase Auth (already on Supabase — avoids rolling our own).
@@ -189,8 +214,18 @@ Each sub-feature is its own deployable slice:
 | Catchable targets | `load_ftn_charting` | 🟡 2022+ only |
 | Slot vs wide alignment | — | 🔴 No free source (see M2 design note §3) |
 | Live upcoming odds (survivor) | external odds API | 🟡 New dependency |
+| Target depth / pass direction | `load_pbp` `air_yards` + `pass_location` | 🟢 Shipped M4 — populated **2020–2025** (see correction below) |
 | Route trees (drawn) | player tracking | 🔴 Not available free |
 | Dynasty value | — | 🔴 No free authoritative source |
+
+> **Correction (2026-07-30).** Directional pass data was expected to have degraded for
+> recent seasons — nflfastR parses `pass_location` from play-description text, and that
+> text has changed format over the years. It did not: `pass_location` is NULL on only
+> 6.8–7.9% of pass plays, flat from 2020 through 2025, and that rate tracks the
+> `air_yards` NULL rate (sacks, scrambles, throwaways — plays that are not targets at
+> all). Coverage of actual *targets* is effectively complete, verified by an exact
+> reconciliation against `player_stats`. The full direction × depth grid is therefore
+> available; M4 stores both dimensions and ships the depth-only chart.
 
 > **Correction (2026-07-29).** This table previously recorded the participation feed as
 > frozen after ~2023, which ruled out route metrics for current seasons. That is not
@@ -318,6 +353,57 @@ tells people it exists.
   weighted inputs with values and percentiles, rendered on the player page. A rule-based
   signal is only better than a black-box projection if the rules are visible; this also
   keeps us honest about the weights being judgement rather than a fit.
+- **2026-08-04 — Curation beats configurability (M4 review).** The scatter builder's
+  free axis picker was replaced with 19 pre-canned charts across six position groups
+  (All / QB / RB / WR / TE / Flex), and the custom-metric *builder UI* was deferred.
+  Two arbitrary metrics almost always produce a meaningless cloud, and a blank picker
+  pushes "which pairs are worth plotting" onto the user — the same reason the Insight
+  boards ship four named questions instead of a formula editor. Position grouping falls
+  out of the same logic: target share means nothing for a QB, rushing share nothing for
+  a receiver, so **Flex** (RB/WR/TE) became a first-class filter since that is the real
+  lineup decision. The custom-metric *engine* stays — the registry's `composite`
+  metrics run on it.
+- **2026-08-04 — Scatter points are player headshots.** The photo is the identity
+  encoding, which supersedes the shape-by-position decision below and makes the
+  colour-vision constraint moot rather than worked around. Consequence: a headshot has
+  a minimum readable size, so plots hold tens of points, not hundreds — which exposed a
+  real bug, since the cap had been applied to whatever order the database returned. The
+  endpoint now takes `rank_by` and ranks before capping.
+- **2026-08-04 — Comparison shows lead margins, not percentiles.** Each row names the
+  leader and how far clear they are of the runner-up. Percentiles answered "is that a
+  lot"; a head-to-head is asking "who wins this, and is it close". Direction comes from
+  the registry's `higher_is_better`, so leading *fumbles lost* means the fewest.
+  Percentiles remain in the API and still drive the radar, which needs a common scale.
+  Separately, a comparison now shows only metrics applying to **every** position
+  involved — a QB-vs-WR view was previously mostly empty rows.
+- **2026-07-30 — Custom metrics are structured, not free-form.** `custom=` is the third
+  per-request config, and it accepts a weighted sum over an optional divisor —
+  nothing more. Full arithmetic with parentheses would buy nested expressions and cost
+  an AST walker plus a permanent injection surface on a public endpoint; the structured
+  form covers every metric proposed during design and is a strict subset, so widening
+  later throws nothing away. Aggregation semantics are **aggregate-then-combine**
+  (`Σyards / Σtargets`, never the mean of per-game ratios) — the alternative silently
+  lets a 1-target game count as much as a 12-target one. The two new built-in metrics
+  are defined as registry `formula` strings parsed by the same evaluator, so a built-in
+  and a user's metric cannot drift.
+- **2026-07-30 — M4 takes one DB table, breaking its own "DB: none" plan.**
+  `player_target_depth` exists because `air_yards` is stored as a per-game total, and a
+  total cannot be un-summed into buckets — the distribution has to come from pbp at
+  ingestion. Stored at (player, game, depth bucket, **direction**) rather than
+  depth-only: direction is one extra group key on a pass already being made, and
+  omitting it would mean a second migration and a second full backfill the first time
+  anyone wants the grid. A separate narrow table rather than columns, because 3
+  directions × 4 buckets × 4 measures is 48 columns no leaderboard will ever show.
+- **2026-07-30 — Scatter encodes position by shape, not colour.** Four categorical hues
+  cannot clear the colour-vision separation floors in the all-pairs case a scatter
+  always is (any two dots may be compared) — verified with a palette validator, not by
+  eye. Shape carries identity and every mark shares the brand accent; it also reads
+  better, since 500 dots in four colours is mud. The five-hue `--series-1..5` palette
+  used by the comparison charts (a line chart, adjacent pairs) validates cleanly in
+  both themes and is keyed to the player, never to their rank.
+- **2026-07-30 — PNG export deferred out of M4.** Chart-to-PNG only earns its
+  complexity once there is a handle or domain worth watermarking (growth playbook #2).
+  Shipping it now would burn in a placeholder. CSV shipped everywhere instead.
 - **2026-07-28 — Visual identity: Liquid Glass + Command Center home.** Adopted a
   frosted "Liquid Glass" surface system with two themes — dark "smoked graphite"
   (default) and light "Clear" — chosen from a 23-skin Bento exploration. The home

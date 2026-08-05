@@ -7,7 +7,9 @@ import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { InsightPanel } from "../components/InsightPanel";
 import { FantasyTrendChart } from "../components/charts/FantasyTrendChart";
-import { usePlayer, usePlayerGameLog } from "../hooks/usePlayer";
+import { TargetDepthChart } from "../components/charts/TargetDepthChart";
+import { UsageTrendChart, usageSeriesFor } from "../components/charts/UsageTrendChart";
+import { usePlayer, usePlayerGameLog, usePlayerTargetDepth } from "../hooks/usePlayer";
 import { useScoring } from "../hooks/useScoring";
 import { formatStat } from "../utils/format";
 import { GAMELOG_COLUMN_SETS, METRICS, SUMMARY_STATS } from "../constants";
@@ -142,6 +144,44 @@ function ExpectedVsActual({ games }) {
   );
 }
 
+// Where a player's targets came from, and whether the role is growing (M4).
+function OpportunityPanels({ playerId, position, season, games }) {
+  const depthQuery = usePlayerTargetDepth(playerId, season);
+  const buckets = depthQuery.data?.data ?? [];
+  const totalTargets = depthQuery.data?.total_targets ?? 0;
+  const hasUsage = usageSeriesFor(position).length > 0;
+
+  return (
+    <>
+      {hasUsage && (
+        <Panel className="p-4">
+          <div className="mb-1 text-sm font-medium text-muted">Usage by Week — {season}</div>
+          <p className="mb-2 text-xs text-faint">
+            Opportunity is the most repeatable thing in fantasy. The direction of these
+            lines says more about what comes next than any single week's points do.
+          </p>
+          <UsageTrendChart games={games} position={position} />
+        </Panel>
+      )}
+
+      {totalTargets > 0 && (
+        <Panel className="p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm font-medium text-muted">Target Depth — {season}</div>
+            <div className="text-xs text-faint">{totalTargets} targets charted</div>
+          </div>
+          <p className="mb-2 mt-1 text-xs text-faint">
+            Where the opportunity actually lives. Two players with the same target count
+            can be worth very different things when one works behind the line and the
+            other is a downfield threat.
+          </p>
+          <TargetDepthChart buckets={buckets} />
+        </Panel>
+      )}
+    </>
+  );
+}
+
 export function PlayerProfile() {
   const { playerId } = useParams();
   const [scoring, setScoring] = useScoring();
@@ -227,6 +267,13 @@ export function PlayerProfile() {
             </div>
             <FantasyTrendChart games={seasonGames} />
           </Panel>
+
+          <OpportunityPanels
+            playerId={playerId}
+            position={position}
+            season={activeSeason}
+            games={seasonGames}
+          />
 
           <Panel className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
