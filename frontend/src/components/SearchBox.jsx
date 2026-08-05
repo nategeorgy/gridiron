@@ -38,8 +38,10 @@ export function SearchBox() {
 
   const showDropdown = open && debounced.trim().length >= 2;
 
+  // The width steps back down between sm and xl so the header still fits on one line
+  // once the account control is present (M5 added ~70px to the right cluster).
   return (
-    <div ref={containerRef} className="relative hidden w-44 sm:block sm:w-64">
+    <div ref={containerRef} className="relative hidden w-44 sm:block sm:w-48 xl:w-64">
       <input
         type="text"
         value={query}

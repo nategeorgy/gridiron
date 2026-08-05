@@ -114,6 +114,12 @@ gridiron/
 
 ### Core Tables
 
+> **Account tables (M5)** — `users`, `league_profiles`, `favorites`, `saved_views` —
+> are defined in `backend/app/models/account.py` and documented in
+> [`docs/design/M5-accounts-saved-state.md`](docs/design/M5-accounts-saved-state.md).
+> They are a separate island: they reference `players`, nothing references them, and
+> the pipeline never touches them. `users.user_id` is the Supabase Auth subject.
+
 ```sql
 -- Teams
 teams (
@@ -362,9 +368,15 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
   custom-metric **engine** ships (it evaluates the registry's `composite` metrics); its
   builder **UI** is deferred, as is PNG export until there's a brand to watermark with.
 
+- **M5 — Accounts & Saved State** (✅ SHIPPED): Google sign-in via Supabase Auth, with
+  FastAPI verifying the token and owning all account data. Ships **multiple named
+  league profiles** (each a bundle of a scoring spec + a league spec), a **favorites
+  watchlist** (star, filter, "My Players" tile), and **saved views** (any board,
+  scatter, or comparison, stored as its route + query string). **Nothing is gated** —
+  accounts are a sync/naming layer over the existing URL + `localStorage` state, and
+  the URL still outranks the account so shared links never lie.
+
 ### Later phases (see ROADMAP for detail)
-- **M5 — Accounts & saved state** (NEXT; deferred deliberately — URL/`localStorage`
-  state first, then Supabase Auth to persist it).
 - **M6 — New data domains**: depth charts, strength of schedule, Vegas board, consensus
   projections (`load_ff_rankings`).
 - **M7 — Games & growth**: college/name trivia, EPA draft, mock draft simulator.
@@ -405,6 +417,12 @@ GET /api/v1/metrics                          ← metric registry
 GET /api/v1/teams                            ← all teams
 GET /api/v1/teams/{team_id}/stats            ← team stats
 GET /api/v1/games                            ← game schedule/results
+
+# M5 — accounts. All require a verified Supabase token; none takes a user id.
+GET/DELETE /api/v1/me                        ← profile + counts / delete account
+CRUD       /api/v1/me/league-profiles        ← named scoring+league bundles
+GET/PUT/DELETE /api/v1/me/favorites[/{id}]   ← watchlist (idempotent add/remove)
+CRUD       /api/v1/me/saved-views            ← named route + query string
 ```
 
 Three per-request configs shape fantasy output, all parsed from compact spec strings:
@@ -485,11 +503,17 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
 ```
 DATABASE_URL=postgresql://user:password@localhost:5432/gridiron
 ENVIRONMENT=development
+# Optional (M5). Unset = accounts disabled; the public API is unaffected.
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_JWT_SECRET=          # only for projects still signing HS256
 ```
 
 ### Frontend (.env)
 ```
 VITE_API_BASE_URL=http://localhost:8000
+# Optional (M5). Unset = no sign-in button, app otherwise identical.
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=       # the publishable anon key — never service_role
 ```
 
 ---
@@ -550,6 +574,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       **builder UI is deferred**. One new table, `player_target_depth`, backfilled
       2020–2025 locally *and on Supabase*
       (see [`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md))
+- [x] M5 — Accounts & Saved State: Supabase Google OAuth (token issuer only) verified by
+      `app/auth.py`; four cascading tables (`users`, `league_profiles`, `favorites`,
+      `saved_views`, migration `990003c7c7cf`); `/me` endpoints scoped entirely to the
+      token subject; header account menu, profile bar on the scoring editor, watchlist
+      star + server-side board filter, saved views, and a "My Players" tile. Also
+      backfilled spine C: the 17 boards now keep their filters in the URL
+      (see [`docs/design/M5-accounts-saved-state.md`](docs/design/M5-accounts-saved-state.md))
 - [x] M3 — Fantasy Intelligence: VORP, Fantasy Opportunity Rating, Positive-Regression
       (buy-low) and Sell-High indices; league context (size + starting lineup) as a
       second per-request config; four Insight boards, player-page badges + a full
@@ -612,6 +643,22 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   for colour-vision separation and contrast against both themes' surfaces — adding a
   sixth hue means re-validating, not guessing. Never reuse `--accent`/`--pos`/`--neg`
   for a series: those carry meaning a series identity must not borrow
+- **Accounts are a persistence layer, never a gate.** Nothing in the product requires
+  signing in, and no account UI renders when signed out or when Supabase is
+  unconfigured. Any new account-aware control must be invisible (or, if it aids
+  discovery, disabled) rather than a prompt to sign up
+- **The URL outranks the account.** Scoring/league resolve
+  `URL > active profile > localStorage > default`. Never invert this: a shared link
+  carrying `?scoring=` has to show the sender's league to whoever opens it
+- **No account endpoint may accept a user id.** The id comes from the verified token
+  and nowhere else, so no request shape can reach another user's rows. Filter every
+  lookup on `user_id` *and* the primary key, so a guessed id 404s like a missing one
+- **Board filters belong in the URL** (`useUrlState`), not `useState` — that is what
+  makes a board link shareable and a saved view worth saving. Keep defaults out of the
+  query string, and pass a whitelist for anything the API would reject
+- A **watchlist filter narrows output only on the Insight boards.** Those scores are
+  percentiles within a position pool, so filtering before scoring would silently
+  redefine what a percentile means. On the leaderboard it goes in the SQL
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

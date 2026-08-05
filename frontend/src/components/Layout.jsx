@@ -2,13 +2,15 @@
 // leaderboard dropdowns, Teams), search, and the light/dark theme toggle.
 // The page background (the Liquid Glass "environment") is painted on <body>.
 import { NavLink, Outlet } from "react-router-dom";
+import { AccountMenu } from "./AccountMenu";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { NavDropdown } from "./ui/NavDropdown";
 import { NAV_GROUPS } from "../constants/boards";
+import { useProfileSync } from "../hooks/useProfileSync";
 
 const navLinkClass = ({ isActive }) =>
-  `rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+  `whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
     isActive ? "glass-pill !text-accent" : "text-muted hover:text-fg"
   }`;
 
@@ -28,6 +30,10 @@ function BrandMark() {
 }
 
 export function Layout() {
+  // Mounted once, here: migrates pre-account localStorage into a profile on first
+  // sign-in, and mirrors the active profile back into localStorage after that.
+  useProfileSync();
+
   return (
     <div className="min-h-screen">
       <header className="glass-header sticky top-0 z-20">
@@ -52,6 +58,7 @@ export function Layout() {
             </nav>
             <SearchBox />
             <ThemeToggle />
+            <AccountMenu />
           </div>
         </div>
       </header>

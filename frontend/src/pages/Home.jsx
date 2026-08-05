@@ -6,6 +6,8 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useIntelligence } from "../hooks/useInsight";
+import { useAuth } from "../hooks/useAuth";
+import { useFavorites } from "../hooks/useAccount";
 import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
@@ -111,6 +113,74 @@ function SignalCard({ title, blurb, boardPath, metric, detailFor, params, cta })
       >
         {cta} →
       </Link>
+    </Card>
+  );
+}
+
+// "My Players" (M5) — the watchlist, ranked in the user's own scoring. Rendered
+// only when signed in *and* something is starred: an empty card on the home page
+// would be a permanent ad for a feature rather than a useful panel.
+function WatchlistCard({ params, pointsKey, ppgKey }) {
+  const { isSignedIn } = useAuth();
+  const { favorites } = useFavorites();
+  const playerIds = favorites.map((favorite) => favorite.player.player_id);
+
+  const watchlistParams = useMemo(
+    () => ({ ...params, metric: pointsKey, limit: 6, player_ids: playerIds.join(",") }),
+    [params, pointsKey, playerIds.join(",")],
+  );
+  const { data, isLoading } = useLeaderboard(watchlistParams, {
+    enabled: isSignedIn && playerIds.length > 0,
+  });
+
+  if (!isSignedIn || playerIds.length === 0) return null;
+  const rows = data?.data ?? [];
+
+  return (
+    <Card className="sm:col-span-2">
+      <CardHead title="My Players" badge={<Badge tone="live">Live</Badge>} />
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="text-[10px] uppercase tracking-wide text-faint">
+            <th className="pb-2 font-semibold">Player</th>
+            <th className="pb-2 text-right font-semibold">G</th>
+            <th className="pb-2 text-right font-semibold">FPTS</th>
+            <th className="pb-2 text-right font-semibold">FPPG</th>
+          </tr>
+        </thead>
+        <tbody>
+          {isLoading && (
+            <tr><td colSpan={4} className="py-6 text-center text-muted">Loading…</td></tr>
+          )}
+          {!isLoading && rows.length === 0 && (
+            <tr>
+              <td colSpan={4} className="py-6 text-center text-muted">
+                No {SEASON} stats yet for your watchlist.
+              </td>
+            </tr>
+          )}
+          {rows.map((row) => (
+            <tr key={row.player_id} className="border-t border-line">
+              <td className="py-2">
+                <Link to={`/players/${row.player_id}`} className="font-semibold text-fg hover:text-accent">
+                  {row.name}
+                </Link>
+                <PosTag pos={row.position} />
+              </td>
+              <td className="stat-num py-2 text-right text-muted">{row.games_played}</td>
+              <td className="stat-num py-2 text-right font-semibold text-accent">
+                {formatStat(row[pointsKey], 1)}
+              </td>
+              <td className="stat-num py-2 text-right text-muted">{formatStat(row[ppgKey], 2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {playerIds.length > rows.length && rows.length > 0 && (
+        <p className="mt-2 text-xs text-faint">
+          Showing {rows.length} of {playerIds.length} watchlisted players.
+        </p>
+      )}
     </Card>
   );
 }
@@ -259,6 +329,9 @@ export function Home() {
             </table>
           )}
         </Card>
+
+        {/* Watchlist (M5) — only present once the user has starred someone. */}
+        <WatchlistCard params={params} pointsKey={pointsKey} ppgKey={ppgKey} />
 
         {/* Scoring explainer (span 2) + two entry tiles. */}
         <Card className="flex flex-col justify-between sm:col-span-2">

@@ -3,6 +3,7 @@
 // columns (gaps and trends) are tinted positive/negative because their sign is the
 // whole point — "+4.6 over expected" and "−4.6" mean opposite things.
 import { Link } from "react-router-dom";
+import { FavoriteStar } from "./FavoriteStar";
 import { formatStat } from "../utils/format";
 
 export function StatTable({
@@ -61,9 +62,14 @@ export function StatTable({
             <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
               <td className="stat-num px-3 py-2.5 text-right text-faint">{offset + index + 1}</td>
               <td className="px-3 py-2.5 font-medium">
-                <Link to={`/players/${row.player_id}`} className="text-fg hover:text-accent hover:underline">
-                  {row.name}
-                </Link>
+                <span className="flex items-center gap-1.5">
+                  {/* Renders nothing when signed out, so the column keeps its
+                      pre-M5 width for a signed-out visitor. */}
+                  <FavoriteStar playerId={row.player_id} size="h-3.5 w-3.5" />
+                  <Link to={`/players/${row.player_id}`} className="text-fg hover:text-accent hover:underline">
+                    {row.name}
+                  </Link>
+                </span>
               </td>
               <td className="px-3 py-2.5">
                 <span className="stat-num text-xs text-muted">{row.team_abbreviation ?? "—"}</span>
