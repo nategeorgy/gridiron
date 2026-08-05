@@ -74,10 +74,12 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `GridironIQ-Technical-Walkthrough.docx` | doc | A standalone Word write-up (not wired into the code). |
 | `.git/` | git | Git's internal history. Never edit by hand. |
 
-> **Note on the three `.venv/` folders.** `backend/`, `pipeline/` each have their own
-> `.venv/` (a private Python virtual environment with that app's installed
-> dependencies). They are git-ignored and machine-local — not part of the source you
-> edit. The frontend's equivalent is `frontend/node_modules/`.
+> **Note on `.venv/`.** `backend/` and `pipeline/` share a **single** Python virtual
+> environment at the repo root (`.venv/`), which is why commands in those folders call
+> `../.venv/bin/…` — including `.claude/launch.json`. It is git-ignored and
+> machine-local, not part of the source you edit. Must be **Python 3.12**:
+> `psycopg2-binary` publishes no wheels for 3.13+, and building from source needs
+> `pg_config` on your PATH. The frontend's equivalent is `frontend/node_modules/`.
 
 ---
 
@@ -240,7 +242,7 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `routers/health.py` | `GET /health` — confirms the API and DB are alive. Used by Render's health check. |
 | `routers/players.py` | `GET /players` (search/list), `/players/{id}` (profile), `/players/{id}/stats` (game log), `/players/{id}/intelligence` (M3 scores + breakdown), `/players/{id}/target-depth` (M4 depth buckets). |
 | `routers/teams.py` | `GET /teams` (list), `/teams/leaderboard` (ranked team offense), `/teams/{id}/stats` (one team's season totals). |
-| `routers/stats.py` | ⭐ `GET /stats/leaderboard` — the filterable player leaderboard. Two modes: **season aggregate** (one row per player) and **single week** (raw game lines). Uses the scoring engine + metric registry. The most important endpoint. Also `GET /stats/intelligence` (M3) — the Insight board; it computes the whole position pool first (scores are relative), then sorts and paginates in Python. Plus the two M4 Explore endpoints: **`/stats/scatter`** (any two metrics, season or per-player-week; routes through the intelligence engine only when an axis needs it) and **`/stats/compare`** (≤5 players with within-position percentiles and weekly series). |
+| `routers/stats.py` | ⭐ `GET /stats/leaderboard` — the filterable player leaderboard. Two modes: **season aggregate** (one row per player) and **single week** (raw game lines). Uses the scoring engine + metric registry. The most important endpoint. Also `GET /stats/intelligence` (M3) — the Insight board; it computes the whole position pool first (scores are relative), then sorts and paginates in Python. Plus the two M4 Explore endpoints: **`/stats/scatter`** (any two metrics, season or per-player-week, `rank_by` before capping, `position=FLEX`; routes through the intelligence engine only when an axis needs it) and **`/stats/compare`** (≤5 players, metrics intersected across their positions, plus percentiles and weekly series). Note the *endpoints* stay general — the **UI** is what's curated (`constants/scatters.js`), so a new chart needs no backend change. |
 | `routers/metrics.py` | `GET /metrics` — serves the whole metric registry to the frontend. |
 | `utils/` | Shared backend helpers (currently just a placeholder `.gitkeep`). |
 

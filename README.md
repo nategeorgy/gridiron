@@ -24,7 +24,9 @@ Three fully decoupled apps (frontend talks to backend over HTTP only):
 ## Prerequisites
 
 - **Docker Desktop** — runs the local PostgreSQL instance
-- **Python 3.12** — for `backend/` and `pipeline/` (already set up in each `.venv`)
+- **Python 3.12** — for `backend/` and `pipeline/`, which share one `.venv/` at the
+  repo root. Use 3.12 specifically: `psycopg2-binary` has no wheels for 3.13+ and
+  building it from source needs `pg_config` on your PATH.
 - **Node 20+** — for the Vite frontend
 
 ## Running locally
@@ -48,8 +50,7 @@ on `localhost:5432`.
 ### 2. Backend
 
 ```bash
-cd gridiron/backend
-.venv/bin/uvicorn app.main:app --reload --port 8000
+cd gridiron/backend && ../.venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
 `--reload` auto-restarts on code edits. Docs at http://localhost:8000/docs.
@@ -78,28 +79,34 @@ Only needed on a fresh machine (the steps above are enough day-to-day):
 cp .env.example backend/.env
 cp .env.example frontend/.env
 
-# Backend deps + database schema
-cd backend && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/alembic upgrade head
+# One virtualenv at the repo root, shared by backend/ and pipeline/
+python3.12 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt -r pipeline/requirements.txt
 
-# Pipeline deps + data ingestion (see pipeline/README.md for details)
+# Database schema
+cd backend && ../.venv/bin/alembic upgrade head
+
+# Data ingestion (see pipeline/README.md for details)
 # Run in this order — each step depends on the rows the previous one wrote.
-cd ../pipeline && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python ingest_teams.py
-.venv/bin/python ingest_players.py
-.venv/bin/python ingest_schedules.py --seasons 2020 2021 2022 2023 2024 2025
-.venv/bin/python ingest_stats.py     --seasons 2020 2021 2022 2023 2024 2025
-.venv/bin/python ingest_expected.py  --seasons 2020 2021 2022 2023 2024 2025
-.venv/bin/python ingest_usage.py     --seasons 2020 2021 2022 2023 2024 2025
+cd ../pipeline
+../.venv/bin/python ingest_teams.py
+../.venv/bin/python ingest_players.py
+../.venv/bin/python ingest_schedules.py     --seasons 2020 2021 2022 2023 2024 2025
+../.venv/bin/python ingest_stats.py         --seasons 2020 2021 2022 2023 2024 2025
+../.venv/bin/python ingest_expected.py      --seasons 2020 2021 2022 2023 2024 2025
+../.venv/bin/python ingest_usage.py         --seasons 2020 2021 2022 2023 2024 2025
+../.venv/bin/python ingest_target_depth.py  --seasons 2020 2021 2022 2023 2024 2025
 
 # Frontend deps
 cd ../frontend && npm install
 ```
 
-> **Don't skip the last two.** `ingest_expected.py` (expected components + market
-> share) and `ingest_usage.py` (snaps + routes) fill columns the Expected Points
-> board and *every* Insight score depend on. Skip them and those pages render
-> empty rather than erroring — a confusing failure to debug.
+> **Don't skip the last three.** `ingest_expected.py` (expected components +
+> market share), `ingest_usage.py` (snaps + routes), and `ingest_target_depth.py`
+> (targets by pass depth) fill the columns and table that the Expected Points
+> board, *every* Insight score, and the player-page depth chart depend on. Skip
+> them and those pages render empty rather than erroring — a confusing failure to
+> debug.
 
 > **Your data persists.** Postgres data lives in the `gridiron_pgdata` Docker
 > volume, so it survives reboots and `docker compose down`. The only command
@@ -119,7 +126,9 @@ Shipped so far:
 | **M1** | Scoring-aware fantasy engine — every fantasy number recomputes to your exact league scoring, from a single metric registry |
 | **M2** | Expected fantasy points (scoring-aware), market share, goal-line carries, snap + route usage |
 | **M3** | Fantasy intelligence — VORP, Fantasy Opportunity Rating, Buy-Low and Sell-High indices, plus league context (size + starting lineup) |
+| **M4** | Exploration & viz — a curated scatter builder (19 charts across six position groups, players drawn as headshots), a comparison builder (up to 5 players, showing who leads each stat and by how much), usage and target-depth charts on player pages, and CSV export everywhere |
 
-**Next up: M4 — Exploration & Viz** (scatter builder, player comparison, richer
-player-page charts, export). See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the
-full plan and [`CLAUDE.md`](./CLAUDE.md) for detailed status.
+**Next up: M5 — Accounts & Saved State** (Supabase Auth, saved views and
+favourites; every view is already URL-shareable, so accounts become a sync
+problem rather than a rebuild). See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for
+the full plan and [`CLAUDE.md`](./CLAUDE.md) for detailed status.

@@ -399,8 +399,8 @@ GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdo
 GET /api/v1/players/{player_id}/target-depth ← M4 targets by pass depth
 GET /api/v1/stats/leaderboard                ← filterable leaderboard
 GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / buy / sell)
-GET /api/v1/stats/scatter                    ← M4 any two metrics, season or per-week
-GET /api/v1/stats/compare                    ← M4 up to 5 players + percentiles
+GET /api/v1/stats/scatter                    ← M4 any two metrics (UI offers presets only)
+GET /api/v1/stats/compare                    ← M4 up to 5 players, position-intersected
 GET /api/v1/metrics                          ← metric registry
 GET /api/v1/teams                            ← all teams
 GET /api/v1/teams/{team_id}/stats            ← team stats
@@ -541,11 +541,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       (+ Expected Points board and expected-vs-actual player pages), market share,
       inside-10/5/2 carries, snap + route usage backfilled 2020–2025
       (see [`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md))
-- [x] M4 — Exploration & Viz: scatter builder + comparison builder (a fourth nav
-      dropdown, **Explore ▾**), usage and target-depth charts on player pages, CSV
-      export on every board, and a custom-metric builder (`custom=`, a third
-      per-request config) that also defines two new built-in metrics. One new table,
-      `player_target_depth`, backfilled 2020–2025
+- [x] M4 — Exploration & Viz: a **curated** scatter builder (19 pre-canned charts
+      across six position groups, players drawn as headshots) + a comparison builder
+      (lead margins, not percentiles; metrics intersected across positions) in a
+      fourth nav dropdown, **Explore ▾**; usage and target-depth charts on player
+      pages; CSV export on every board. The custom-metric **engine** ships (`custom=`,
+      a third per-request config) and defines two new built-in metrics — its
+      **builder UI is deferred**. One new table, `player_target_depth`, backfilled
+      2020–2025 locally *and on Supabase*
       (see [`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md))
 - [x] M3 — Fantasy Intelligence: VORP, Fantasy Opportunity Rating, Positive-Regression
       (buy-low) and Sell-High indices; league context (size + starting lineup) as a
