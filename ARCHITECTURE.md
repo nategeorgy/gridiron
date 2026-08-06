@@ -52,10 +52,11 @@ the backend talks to the database; the pipeline is the only thing that writes bu
 NFL data. Nothing skips a layer.
 
 **Accounts (M5) do not break that rule.** Supabase Auth is a fourth party, but it is
-used *only* as a token issuer: the browser gets a signed JWT from it and sends that to
-FastAPI, which verifies it and reads/writes the account tables itself. The frontend
-never reads application data from Supabase directly — that would put authorization in
-dashboard-managed RLS policies instead of in reviewable Python.
+used *only* as a token issuer: the browser gets a signed JWT from it (via email +
+password or a magic link) and sends that to FastAPI, which verifies it and reads/writes
+the account tables itself. The frontend never reads application data from Supabase
+directly — that would put authorization in dashboard-managed RLS policies instead of in
+reviewable Python.
 
 ---
 
@@ -156,7 +157,8 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | **`components/`** | UI | Reusable pieces used by pages. |
 | `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the four dropdowns — Insight / Explore / Fantasy / NFL — and Teams), search box, the theme toggle, and **the account menu**; renders the current page inside. Also the single mount point for `useProfileSync`. The page background (the Liquid Glass "environment") is painted on `<body>`. |
 | `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
-| `components/AccountMenu.jsx` | UI | ⭐ **The header account control (M5).** A Google *Sign in* button when signed out; an avatar dropdown when signed in — league profiles (switch or delete), saved views (open or delete), and sign out. Renders **nothing** when the build has no Supabase project configured. |
+| `components/AccountMenu.jsx` | UI | ⭐ **The header account control (M5).** A *Sign in* button when signed out; an avatar dropdown when signed in — league profiles (switch or delete), saved views (open or delete), and sign out. Renders **nothing** when the build has no Supabase project configured. Mounts `AuthDialog` in *both* branches, because a password-reset link signs the user in before they set the new password. |
+| `components/AuthDialog.jsx` | UI | ⭐ **The sign-in surface (M5)**: password sign-in, sign-up, magic link, forgot-password, a "check your inbox" state, and a set-a-new-password form entered only via Supabase's `PASSWORD_RECOVERY` event. **Portalled to `document.body`** — it renders from inside the sticky header, and `.glass-header`'s `backdrop-filter` makes that a containing block for `position: fixed`, which would otherwise clip the overlay to the header. Any future modal opened from the header needs the same treatment. |
 | `components/LeagueProfileBar.jsx` | UI | ⭐ **The account layer on the scoring editor (M5)**, mounted inside `ScoringControl` (the one surface present on every page with either editor). Save the current scoring+league as a named profile, update the active one, or revert to it. Editing scoring never silently rewrites a saved profile — an edit is a URL override, committing it is explicit. Hidden when signed out. |
 | `components/FavoriteStar.jsx` | UI | ⭐ **The watchlist star (M5)** on player pages and every board row. Optimistic toggle. Hidden when signed out, so the Player column keeps its pre-M5 width for a visitor. |
 | `components/WatchlistToggle.jsx` | UI | ⭐ **The "watchlist only" board filter (M5)** + its `useWatchlistFilter` hook. Disabled (not hidden) when nothing is starred, so the feature is discoverable from the boards. Emits `player_ids` for a **server-side** filter. |
@@ -184,7 +186,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/usePlayerSearch.js` | data | Fetches header search results (fires only at ≥2 chars). |
 | `hooks/useMetrics.js` | data | Fetches the metric registry from the backend; exposes a `supportsScoring` capability flag. Seeded with bundled constants so the UI is never blank. |
 | `hooks/useInsight.js` | data | Fetches the intelligence board (`useIntelligence`) and one player's scores (`usePlayerIntelligence`). |
-| `hooks/useAuth.jsx` | state | ⭐ **Auth state for the whole app (M5)** — `AuthProvider` + `useAuth`. Mirrors the Supabase session into React and drops cached `["account", …]` queries on any auth change, so one user's saved state can never flash in front of the next. Signed-out is a first-class state. |
+| `hooks/useAuth.jsx` | state | ⭐ **Auth state for the whole app (M5)** — `AuthProvider` + `useAuth`. Mirrors the Supabase session into React and drops cached `["account", …]` queries on any auth change, so one user's saved state can never flash in front of the next. Also tracks `isRecovering` (set by Supabase's `PASSWORD_RECOVERY` event) so the UI asks for a new password instead of behaving like a normal sign-in. Signed-out is a first-class state. |
 | `hooks/useAccount.js` | data | ⭐ **React Query over the account API (M5)**: `useAccount`, `useLeagueProfiles`, `useFavorites` (with an optimistic star toggle), `useSavedViews`. All disabled when signed out, so a visitor never fires a request that would 401. |
 | `hooks/useProfileSync.js` | state | ⭐ **Keeps `localStorage` and the active profile coherent (M5).** On first sign-in with no profiles, migrates pre-account scoring/league into a profile named **"My League"**; thereafter mirrors the active profile *back* into `localStorage`, which is what lets the state hooks resolve correctly on first paint. Mounted once, in `Layout`. |
 | `hooks/useUrlState.js` | state | ⭐ **A filter that lives in the query string (M5).** Keeps defaults out of the URL and validates against an optional whitelist, so a param carried over from another board falls back instead of wedging the view. Backfills the spine-C promise the 17 boards had never actually kept. |
@@ -194,7 +196,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/useDebounce.js` | util | Debounces a fast-changing value (used to throttle search-as-you-type). |
 | **`services/`** | network | The **only** place HTTP calls live. One function per endpoint. |
 | `services/api.js` | network | The shared axios instance; sets the base URL to `{VITE_API_BASE_URL}/api/v1`. A request interceptor attaches the Supabase access token as `Authorization: Bearer …` when there is one. Everything else imports this. |
-| `services/supabase.js` | network | ⭐ **The Supabase client (M5), used *only* as a token issuer** — it runs the Google OAuth flow and holds the session, and never reads or writes application data. Exports `authConfigured`, which is false (and the whole account UI absent) when the env vars are unset. |
+| `services/supabase.js` | network | ⭐ **The Supabase client (M5), used *only* as a token issuer** — sign-up, password sign-in, magic link, password reset, and session refresh. It never reads or writes application data. Exports `authConfigured`, which is false (and the whole account UI absent) when the env vars are unset. |
 | `services/account.js` | network | ⭐ **The account API (M5)**: `/me`, league profiles, favorites, saved views. |
 | `services/stats.js` | network | `getLeaderboard(params)` → `/stats/leaderboard`; `getScatter(params)` → `/stats/scatter`; `getCompare(params)` → `/stats/compare`. |
 | `services/insight.js` | network | `getIntelligence(params)` → `/stats/intelligence`; `getPlayerIntelligence(id, params)` → `/players/{id}/intelligence`. |
@@ -237,7 +239,7 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `main.py` | **App entry point.** Creates the FastAPI app, configures CORS (which frontend origins may call it), and wires up all the routers under `/api/v1`. |
 | `config.py` | Loads settings from environment variables / `.env` (database URL, environment, allowed CORS origins, **Supabase auth**) via Pydantic. In **development** it also allows any `localhost` port, so a dev server on an auto-assigned port isn't blocked by CORS. `auth_enabled` is false until `SUPABASE_URL` is set, which is what lets the whole public API run on a fresh checkout with no Supabase project. |
 | `database.py` | Creates the SQLAlchemy engine + session factory, and the `get_db()` dependency every endpoint uses to get a database session. |
-| `auth.py` | ⭐ **Supabase JWT verification (M5)** — the only place a token becomes an identity. Supports both **asymmetric** signing (public keys from the project's JWKS, the current Supabase default) and **legacy HS256**, chosen by the token header's `alg`, so a project can migrate without a code change. Checks signature, expiry, issuer, and audience, then **provisions the local `users` row just-in-time** — no webhook, no second source of truth. Exports `get_current_user` (401s) and `get_optional_user` (returns `None`). |
+| `auth.py` | ⭐ **Supabase JWT verification (M5)** — the only place a token becomes an identity. Supports both **asymmetric** signing (public keys from the project's JWKS, the current Supabase default) and **legacy HS256**, chosen by the token header's `alg`, so a project can migrate without a code change. Checks signature, expiry, issuer, and audience, then **provisions the local `users` row just-in-time** — no webhook, no second source of truth. Deliberately knows **nothing about how the user signed in**: swapping Google OAuth for email auth changed one line here (a `display_name` fallback to the email's local part, since email sign-ups may carry no name). Exports `get_current_user` (401s) and `get_optional_user` (returns `None`). |
 | `scoring.py` | ⭐ **The scoring-aware fantasy engine (architecture "spine A").** Turns a league-scoring string like `"ppr:pass_td=6,te_rec=1.5"` into a `ScoringConfig`, and computes fantasy points from raw stat components — both as a SQL expression (for sorting/ranking in the DB) and in Python (for display). Fantasy points are **computed live, never stored per-scoring.** |
 | `league.py` | ⭐ **League context (M3).** Turns a league string like `"10:rb=2,flex=2"` into a `LeagueConfig` (teams + starting lineup) and derives the **replacement rank per position** — flex slots shared across RB/WR/TE in proportion to the lineup's flex-eligible starters, superflex credited to QB. The second per-request config alongside scoring; it's what makes *value* league-aware. |
 | `metrics.py` | ⭐ **The metric registry (architecture "spine B").** One canonical definition per metric (id, label, short label, description, format, category, how it aggregates, which positions it applies to). The single source of truth for metric metadata — the leaderboard reads aggregation behavior from here, and the frontend fetches it via `/metrics`. **Adding a stat starts here.** |
@@ -365,7 +367,9 @@ The four Supabase variables are optional by design: with them unset the app runs
 exactly as it did before M5, minus the sign-in button, and the `/me` endpoints return
 503 rather than a confusing 401. See
 [`docs/design/M5-accounts-saved-state.md`](docs/design/M5-accounts-saved-state.md) §8
-for the one-time Google/Supabase console setup.
+for the one-time Supabase setup — including **configuring a real SMTP sender**, which
+is a launch requirement rather than a nicety, since sign-up confirmation, magic links,
+and password resets all depend on mail arriving.
 
 The template with all of these and copy instructions is [`.env.example`](.env.example).
 
@@ -509,6 +513,17 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-08-05** — M5 auth swapped to email, before merge. Google OAuth replaced by
+  **email + password *and* magic link** (see the ROADMAP decision log). New
+  `components/AuthDialog.jsx` (sign-in / sign-up / magic link / forgot / check-inbox /
+  set-new-password), rewritten `services/supabase.js`, and `hooks/useAuth.jsx` now
+  tracks `isRecovering` from Supabase's `PASSWORD_RECOVERY` event. Backend change was
+  one line — a `display_name` fallback to the email's local part — which is the payoff
+  from `app/auth.py` never knowing how the user signed in. Two bugs found and fixed by
+  looking: the dialog needed a **portal** (the header's `backdrop-filter` was clipping
+  a `position: fixed` overlay), and it had to mount in the *signed-in* branch too
+  (a reset link signs you in). Setup no longer needs a Google OAuth app, but now
+  requires a real **SMTP sender**.
 - **2026-08-05** — M5: accounts & saved state. **Auth:** `app/auth.py` verifies
   Supabase-issued JWTs (asymmetric JWKS *and* legacy HS256) and provisions the local
   `users` mirror just-in-time; Supabase is used purely as a token issuer, so the

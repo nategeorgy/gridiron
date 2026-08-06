@@ -368,7 +368,8 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
   custom-metric **engine** ships (it evaluates the registry's `composite` metrics); its
   builder **UI** is deferred, as is PNG export until there's a brand to watermark with.
 
-- **M5 — Accounts & Saved State** (✅ SHIPPED): Google sign-in via Supabase Auth, with
+- **M5 — Accounts & Saved State** (✅ SHIPPED): email sign-in — **password *or* magic
+  link**, no third-party account needed — via Supabase Auth, with
   FastAPI verifying the token and owning all account data. Ships **multiple named
   league profiles** (each a bundle of a scoring spec + a league spec), a **favorites
   watchlist** (star, filter, "My Players" tile), and **saved views** (any board,
@@ -574,8 +575,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       **builder UI is deferred**. One new table, `player_target_depth`, backfilled
       2020–2025 locally *and on Supabase*
       (see [`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md))
-- [x] M5 — Accounts & Saved State: Supabase Google OAuth (token issuer only) verified by
-      `app/auth.py`; four cascading tables (`users`, `league_profiles`, `favorites`,
+- [x] M5 — Accounts & Saved State: Supabase email auth — password + magic link, token
+      issuer only — verified by `app/auth.py`; four cascading tables (`users`, `league_profiles`, `favorites`,
       `saved_views`, migration `990003c7c7cf`); `/me` endpoints scoped entirely to the
       token subject; header account menu, profile bar on the scoring editor, watchlist
       star + server-side board filter, saved views, and a "My Players" tile. Also
@@ -647,6 +648,12 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   signing in, and no account UI renders when signed out or when Supabase is
   unconfigured. Any new account-aware control must be invisible (or, if it aids
   discovery, disabled) rather than a prompt to sign up
+- **`app/auth.py` must never learn how a user signed in.** It verifies whatever Supabase
+  signs. That is why swapping Google OAuth for email auth cost one backend line; keep it
+  that way, and add sign-in methods purely in `services/supabase.js` + `AuthDialog`
+- **A modal opened from the header must be portalled to `document.body`.**
+  `.glass-header`'s `backdrop-filter` makes it a containing block for `position: fixed`,
+  so an overlay rendered inside it gets clipped to the header instead of the viewport
 - **The URL outranks the account.** Scoring/league resolve
   `URL > active profile > localStorage > default`. Never invert this: a shared link
   carrying `?scoring=` has to show the sender's league to whoever opens it

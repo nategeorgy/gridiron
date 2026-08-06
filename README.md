@@ -127,7 +127,7 @@ Shipped so far:
 | **M2** | Expected fantasy points (scoring-aware), market share, goal-line carries, snap + route usage |
 | **M3** | Fantasy intelligence — VORP, Fantasy Opportunity Rating, Buy-Low and Sell-High indices, plus league context (size + starting lineup) |
 | **M4** | Exploration & viz — a curated scatter builder (19 charts across six position groups, players drawn as headshots), a comparison builder (up to 5 players, showing who leads each stat and by how much), usage and target-depth charts on player pages, and CSV export everywhere |
-| **M5** | Accounts & saved state — sign in with Google to keep **multiple named league profiles**, a **watchlist** of players (star them, filter any board to them, see them on the home page), and **saved views** of any board or chart. Nothing is behind a login: every page and share link works signed out exactly as before |
+| **M5** | Accounts & saved state — sign in with an email and password, or just have a link emailed to you, to keep **multiple named league profiles**, a **watchlist** of players (star them, filter any board to them, see them on the home page), and **saved views** of any board or chart. Nothing is behind a login: every page and share link works signed out exactly as before |
 
 **Next up: M6 — New Data Domains** (depth charts, strength of schedule, a Vegas
 board, and consensus projections). See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for

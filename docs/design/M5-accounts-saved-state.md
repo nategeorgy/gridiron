@@ -3,7 +3,7 @@
 > Status: in progress. Milestone: [`docs/ROADMAP.md`](../ROADMAP.md) → M5.
 > Depends on M1 (scoring config), M3 (league config), M4 (state worth saving).
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 M1–M4 gave a user a lot of state worth keeping: their exact league scoring, their
 league size and lineup, a scatter they liked, five players they keep comparing, a board
@@ -50,14 +50,29 @@ between them. No page or hook that reads scoring today needs to know accounts ex
 
 ## 2. Auth — Supabase issues, FastAPI verifies
 
-Google OAuth is the only sign-in method. No passwords, no reset flow, no email
-deliverability problem, one tap.
+Two sign-in methods, both email-based, neither requiring an account with any third
+party:
+
+- **Email + password** — the familiar path, and the one that still works when a user's
+  mail is slow, filtered, or on a different device.
+- **Email magic link** — nothing to invent or remember. Also the recovery path for
+  anyone who set a password and forgot it.
+
+They are deliberately complementary rather than redundant. A magic link is the lowest
+-friction way to *start*; a password is the most reliable way to *return*, because it
+does not depend on an email arriving. Offering only one would strand users at whichever
+point that one fails.
+
+> **Superseded (2026-08-05).** This originally shipped as Google OAuth only. Swapped
+> before merge — see the decision log entry in `ROADMAP.md`. The backend was almost
+> unaffected, which is the point of the split below: `app/auth.py` verifies whatever
+> Supabase signs and has never cared how the user proved who they were.
 
 The split of responsibility:
 
 | Concern | Owner |
 |---|---|
-| OAuth dance, session, refresh tokens | Supabase Auth (via `@supabase/supabase-js` in the browser) |
+| Sign-up, password check, emailing links, session refresh | Supabase Auth (via `@supabase/supabase-js` in the browser) |
 | Access token → identity | `app/auth.py`, verifying the JWT |
 | Who owns what data | FastAPI + SQLAlchemy, exactly like every other table |
 
@@ -102,6 +117,29 @@ The row is **provisioned just-in-time**: the first authenticated request from an
 `sub` inserts it (`ON CONFLICT DO UPDATE` on the profile fields, matching the pipeline's
 idempotency rule). No webhook, no sync job, no second source of truth that can drift —
 if you can present a valid token, your row exists by the time the handler runs.
+
+`display_name` falls through `full_name` → `name` → `user_name` → **the email's local
+part**. That last fallback matters for email sign-up, where a name is optional and the
+token's metadata may be empty; `avatar_url` is simply null, and the UI renders an
+initial, which for email accounts is the normal case rather than a degraded one.
+
+### The client-side flow
+
+`AuthDialog` is the whole surface: sign-in, sign-up, magic link, forgot-password, a
+"check your inbox" terminal state, and a set-a-new-password form. That last mode is
+never chosen — it is entered when Supabase fires `PASSWORD_RECOVERY`, which happens
+after someone follows a reset link.
+
+Two consequences worth knowing:
+
+- **A reset link signs the user in.** So the recovery form has to be reachable from the
+  *signed-in* branch of the header menu, not just the signed-out one. `AccountMenu`
+  mounts `AuthDialog` in both.
+- **The dialog is portalled to `document.body`.** It renders from inside the sticky
+  header, and `.glass-header`'s `backdrop-filter` makes that header a containing block
+  for `position: fixed` descendants — so without the portal the overlay is positioned
+  against the header and clipped to it instead of covering the viewport. Any future
+  modal rendered from the header has the same constraint.
 
 ---
 
@@ -288,8 +326,8 @@ is no shape of request that can read another user's rows.
   dashboard does not rearrange itself around your league. That is a bigger design job
   than the rest of the milestone combined and is better done once favorites have
   actually been used.
-- **No email/password or magic link.** Google only until there is evidence someone
-  bounced for want of an alternative.
+- **No social sign-in.** Email only. Adding a provider later is a Supabase toggle, one
+  `signInWithOAuth` call, and a button — `app/auth.py` never learns about it.
 - **No sharing a profile with another user.** URLs already share a setup perfectly.
 - **No league import.** M6+, needs a provider integration.
 - **No server-side session.** The Supabase token is the session; the API is stateless.
@@ -297,19 +335,30 @@ is no shape of request that can read another user's rows.
 ## 8. Setup (one-time, outside the codebase)
 
 Accounts stay dormant until these are configured, so the app is fully usable before any
-of it is done.
+of it is done. There is no third-party OAuth app to register.
 
-1. **Google Cloud console** → APIs & Services → Credentials → *Create OAuth client ID*
-   (Web application). Authorised redirect URI:
-   `https://<project-ref>.supabase.co/auth/v1/callback`. Copy the client ID and secret.
-2. **Supabase** → Authentication → Providers → *Google*: enable, paste the client ID and
-   secret. Under URL Configuration add the site URLs
-   (`http://localhost:5173`, the Vercel production URL, and the Vercel preview pattern).
-3. **Render** (backend env): `SUPABASE_URL`. Add `SUPABASE_JWT_SECRET` only if the
+1. **Supabase → Authentication → Providers → Email**: enable it. Leave *Confirm email*
+   on (the default) unless you want sign-ups usable instantly — the dialog handles both,
+   showing "check your inbox" only when a session was withheld.
+2. **Supabase → Authentication → URL Configuration**: set the Site URL, and add
+   redirect URLs as wildcards — `http://localhost:5173/**`, `https://<prod>.vercel.app/**`,
+   and the preview pattern. The wildcard matters: emailed links return the user to *the
+   page they started from*, not a fixed callback path, and an unlisted URL silently
+   falls back to the Site URL.
+3. **⚠️ Supabase → Project Settings → Auth → SMTP Settings**: configure a real sender
+   (Resend, Postmark, SendGrid). **Do this before any real traffic.** Supabase's
+   built-in mailer is rate-limited to a handful of messages per hour and its shared
+   sender frequently lands in spam. Every path here depends on email delivery —
+   confirmation, magic link, and password reset — so a throttled or spam-filed mailer
+   is not a cosmetic problem, it is the feature not working.
+4. **Render** (backend env): `SUPABASE_URL`. Add `SUPABASE_JWT_SECRET` only if the
    project still signs HS256.
-4. **Vercel** (frontend env): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
-5. Run the migration against Supabase (`alembic upgrade head` with `DATABASE_URL`
+5. **Vercel** (frontend env): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+6. Run the migration against Supabase (`alembic upgrade head` with `DATABASE_URL`
    pointed at it), as M4 did for `player_target_depth`.
+
+Optionally raise the password floor in **Authentication → Policies**; the UI already
+enforces 8 characters, above Supabase's default of 6.
 
 ## 9. Verification
 
@@ -334,11 +383,43 @@ menu, the Command Center watchlist tile, and sign-out clearing both the session 
 every account surface. Signed-out and Supabase-unconfigured builds render exactly as
 the pre-M5 app.
 
+**Email auth**, driven in a browser against a local stand-in for Supabase's auth
+endpoints that mints JWTs with the same secret and issuer the backend expects — so the
+whole loop was real from the app's side, with only email sending and the password check
+faked:
+
+| Flow | Result |
+|---|---|
+| Sign up (name + email + password) | confirmation "sent"; dialog shows *Check your email* |
+| Sign in with password | session issued → token → **backend verified it** and provisioned `pat@example.com` as *Pat Rivera* |
+| Magic link request | link "sent"; terminal state renders |
+| Password reset request | reset "sent" |
+| Arrive on a reset link | signs in, fires `PASSWORD_RECOVERY`, shows *Set a new password*; saving it reaches the server, clears the URL hash, and leaves the user signed in |
+| Sign out | session cleared, every account surface gone |
+
+Also checked: the 8-character floor disables submit and shows a warning; a network
+failure surfaces a readable message rather than "Failed to fetch"; `autocomplete` is
+`current-password` on sign-in and `new-password` on sign-up/recovery (so password
+managers behave); email persists across mode switches while the password field clears;
+and the dialog renders correctly in both themes.
+
+Email accounts with no name resolve `display_name` to the email's local part
+(`bare@example.com` → `bare`), verified directly against the API for the bare-metadata,
+named, and magic-link token shapes.
+
 ## 10. Known limits
 
-- **Google-only sign-in excludes anyone without a Google account** and couples signup to
-  one provider's availability. Mitigated by the fact that nothing is gated: a user who
-  cannot or will not sign in loses persistence, not the product.
+- **Everything depends on email delivery.** Confirmation, magic link, and password reset
+  all fail the same way if mail is throttled or filtered — see setup step 3. The
+  password path is the partial hedge: once an account exists and is confirmed, signing
+  in again needs no email at all, which is exactly why both methods ship rather than
+  magic link alone.
+- **Magic links use the implicit flow** (supabase-js's default), so the session arrives
+  in the URL fragment. That is what makes a link work when opened on a *different*
+  device from the one that requested it — a real scenario, since people read mail on
+  their phones. The cost is a short-lived access token in the URL hash, which the client
+  consumes and clears immediately. Switching to PKCE would tighten that at the price of
+  breaking cross-device links; worth revisiting only if the threat model changes.
 - **A saved view is a URL, so it inherits URL semantics** — including that a board which
   renames a query param orphans the old value. Accepted; the degradation is to defaults,
   not to an error.

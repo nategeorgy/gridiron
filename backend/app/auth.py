@@ -137,13 +137,20 @@ def _upsert_user(db: Session, claims: dict) -> User:
     except (TypeError, ValueError) as exc:
         raise _unauthorized("Token is missing a valid subject.") from exc
 
-    # Supabase puts the OAuth profile under user_metadata; the shape varies slightly
-    # by provider, so fall through the plausible keys rather than assuming one.
+    # Supabase puts the profile under user_metadata. Its shape varies by how the
+    # account was created, so fall through the plausible keys rather than assuming
+    # one — and for an email sign-up, where a name is optional, there may be nothing
+    # at all. The email's local part is a better last resort than a blank row.
     metadata = claims.get("user_metadata") or {}
-    display_name = (
-        metadata.get("full_name") or metadata.get("name") or metadata.get("user_name")
-    )
     email = claims.get("email") or metadata.get("email")
+    display_name = (
+        metadata.get("full_name")
+        or metadata.get("name")
+        or metadata.get("user_name")
+        or (email.split("@")[0] if email else None)
+    )
+    # Email accounts have no avatar; the UI renders an initial, which is the normal
+    # case rather than a fallback.
     avatar_url = metadata.get("avatar_url") or metadata.get("picture")
 
     now = datetime.now(timezone.utc)

@@ -6,24 +6,13 @@
 // showing a button that cannot work.
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { AuthDialog } from "./AuthDialog";
 import { useAuth } from "../hooks/useAuth";
 import { useLeagueProfiles, useSavedViews } from "../hooks/useAccount";
 import { scoringLabel } from "../constants/scoring";
 
-function GoogleMark() {
-  // Google's four-colour G. Fixed brand colours by design — this one mark is
-  // deliberately exempt from the theme tokens.
-  return (
-    <svg viewBox="0 0 18 18" className="h-4 w-4" aria-hidden="true">
-      <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.3-.2-1.9H9v3.5h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5z" />
-      <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18z" />
-      <path fill="#FBBC05" d="M3.9 10.7a5.4 5.4 0 0 1 0-3.4V5H.9a9 9 0 0 0 0 8l3-2.3z" />
-      <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 5l3 2.3C4.6 5.2 6.6 3.6 9 3.6z" />
-    </svg>
-  );
-}
-
 function Avatar({ user, size = "h-7 w-7" }) {
+  // Email accounts have no avatar, so the initial is the normal case, not a fallback.
   const url = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
   const name = user?.user_metadata?.full_name || user?.email || "?";
   if (url) {
@@ -38,11 +27,17 @@ function Avatar({ user, size = "h-7 w-7" }) {
   );
 }
 
+/** The display name for an email account, which may have no name set. */
+function displayName(user) {
+  return user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Signed in";
+}
+
 export function AccountMenu() {
-  const { authConfigured, isSignedIn, ready, user, signIn, signOut } = useAuth();
+  const { authConfigured, isSignedIn, ready, user, signOut } = useAuth();
   const { profiles, activeProfile, updateProfile, deleteProfile } = useLeagueProfiles();
   const { views, deleteView } = useSavedViews();
   const [open, setOpen] = useState(false);
+  const [authMode, setAuthMode] = useState(null);
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -68,22 +63,22 @@ export function AccountMenu() {
 
   if (!isSignedIn) {
     return (
-      <button
-        type="button"
-        disabled={!ready || busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await signIn();
-          } catch {
-            setBusy(false);
-          }
-        }}
-        className="btn-ghost flex items-center gap-2 px-3 py-1.5 text-sm font-medium transition hover:!text-accent"
-      >
-        <GoogleMark />
-        <span className="hidden sm:inline">Sign in</span>
-      </button>
+      <>
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => setAuthMode("signin")}
+          className="btn-ghost px-3 py-1.5 text-sm font-medium transition hover:!text-accent"
+        >
+          Sign in
+        </button>
+        {/* Also renders on its own when a password-reset link brings someone back. */}
+        <AuthDialog
+          open={authMode !== null}
+          mode={authMode ?? "signin"}
+          onClose={() => setAuthMode(null)}
+        />
+      </>
     );
   }
 
@@ -119,7 +114,7 @@ export function AccountMenu() {
             <Avatar user={user} size="h-9 w-9" />
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-fg">
-                {user?.user_metadata?.full_name || "Signed in"}
+                {displayName(user)}
               </div>
               <div className="truncate text-xs text-muted">{user?.email}</div>
             </div>
@@ -233,6 +228,10 @@ export function AccountMenu() {
         </div>
       )}
       {activeProfile && <span className="sr-only">Active league: {activeProfile.name}</span>}
+
+      {/* Mounted here too: following a password-reset link *signs you in*, so the
+          recovery form has to be reachable from the signed-in branch as well. */}
+      <AuthDialog open={false} onClose={() => {}} />
     </div>
   );
 }

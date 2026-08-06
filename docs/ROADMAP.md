@@ -169,11 +169,12 @@ The layer that lets someone ask their own question instead of picking from ours.
 Design note: [`design/M5-accounts-saved-state.md`](design/M5-accounts-saved-state.md).
 The completion of spine C: the same state, now following you between devices.
 - **Deps:** M1–M4 (state worth saving). **Data:** none — no NFL ingestion.
-- **Auth:** **Google OAuth only**, via Supabase Auth used *purely as a token issuer*.
-  FastAPI verifies the JWT (`app/auth.py` — asymmetric JWKS *and* legacy HS256) and
-  owns every account table through SQLAlchemy/Alembic. Deliberately **not** frontend →
-  Supabase with RLS: that would split the data layer and put authorization in
-  dashboard-managed policies instead of reviewable Python.
+- **Auth:** **email + password *and* email magic link** — no third-party account
+  required — via Supabase Auth used *purely as a token issuer*. FastAPI verifies the JWT
+  (`app/auth.py` — asymmetric JWKS *and* legacy HS256) and owns every account table
+  through SQLAlchemy/Alembic. Deliberately **not** frontend → Supabase with RLS: that
+  would split the data layer and put authorization in dashboard-managed policies instead
+  of reviewable Python.
 - **DB:** four cascading tables (migration `990003c7c7cf`) — `users` (the Supabase
   subject, mirrored just-in-time on first authenticated request), `league_profiles`,
   `favorites`, `saved_views`. A partial unique index enforces one active profile per
@@ -200,10 +201,12 @@ The completion of spine C: the same state, now following you between devices.
   browser, including that a watchlist-filtered board reports the *correct total* (proving
   a server-side filter, not a trimmed page) and that Insight percentiles are unchanged
   by filtering.
-- **Known limits:** Google-only sign-in; the watchlist filter passes ids in the query
-  string (the reason for the 300-favorite cap); and the repo still has **no automated
-  test suite**, so this — the first code where a bug means one user reading another's
-  data — is covered by scripted verification rather than committed tests.
+- **Known limits:** **every auth path depends on email delivery**, so a real SMTP sender
+  must be configured before real traffic (Supabase's built-in mailer is rate-limited and
+  spam-prone); the watchlist filter passes ids in the query string (the reason for the
+  300-favorite cap); and the repo still has **no automated test suite**, so this — the
+  first code where a bug means one user reading another's data — is covered by scripted
+  verification rather than committed tests.
 
 ### 🗓️ M6 — New Data Domains — M–L — **NEXT** (parallelizable after M1)
 Each sub-feature is its own deployable slice:
@@ -339,6 +342,25 @@ tells people it exists.
 
 ## Decision Log
 
+- **2026-08-05 — Email auth, both kinds, instead of Google OAuth.** M5 first shipped
+  Google-only sign-in; swapped before merge to **email + password *and* magic link**.
+  The two are complementary, not redundant: a magic link is the lowest-friction way to
+  *start* an account, and a password is the most reliable way to *return* to one,
+  because it does not depend on an email arriving. Shipping either alone strands users
+  at whichever point that one fails. It also drops the assumption that everyone has —
+  or wants to use — a Google account, and removes a third-party OAuth registration from
+  the setup. **Cost, and it is real: every path now depends on email delivery**, so a
+  proper SMTP sender is a launch requirement rather than a nicety; the password path is
+  the partial hedge, since a confirmed account signs in again with no email at all.
+  Magic links use the implicit flow so a link opened on a *different device* still
+  works — people read mail on their phones — at the price of a short-lived token in the
+  URL fragment, which the client consumes and clears.
+  **What this cost to change: almost nothing on the backend**, which is the payoff from
+  the "Supabase issues tokens, FastAPI owns the data" split. `app/auth.py` verifies
+  whatever Supabase signs and never knew how the user proved who they were; the only
+  edit was a `display_name` fallback to the email's local part, since email sign-ups may
+  carry no name. All the work was one new component (`AuthDialog`) and the service
+  functions behind it.
 - **2026-08-05 — Accounts sync state; they never gate it.** M5 adds no wall. Every
   board, Insight score, and share link works signed out exactly as before, and no
   account UI renders at all when signed out or when Supabase is unconfigured. Signing
