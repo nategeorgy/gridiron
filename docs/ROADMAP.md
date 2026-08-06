@@ -342,6 +342,21 @@ tells people it exists.
 
 ## Decision Log
 
+- **2026-08-06 — The platform runs a second API over your database.** Found during the
+  production rollout: Supabase serves the entire `public` schema through **PostgREST**
+  at `/rest/v1/`, and its default privileges grant the `anon` and `authenticated` roles
+  access to new tables. So the account tables — created by a plain Alembic migration —
+  would have been readable *and writable* by anyone holding the anon key, which is
+  public by design and ships in our JS bundle. `GET /rest/v1/users?select=*` would have
+  returned every user's email. None of the authorization in `routers/account.py` was
+  wrong; it was simply **bypassed**, by a door we did not know was open. Fixed in
+  migration `8f73b5b2b1a1`: RLS enabled on all four account tables with **no policies**,
+  plus an explicit revoke. The backend connects as the table owner, which bypasses RLS,
+  so nothing changed for the API (all 36 checks pass unchanged). No policies by design —
+  writing one starts down the road to the browser querying the database directly, which
+  is the architecture we rejected. **Generalised rule:** "the backend owns the data" is
+  a claim about code, and holds only while nothing else serves that database. On a
+  platform-as-a-database, audit what the platform exposes by default.
 - **2026-08-05 — Email auth, both kinds, instead of Google OAuth.** M5 first shipped
   Google-only sign-in; swapped before merge to **email + password *and* magic link**.
   The two are complementary, not redundant: a magic link is the lowest-friction way to

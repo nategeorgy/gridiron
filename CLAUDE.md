@@ -660,6 +660,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - **No account endpoint may accept a user id.** The id comes from the verified token
   and nowhere else, so no request shape can reach another user's rows. Filter every
   lookup on `user_id` *and* the primary key, so a guessed id 404s like a missing one
+- ⚠️ **Any new table holding user data must enable RLS in its migration** (see
+  `8f73b5b2b1a1`). Supabase serves the whole `public` schema through PostgREST, and its
+  default privileges grant the public `anon` key access — so a user-data table without
+  RLS is world-readable *and writable*, bypassing the API entirely. The backend connects
+  as the table owner and bypasses RLS, so this costs nothing. Create **no policies**:
+  a policy is the first step toward the browser talking to the database directly, which
+  this architecture rejects. NFL reference tables are exempt (public read-only data)
 - **Board filters belong in the URL** (`useUrlState`), not `useState` — that is what
   makes a board link shareable and a saved view worth saving. Keep defaults out of the
   query string, and pass a whitelist for anything the API would reject
