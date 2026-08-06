@@ -10,26 +10,32 @@ import { ScoringControl } from "../components/ScoringControl";
 import { LeagueControl } from "../components/LeagueControl";
 import { StatTable, TablePager } from "../components/StatTable";
 import { ExportButton } from "../components/ExportButton";
+import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
+import { SaveViewButton } from "../components/SaveViewButton";
 import { buildBoardExport } from "../utils/csv";
 import { useIntelligence } from "../hooks/useInsight";
 import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
+import { useUrlState } from "../hooks/useUrlState";
 import { INSIGHT_TIMEFRAMES, POSITIONS, SEASONS, SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
 const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
 
 export function InsightView({ board }) {
-  const [season, setSeason] = useState(String(SEASONS[0]));
-  const [lastWeeks, setLastWeeks] = useState("");
-  const [position, setPosition] = useState(board.defaultPosition);
-  const [seasonType, setSeasonType] = useState("REG");
-  const [metric, setMetric] = useState(board.defaultSort);
+  // URL-backed for the same reasons as the leaderboard: shareable links and saved
+  // views that actually carry a view.
+  const [season, setSeason] = useUrlState("season", String(SEASONS[0]));
+  const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "");
+  const [position, setPosition] = useUrlState("position", board.defaultPosition ?? "");
+  const [seasonType, setSeasonType] = useUrlState("type", "REG");
+  const [metric, setMetric] = useUrlState("metric", board.defaultSort, board.columns);
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
   const [league, setLeague] = useLeague();
   const { metrics } = useMetrics();
+  const watchlist = useWatchlistFilter();
 
   const params = useMemo(
     () => ({
@@ -41,10 +47,15 @@ export function InsightView({ board }) {
       scoring,
       league,
       order: "desc",
+      // Narrows the output only — scores stay relative to the full position pool.
+      ...watchlist.params,
       limit: PAGE_SIZE,
       offset,
     }),
-    [season, lastWeeks, position, seasonType, metric, scoring, league, offset],
+    [
+      season, lastWeeks, position, seasonType, metric, scoring, league, offset,
+      watchlist.params.player_ids,
+    ],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useIntelligence(params);
@@ -82,7 +93,9 @@ export function InsightView({ board }) {
         <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
-        <div className="ml-auto flex items-end">
+        <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
+        <div className="ml-auto flex items-end gap-2">
+          <SaveViewButton defaultName={board.title} />
           <ExportButton
             filename={`gridironiq-${board.id}-${season}`}
             rows={exportData.rows}

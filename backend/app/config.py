@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     # without listing each one. Override or clear via the CORS_ORIGIN_REGEX env var.
     cors_origin_regex: str = r"https://gridiron-[a-z0-9-]+\.vercel\.app"
 
+    # --- Supabase Auth (M5) ---
+    # The project URL, e.g. https://abcdefgh.supabase.co. Used to derive the token
+    # issuer and the JWKS endpoint. Leave empty to run the API with accounts
+    # disabled: every public endpoint keeps working and the /me endpoints return 503.
+    supabase_url: str = ""
+    # Only needed for projects still on legacy symmetric (HS256) JWT signing. Newer
+    # Supabase projects sign asymmetrically and publish public keys at the JWKS
+    # endpoint, which needs no secret here. See app/auth.py.
+    supabase_jwt_secret: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -42,6 +52,32 @@ class Settings(BaseSettings):
             localhost = r"http://(localhost|127\.0\.0\.1):\d+"
             pattern = f"{pattern}|{localhost}" if pattern else localhost
         return pattern or None
+
+    @property
+    def auth_enabled(self) -> bool:
+        """Whether account endpoints can verify a token.
+
+        False until Supabase is configured, which keeps the whole public API usable
+        on a fresh checkout with no Supabase project. Account endpoints then return
+        503 ("accounts are not configured") instead of 401, so a missing env var
+        never looks like a rejected login.
+        """
+        return bool(self.supabase_url.strip())
+
+    @property
+    def supabase_base_url(self) -> str:
+        """The project URL without a trailing slash."""
+        return self.supabase_url.strip().rstrip("/")
+
+    @property
+    def supabase_issuer(self) -> str:
+        """The `iss` claim Supabase puts on tokens it signs."""
+        return f"{self.supabase_base_url}/auth/v1"
+
+    @property
+    def supabase_jwks_url(self) -> str:
+        """Where Supabase publishes the public keys for asymmetric verification."""
+        return f"{self.supabase_base_url}/auth/v1/.well-known/jwks.json"
 
 
 settings = Settings()  # type: ignore[call-arg]

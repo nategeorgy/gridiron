@@ -14,6 +14,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { ExportButton } from "../components/ExportButton";
+import { SaveViewButton } from "../components/SaveViewButton";
 import { PlayerPicker } from "../components/PlayerPicker";
 import { CompareTrendChart, SERIES_COLORS } from "../components/charts/CompareTrendChart";
 import { CompareRadar, radarAxesFor } from "../components/charts/CompareRadar";
@@ -149,7 +150,8 @@ export function CompareView({ board }) {
         <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
         <Select label="Timeframe" value={lastWeeks} onChange={setLastWeeks} options={INSIGHT_TIMEFRAMES} />
         <Select label="Type" value={seasonType} onChange={setSeasonType} options={SEASON_TYPES} />
-        <div className="ml-auto flex items-end">
+        <div className="ml-auto flex items-end gap-2">
+          <SaveViewButton defaultName="Comparison" />
           <ExportButton
             filename={`gridironiq-compare-${season}`}
             rows={exportRows}

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
+import { FavoriteStar } from "../components/FavoriteStar";
 import { InsightPanel } from "../components/InsightPanel";
 import { FantasyTrendChart } from "../components/charts/FantasyTrendChart";
 import { TargetDepthChart } from "../components/charts/TargetDepthChart";
@@ -33,7 +34,10 @@ function ProfileHeader({ player }) {
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-fg">{player.name}</h1>
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-2xl font-bold tracking-tight text-fg">{player.name}</h1>
+          <FavoriteStar playerId={player.player_id} size="h-5 w-5" />
+        </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-muted">
           <span className="rounded bg-surface-2 px-2 py-0.5 text-xs font-semibold text-accent">
             {player.position}

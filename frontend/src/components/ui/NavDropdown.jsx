@@ -66,7 +66,7 @@ export function NavDropdown({ label, items, match }) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+        className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
           active ? "glass-pill !text-accent" : "text-muted hover:text-fg"
         }`}
       >

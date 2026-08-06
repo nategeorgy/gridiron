@@ -6,3 +6,6 @@ psycopg2-binary==2.9.10
 pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
+# M5 accounts: verify Supabase-issued JWTs. The [crypto] extra pulls in `cryptography`,
+# needed for the asymmetric (ES256/RS256) signing keys newer Supabase projects use.
+PyJWT[crypto]==2.10.1

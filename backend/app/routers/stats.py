@@ -82,10 +82,11 @@ def _leaderboard_season(
     db: Session, season: int, season_type: str, position: str | None,
     metric: str, config: ScoringConfig, descending: bool, min_games: int,
     limit: int, offset: int, custom: list[CustomMetric],
+    player_ids: tuple[str, ...] | None = None,
 ) -> tuple[list[dict], int]:
     """Aggregate a full season into one ranked row per player."""
     games = games_expr()
-    filters = window_filters(season, season_type, position=position)
+    filters = window_filters(season, season_type, position=position, player_ids=player_ids)
     base = aggregate_select(filters, games).having(games >= min_games)
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
@@ -106,11 +107,12 @@ def _leaderboard_season(
 def _leaderboard_week(
     db: Session, season: int, week: int, season_type: str, position: str | None,
     metric: str, config: ScoringConfig, descending: bool, limit: int, offset: int,
-    custom: list[CustomMetric],
+    custom: list[CustomMetric], player_ids: tuple[str, ...] | None = None,
 ) -> tuple[list[dict], int]:
     """Return raw per-game stat lines for a single week, ranked by metric."""
     filters = window_filters(
-        season, season_type, position=position, week_from=week, week_to=week
+        season, season_type, position=position, week_from=week, week_to=week,
+        player_ids=player_ids,
     )
 
     # In single-week mode every metric is already a one-game value, so the same
@@ -164,6 +166,17 @@ def _leaderboard_week(
     return results, total
 
 
+def _parse_player_ids(raw: str) -> tuple[str, ...] | None:
+    """Parse the comma-separated watchlist filter, or None when absent.
+
+    None means "no filter"; an explicit but empty list is treated the same, because
+    the caller has nothing to narrow to and returning zero rows for a blank parameter
+    would be a confusing way to spell "everything".
+    """
+    ids = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return ids or None
+
+
 @router.get("/leaderboard")
 def leaderboard(
     season: int = Query(..., description="Season year, e.g. 2024"),
@@ -182,6 +195,9 @@ def leaderboard(
     ),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     min_games: int = Query(1, ge=0, description="Season mode: minimum games played"),
+    player_ids: str = Query(
+        "", description="Comma-separated player ids to narrow to (the M5 watchlist filter)"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -198,15 +214,16 @@ def leaderboard(
         raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}'")
 
     descending = order == "desc"
+    watchlist = _parse_player_ids(player_ids)
     if week is None:
         data, total = _leaderboard_season(
             db, season, season_type, position, metric, config, descending, min_games,
-            limit, offset, custom_metrics,
+            limit, offset, custom_metrics, watchlist,
         )
     else:
         data, total = _leaderboard_week(
             db, season, week, season_type, position, metric, config, descending,
-            limit, offset, custom_metrics,
+            limit, offset, custom_metrics, watchlist,
         )
 
     page = (offset // limit) + 1 if limit else 1
@@ -783,6 +800,9 @@ def intelligence(
     include_unqualified: bool = Query(
         False, description="Include players below the games threshold (never in the ranking pools)"
     ),
+    player_ids: str = Query(
+        "", description="Comma-separated player ids to narrow to (the M5 watchlist filter)"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -792,6 +812,9 @@ def intelligence(
     Scores are relative to a position pool, so the whole pool is computed and then
     sorted and paginated in Python. Filtering by ``position`` narrows the *output*
     only — a receiver's percentile never depends on who else the caller asked about.
+    The ``player_ids`` watchlist filter is applied the same way, and for the same
+    reason: "82nd percentile" has to mean among all receivers, not among the six a
+    user happened to star.
     """
     if metric not in ALLOWED_INSIGHT_METRICS:
         raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}'")
@@ -808,6 +831,12 @@ def intelligence(
 
     if not include_unqualified:
         rows = [row for row in rows if row.get("qualified")]
+
+    # Applied after scoring, so percentiles stay relative to the full position pool.
+    watchlist = _parse_player_ids(player_ids)
+    if watchlist is not None:
+        wanted = set(watchlist)
+        rows = [row for row in rows if row.get("player_id") in wanted]
 
     descending = order == "desc"
 

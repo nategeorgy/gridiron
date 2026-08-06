@@ -13,6 +13,7 @@ import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { LeagueControl } from "../components/LeagueControl";
 import { ExportButton } from "../components/ExportButton";
+import { SaveViewButton } from "../components/SaveViewButton";
 import { MetricScatter } from "../components/charts/MetricScatter";
 import { useScatter } from "../hooks/useExplore";
 import { useScoring } from "../hooks/useScoring";
@@ -158,7 +159,8 @@ export function ScatterView({ board }) {
         <Select label="Timeframe" value={lastWeeks} onChange={setLastWeeks} options={INSIGHT_TIMEFRAMES} />
         <Select label="Type" value={seasonType} onChange={setSeasonType} options={SEASON_TYPES} />
         <Select label="Players" value={density} onChange={setDensity} options={DENSITY_OPTIONS} />
-        <div className="ml-auto flex items-end">
+        <div className="ml-auto flex items-end gap-2">
+          <SaveViewButton defaultName={preset.label} />
           <ExportButton
             filename={`gridironiq-${preset.id}-${season}`}
             rows={points}

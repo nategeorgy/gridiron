@@ -1,32 +1,29 @@
-// League-context state, stateless-first (spine C) — the same pattern as useScoring:
-// the URL query param is the source of truth (so an Insight view is shareable), with
-// localStorage as the persisted default across visits.
+// League-context state — the same layering as useScoring:
+//
+//     URL query param  >  active league profile  >  localStorage  >  12-team
+//
+// See useScoring for why the URL outranks the account.
 import { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { DEFAULT_LEAGUE } from "../constants/league";
-
-const STORAGE_KEY = "gridiron.league";
-
-function readStored() {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
+import { LEAGUE_STORAGE_KEY, readStored, writeStored } from "../constants/storage";
+import { useLeagueProfiles } from "./useAccount";
 
 export function useLeague() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const league = searchParams.get("league") || readStored() || DEFAULT_LEAGUE;
+  const { activeProfile } = useLeagueProfiles();
+
+  const fromUrl = searchParams.get("league");
+  const league =
+    fromUrl ||
+    activeProfile?.league_spec ||
+    readStored(LEAGUE_STORAGE_KEY) ||
+    DEFAULT_LEAGUE;
 
   const setLeague = useCallback(
     (spec) => {
       const next = spec || DEFAULT_LEAGUE;
-      try {
-        localStorage.setItem(STORAGE_KEY, next);
-      } catch {
-        // ignore storage failures (private mode, etc.)
-      }
+      writeStored(LEAGUE_STORAGE_KEY, next);
       setSearchParams(
         (prev) => {
           const params = new URLSearchParams(prev);
@@ -41,5 +38,9 @@ export function useLeague() {
     [setSearchParams],
   );
 
-  return [league, setLeague];
+  const isOverridingProfile = Boolean(
+    fromUrl && activeProfile && fromUrl !== activeProfile.league_spec,
+  );
+
+  return [league, setLeague, { isOverridingProfile, activeProfile }];
 }

@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 ---
 
@@ -50,6 +50,13 @@ breaking the others.
 **Golden rule of the codebase:** the frontend talks to the backend *only* over HTTP;
 the backend talks to the database; the pipeline is the only thing that writes bulk
 NFL data. Nothing skips a layer.
+
+**Accounts (M5) do not break that rule.** Supabase Auth is a fourth party, but it is
+used *only* as a token issuer: the browser gets a signed JWT from it (via email +
+password or a magic link) and sends that to FastAPI, which verifies it and reads/writes
+the account tables itself. The frontend never reads application data from Supabase
+directly — that would put authorization in dashboard-managed RLS policies instead of in
+reviewable Python.
 
 ---
 
@@ -136,7 +143,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 
 | Path | Layer | What it does |
 | --- | --- | --- |
-| `main.jsx` | entry | Boots React. Wraps the app in `BrowserRouter` (routing) and `QueryClientProvider` (React Query). Imports global CSS. |
+| `main.jsx` | entry | Boots React. Wraps the app in `QueryClientProvider` (React Query), **`AuthProvider`** (M5 — inside the query client, since it clears cached account queries on sign-out), and `BrowserRouter`. Imports global CSS. |
 | `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/insight/*` → `InsightView`; **`/explore/*` → the M4 tools** (`ScatterView`, `CompareView`, mapped from `EXPLORE_ITEMS`); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`. All wrapped in `Layout`. |
 | `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | **`pages/`** | pages | Top-level screens, one per route. |
@@ -148,8 +155,14 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, the **Insight panel** (M3 scores + breakdown), an Expected vs Actual panel, a weekly fantasy trend chart, **the M4 usage-trend and target-depth charts**, and a game-by-game log. |
 | `pages/Teams.jsx` | page | Team leaderboard — ranked team offensive production for a season. |
 | **`components/`** | UI | Reusable pieces used by pages. |
-| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the four dropdowns — Insight / Explore / Fantasy / NFL — and Teams), search box, and the theme toggle; renders the current page inside. The page background (the Liquid Glass "environment") is painted on `<body>`. |
+| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the four dropdowns — Insight / Explore / Fantasy / NFL — and Teams), search box, the theme toggle, and **the account menu**; renders the current page inside. Also the single mount point for `useProfileSync`. The page background (the Liquid Glass "environment") is painted on `<body>`. |
 | `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
+| `components/AccountMenu.jsx` | UI | ⭐ **The header account control (M5).** A *Sign in* button when signed out; an avatar dropdown when signed in — league profiles (switch or delete), saved views (open or delete), and sign out. Renders **nothing** when the build has no Supabase project configured. Mounts `AuthDialog` in *both* branches, because a password-reset link signs the user in before they set the new password. |
+| `components/AuthDialog.jsx` | UI | ⭐ **The sign-in surface (M5)**: password sign-in, sign-up, magic link, forgot-password, a "check your inbox" state, and a set-a-new-password form entered only via Supabase's `PASSWORD_RECOVERY` event. **Portalled to `document.body`** — it renders from inside the sticky header, and `.glass-header`'s `backdrop-filter` makes that a containing block for `position: fixed`, which would otherwise clip the overlay to the header. Any future modal opened from the header needs the same treatment. |
+| `components/LeagueProfileBar.jsx` | UI | ⭐ **The account layer on the scoring editor (M5)**, mounted inside `ScoringControl` (the one surface present on every page with either editor). Save the current scoring+league as a named profile, update the active one, or revert to it. Editing scoring never silently rewrites a saved profile — an edit is a URL override, committing it is explicit. Hidden when signed out. |
+| `components/FavoriteStar.jsx` | UI | ⭐ **The watchlist star (M5)** on player pages and every board row. Optimistic toggle. Hidden when signed out, so the Player column keeps its pre-M5 width for a visitor. |
+| `components/WatchlistToggle.jsx` | UI | ⭐ **The "watchlist only" board filter (M5)** + its `useWatchlistFilter` hook. Disabled (not hidden) when nothing is starred, so the feature is discoverable from the boards. Emits `player_ids` for a **server-side** filter. |
+| `components/SaveViewButton.jsx` | UI | ⭐ **"Save view" (M5)** on every board and both Explore tools — names the current route + query string. Saving under an existing name updates it. Validates the path against the board registry (the catalog check the backend deliberately leaves to the client). |
 | `components/ui/NavDropdown.jsx` | UI (base) | The **Insight ▾ / Explore ▾ / Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
 | `components/StatTable.jsx` | UI | The ranked stat table + pager **shared by the leaderboard and Insight boards**: click-to-sort headers, accented active column, and positive/negative tinting for columns whose sign carries the meaning. |
 | `components/ScoringControl.jsx` | UI | The league-scoring editor: preset picker (PPR/Half/Std/TE-Premium) + an expandable custom-weights panel. Emits a scoring spec string. |
@@ -173,12 +186,18 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/usePlayerSearch.js` | data | Fetches header search results (fires only at ≥2 chars). |
 | `hooks/useMetrics.js` | data | Fetches the metric registry from the backend; exposes a `supportsScoring` capability flag. Seeded with bundled constants so the UI is never blank. |
 | `hooks/useInsight.js` | data | Fetches the intelligence board (`useIntelligence`) and one player's scores (`usePlayerIntelligence`). |
-| `hooks/useScoring.js` | state | The active league scoring. **URL query param is the source of truth** (so views are shareable), backed by `localStorage`. Defaults to PPR. (Architecture "spine C": stateless-first.) |
-| `hooks/useLeague.js` | state | The active **league context** (size + starting lineup), same spine-C pattern as `useScoring`: URL param backed by `localStorage`. Defaults to 12-team. |
+| `hooks/useAuth.jsx` | state | ⭐ **Auth state for the whole app (M5)** — `AuthProvider` + `useAuth`. Mirrors the Supabase session into React and drops cached `["account", …]` queries on any auth change, so one user's saved state can never flash in front of the next. Also tracks `isRecovering` (set by Supabase's `PASSWORD_RECOVERY` event) so the UI asks for a new password instead of behaving like a normal sign-in. Signed-out is a first-class state. |
+| `hooks/useAccount.js` | data | ⭐ **React Query over the account API (M5)**: `useAccount`, `useLeagueProfiles`, `useFavorites` (with an optimistic star toggle), `useSavedViews`. All disabled when signed out, so a visitor never fires a request that would 401. |
+| `hooks/useProfileSync.js` | state | ⭐ **Keeps `localStorage` and the active profile coherent (M5).** On first sign-in with no profiles, migrates pre-account scoring/league into a profile named **"My League"**; thereafter mirrors the active profile *back* into `localStorage`, which is what lets the state hooks resolve correctly on first paint. Mounted once, in `Layout`. |
+| `hooks/useUrlState.js` | state | ⭐ **A filter that lives in the query string (M5).** Keeps defaults out of the URL and validates against an optional whitelist, so a param carried over from another board falls back instead of wedging the view. Backfills the spine-C promise the 17 boards had never actually kept. |
+| `hooks/useScoring.js` | state | The active league scoring, resolved **URL param > active league profile > `localStorage` > PPR**. The URL outranks the account deliberately: a shared `?scoring=` link must show *that* league to whoever opens it, or every share link silently lies. |
+| `hooks/useLeague.js` | state | The active **league context** (size + starting lineup), same layering as `useScoring`. Defaults to 12-team. |
 | `hooks/useTheme.js` | state | The active UI theme (light/dark). Writes `data-theme` on `<html>` and persists to `localStorage` (`gridiron.theme`); defaults to dark. |
 | `hooks/useDebounce.js` | util | Debounces a fast-changing value (used to throttle search-as-you-type). |
 | **`services/`** | network | The **only** place HTTP calls live. One function per endpoint. |
-| `services/api.js` | network | The shared axios instance; sets the base URL to `{VITE_API_BASE_URL}/api/v1`. Everything else imports this. |
+| `services/api.js` | network | The shared axios instance; sets the base URL to `{VITE_API_BASE_URL}/api/v1`. A request interceptor attaches the Supabase access token as `Authorization: Bearer …` when there is one. Everything else imports this. |
+| `services/supabase.js` | network | ⭐ **The Supabase client (M5), used *only* as a token issuer** — sign-up, password sign-in, magic link, password reset, and session refresh. It never reads or writes application data. Exports `authConfigured`, which is false (and the whole account UI absent) when the env vars are unset. |
+| `services/account.js` | network | ⭐ **The account API (M5)**: `/me`, league profiles, favorites, saved views. |
 | `services/stats.js` | network | `getLeaderboard(params)` → `/stats/leaderboard`; `getScatter(params)` → `/stats/scatter`; `getCompare(params)` → `/stats/compare`. |
 | `services/insight.js` | network | `getIntelligence(params)` → `/stats/intelligence`; `getPlayerIntelligence(id, params)` → `/players/{id}/intelligence`. |
 | `services/players.js` | network | Player profile, game log, search, and **target-depth** calls. |
@@ -189,6 +208,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `constants/boards.js` | config | **The 17 "boards"** (4 Insight + 5 Fantasy + 8 NFL) — each declares its columns (metric ids), default sort/position, whether it's a scoring (fantasy) board, and whether it's an `insight` board (rendered by `InsightView` against `/stats/intelligence`). Also holds **`EXPLORE_ITEMS`** (M4), which are tools rather than boards (no columns) and route to their own pages. Drives the four nav dropdowns. Adding a board here is all it takes. |
 | `constants/scoring.js` | config | League-scoring presets + editable weights, and the (de)serialize helpers that mirror the backend's scoring grammar. **Must stay in sync with `backend/app/scoring.py`.** |
 | `constants/league.js` | config | League size + starting-lineup defaults and the (de)serialize helpers that mirror the backend's league grammar. **Must stay in sync with `backend/app/league.py`.** |
+| `constants/storage.js` | config | The `localStorage` keys for scoring and league, plus safe read/write helpers — shared by the state hooks and `useProfileSync`, which both write them. |
 | `constants/scatters.js` | config | ⭐ **The pre-canned scatters (M4)** — six position groups (All / QB / RB / WR / TE / Flex), each with a handful of curated charts. The scatter builder deliberately offers *questions*, not free axis choice: two metrics picked at random usually produce a meaningless cloud, and the curation is the product. |
 | **`utils/`** | util | Pure helpers. |
 | `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. Plus `formatPercentile` (0.92 → "92nd") and `formatSigned` (explicit `+` on gaps). |
@@ -209,7 +229,7 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | --- | --- |
 | `requirements.txt` | Python dependencies for the backend. |
 | `alembic.ini` | Alembic (migrations) configuration. |
-| `.env` | Local secrets: `DATABASE_URL`, `ENVIRONMENT`, `CORS_ORIGINS`. Git-ignored. |
+| `.env` | Local secrets: `DATABASE_URL`, `ENVIRONMENT`, `CORS_ORIGINS`, and optionally `SUPABASE_URL` / `SUPABASE_JWT_SECRET`. Git-ignored. |
 | `.venv/` | The backend's private Python environment (git-ignored). |
 
 ### `backend/app/` — the application
@@ -217,8 +237,9 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | Path | What it does |
 | --- | --- |
 | `main.py` | **App entry point.** Creates the FastAPI app, configures CORS (which frontend origins may call it), and wires up all the routers under `/api/v1`. |
-| `config.py` | Loads settings from environment variables / `.env` (database URL, environment, allowed CORS origins) via Pydantic. In **development** it also allows any `localhost` port, so a dev server on an auto-assigned port isn't blocked by CORS. |
+| `config.py` | Loads settings from environment variables / `.env` (database URL, environment, allowed CORS origins, **Supabase auth**) via Pydantic. In **development** it also allows any `localhost` port, so a dev server on an auto-assigned port isn't blocked by CORS. `auth_enabled` is false until `SUPABASE_URL` is set, which is what lets the whole public API run on a fresh checkout with no Supabase project. |
 | `database.py` | Creates the SQLAlchemy engine + session factory, and the `get_db()` dependency every endpoint uses to get a database session. |
+| `auth.py` | ⭐ **Supabase JWT verification (M5)** — the only place a token becomes an identity. Supports both **asymmetric** signing (public keys from the project's JWKS, the current Supabase default) and **legacy HS256**, chosen by the token header's `alg`, so a project can migrate without a code change. Checks signature, expiry, issuer, and audience, then **provisions the local `users` row just-in-time** — no webhook, no second source of truth. Deliberately knows **nothing about how the user signed in**: swapping Google OAuth for email auth changed one line here (a `display_name` fallback to the email's local part, since email sign-ups may carry no name). Exports `get_current_user` (401s) and `get_optional_user` (returns `None`). |
 | `scoring.py` | ⭐ **The scoring-aware fantasy engine (architecture "spine A").** Turns a league-scoring string like `"ppr:pass_td=6,te_rec=1.5"` into a `ScoringConfig`, and computes fantasy points from raw stat components — both as a SQL expression (for sorting/ranking in the DB) and in Python (for display). Fantasy points are **computed live, never stored per-scoring.** |
 | `league.py` | ⭐ **League context (M3).** Turns a league string like `"10:rb=2,flex=2"` into a `LeagueConfig` (teams + starting lineup) and derives the **replacement rank per position** — flex slots shared across RB/WR/TE in proportion to the lineup's flex-eligible starters, superflex credited to QB. The second per-request config alongside scoring; it's what makes *value* league-aware. |
 | `metrics.py` | ⭐ **The metric registry (architecture "spine B").** One canonical definition per metric (id, label, short label, description, format, category, how it aggregates, which positions it applies to). The single source of truth for metric metadata — the leaderboard reads aggregation behavior from here, and the frontend fetches it via `/metrics`. **Adding a stat starts here.** |
@@ -232,18 +253,21 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `models/game.py` | `games` table (season, week, home/away teams, scores, date). |
 | `models/player_stats.py` | ⭐ `player_stats` table — **one row per player per game**, with ~50 stat columns (general, advanced, fantasy). The heart of the data. Season-level derived metrics (e.g. PPG) are deliberately **not** columns — they're computed in the API. |
 | `models/player_target_depth.py` | `player_target_depth` table (M4) — targets and production at the grain **(player, game, depth bucket, direction)**. Exists because `air_yards` is stored as a per-game total and a total can't be un-summed into buckets. Direction is stored even though the shipped chart sums it away, so the directional grid needs no second migration. |
+| `models/account.py` | ⭐ **The four account tables (M5)** — `users` (a thin mirror of the Supabase Auth subject, so the rest have a real FK), `league_profiles`, `favorites`, `saved_views`. Everything cascades from `users`, which is what makes account deletion a five-line handler. A **partial unique index** enforces at most one active profile per user in the database, not just in application logic. |
 | `models/__init__.py` | Imports all models so Alembic and the app can see them. |
 | **`schemas/`** | **Pydantic schemas** — define the *shape of JSON* going in/out of the API (separate from the DB models). |
 | `schemas/player.py` | Player response shape. |
 | `schemas/stats.py` | Stat-line (game log) response shape. |
 | `schemas/team.py` | Team response shape. |
 | `schemas/common.py` | Shared pieces — e.g. the paginated-list envelope `{ data, total, page, … }`. |
+| `schemas/account.py` | ⭐ **Account request/response shapes (M5)**, and where their validation lives. Profile specs are checked by parsing them through `scoring.py` / `league.py` — a profile that saves is a profile that will render. Saved-view paths are held to a **safety envelope** (single-slash, same-origin, known section, no scheme, no `..`); the 19-board catalog check stays on the frontend, which already owns the registry. |
 | **`routers/`** | **The API endpoints**, grouped by resource. Each file is a set of related routes. |
 | `routers/health.py` | `GET /health` — confirms the API and DB are alive. Used by Render's health check. |
 | `routers/players.py` | `GET /players` (search/list), `/players/{id}` (profile), `/players/{id}/stats` (game log), `/players/{id}/intelligence` (M3 scores + breakdown), `/players/{id}/target-depth` (M4 depth buckets). |
 | `routers/teams.py` | `GET /teams` (list), `/teams/leaderboard` (ranked team offense), `/teams/{id}/stats` (one team's season totals). |
 | `routers/stats.py` | ⭐ `GET /stats/leaderboard` — the filterable player leaderboard. Two modes: **season aggregate** (one row per player) and **single week** (raw game lines). Uses the scoring engine + metric registry. The most important endpoint. Also `GET /stats/intelligence` (M3) — the Insight board; it computes the whole position pool first (scores are relative), then sorts and paginates in Python. Plus the two M4 Explore endpoints: **`/stats/scatter`** (any two metrics, season or per-player-week, `rank_by` before capping, `position=FLEX`; routes through the intelligence engine only when an axis needs it) and **`/stats/compare`** (≤5 players, metrics intersected across their positions, plus percentiles and weekly series). Note the *endpoints* stay general — the **UI** is what's curated (`constants/scatters.js`), so a new chart needs no backend change. |
 | `routers/metrics.py` | `GET /metrics` — serves the whole metric registry to the frontend. |
+| `routers/account.py` | ⭐ **The account endpoints (M5)**: `/me` (+ `DELETE`, which ships now rather than later — collecting an identity means owing a way to revoke it), and CRUD for `/me/league-profiles`, `/me/favorites`, `/me/saved-views`. Every handler is scoped to the token's subject and **no endpoint accepts a user id**, so there is no request shape that reads another user's rows; a guessed id 404s exactly like a nonexistent one. |
 | `utils/` | Shared backend helpers (currently just a placeholder `.gitkeep`). |
 
 ### `backend/alembic/` — database migrations
@@ -259,6 +283,7 @@ machine (your laptop, Supabase) can be brought to the exact same schema with
 | `alembic/versions/4a2fb3bf6c6b_*.py` | Migration #2 — adds a unique constraint on team abbreviation. |
 | `alembic/versions/521f727f5461_*.py` | Migration #3 (M2) — adds the expected stat components, the three market-share columns, and carries inside the 10/5/2. |
 | `alembic/versions/7852e5b550b0_*.py` | Migration #4 (M4) — creates `player_target_depth` (targets by depth bucket × direction). |
+| `alembic/versions/990003c7c7cf_*.py` | Migration #5 (M5) — creates the four account tables (`users`, `league_profiles`, `favorites`, `saved_views`) with the one-active-profile partial index. |
 | `alembic/script.py.mako` | Template used when generating a new migration. |
 
 ---
@@ -301,11 +326,18 @@ routes — the same doc explains what that over- and under-states.
   `docker compose down -v` (note the `-v`) wipes it.
 - **Production:** hosted on **Supabase**. The backend on Render connects to it via a
   `DATABASE_URL` set in Render's dashboard (never committed).
-- **Schema:** five tables — `teams`, `players`, `games`, `player_stats`, and
-  `player_target_depth` (defined in `backend/app/models/`, created/altered via Alembic
-  migrations). The full annotated schema, including every `player_stats` column, is in
-  [`CLAUDE.md`](CLAUDE.md). `player_target_depth` (M4) is the one table at a different
-  grain — one row per player, game, depth bucket, and pass direction.
+- **Schema:** nine tables — five of NFL data (`teams`, `players`, `games`,
+  `player_stats`, `player_target_depth`) and four of **account** data (`users`,
+  `league_profiles`, `favorites`, `saved_views`, M5). All defined in
+  `backend/app/models/` and created/altered via Alembic migrations. The full annotated
+  schema, including every `player_stats` column, is in [`CLAUDE.md`](CLAUDE.md).
+  `player_target_depth` (M4) is the one NFL table at a different grain — one row per
+  player, game, depth bucket, and pass direction.
+- **Account tables are a separate island.** They reference `players` (favorites) but
+  nothing references *them*, and the pipeline never touches them — so a full re-ingest
+  can't disturb user data. `users.user_id` is the Supabase Auth subject verbatim rather
+  than a locally-generated id, because Supabase owns `auth.users` in a schema Alembic
+  does not manage.
 
 **Important schema rule (repeated everywhere for a reason):** per-game stats are
 stored; **season-level derived metrics** (`fantasy_ppg_*`, `routes_run_per_game`) and
@@ -326,6 +358,18 @@ dashboard (production).
 | `CORS_ORIGINS` | backend | `http://localhost:5173` | the deployed Vercel URL (exact origins) |
 | `CORS_ORIGIN_REGEX` | backend | *(unset — code default matches this project's Vercel URLs)* | override only to change the allowed-origin regex; lets Vercel **preview** deploys call the API |
 | `VITE_API_BASE_URL` | frontend | `http://localhost:8000` | the deployed Render URL |
+| `SUPABASE_URL` | backend | *(optional — unset disables accounts)* | `https://<project-ref>.supabase.co` (Render dashboard) |
+| `SUPABASE_JWT_SECRET` | backend | *(optional)* | only for projects still signing HS256; newer ones verify from the public JWKS |
+| `VITE_SUPABASE_URL` | frontend | *(optional)* | `https://<project-ref>.supabase.co` (Vercel) |
+| `VITE_SUPABASE_ANON_KEY` | frontend | *(optional)* | the **publishable anon** key — never the `service_role` key, which must never reach a client bundle |
+
+The four Supabase variables are optional by design: with them unset the app runs
+exactly as it did before M5, minus the sign-in button, and the `/me` endpoints return
+503 rather than a confusing 401. See
+[`docs/design/M5-accounts-saved-state.md`](docs/design/M5-accounts-saved-state.md) §8
+for the one-time Supabase setup — including **configuring a real SMTP sender**, which
+is a launch requirement rather than a nicety, since sign-up confirmation, magic links,
+and password resets all depend on mail arriving.
 
 The template with all of these and copy instructions is [`.env.example`](.env.example).
 
@@ -377,8 +421,15 @@ instead of being retrofitted. You'll see these referenced in the code:
   `/metrics`, consumed by `useMetrics`). One definition per metric, shared by every
   view. Replaces the old "add a metric in four places" problem.
 - **Spine C — Stateless-first persistence** (`frontend/src/hooks/useScoring.js`,
-  `frontend/src/hooks/useLeague.js`). State lives in the URL + `localStorage`
-  (shareable, no login), before accounts exist.
+  `frontend/src/hooks/useLeague.js`, `frontend/src/hooks/useUrlState.js`). State lives
+  in the URL + `localStorage` (shareable, no login). **M5 layered accounts on top
+  without changing this**: the resolution order is
+  `URL > active league profile > localStorage > default`, and the URL wins on purpose —
+  a shared `?scoring=` link must show *that* league to whoever opens it, or every share
+  link silently lies. Nothing in the product is gated behind an account; signing in buys
+  sync, naming, and more than one of a thing. M5 also had to *finish* this spine: the 17
+  boards had kept their filters in `useState`, so a board link carried none of them
+  (`useUrlState` fixed that).
 
 M3 added a **second per-request config** next to scoring: **league context**
 (`backend/app/league.py`, `frontend/src/constants/league.js`) — league size and
@@ -390,9 +441,12 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full vision and milestone plan,
 [`docs/design/M1-scoring-foundation.md`](docs/design/M1-scoring-foundation.md) for the
 scoring engine + registry design,
 [`docs/design/M2-expanded-metrics.md`](docs/design/M2-expanded-metrics.md) for expected
-points, market share, and the snap/route enrichment, and
-[`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md) for
-the VORP / opportunity / buy-low / sell-high engine (M3 — most recently shipped).
+points, market share, and the snap/route enrichment, [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md) for
+the VORP / opportunity / buy-low / sell-high engine,
+[`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md) for the
+Explore tools and the custom-metric engine, and
+[`docs/design/M5-accounts-saved-state.md`](docs/design/M5-accounts-saved-state.md) for
+accounts, league profiles, favorites, and saved views (M5 — most recently shipped).
 
 ---
 
@@ -416,6 +470,8 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
 | Add a new **page/screen** | a component in `frontend/src/pages/`, a route in `frontend/src/App.jsx`, a nav link in `components/Layout.jsx`. |
 | Add a new **board** (or change its columns) | add/edit a board in `frontend/src/constants/boards.js` (columns, default sort/position, fantasy vs NFL vs `insight`). The route, nav dropdown item, and page all pick it up automatically. |
 | Change the **look/theme** | `frontend/src/index.css` (Liquid Glass tokens per theme + `.glass-*` classes) + `frontend/tailwind.config.js` (semantic token names). Use the `.glass-*` classes and `text-fg`/`text-muted`/`text-accent`/`border-line` tokens — never hardcode theme colors. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
+| Add a **board filter that should survive sharing/saving** | use `useUrlState` in the view rather than `useState`, and give it a fallback (kept out of the URL) plus an optional whitelist. Saved views and share links then pick it up with no other change. |
+| Add something to the **account** (a new saved thing) | 1) a model in `backend/app/models/account.py` (cascade from `users`) → 2) a migration → 3) schemas in `schemas/account.py` → 4) routes in `routers/account.py`, scoped to `get_current_user` and **never taking a user id** → 5) a service in `frontend/src/services/account.js` + a hook in `hooks/useAccount.js` keyed under `["account", …]`. |
 | Change **data scope** (seasons, etc.) | re-run `pipeline/` scripts with new `--seasons`; update `frontend/src/constants/index.js` `SEASONS`. |
 
 ---
@@ -457,6 +513,35 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-08-05** — M5 auth swapped to email, before merge. Google OAuth replaced by
+  **email + password *and* magic link** (see the ROADMAP decision log). New
+  `components/AuthDialog.jsx` (sign-in / sign-up / magic link / forgot / check-inbox /
+  set-new-password), rewritten `services/supabase.js`, and `hooks/useAuth.jsx` now
+  tracks `isRecovering` from Supabase's `PASSWORD_RECOVERY` event. Backend change was
+  one line — a `display_name` fallback to the email's local part — which is the payoff
+  from `app/auth.py` never knowing how the user signed in. Two bugs found and fixed by
+  looking: the dialog needed a **portal** (the header's `backdrop-filter` was clipping
+  a `position: fixed` overlay), and it had to mount in the *signed-in* branch too
+  (a reset link signs you in). Setup no longer needs a Google OAuth app, but now
+  requires a real **SMTP sender**.
+- **2026-08-05** — M5: accounts & saved state. **Auth:** `app/auth.py` verifies
+  Supabase-issued JWTs (asymmetric JWKS *and* legacy HS256) and provisions the local
+  `users` mirror just-in-time; Supabase is used purely as a token issuer, so the
+  frontend↔backend HTTP boundary is unchanged. **DB:** migration #5 (`990003c7c7cf`)
+  adds four cascading tables — `users`, `league_profiles`, `favorites`, `saved_views`
+  (`models/account.py`), with a partial unique index enforcing one active profile per
+  user. **Backend:** `routers/account.py` (`/me` + CRUD, scoped entirely to the token
+  subject, no endpoint takes a user id), `schemas/account.py`, and a `player_ids`
+  watchlist filter threaded through `aggregation.window_filters` → the leaderboard
+  (in SQL) and the Insight board (*after* scoring, so percentiles stay pool-relative).
+  **Frontend:** `hooks/useAuth.jsx`, `useAccount.js`, `useProfileSync.js`,
+  `useUrlState.js`; `services/supabase.js` + `account.js`; `components/AccountMenu`,
+  `LeagueProfileBar`, `FavoriteStar`, `WatchlistToggle`, `SaveViewButton`;
+  `constants/storage.js`; a "My Players" tile on Home. `useScoring`/`useLeague` gained
+  the profile layer (URL still wins). **Also fixed:** the 17 boards kept their filters
+  in `useState`, so a board link carried none of them — now URL-backed, which is what
+  makes a saved view store more than a bare path. Four new optional env vars (§8). New
+  design note: `docs/design/M5-accounts-saved-state.md`.
 - **2026-08-04** — M4 revision after review. **Scatter builder is now curated**: no free
   axis/size pickers, replaced by `frontend/src/constants/scatters.js` — six position
   groups (All / QB / RB / WR / TE / Flex) with 19 pre-canned charts, each stating the

@@ -7,9 +7,12 @@ import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
 import { ExportButton } from "../components/ExportButton";
+import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
+import { SaveViewButton } from "../components/SaveViewButton";
 import { buildBoardExport } from "../utils/csv";
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useScoring } from "../hooks/useScoring";
+import { useUrlState } from "../hooks/useUrlState";
 import { useMetrics } from "../hooks/useMetrics";
 import { POSITIONS, SEASONS, SEASON_TYPES, WEEKS } from "../constants";
 
@@ -24,14 +27,17 @@ const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "f
 const SIGNED_COLUMNS = ["fantasy_points_over_expected", "epa", "rushing_epa", "receiving_epa", "cpoe"];
 
 export function LeaderboardView({ board }) {
-  const [season, setSeason] = useState(String(SEASONS[0]));
-  const [week, setWeek] = useState("");
-  const [position, setPosition] = useState(board.defaultPosition);
-  const [seasonType, setSeasonType] = useState("REG");
-  const [metric, setMetric] = useState(board.defaultSort);
+  // Filters live in the URL so a board link carries its view — shareable, and what
+  // makes a saved view (M5) store something more than a bare path.
+  const [season, setSeason] = useUrlState("season", String(SEASONS[0]));
+  const [week, setWeek] = useUrlState("week", "");
+  const [position, setPosition] = useUrlState("position", board.defaultPosition ?? "");
+  const [seasonType, setSeasonType] = useUrlState("type", "REG");
+  const [metric, setMetric] = useUrlState("metric", board.defaultSort, board.columns);
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
   const { metrics, supportsScoring } = useMetrics();
+  const watchlist = useWatchlistFilter();
 
   // Scoring-aware ids fall back to their fixed-PPR column when the backend can't
   // score them; on NFL boards there are no scoring-aware columns, so this is a no-op.
@@ -47,10 +53,16 @@ export function LeaderboardView({ board }) {
       metric: toBackendMetric(metric),
       ...(board.scoring ? { scoring } : {}),
       order: "desc",
+      ...watchlist.params,
       limit: PAGE_SIZE,
       offset,
     }),
-    [season, week, position, seasonType, metric, scoring, offset, supportsScoring, board],
+    // watchlist.params is derived from the favorites list, so its serialised form is
+    // the dependency — the object identity changes on every render.
+    [
+      season, week, position, seasonType, metric, scoring, offset, supportsScoring,
+      board, watchlist.params.player_ids,
+    ],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useLeaderboard(params);
@@ -94,7 +106,9 @@ export function LeaderboardView({ board }) {
         <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
-        <div className="ml-auto flex items-end">
+        <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
+        <div className="ml-auto flex items-end gap-2">
+          <SaveViewButton defaultName={board.title} />
           <ExportButton
             filename={`gridironiq-${board.id}-${season}${week ? `-wk${week}` : ""}`}
             rows={exportData.rows}

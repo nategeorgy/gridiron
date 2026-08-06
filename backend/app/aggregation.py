@@ -56,8 +56,15 @@ def window_filters(
     week_from: int | None = None,
     week_to: int | None = None,
     positions: tuple[str, ...] | None = None,
+    player_ids: tuple[str, ...] | None = None,
 ) -> list[ColumnElement]:
-    """WHERE clauses for a season, optionally narrowed to a week range and position."""
+    """WHERE clauses for a season, optionally narrowed to a week range and position.
+
+    ``player_ids`` narrows to an explicit set — how the watchlist filter (M5) is
+    applied. It belongs here rather than in a router so it composes with sort,
+    pagination, and the min-games having clause instead of trimming an already-paged
+    result, which would produce short pages and wrong totals.
+    """
     filters: list[ColumnElement] = [
         PlayerStats.season == season,
         PlayerStats.season_type == season_type,
@@ -70,6 +77,8 @@ def window_filters(
         filters.append(Player.position == position.upper())
     elif positions:
         filters.append(Player.position.in_(positions))
+    if player_ids is not None:
+        filters.append(PlayerStats.player_id.in_(player_ids))
     return filters
 
 

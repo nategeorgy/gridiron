@@ -4,7 +4,7 @@
 > summary; this file holds the vision, architecture spines, and the milestone
 > plan. Update this when priorities change, then reconcile `CLAUDE.md`.
 
-Last updated: 2026-07-30
+Last updated: 2026-08-05
 
 ---
 
@@ -48,7 +48,10 @@ retrofitted:
   shared by leaderboards, scatter, compare, and the custom-metric builder. Replaces
   today's scattered "add it in 4 places" knowledge.
 - **C) Stateless-first persistence.** URL-encoded + `localStorage` state before
-  accounts. Shareable by default; accounts later just sync the same state.
+  accounts. Shareable by default; accounts later just sync the same state. **Completed
+  in M5** — accounts slot in as one more fallback layer
+  (`URL > active profile > localStorage > default`) rather than replacing anything, and
+  the board filters that had never actually made it into the URL now do.
 
 Plus one data-model rule set now to avoid a later migration:
 
@@ -162,13 +165,50 @@ The layer that lets someone ask their own question instead of picking from ours.
   are unvalidated by construction — any two metrics can be divided, so they carry no
   "good direction" and are never used in Insight scoring.
 
-### 🔐 M5 — Accounts & Saved State — M — **NEXT**
-- **Deps:** M1–M4 (state worth saving). 
-- **DB:** `users`, `saved_views` (scoring, scatters, rankings, comparisons), `favorites`.
-- **Backend:** Supabase Auth (already on Supabase — avoids rolling our own).
-- **Frontend:** login; save/favorite; sync `localStorage` → account.
+### 🔐 M5 — Accounts & Saved State — M — **✅ SHIPPED**
+Design note: [`design/M5-accounts-saved-state.md`](design/M5-accounts-saved-state.md).
+The completion of spine C: the same state, now following you between devices.
+- **Deps:** M1–M4 (state worth saving). **Data:** none — no NFL ingestion.
+- **Auth:** **email + password *and* email magic link** — no third-party account
+  required — via Supabase Auth used *purely as a token issuer*. FastAPI verifies the JWT
+  (`app/auth.py` — asymmetric JWKS *and* legacy HS256) and owns every account table
+  through SQLAlchemy/Alembic. Deliberately **not** frontend → Supabase with RLS: that
+  would split the data layer and put authorization in dashboard-managed policies instead
+  of reviewable Python.
+- **DB:** four cascading tables (migration `990003c7c7cf`) — `users` (the Supabase
+  subject, mirrored just-in-time on first authenticated request), `league_profiles`,
+  `favorites`, `saved_views`. A partial unique index enforces one active profile per
+  user in the database, not just in app code.
+- **Shipped:** **multiple named league profiles** (each a bundle of the two spec
+  strings, stored verbatim so `scoring.py`/`league.py` stay the only grammar);
+  **favorites** (star on rows and player pages, a server-side watchlist filter on all
+  17 boards, a "My Players" tile on the Command Center); **saved views** (any board or
+  Explore tool, stored as route + query string, so every board added later is saveable
+  the day it ships); `DELETE /me` in the first release, because collecting an identity
+  means owing a way to revoke it.
+- **Nothing is gated.** Signed-out is a first-class state; every board and share link
+  works exactly as before. An account buys sync, naming, and more than one of a thing.
+  Resolution order is `URL > active profile > localStorage > default` — **the URL wins
+  on purpose**, or a shared `?scoring=` link would silently show the recipient their
+  own league instead of the sender's.
+- **Also fixed:** the 17 boards had kept season/week/position/sort in `useState`, so a
+  board link carried none of them and the first saved view stored a bare path. Now
+  URL-backed (`useUrlState`) — which is what spine C had claimed since M1.
+- **Verified:** 36 backend checks (CRUD, the one-active invariant, successor promotion,
+  idempotent favorites, path-injection rejection, cascade, and **cross-user isolation**
+  — user B gets 404s, never user A's rows); the JWT path rejects tampered, wrong-secret,
+  expired, wrong-issuer, and `alg=none` tokens; and the full signed-in UI driven in a
+  browser, including that a watchlist-filtered board reports the *correct total* (proving
+  a server-side filter, not a trimmed page) and that Insight percentiles are unchanged
+  by filtering.
+- **Known limits:** **every auth path depends on email delivery**, so a real SMTP sender
+  must be configured before real traffic (Supabase's built-in mailer is rate-limited and
+  spam-prone); the watchlist filter passes ids in the query string (the reason for the
+  300-favorite cap); and the repo still has **no automated test suite**, so this — the
+  first code where a bug means one user reading another's data — is covered by scripted
+  verification rather than committed tests.
 
-### 🗓️ M6 — New Data Domains — M–L (parallelizable after M1)
+### 🗓️ M6 — New Data Domains — M–L — **NEXT** (parallelizable after M1)
 Each sub-feature is its own deployable slice:
 - **Depth charts** — `load_depth_charts` (2001+), new `depth_charts` table. S–M.
 - **Strength of Schedule** — fantasy pts allowed by position, from existing stats +
@@ -302,6 +342,64 @@ tells people it exists.
 
 ## Decision Log
 
+- **2026-08-05 — Email auth, both kinds, instead of Google OAuth.** M5 first shipped
+  Google-only sign-in; swapped before merge to **email + password *and* magic link**.
+  The two are complementary, not redundant: a magic link is the lowest-friction way to
+  *start* an account, and a password is the most reliable way to *return* to one,
+  because it does not depend on an email arriving. Shipping either alone strands users
+  at whichever point that one fails. It also drops the assumption that everyone has —
+  or wants to use — a Google account, and removes a third-party OAuth registration from
+  the setup. **Cost, and it is real: every path now depends on email delivery**, so a
+  proper SMTP sender is a launch requirement rather than a nicety; the password path is
+  the partial hedge, since a confirmed account signs in again with no email at all.
+  Magic links use the implicit flow so a link opened on a *different device* still
+  works — people read mail on their phones — at the price of a short-lived token in the
+  URL fragment, which the client consumes and clears.
+  **What this cost to change: almost nothing on the backend**, which is the payoff from
+  the "Supabase issues tokens, FastAPI owns the data" split. `app/auth.py` verifies
+  whatever Supabase signs and never knew how the user proved who they were; the only
+  edit was a `display_name` fallback to the email's local part, since email sign-ups may
+  carry no name. All the work was one new component (`AuthDialog`) and the service
+  functions behind it.
+- **2026-08-05 — Accounts sync state; they never gate it.** M5 adds no wall. Every
+  board, Insight score, and share link works signed out exactly as before, and no
+  account UI renders at all when signed out or when Supabase is unconfigured. Signing
+  in buys three things and no fourth: your config follows you between devices, you can
+  keep more than one of it, and you can name things. The alternative — gating the
+  Insight boards to drive signups — would trade the product's actual distribution
+  advantage (screenshot-worthy public pages, growth playbook #2) for a metric.
+- **2026-08-05 — The URL outranks the account.** Scoring/league resolve
+  `URL > active profile > localStorage > default`. A signed-in user opening a link with
+  `?scoring=ppr:te_rec=1.5` sees the *sender's* league. Inverting this would make every
+  shared link silently lie to the person most likely to care, which would quietly
+  destroy the shareability the whole product was built stateless-first to get.
+  Consequence: editing scoring is a URL override, and committing it to a profile is an
+  explicit act — opening a friend's link can never rewrite the league you play in.
+- **2026-08-05 — Supabase issues tokens; FastAPI owns the data.** The obvious cheaper
+  path was `supabase-js` reading and writing account rows straight from the browser
+  with RLS policies as the only enforcement. Rejected: it splits the data layer in two,
+  and puts authorization in dashboard-managed policies that never appear in a diff.
+  Instead Supabase is used purely as a token issuer and `app/auth.py` is the single
+  place a token becomes an identity — supporting both asymmetric (JWKS) and legacy
+  HS256 signing, so the project's age never becomes a code change. The corollary rule:
+  **no account endpoint accepts a user id**, so there is no request shape that reads
+  another user's rows.
+- **2026-08-05 — A league profile stores the spec strings verbatim.** Not a normalised
+  column per scoring rule. `scoring.py` and `league.py` are already the canonical,
+  validated, frontend-mirrored grammar; a second representation would be a fourth place
+  it lives and a guaranteed drift source. A profile is then literally a bookmark of two
+  strings, and adding a scoring rule later needs no migration. Cost: specs are validated
+  by parsing on write rather than being unrepresentable-when-invalid — worth it.
+- **2026-08-05 — A saved view is a route and a query string.** No typed config union per
+  view kind: that buys validation we do not need and costs a migration every time a
+  board gains a filter. This forced the finding that **the boards were not actually
+  URL-described** — `LeaderboardView`/`InsightView` kept their filters in `useState`, so
+  the first saved view stored a bare path, and board links had been dropping their
+  filters since they shipped. Fixed with `useUrlState`, which is what spine C had
+  claimed all along. Path validation splits deliberately: the **backend** enforces a
+  narrow, stable safety envelope (same-origin app route, known section, no scheme, no
+  `..`), and the **frontend** — which already owns `constants/boards.js` — checks the
+  catalog, so the 19-board list is never duplicated in Python.
 - **2026-07-16 — Fantasy-first pivot.** Repositioned from general "advanced NFL
   analytics" to fantasy-first. Trigger: nflsavant.com. Dropped the "Baseball Savant for
   the NFL" one-liner.

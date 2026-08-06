@@ -1,6 +1,7 @@
 // League-scoring editor: a preset picker plus an expandable custom-weights panel.
 // Emits a scoring spec string (e.g. "ppr" or "ppr:pass_td=6") via onChange.
 import { useState } from "react";
+import { LeagueProfileBar } from "./LeagueProfileBar";
 import { Select } from "./ui/Select";
 import {
   EDITABLE_WEIGHTS,
@@ -72,6 +73,11 @@ export function ScoringControl({ scoring, onChange }) {
           ))}
         </div>
       )}
+
+      {/* Mounted here because this card is the one surface present on every page
+          that has either the scoring or the league editor. Renders nothing when
+          signed out. */}
+      <LeagueProfileBar />
     </div>
   );
 }
