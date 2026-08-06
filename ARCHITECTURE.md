@@ -284,6 +284,7 @@ machine (your laptop, Supabase) can be brought to the exact same schema with
 | `alembic/versions/521f727f5461_*.py` | Migration #3 (M2) — adds the expected stat components, the three market-share columns, and carries inside the 10/5/2. |
 | `alembic/versions/7852e5b550b0_*.py` | Migration #4 (M4) — creates `player_target_depth` (targets by depth bucket × direction). |
 | `alembic/versions/990003c7c7cf_*.py` | Migration #5 (M5) — creates the four account tables (`users`, `league_profiles`, `favorites`, `saved_views`) with the one-active-profile partial index. |
+| `alembic/versions/8f73b5b2b1a1_*.py` | Migration #6 (M5 security) — **enables RLS on the account tables and revokes `anon`/`authenticated`**. Required: Supabase serves the whole `public` schema through PostgREST, so without it those tables are readable and writable by anyone holding the (public) anon key, bypassing the API entirely. |
 | `alembic/script.py.mako` | Template used when generating a new migration. |
 
 ---
@@ -338,6 +339,13 @@ routes — the same doc explains what that over- and under-states.
   can't disturb user data. `users.user_id` is the Supabase Auth subject verbatim rather
   than a locally-generated id, because Supabase owns `auth.users` in a schema Alembic
   does not manage.
+- ⚠️ **The account tables must keep RLS enabled** (migration `8f73b5b2b1a1`). Supabase
+  serves the whole `public` schema through PostgREST at `/rest/v1/`, and its default
+  privileges grant `anon` access to new tables — so any account table created *without*
+  RLS is readable and writable by anyone holding the anon key, which ships in the public
+  JS bundle. The backend is unaffected because it connects as the table owner, which
+  bypasses RLS. **Any future user-data table needs the same treatment**; the NFL
+  reference tables do not, being public read-only data.
 
 **Important schema rule (repeated everywhere for a reason):** per-game stats are
 stored; **season-level derived metrics** (`fantasy_ppg_*`, `routes_run_per_game`) and

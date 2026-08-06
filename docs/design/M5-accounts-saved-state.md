@@ -317,6 +317,34 @@ Every list endpoint is implicitly scoped to the token's `sub`. **No endpoint acc
 `user_id` parameter** — the id comes from the verified token and nowhere else, so there
 is no shape of request that can read another user's rows.
 
+### The second API you didn't write (found during production rollout)
+
+That guarantee covers *our* API. It does not, on its own, cover Supabase — which serves
+the entire `public` schema through **PostgREST** at `/rest/v1/`, and whose default
+privileges grant the `anon` and `authenticated` roles access to new tables there.
+
+So a table created by a plain Alembic migration is, by default, readable **and
+writable** by anyone holding the anon key — which is public by design and ships inside
+our JavaScript bundle. `GET /rest/v1/users?select=*` would have returned every user's
+email address, and profiles, favorites, and saved views would have been open to anyone.
+Every authorization rule above would have been bypassed, not by defeating it, but by
+going around it.
+
+Migration `8f73b5b2b1a1` closes this: **row-level security enabled on all four account
+tables with no policies**, plus an explicit `REVOKE` from both roles. Under RLS a role
+with no matching policy sees nothing and writes nothing, while the table *owner*
+bypasses RLS — and the backend connects as the owner, so the API is unaffected
+(verified: all 36 checks pass unchanged with RLS on).
+
+No policies are created, deliberately. Writing one would be the first step toward
+letting the browser talk to the database directly, which is exactly the architecture §2
+rejects.
+
+**The general lesson:** "the backend owns the data" is a statement about code, and it
+holds only as long as nothing else is also serving that database. On a
+platform-as-a-database, check what the platform exposes by default before assuming your
+API is the only door.
+
 ---
 
 ## 7. What M5 deliberately does not do
@@ -354,8 +382,10 @@ of it is done. There is no third-party OAuth app to register.
 4. **Render** (backend env): `SUPABASE_URL`. Add `SUPABASE_JWT_SECRET` only if the
    project still signs HS256.
 5. **Vercel** (frontend env): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
-6. Run the migration against Supabase (`alembic upgrade head` with `DATABASE_URL`
-   pointed at it), as M4 did for `player_target_depth`.
+6. Run the migrations against Supabase (`alembic upgrade head` with `DATABASE_URL`
+   pointed at it), as M4 did for `player_target_depth`. This must include
+   **`8f73b5b2b1a1`**, which locks the account tables away from PostgREST — without it
+   they are world-readable through Supabase's own REST API (see §6).
 
 Optionally raise the password floor in **Authentication → Policies**; the UI already
 enforces 8 characters, above Supabase's default of 6.
