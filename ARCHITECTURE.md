@@ -77,7 +77,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `render.yaml` | config | "Blueprint" telling **Render** (the backend host) how to build and run the backend in production. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
 | `.gitignore` | config | Lists files git should ignore (`.env`, `.venv/`, `node_modules/`, etc.). |
-| `.github/` | tooling | GitHub Actions. `workflows/backend-tests.yml` runs `backend/tests/` on every pull request and on `main`, against a PostgreSQL 16 service container matching `docker-compose.yml`. |
+| `.github/` | tooling | GitHub Actions. `workflows/backend-tests.yml` runs `backend/tests/` on every pull request and on `main`, against a PostgreSQL 16 service container matching `docker-compose.yml`. Its `pytest` job is a **required status check** on `main` — a pull request cannot merge while it is red. |
 | `.claude/` | tooling | Claude Code settings for this repo (e.g. `launch.json` for the preview server, local settings). Not part of the app itself. |
 | `GridironIQ-Technical-Walkthrough.docx` | doc | A standalone Word write-up (not wired into the code). |
 | `.git/` | git | Git's internal history. Never edit by hand. |

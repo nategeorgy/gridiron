@@ -12,6 +12,10 @@ against a PostgreSQL 16 service container with the same credentials as
 `docker-compose.yml`, so there is no CI-only configuration to keep in sync. Point the
 suite at a different server with `TEST_DATABASE_URL`.
 
+That job is a **required status check** on `main`, so a red suite blocks the merge. If
+you need to land something while CI itself is broken, an admin can override on the pull
+request — the check is a speed bump for emergencies, not a lock.
+
 ## What is covered
 
 The suite starts at the auth boundary, because M5 is the first code in the project where
