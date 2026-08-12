@@ -91,6 +91,9 @@ cross-user isolation on every account endpoint, and the row-level-security lockd
 keeps the account tables off Supabase's PostgREST API. See
 [`backend/tests/README.md`](backend/tests/README.md).
 
+The same command runs on every pull request via GitHub Actions
+(`.github/workflows/backend-tests.yml`).
+
 ## First-time / from-scratch setup
 
 Only needed on a fresh machine (the steps above are enough day-to-day):

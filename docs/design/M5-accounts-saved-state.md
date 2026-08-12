@@ -521,9 +521,9 @@ Two lessons worth carrying forward:
   matrix in §9, which is a lot of behaviour resting on a manual pass. That is a smaller
   risk than the auth boundary (a frontend bug shows the wrong thing to *you*, not
   someone else's data), but it is the largest remaining gap.
-- **No CI runs the suite**, so it protects only the people who remember to run it. Two of
-  the four rollout failures in §10 were schema- or config-level and would have been
-  caught by tests running automatically on a pull request.
+- ~~**No CI runs the suite.**~~ **Resolved:** `.github/workflows/backend-tests.yml` runs
+  it on every pull request and on `main` — the repo's first CI. Two of the four rollout
+  failures in §10 were schema- or config-level, the kind a pull-request check catches.
 
 ## 12. The test suite
 

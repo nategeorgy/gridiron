@@ -598,7 +598,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
-      `gridiron_test` database, so it never touches dev data. No CI yet
+      `gridiron_test` database, so it never touches dev data. Runs on every pull
+      request via `.github/workflows/backend-tests.yml`
       (see [`backend/tests/README.md`](backend/tests/README.md))
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app

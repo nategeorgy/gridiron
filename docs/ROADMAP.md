@@ -210,7 +210,8 @@ The completion of spine C: the same state, now following you between devices.
   `backend/tests/` — **150 tests** covering token verification, JIT provisioning,
   cross-user isolation on every account endpoint, and the RLS lockdown. The first
   automated tests in the repo, started here because this is the first code where a bug
-  means one user reading another's data. No CI runs them yet.
+  means one user reading another's data. Run on every pull request by
+  `.github/workflows/backend-tests.yml`, the repo's first CI.
 
 ### 🗓️ M6 — New Data Domains — M–L — **NEXT** (parallelizable after M1)
 Each sub-feature is its own deployable slice:

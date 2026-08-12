@@ -7,6 +7,11 @@ cd backend && .venv/bin/python -m pytest
 Needs the local Postgres running (`docker compose up -d` from the repo root). Nothing
 else: no Supabase project, no network, no `.env`.
 
+CI runs the same command on every pull request — `.github/workflows/backend-tests.yml`,
+against a PostgreSQL 16 service container with the same credentials as
+`docker-compose.yml`, so there is no CI-only configuration to keep in sync. Point the
+suite at a different server with `TEST_DATABASE_URL`.
+
 ## What is covered
 
 The suite starts at the auth boundary, because M5 is the first code in the project where

@@ -77,6 +77,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `render.yaml` | config | "Blueprint" telling **Render** (the backend host) how to build and run the backend in production. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
 | `.gitignore` | config | Lists files git should ignore (`.env`, `.venv/`, `node_modules/`, etc.). |
+| `.github/` | tooling | GitHub Actions. `workflows/backend-tests.yml` runs `backend/tests/` on every pull request and on `main`, against a PostgreSQL 16 service container matching `docker-compose.yml`. |
 | `.claude/` | tooling | Claude Code settings for this repo (e.g. `launch.json` for the preview server, local settings). Not part of the app itself. |
 | `GridironIQ-Technical-Walkthrough.docx` | doc | A standalone Word write-up (not wired into the code). |
 | `.git/` | git | Git's internal history. Never edit by hand. |
@@ -552,6 +553,12 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-08-12** — **First CI** (§2). New `.github/workflows/backend-tests.yml` runs the
+  backend suite on every pull request and on `main`, against a PostgreSQL 16 service
+  container using the same credentials as `docker-compose.yml` — so CI runs the identical
+  command a developer does, with no CI-only configuration to drift. Deliberately no
+  `paths:` filter: scoping it to `backend/**` would mean the check never reports on
+  documentation PRs, which silently blocks them the moment it becomes required.
 - **2026-08-12** — **First automated tests** (§5). New `backend/tests/` — 150 tests
   covering the M5 auth boundary, which until now was verified by a throwaway script. The
   harness builds a throwaway `gridiron_test` with `alembic upgrade head` and drops it, so
