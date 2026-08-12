@@ -45,6 +45,12 @@ function readableError(error) {
   if (/user already registered/i.test(message)) {
     return "That email already has an account — sign in instead.";
   }
+  if (/email rate limit|over_email_send/i.test(message)) {
+    // A different limit with a very different reset: the mail-sending quota is
+    // per *hour*, so "wait a minute" would send people into a retry loop that
+    // cannot succeed. Point at the path that needs no email instead.
+    return "We've sent too many emails recently — that limit resets after about an hour. If you already have an account, signing in with your password works right now.";
+  }
   if (/rate limit|too many/i.test(message)) {
     return "Too many attempts. Wait a minute and try again.";
   }
