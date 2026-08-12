@@ -24,9 +24,11 @@ Three fully decoupled apps (frontend talks to backend over HTTP only):
 ## Prerequisites
 
 - **Docker Desktop** — runs the local PostgreSQL instance
-- **Python 3.12** — for `backend/` and `pipeline/`, which share one `.venv/` at the
-  repo root. Use 3.12 specifically: `psycopg2-binary` has no wheels for 3.13+ and
-  building it from source needs `pg_config` on your PATH.
+- **Python 3.12** — for `backend/` and `pipeline/`. Use 3.12 specifically:
+  `psycopg2-binary` has no wheels for 3.13+ and building it from source needs
+  `pg_config` on your PATH. The backend runs from **`backend/.venv/`** — the one
+  `.claude/launch.json` starts, and the only one with M5's `PyJWT` installed;
+  `pipeline/` uses the older shared `.venv/` at the repo root.
 - **Node 20+** — for the Vite frontend
 
 ## Running locally
@@ -50,7 +52,7 @@ on `localhost:5432`.
 ### 2. Backend
 
 ```bash
-cd gridiron/backend && ../.venv/bin/uvicorn app.main:app --reload --port 8000
+cd gridiron/backend && .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
 `--reload` auto-restarts on code edits. Docs at http://localhost:8000/docs.
@@ -69,6 +71,25 @@ curl localhost:8000/api/v1/health     # {"status":"ok","database":"connected"}
 ```
 
 Then open http://localhost:5173. Edit code → both servers hot-reload → refresh.
+
+Signed-in features not working? `curl localhost:8000/api/v1/health/auth` reports whether
+token verification is wired correctly — a misconfigured `SUPABASE_URL` and a genuinely
+bad token both look like the same 401 without it.
+
+## Tests
+
+```bash
+cd gridiron/backend && .venv/bin/python -m pytest
+```
+
+Needs only the database from step 1 — no Supabase project, no network, no `.env`. The
+suite creates its own `gridiron_test`, migrates it, and drops it at the end, so it never
+touches your development data.
+
+Coverage starts at the **auth boundary** (M5): token verification, JIT user provisioning,
+cross-user isolation on every account endpoint, and the row-level-security lockdown that
+keeps the account tables off Supabase's PostgREST API. See
+[`backend/tests/README.md`](backend/tests/README.md).
 
 ## First-time / from-scratch setup
 

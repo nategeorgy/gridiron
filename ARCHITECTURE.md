@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-12
+Last updated: 2026-08-12 (backend test suite)
 
 ---
 
@@ -71,7 +71,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `CLAUDE.md` | doc | The master spec: product vision, full DB schema, metric catalog, scope ("do not build X yet"), and coding conventions. Read first by anyone (human or AI) starting work. |
 | `docs/` | folder | Longer-form design docs — the roadmap and per-milestone design notes. |
 | `frontend/` | app | The React web app (what users see). See [§4](#4-frontend--the-react-web-app). |
-| `backend/` | app | The FastAPI JSON API. See [§5](#5-backend--the-fastapi-api). |
+| `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
 | `render.yaml` | config | "Blueprint" telling **Render** (the backend host) how to build and run the backend in production. |
@@ -81,9 +81,10 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `GridironIQ-Technical-Walkthrough.docx` | doc | A standalone Word write-up (not wired into the code). |
 | `.git/` | git | Git's internal history. Never edit by hand. |
 
-> **Note on `.venv/`.** `backend/` and `pipeline/` share a **single** Python virtual
-> environment at the repo root (`.venv/`), which is why commands in those folders call
-> `../.venv/bin/…` — including `.claude/launch.json`. It is git-ignored and
+> **Note on `.venv/`.** The backend runs from **`backend/.venv/`** — that is what
+> `.claude/launch.json` starts and the only environment with M5's `PyJWT` installed, so
+> backend commands are `.venv/bin/…` from inside `backend/`. `pipeline/` still uses the
+> older shared `.venv/` at the repo root (`../.venv/bin/…`). Both are git-ignored and
 > machine-local, not part of the source you edit. Must be **Python 3.12**:
 > `psycopg2-binary` publishes no wheels for 3.13+, and building from source needs
 > `pg_config` on your PATH. The frontend's equivalent is `frontend/node_modules/`.
@@ -227,7 +228,8 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 
 | File | Controls |
 | --- | --- |
-| `requirements.txt` | Python dependencies for the backend. |
+| `requirements.txt` | Python dependencies for the backend, tests included (`pytest`, `pytest-asyncio`, `httpx`) — one venv, so a test suite nobody has installed is a test suite nobody runs. |
+| `pytest.ini` | Test configuration: `testpaths = tests`, and `pythonpath = .` so tests import the app the same way the app imports itself. |
 | `alembic.ini` | Alembic (migrations) configuration. |
 | `.env` | Local secrets: `DATABASE_URL`, `ENVIRONMENT`, `CORS_ORIGINS`, and optionally `SUPABASE_URL` / `SUPABASE_JWT_SECRET`. Git-ignored. |
 | `.venv/` | The backend's private Python environment (git-ignored). |
@@ -269,6 +271,27 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `routers/metrics.py` | `GET /metrics` — serves the whole metric registry to the frontend. |
 | `routers/account.py` | ⭐ **The account endpoints (M5)**: `/me` (+ `DELETE`, which ships now rather than later — collecting an identity means owing a way to revoke it), and CRUD for `/me/league-profiles`, `/me/favorites`, `/me/saved-views`. Every handler is scoped to the token's subject and **no endpoint accepts a user id**, so there is no request shape that reads another user's rows; a guessed id 404s exactly like a nonexistent one. |
 | `utils/` | Shared backend helpers (currently just a placeholder `.gitkeep`). |
+
+### `backend/tests/` — the test suite
+
+Run with `.venv/bin/python -m pytest` from `backend/`. Needs only the local Postgres — no
+Supabase project, no network, no `.env`. Started at the **auth boundary**, because M5 is
+the first code in the project where a bug means one user reading another user's data.
+
+| Path | What it does |
+| --- | --- |
+| `README.md` | What is covered, how the fixtures work, and the traps worth knowing before adding a test. |
+| `conftest.py` | ⭐ **The harness.** Creates a throwaway `gridiron_test` database, migrates it with `alembic upgrade head`, and drops it at the end — the development database is never touched, and no test depends on ingested data. Each test runs in a transaction that is rolled back, with the session joined in `create_savepoint` mode so handler `commit()` calls behave normally and still leave no trace. Also pins the suite **offline**: an autouse fixture installs a JWKS client that fails like an unreachable endpoint. |
+| `helpers.py` | Test constants and token minting. Imports nothing from `app`, because `conftest.py` reads these constants to build the environment *before* the first `import app` — `settings` and the engine are both built at import time. |
+| `test_auth.py` | ⭐ Token verification with **real** signed tokens and nothing overridden — signature, expiry, issuer, audience, `alg=none`, the asymmetric ES256/JWKS path, algorithm confusion, and JIT provisioning (including the email-local-part `display_name` fallback). |
+| `test_cross_user_isolation.py` | ⭐ **The file that matters most.** User B attempting to read, patch, and delete user A's profiles, saved views, and favorites. The answer is always **404, never 403** — a 403 confirms the id is real and turns the endpoint into an enumeration oracle. |
+| `test_rls.py` | ⭐ The row-level-security lockdown from `8f73b5b2b1a1`, and the reason the suite migrates rather than using `create_all()`: this layer is a property of the *schema*, invisible to every request-level test. Asserts the mechanism, not the flag — a role standing in for PostgREST's `anon` is granted `SELECT` and must still see nothing. |
+| `test_league_profiles.py` | CRUD, spec validation, the one-active-profile invariant (including the partial unique index itself), and successor promotion. |
+| `test_saved_views.py` | CRUD and the path validation that keeps a stored URL on-site. |
+| `test_favorites.py` | Idempotent add/remove, unknown players, the cap. |
+| `test_account.py` | The account summary and the deletion cascade. |
+| `test_health.py` | `/health` and `/health/auth` — including that the auth probe never returns the HS256 secret, and that a broken JWKS is *reported* rather than raised. |
+| `test_harness.py` | Guards on the fixtures themselves: that the suite really is on the throwaway database, and that the schema is at the expected migration head. |
 
 ### `backend/alembic/` — database migrations
 
@@ -412,7 +435,15 @@ cd gridiron/frontend && npm run dev
 ```
 
 Sanity check: `curl localhost:8000/api/v1/health` should return
-`{"status":"ok","database":"connected"}`.
+`{"status":"ok","database":"connected"}`. For accounts, `/api/v1/health/auth` reports
+whether token verification is wired correctly.
+
+Backend tests (needs only the database from step 1 — the suite builds and drops its own
+`gridiron_test`, so your data is never touched):
+
+```bash
+cd gridiron/backend && .venv/bin/python -m pytest
+```
 
 ---
 
@@ -521,6 +552,24 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-08-12** — **First automated tests** (§5). New `backend/tests/` — 150 tests
+  covering the M5 auth boundary, which until now was verified by a throwaway script. The
+  harness builds a throwaway `gridiron_test` with `alembic upgrade head` and drops it, so
+  the development database is never touched and no test depends on ingested data; each
+  test runs in a transaction rolled back at the end, and an autouse fixture keeps the
+  suite off the network. `test_auth.py` uses **real signed tokens** against the real
+  `get_current_user`; everything else overrides it, resolving the user through
+  `Depends(get_db)` so `DELETE /me` can delete the instance its own session owns. Covers
+  token verification (signature, expiry, issuer, audience, `alg=none`, the ES256/JWKS
+  path, algorithm confusion), JIT provisioning, **cross-user isolation on every account
+  endpoint**, the one-active-profile invariant, saved-view path rejection, the deletion
+  cascade, `/health/auth`, and — the reason the suite migrates rather than using
+  `create_all()` — the **RLS lockdown from `8f73b5b2b1a1`**, which adds no table or column
+  and would otherwise have been invisible. New `backend/pytest.ini`; `pytest`,
+  `pytest-asyncio`, `httpx` added to `requirements.txt`. Verified by breaking the app on
+  purpose: 25 deliberate mutations, all caught. **Also fixed:** README and §2 described
+  one shared `.venv/` at the repo root, but the backend has run from `backend/.venv/`
+  since M5 added `PyJWT` — the documented command could not start the API.
 - **2026-08-12** — M5 accounts **enabled in production**, plus the four fixes the
   rollout surfaced. `8f73b5b2b1a1` enables RLS on the account tables (Supabase serves
   `public` through PostgREST, so Alembic-made tables were world-readable via the public

@@ -405,6 +405,11 @@ enforces 8 characters, above Supabase's default of 6.
 
 ## 9. Verification
 
+> **The backend half of this is now a committed test suite** — see
+> [§12](#12-the-test-suite). What follows is the ad-hoc verification done as M5 shipped;
+> everything in the first two paragraphs is now an automated test, and the browser-driven
+> checks below them still are not.
+
 Backend, against local Postgres with the real router and ORM (`get_current_user`
 overridden so endpoints could be driven without a live Supabase project): **36 checks**,
 all passing —
@@ -507,7 +512,79 @@ Two lessons worth carrying forward:
   cap that is roughly 3.6 kB of URL — within every practical limit, but it is the
   reason the cap exists. If watchlists ever need to be larger, the filter should become
   a server-side join against `favorites` keyed on the token instead.
-- **No automated test suite exists in this repo**, so the auth boundary is covered by
-  scripted verification rather than committed tests. Given that this is the first code
-  in the project where a bug means one user reading another's data, a real test suite
-  starting here is the obvious next investment.
+- ~~**No automated test suite exists in this repo.**~~ **Resolved:** the scripted
+  verification in §9 is now committed as `backend/tests/` — 150 tests, run with
+  `.venv/bin/python -m pytest` from `backend/`. See [§12](#12-the-test-suite).
+- **The tests cover the backend only.** The frontend account surfaces (`useAuth`,
+  `useAccount`, `useProfileSync`, `AuthDialog`, the URL-backed board state) still have no
+  automated coverage and were verified in a browser — including the entire email-auth
+  matrix in §9, which is a lot of behaviour resting on a manual pass. That is a smaller
+  risk than the auth boundary (a frontend bug shows the wrong thing to *you*, not
+  someone else's data), but it is the largest remaining gap.
+- **No CI runs the suite**, so it protects only the people who remember to run it. Two of
+  the four rollout failures in §10 were schema- or config-level and would have been
+  caught by tests running automatically on a pull request.
+
+## 12. The test suite
+
+**150 tests** in `backend/tests/`, added after the rollout in §10:
+
+```bash
+cd backend && .venv/bin/python -m pytest
+```
+
+Needs only the local Postgres. Reference documentation is in
+[`backend/tests/README.md`](../../backend/tests/README.md); this section records why it
+is shaped the way it is.
+
+**Why the auth boundary first.** Everything before M5 served the same public numbers to
+everybody, so a bug was wrong output. Here a bug is a disclosure. The suite is scoped to
+that boundary rather than spread thinly across the API.
+
+**Why it migrates its database instead of building it from models.** This is the decision
+§10 forced. The suite creates a throwaway `gridiron_test`, runs `alembic upgrade head`,
+and drops it — so no test can damage development data, and none may depend on it either
+(fixtures seed the two players they need). Building the schema from
+`Base.metadata.create_all()` would have been faster and simpler, and it would have
+produced tables that look correct to every request-level test in the suite while
+**silently omitting migration `8f73b5b2b1a1` entirely** — the RLS lockdown, which adds no
+table and no column and exists only as a property of the schema. The most serious bug of
+this milestone would have been invisible to the tests written to prevent the next one.
+
+`tests/test_rls.py` covers it directly, and asserts the mechanism rather than the flag: a
+role standing in for PostgREST's `anon` is granted `SELECT` explicitly, so that the only
+thing left between it and the data is row-level security, and it must still come up
+empty. It also pins that `FORCE ROW LEVEL SECURITY` stays **off** — that is what exempts
+the owner, and the backend connects as the owner, so forcing it would lock out the
+application itself.
+
+**Two authentication paths, deliberately.** `test_auth.py` overrides nothing and uses
+real signed tokens, because the thing under test *is* `app.auth`. Every other module uses
+`client_a` / `client_b`, which override `get_current_user`, so a test about router
+behaviour does not restate token plumbing. The override resolves the user through
+`Depends(get_db)`: the handler's session must own the instance it is handed, or
+`db.delete(user)` in `DELETE /me` raises `InvalidRequestError`.
+
+**The suite never touches the network**, and that is enforced rather than intended — an
+autouse fixture installs a JWKS client that fails the way an unreachable endpoint would.
+Before it existed, two health-endpoint tests were making real DNS lookups for
+`testproj.supabase.co` and passing because the lookup failed *fast*. Verified by running
+the suite with all non-localhost sockets blocked.
+
+**It was checked by breaking the app.** 25 deliberate mutations — dropping each `user_id`
+filter, skipping the issuer and audience checks, verifying HS256 against the JWKS key,
+never enabling RLS, adding a permissive policy, leaking the HS256 secret from
+`/health/auth` — applied one at a time to confirm the tests went red. All 25 were caught,
+but three only after fixes, each of which had been **passing for the wrong reason**:
+
+- A `//evil.com/x` rejection that was actually being caught by the *section* check rather
+  than the protocol-relative one. The input that needs that rule is `//fantasy/leaders`,
+  where the fake host is spelled like a real section.
+- An `alg=none` token that PyJWT refused before the allow-list was ever consulted,
+  because the test's stub returned a non-empty key.
+- The two network-dependent health tests above.
+
+That exercise is the reason to trust the rest, and it is worth repeating for any security
+assertion added later. It also exposed an untested branch — the **asymmetric ES256/JWKS
+path**, which is what the production Supabase project actually uses — now covered,
+including the algorithm-confusion attack.
