@@ -1,10 +1,16 @@
 """Supabase JWT verification and the current-user dependencies.
 
-Supabase Auth runs the Google OAuth dance in the browser and issues a signed access
-token; this module is the only place that token becomes an identity. The frontend
-uses ``supabase-js`` purely as a token issuer and never reads or writes application
-data — every request still goes through FastAPI, which keeps authorization in tested
-Python rather than in row-level-security policies that live in a dashboard.
+Supabase Auth signs the user in (email + password, or a magic link) and issues a
+signed access token; this module is the only place that token becomes an identity.
+The frontend uses ``supabase-js`` purely as a token issuer and never reads or writes
+application data — every request still goes through FastAPI, which keeps
+authorization in tested Python rather than in row-level-security policies that live
+in a dashboard.
+
+**This module must never learn how the user signed in.** It verifies whatever
+Supabase signs, which is why replacing Google OAuth with email auth changed exactly
+one line here (the ``display_name`` fallback below). Add sign-in methods in
+``services/supabase.js`` and ``AuthDialog``, not here.
 
 Two signing schemes are supported because Supabase projects use one or the other
 depending on their age:
@@ -14,6 +20,10 @@ depending on their age:
 * **Legacy HS256** — a shared project secret, used when ``SUPABASE_JWT_SECRET`` is
   set. The token header's ``alg`` selects the path, so a project can migrate from one
   to the other without a code change.
+
+Note that a rejected token is deliberately opaque: a bad signature, an unreachable
+JWKS, and a wrong issuer all return the same 401. Use ``GET /health/auth`` to tell
+them apart — see ``jwks_status`` below.
 
 See docs/design/M5-accounts-saved-state.md §2.
 """
@@ -149,8 +159,7 @@ def _upsert_user(db: Session, claims: dict) -> User:
     Provisioned just-in-time: the first authenticated request from an unknown subject
     creates the row, so there is no webhook to keep in sync and no window in which a
     valid token has no row to hang data off. Profile fields are refreshed on every
-    request, which is cheap and keeps a changed Google avatar or name from going
-    stale.
+    request, which is cheap and keeps a name the user later edits from going stale.
     """
     subject = claims.get("sub")
     try:

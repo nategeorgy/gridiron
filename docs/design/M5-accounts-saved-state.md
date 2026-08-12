@@ -1,9 +1,10 @@
 # M5 Design — Accounts & Saved State
 
-> Status: in progress. Milestone: [`docs/ROADMAP.md`](../ROADMAP.md) → M5.
+> Status: **shipped and live in production** (accounts enabled 2026-08-12).
+> Milestone: [`docs/ROADMAP.md`](../ROADMAP.md) → M5.
 > Depends on M1 (scoring config), M3 (league config), M4 (state worth saving).
 
-Last updated: 2026-08-05
+Last updated: 2026-08-12
 
 M1–M4 gave a user a lot of state worth keeping: their exact league scoring, their
 league size and lineup, a scatter they liked, five players they keep comparing, a board
@@ -309,9 +310,11 @@ PATCH  /me/saved-views/{id}         ← rename
 DELETE /me/saved-views/{id}
 ```
 
-`DELETE /me` exists in the first release rather than as a follow-up: collecting a Google
-identity means owing the user a way to revoke it, and the cascade makes it a five-line
-handler. Deferring it is how a project ends up with a support-email deletion process.
+`DELETE /me` exists in the first release rather than as a follow-up: collecting
+someone's email address means owing them a way to revoke it, and the cascade makes it a
+five-line handler. Deferring it is how a project ends up with a support-email deletion
+process. It clears everything *this* application stores; the Supabase Auth record lives
+outside our schema, so a full erasure also means deleting the user in Supabase.
 
 Every list endpoint is implicitly scoped to the token's `sub`. **No endpoint accepts a
 `user_id` parameter** — the id comes from the verified token and nowhere else, so there
@@ -403,7 +406,8 @@ enforces 8 characters, above Supabase's default of 6.
 ## 9. Verification
 
 Backend, against local Postgres with the real router and ORM (`get_current_user`
-overridden so endpoints could be driven without Google): **36 checks**, all passing —
+overridden so endpoints could be driven without a live Supabase project): **36 checks**,
+all passing —
 CRUD on all three resources, the one-active-profile invariant, successor promotion on
 deleting the active profile, idempotent favorites, duplicate-name 409s, invalid-spec
 422s, off-site and traversal path rejection, cascade on account deletion, and
@@ -447,7 +451,30 @@ Email accounts with no name resolve `display_name` to the email's local part
 (`bare@example.com` → `bare`), verified directly against the API for the bare-metadata,
 named, and magic-link token shapes.
 
-## 10. Known limits
+## 10. What the production rollout actually cost
+
+Everything above was verified locally before deploy, and the rollout still surfaced
+four separate problems. Each is fixed; they are recorded because the *pattern* matters
+more than the individual bugs — all four were invisible to local testing and to code
+review, and were only found by exercising the deployed system.
+
+| Found | Cause | Now |
+|---|---|---|
+| Account tables world-readable | Supabase serves `public` through PostgREST; Alembic-made tables land without RLS | Migration `8f73b5b2b1a1`; rule in CLAUDE.md |
+| `PGRST125: Invalid path specified in request URL` on sign-up | `VITE_SUPABASE_URL` set to the project's REST endpoint, not the project | Client strips the suffix and warns |
+| `Invalid or expired token` on every signed-in request | Same mistake in the backend's `SUPABASE_URL`, so the JWKS lookup 404'd | `GET /health/auth` reports issuer, JWKS URL, reachability |
+| "Wait a minute" advice on an hour-long limit | Supabase's email quota caught by the generic rate-limit branch | Matched separately, with the real reset |
+
+Two lessons worth carrying forward:
+
+1. **A platform-as-a-database may run an API you didn't write.** "The backend owns the
+   data" is a claim about code; it holds only while nothing else serves that database.
+2. **Do not infer configuration health from an opaque error.** A forged-token probe
+   returning 401 proves the token was rejected, not that verification is wired
+   correctly — those are the same response. That mistaken inference cost a full
+   debugging round, and `/health/auth` exists so it cannot happen again.
+
+## 11. Known limits
 
 - **Everything depends on email delivery.** Confirmation, magic link, and password reset
   all fail the same way if mail is throttled or filtered — see setup step 3. The
@@ -474,8 +501,8 @@ named, and magic-link token shapes.
   request was rejected, **not** that the verification path is correctly configured.
 - **JIT provisioning trusts the token's claims for email/name.** They come from a
   Supabase-signed token so they are not user-editable in transit, but they are a mirror
-  and can go stale if the user changes their Google profile; refreshed on every request
-  is cheap enough that they will not.
+  of Supabase's copy and would go stale if a user changed it there; refreshing on every
+  request is cheap enough that they will not.
 - **The watchlist filter passes player ids in the query string.** At the 300-favorite
   cap that is roughly 3.6 kB of URL — within every practical limit, but it is the
   reason the cap exists. If watchlists ever need to be larger, the filter should become

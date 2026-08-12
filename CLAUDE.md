@@ -424,6 +424,12 @@ GET/DELETE /api/v1/me                        ← profile + counts / delete accou
 CRUD       /api/v1/me/league-profiles        ← named scoring+league bundles
 GET/PUT/DELETE /api/v1/me/favorites[/{id}]   ← watchlist (idempotent add/remove)
 CRUD       /api/v1/me/saved-views            ← named route + query string
+
+GET /api/v1/health                           ← API + DB liveness (Render health check)
+GET /api/v1/health/auth                      ← is token verification wired? (issuer,
+                                               JWKS URL, whether it is reachable).
+                                               Public, non-secret — the diagnostic a
+                                               401 deliberately withholds
 ```
 
 Three per-request configs shape fantasy output, all parsed from compact spec strings:
@@ -654,6 +660,16 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - **A modal opened from the header must be portalled to `document.body`.**
   `.glass-header`'s `backdrop-filter` makes it a containing block for `position: fixed`,
   so an overlay rendered inside it gets clipped to the header instead of the viewport
+- **`SUPABASE_URL` / `VITE_SUPABASE_URL` are the *project* URL**, never one of the API
+  endpoints shown beside it in the dashboard. A `/rest/v1` suffix breaks the frontend
+  (auth calls land on PostgREST → `PGRST125`) and the backend (the JWKS lookup 404s →
+  every signed-in request returns "Invalid or expired token"). Both now guard against
+  it, but the failures are opaque — check `GET /api/v1/health/auth` first
+- **A rejected token never says *why*, so don't infer config health from a 401.** Bad
+  signature, unreachable JWKS, and wrong issuer are one response by design.
+  `PyJWKClientError` subclasses `PyJWTError`, so a probe with a forged token returning
+  "Invalid or expired token" proves only that it was rejected — **not** that
+  verification is wired correctly. `GET /api/v1/health/auth` is what answers that
 - **The URL outranks the account.** Scoring/league resolve
   `URL > active profile > localStorage > default`. Never invert this: a shared link
   carrying `?scoring=` has to show the sender's league to whoever opens it
