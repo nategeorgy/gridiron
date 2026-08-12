@@ -4,7 +4,7 @@
 > summary; this file holds the vision, architecture spines, and the milestone
 > plan. Update this when priorities change, then reconcile `CLAUDE.md`.
 
-Last updated: 2026-08-05
+Last updated: 2026-08-12
 
 ---
 
@@ -165,7 +165,7 @@ The layer that lets someone ask their own question instead of picking from ours.
   are unvalidated by construction — any two metrics can be divided, so they carry no
   "good direction" and are never used in Insight scoring.
 
-### 🔐 M5 — Accounts & Saved State — M — **✅ SHIPPED**
+### 🔐 M5 — Accounts & Saved State — M — **✅ SHIPPED & LIVE** (accounts enabled 2026-08-12)
 Design note: [`design/M5-accounts-saved-state.md`](design/M5-accounts-saved-state.md).
 The completion of spine C: the same state, now following you between devices.
 - **Deps:** M1–M4 (state worth saving). **Data:** none — no NFL ingestion.

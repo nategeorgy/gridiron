@@ -68,10 +68,13 @@ def delete_account(
 ) -> Response:
     """Delete the account and everything it owns.
 
-    Present in the first release rather than as a follow-up: collecting a Google
-    identity means owing the user a way to revoke it. Profiles, favorites, and saved
-    views go with it via ON DELETE CASCADE. The Supabase auth record is separate and
-    is removed by the user through Google/Supabase.
+    Present in the first release rather than as a follow-up: collecting someone's
+    email address means owing them a way to revoke it. Profiles, favorites, and saved
+    views go with it via ON DELETE CASCADE.
+
+    Note this deletes everything *this* application stores. The Supabase Auth record
+    lives outside our schema and is not removed here — a full erasure also means
+    deleting the user in Supabase.
     """
     db.delete(user)
     db.commit()

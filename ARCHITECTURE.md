@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-05
+Last updated: 2026-08-12
 
 ---
 
@@ -521,6 +521,16 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-08-12** — M5 accounts **enabled in production**, plus the four fixes the
+  rollout surfaced. `8f73b5b2b1a1` enables RLS on the account tables (Supabase serves
+  `public` through PostgREST, so Alembic-made tables were world-readable via the public
+  anon key). `services/supabase.js` now reduces `VITE_SUPABASE_URL` to the project URL
+  and warns, instead of letting an endpoint suffix send auth calls to PostgREST. New
+  **`GET /api/v1/health/auth`** reports issuer / JWKS URL / reachability, because a bad
+  signature, an unreachable JWKS and a wrong issuer are one indistinguishable 401.
+  `AuthDialog` now separates Supabase's hour-long email quota from generic rate limits.
+  Stale Google-era wording cleaned out of `app/auth.py`, `routers/account.py`, and the
+  M5 design note. See that note's §10 for the pattern behind all four.
 - **2026-08-05** — M5 auth swapped to email, before merge. Google OAuth replaced by
   **email + password *and* magic link** (see the ROADMAP decision log). New
   `components/AuthDialog.jsx` (sign-in / sign-up / magic link / forgot / check-inbox /
