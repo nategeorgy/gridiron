@@ -381,7 +381,12 @@ of it is done. There is no third-party OAuth app to register.
    is not a cosmetic problem, it is the feature not working.
 4. **Render** (backend env): `SUPABASE_URL`. Add `SUPABASE_JWT_SECRET` only if the
    project still signs HS256.
-5. **Vercel** (frontend env): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+5. **Vercel** (frontend env): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. ⚠️ The
+   first is the **project URL**, not one of the API endpoints displayed beside it.
+   Setting `…/rest/v1` sends every auth call to PostgREST, which answers
+   `PGRST125: Invalid path specified in request URL` — an error naming neither the
+   cause nor the fix. `services/supabase.js` now strips such a suffix and warns in the
+   console rather than shipping an unexplainable sign-up failure.
 6. Run the migrations against Supabase (`alembic upgrade head` with `DATABASE_URL`
    pointed at it), as M4 did for `player_target_depth`. This must include
    **`8f73b5b2b1a1`**, which locks the account tables away from PostgREST — without it
