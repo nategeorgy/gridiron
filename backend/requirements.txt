@@ -9,3 +9,16 @@ python-dotenv==1.0.1
 # M5 accounts: verify Supabase-issued JWTs. The [crypto] extra pulls in `cryptography`,
 # needed for the asymmetric (ES256/RS256) signing keys newer Supabase projects use.
 PyJWT[crypto]==2.10.1
+
+# --- Tests ---
+# Installed alongside the app rather than in a separate requirements-dev.txt: there is
+# one venv for backend and pipeline (see README), and a test suite nobody has installed
+# is a test suite nobody runs. See backend/tests/README.md.
+pytest==8.3.4
+# Every route handler is currently sync `def`, so nothing here needs it yet. It is
+# pinned now so the first async handler does not arrive with a test-infrastructure
+# change attached; `asyncio_mode` is left at its default (strict) in pytest.ini.
+pytest-asyncio==0.25.2
+# FastAPI's TestClient is a thin wrapper over httpx. Starlette already depends on it
+# transitively; pinning it here says the tests need it directly.
+httpx==0.28.1

@@ -594,6 +594,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       explanation breakdown, and live signal tiles on the Command Center. No new DB
       columns — everything is query-time
       (see [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md))
+- [x] Backend test suite (`backend/tests/`, 150 tests) — the repo's first automated
+      tests, started at the M5 auth boundary: token verification, JIT provisioning,
+      cross-user isolation on every account endpoint, and the RLS lockdown. Run with
+      `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
+      `gridiron_test` database, so it never touches dev data. Runs on every pull
+      request via `.github/workflows/backend-tests.yml`
+      (see [`backend/tests/README.md`](backend/tests/README.md))
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -604,6 +611,17 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 ## Notes for Claude Code
 
 - Always read this file at the start of every session before writing any code
+- **Run the backend tests after touching `app/auth.py`, `app/routers/account.py`,
+  `app/schemas/account.py`, or any migration** — `cd backend && .venv/bin/python -m
+  pytest`. That is the one area where a bug means one user reading another user's data,
+  which is why it is the part with tests. A new account endpoint needs an isolation test
+  (user B gets a 404, never a 403) in `tests/test_cross_user_isolation.py`; a new
+  migration means bumping `EXPECTED_HEAD` in `tests/test_harness.py`, and if it touches
+  an account table, adding it to `tests/test_rls.py`
+- **The test suite builds its schema by running the migrations, never
+  `Base.metadata.create_all()`.** Keep it that way: the RLS lockdown (`8f73b5b2b1a1`)
+  adds no table and no column, so a metadata-built schema would silently drop it and
+  every test would still pass — see `tests/test_rls.py`
 - **Keep [`ARCHITECTURE.md`](ARCHITECTURE.md) up to date.** It is the living map of the
   repo (what every file/folder is and controls). Whenever a change alters the project's
   structure — a new top-level file/folder, a new backend router/model/schema, a new

@@ -204,9 +204,14 @@ The completion of spine C: the same state, now following you between devices.
 - **Known limits:** **every auth path depends on email delivery**, so a real SMTP sender
   must be configured before real traffic (Supabase's built-in mailer is rate-limited and
   spam-prone); the watchlist filter passes ids in the query string (the reason for the
-  300-favorite cap); and the repo still has **no automated test suite**, so this — the
-  first code where a bug means one user reading another's data — is covered by scripted
-  verification rather than committed tests.
+  300-favorite cap); and the frontend account surfaces are still covered only by
+  browser-driven checks.
+- **Test suite:** the backend half of that verification is now committed as
+  `backend/tests/` — **150 tests** covering token verification, JIT provisioning,
+  cross-user isolation on every account endpoint, and the RLS lockdown. The first
+  automated tests in the repo, started here because this is the first code where a bug
+  means one user reading another's data. Run on every pull request by
+  `.github/workflows/backend-tests.yml`, the repo's first CI.
 
 ### 🗓️ M6 — New Data Domains — M–L — **NEXT** (parallelizable after M1)
 Each sub-feature is its own deployable slice:
