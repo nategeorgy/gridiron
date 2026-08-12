@@ -16,7 +16,29 @@
 // M5, minus the sign-in button. Accounts are a persistence layer, never a gate.
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
+// Endpoints Supabase's dashboard displays alongside the project URL. Copying one of
+// these into VITE_SUPABASE_URL by mistake is easy, and the resulting failure names
+// neither the cause nor the fix: the client posts to `<url>/auth/v1/signup`, which
+// becomes `…/rest/v1/auth/v1/signup`, and PostgREST answers "Invalid path specified in
+// request URL". Strip them and say so, rather than shipping an unexplainable sign-up.
+const ENDPOINT_SUFFIX = /\/(rest|auth|realtime|storage|functions)\/v\d+$/;
+
+/** Reduce whatever was configured to the project URL supabase-js expects. */
+function projectUrl(raw) {
+  if (!raw) return raw;
+  const trimmed = raw.trim().replace(/\/+$/, "");
+  const stripped = trimmed.replace(ENDPOINT_SUFFIX, "");
+  if (stripped !== trimmed) {
+    console.warn(
+      `[GridironIQ] VITE_SUPABASE_URL is "${trimmed}", which points at a specific API ` +
+        `rather than the project. Using "${stripped}" instead — please correct the ` +
+        `environment variable.`,
+    );
+  }
+  return stripped;
+}
+
+const url = projectUrl(import.meta.env.VITE_SUPABASE_URL);
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 /** Whether this build was configured with a Supabase project. */
