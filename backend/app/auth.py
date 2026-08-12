@@ -59,6 +59,27 @@ def _get_jwks_client() -> PyJWKClient:
     return _jwks_client
 
 
+def jwks_status() -> tuple[bool, str, int]:
+    """Probe the configured JWKS document. Returns (reachable, detail, key_count).
+
+    Used only by the auth health endpoint. A verification failure cannot distinguish
+    "this signature is wrong" from "I could not fetch the keys to check it" —
+    `PyJWKClientError` is a `PyJWTError`, so both raise into the same handler and
+    produce the same 401. This makes the difference visible without weakening what a
+    client learns from a rejected token.
+    """
+    if not settings.auth_enabled:
+        return False, "accounts not configured (SUPABASE_URL unset)", 0
+    try:
+        keys = _get_jwks_client().get_jwk_set().keys
+        if not keys:
+            return False, "JWKS fetched but contains no keys", 0
+        return True, "ok", len(keys)
+    except Exception as exc:  # noqa: BLE001 — any failure here is a config problem
+        logger.warning("JWKS probe failed for %s: %s", settings.supabase_jwks_url, exc)
+        return False, f"{type(exc).__name__}: {exc}", 0
+
+
 def _unauthorized(detail: str) -> HTTPException:
     """401 with the WWW-Authenticate header the Bearer scheme requires."""
     return HTTPException(

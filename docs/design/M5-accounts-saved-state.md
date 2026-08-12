@@ -379,8 +379,13 @@ of it is done. There is no third-party OAuth app to register.
    sender frequently lands in spam. Every path here depends on email delivery —
    confirmation, magic link, and password reset — so a throttled or spam-filed mailer
    is not a cosmetic problem, it is the feature not working.
-4. **Render** (backend env): `SUPABASE_URL`. Add `SUPABASE_JWT_SECRET` only if the
-   project still signs HS256.
+4. **Render** (backend env): `SUPABASE_URL` — again the **project URL**, not an API
+   endpoint under it. A `/rest/v1` suffix here points the JWKS lookup at a path that
+   does not exist, and because `PyJWKClientError` is a `PyJWTError`, the failure is
+   indistinguishable from a forged token: every signed-in request returns
+   *"Invalid or expired token."* Check with `GET /api/v1/health/auth`, which reports
+   the expected issuer, the JWKS URL, and whether it is actually reachable. Add
+   `SUPABASE_JWT_SECRET` only if the project still signs HS256.
 5. **Vercel** (frontend env): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. ⚠️ The
    first is the **project URL**, not one of the API endpoints displayed beside it.
    Setting `…/rest/v1` sends every auth call to PostgREST, which answers
@@ -461,6 +466,12 @@ named, and magic-link token shapes.
 - **Profiles store spec strings, so an invalid spec is representable in the type system**
   and prevented by validation instead. A grammar change that removes a token would need
   a data migration over stored specs.
+- **A rejected token does not say why, by design — so diagnose with `/health/auth`.**
+  Bad signature, unreachable JWKS, and wrong issuer all produce one 401. That is right
+  for a client (distinguishing them helps an attacker more than a user) and unhelpful
+  for an operator, which is why the health endpoint exists. Worth remembering when
+  *testing*, too: a forged-token probe returning "Invalid or expired token" proves the
+  request was rejected, **not** that the verification path is correctly configured.
 - **JIT provisioning trusts the token's claims for email/name.** They come from a
   Supabase-signed token so they are not user-editable in transit, but they are a mirror
   and can go stale if the user changes their Google profile; refreshed on every request
