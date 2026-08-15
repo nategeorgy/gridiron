@@ -1,9 +1,11 @@
 # Runs the backend test suite (backend/tests/) on every pull request and on main.
 #
-# Deliberately unconditional — no `paths:` filter. Filtering to `backend/**` would save
-# a minute on documentation PRs and would also mean this check never reports on them; the
-# moment it becomes a required status check, those PRs can never merge. The suite itself
-# takes about a second, so almost all of the runtime below is checkout and pip.
+# The `pytest` job below is a **required status check** on main: a pull request cannot
+# merge while it is red. That is also why this workflow is deliberately unconditional —
+# no `paths:` filter. Filtering to `backend/**` would save a minute on documentation PRs
+# and would also mean the check never reports on them, which now means they could never
+# merge at all. The suite itself takes about a second; almost all of the runtime below is
+# checkout and pip.
 name: Backend tests
 
 on:
