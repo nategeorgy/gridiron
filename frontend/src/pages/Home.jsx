@@ -13,11 +13,10 @@ import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { formatSigned, formatStat } from "../utils/format";
 import { scoringLabel } from "../constants/scoring";
-import { SEASONS } from "../constants";
+import { useSeasons } from "../hooks/useSeasons";
 
 // Same fixed-PPR fallback the leaderboard uses when the backend can't score yet.
 const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
-const SEASON = SEASONS[0];
 
 function Card({ children, className = "" }) {
   return <section className={`glass-card p-4 ${className}`}>{children}</section>;
@@ -121,6 +120,7 @@ function SignalCard({ title, blurb, boardPath, metric, detailFor, params, cta })
 // only when signed in *and* something is starred: an empty card on the home page
 // would be a permanent ad for a feature rather than a useful panel.
 function WatchlistCard({ params, pointsKey, ppgKey }) {
+  const { currentSeason: season } = useSeasons();
   const { isSignedIn } = useAuth();
   const { favorites } = useFavorites();
   const playerIds = favorites.map((favorite) => favorite.player.player_id);
@@ -155,7 +155,7 @@ function WatchlistCard({ params, pointsKey, ppgKey }) {
           {!isLoading && rows.length === 0 && (
             <tr>
               <td colSpan={4} className="py-6 text-center text-muted">
-                No {SEASON} stats yet for your watchlist.
+                No {season} stats yet for your watchlist.
               </td>
             </tr>
           )}
@@ -187,13 +187,14 @@ function WatchlistCard({ params, pointsKey, ppgKey }) {
 
 export function Home() {
   const [scoring] = useScoring();
+  const { currentSeason: season } = useSeasons();
   const { supportsScoring } = useMetrics();
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
   const ppgKey = supportsScoring ? "fantasy_ppg" : FANTASY_FALLBACK.fantasy_ppg;
 
   const params = useMemo(
     () => ({
-      season: SEASON,
+      season,
       season_type: "REG",
       metric: pointsKey,
       scoring,
@@ -201,7 +202,7 @@ export function Home() {
       limit: 6,
       offset: 0,
     }),
-    [scoring, pointsKey],
+    [season, scoring, pointsKey],
   );
 
   const { data, isLoading, isError } = useLeaderboard(params);
@@ -210,8 +211,8 @@ export function Home() {
 
   const [league] = useLeague();
   const insightParams = useMemo(
-    () => ({ season: SEASON, season_type: "REG", scoring, league, order: "desc" }),
-    [scoring, league],
+    () => ({ season, season_type: "REG", scoring, league, order: "desc" }),
+    [season, scoring, league],
   );
 
   return (
@@ -221,7 +222,7 @@ export function Home() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-fg">Command Center</h1>
           <p className="mt-1 text-sm text-muted">
-            The fastest way to a confident fantasy call — {SEASON} season.
+            The fastest way to a confident fantasy call — {season} season.
           </p>
         </div>
         <Link
@@ -251,7 +252,7 @@ export function Home() {
                 </div>
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">
-                    ◈ Fantasy Points Leader · {SEASON}
+                    ◈ Fantasy Points Leader · {season}
                   </div>
                   <h2 className="mt-1 text-xl font-bold tracking-tight text-fg">
                     {isLoading ? "Loading…" : leader?.name ?? "No data yet"}

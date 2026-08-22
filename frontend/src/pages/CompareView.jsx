@@ -22,9 +22,17 @@ import { useCompare } from "../hooks/useExplore";
 import { useScoring } from "../hooks/useScoring";
 import { useMetrics } from "../hooks/useMetrics";
 import { formatStat } from "../utils/format";
-import { INSIGHT_TIMEFRAMES, SEASONS, SEASON_TYPES } from "../constants";
+import { useSeasons } from "../hooks/useSeasons";
+import { useUrlState } from "../hooks/useUrlState";
+import { INSIGHT_TIMEFRAMES, SEASON_TYPES } from "../constants";
 
-const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
+// Whitelists for the URL-backed filters. A value outside them falls back rather than
+// reaching the API, so a param carried over from another view cannot wedge this one.
+// The empty timeframe is the fallback and is deliberately absent: it never appears in
+// a URL, so it never needs to be allowed in one.
+const SEASON_TYPE_VALUES = SEASON_TYPES.map((option) => option.value);
+const TIMEFRAME_VALUES = INSIGHT_TIMEFRAMES.map((option) => option.value).filter(Boolean);
+
 const MAX_PLAYERS = 5;
 
 /**
@@ -46,9 +54,16 @@ function leadFor(players, metricId, higherIsBetter) {
 
 export function CompareView({ board }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [season, setSeason] = useState(String(SEASONS[0]));
-  const [lastWeeks, setLastWeeks] = useState("");
-  const [seasonType, setSeasonType] = useState("REG");
+  // Every filter lives in the URL, so a comparison link reproduces the comparison —
+  // the player selection already did; season, timeframe and type now do too.
+  //
+  // Seasons come from the API (M6), and `String(currentSeason)` is the fallback rather
+  // than a literal: the default stays out of the query string *and* tracks the served
+  // current season, so this view rolls over when the data does.
+  const { seasonOptions, currentSeason } = useSeasons();
+  const [season, setSeason] = useUrlState("season", String(currentSeason));
+  const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "", TIMEFRAME_VALUES);
+  const [seasonType, setSeasonType] = useUrlState("type", "REG", SEASON_TYPE_VALUES);
   const [scoring, setScoring] = useScoring();
   const { metrics } = useMetrics();
 

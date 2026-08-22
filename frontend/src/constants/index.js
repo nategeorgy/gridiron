@@ -2,7 +2,28 @@
 // for the team leaderboard and the player-profile game log. Leaderboard columns live
 // in constants/boards.js, one set per board.
 
-export const SEASONS = [2025, 2024, 2023, 2022, 2021, 2020];
+// The first season in project scope — a scope decision, not a fact about today.
+export const FIRST_SEASON = 2020;
+
+/**
+ * The season a date falls in, for use *before* /seasons answers.
+ *
+ * An NFL season labelled Y runs from September Y into February Y+1, so anything
+ * before September belongs to the previous season's year. This is deliberately a
+ * month-level approximation of the real rollover (the Thursday after Labor Day):
+ * it is only ever the seed for the first render, and the served value — which knows
+ * which seasons actually have data — replaces it as soon as it arrives.
+ */
+export function fallbackCurrentSeason(today = new Date()) {
+  return today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
+}
+
+// Newest first, matching the shape of the served list. Only a placeholder: use
+// useSeasons() in components so the dropdown reflects the data that actually exists.
+export const FALLBACK_SEASONS = Array.from(
+  { length: fallbackCurrentSeason() - FIRST_SEASON + 1 },
+  (_, index) => fallbackCurrentSeason() - index,
+);
 
 export const SEASON_TYPES = [
   { value: "REG", label: "Regular Season" },

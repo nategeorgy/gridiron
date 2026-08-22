@@ -7,7 +7,7 @@
 //
 // Everything is in the user's own scoring and league context, and the whole view is
 // reconstructible from the URL, so a chart can be shared as a link.
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
@@ -20,9 +20,18 @@ import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { DENSITY_OPTIONS, SCATTER_GROUPS, findGroup } from "../constants/scatters";
-import { INSIGHT_TIMEFRAMES, SEASONS, SEASON_TYPES } from "../constants";
+import { useSeasons } from "../hooks/useSeasons";
+import { useUrlState } from "../hooks/useUrlState";
+import { INSIGHT_TIMEFRAMES, SEASON_TYPES } from "../constants";
 
-const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
+// Whitelists for the URL-backed filters. A value outside them falls back rather than
+// reaching the API, so a param carried over from another view cannot wedge the chart.
+// The empty timeframe is the fallback and is deliberately absent: it never appears in
+// a URL, so it never needs to be allowed in one.
+const SEASON_TYPE_VALUES = SEASON_TYPES.map((option) => option.value);
+const TIMEFRAME_VALUES = INSIGHT_TIMEFRAMES.map((option) => option.value).filter(Boolean);
+const DENSITY_VALUES = DENSITY_OPTIONS.map((option) => option.value);
+
 
 // Games needed to appear. Deliberately not a user control — each preset is a ranked
 // top-N, and a 1-game sample in a rate-stat plot is noise dressed as an outlier.
@@ -32,10 +41,17 @@ const MIN_GAMES_WINDOW = 2;
 export function ScatterView({ board }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [season, setSeason] = useState(String(SEASONS[0]));
-  const [lastWeeks, setLastWeeks] = useState("");
-  const [seasonType, setSeasonType] = useState("REG");
-  const [density, setDensity] = useState("50");
+  // Every filter lives in the URL, so a chart link reproduces the chart — the group
+  // and preset already did; season, timeframe, type and density now do too.
+  //
+  // Seasons come from the API (M6), and `String(currentSeason)` is the fallback rather
+  // than a literal: the default stays out of the query string *and* tracks the served
+  // current season, so this view rolls over when the data does.
+  const { seasonOptions, currentSeason } = useSeasons();
+  const [season, setSeason] = useUrlState("season", String(currentSeason));
+  const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "", TIMEFRAME_VALUES);
+  const [seasonType, setSeasonType] = useUrlState("type", "REG", SEASON_TYPE_VALUES);
+  const [density, setDensity] = useUrlState("density", "50", DENSITY_VALUES);
   const [scoring, setScoring] = useScoring();
   const [league, setLeague] = useLeague();
   const { metrics } = useMetrics();

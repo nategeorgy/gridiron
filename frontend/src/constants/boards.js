@@ -338,6 +338,61 @@ export const NFL_BOARDS = [
 
 export const ALL_BOARDS = [...INSIGHT_BOARDS, ...FANTASY_BOARDS, ...NFL_BOARDS];
 
+// --- Insight tools (M6) ---
+// Same nav-item shape as a board, but routed to its own page: the Draft Value Board's
+// columns are properties of a *comparison* (two ranks and the distance between them),
+// not registry metrics of a player, and one of its rows can legitimately have no value
+// at all — a rookie the consensus ranks and we have never seen play. Listed ahead of
+// the boards because in August it is the reason to open the site.
+export const INSIGHT_TOOLS = [
+  {
+    id: "insight-draft",
+    label: "Draft Value Board",
+    path: "/insight/draft",
+    menuDesc: "Where the consensus and our valuation disagree",
+    title: "Draft Value Board",
+    description:
+      "Expert consensus rank next to what each player's usage was actually worth, in " +
+      "your scoring and league size — and the gap between the two. A positive gap is " +
+      "a player we rate above the market.",
+    lede:
+      "Our side is built on expected points, not actual ones: a player who scored " +
+      "twelve touchdowns on six touchdowns' worth of usage is valued at six here. " +
+      "That is the point — it prices the opportunity, which tends to repeat, rather " +
+      "than the finish, which often does not.",
+  },
+  {
+    id: "insight-sos",
+    label: "Strength of Schedule",
+    path: "/insight/sos",
+    menuDesc: "Whose fixtures open up, by position",
+    title: "Strength of Schedule",
+    description:
+      "How hard every team's fixtures are for one position, in your scoring — the " +
+      "whole season as a grid, so the run of weeks is visible rather than just a rank.",
+    lede:
+      "Difficulty is fantasy points allowed to this position, on a 0-100 scale where " +
+      "higher is harder. Position matters more than most sites admit: a defense that " +
+      "smothers receivers is often the one running backs feast on.",
+  },
+  {
+    id: "insight-vegas",
+    label: "Vegas Board",
+    path: "/insight/vegas",
+    menuDesc: "Who's in the best scoring environment",
+    title: "Vegas Board",
+    description:
+      "What the betting market expects each offense to score this week, and the players " +
+      "who are in those games. A back in a 27-point offense has a different job from " +
+      "the same back in a 17-point one.",
+    lede:
+      "Implied total is the game total split by the spread - the points the market " +
+      "expects one offense to put up. It is the sharpest forward-looking read we have " +
+      "on how many fantasy points there are to go around, and it needs no projection " +
+      "of our own to say so.",
+  },
+];
+
 // --- Explore (M4) ---
 // Not boards: these are tools, not ranked tables, so they have no `columns` and are
 // routed to their own pages. They share the nav-item shape so the dropdown can render
@@ -369,7 +424,7 @@ export const EXPLORE_ITEMS = [
 
 // Nav dropdown groups. Insight leads — it is the reason to come back.
 export const NAV_GROUPS = [
-  { label: "Insight", items: INSIGHT_BOARDS, match: "/insight" },
+  { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
   { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" },
   { label: "Fantasy Leaderboards", items: FANTASY_BOARDS, match: "/fantasy" },
   { label: "NFL Leaderboards", items: NFL_BOARDS, match: "/nfl" },

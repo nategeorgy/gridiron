@@ -449,6 +449,18 @@ class PositionPool:
         )
         self.replacement_ppg, self.shallow_pool = _replacement_ppg(ppg, rank)
 
+        # The same baseline computed on *expected* points (M6.1). Replacement level
+        # has to be measured on the same ruler as the player, so expected VORP needs
+        # its own — the last startable player's expected points, not their actual.
+        expected_ppg = sorted(
+            (
+                record["expected_fantasy_ppg"] for record in records
+                if record.get("expected_fantasy_ppg") is not None
+            ),
+            reverse=True,
+        )
+        self.replacement_expected_ppg, _ = _replacement_ppg(expected_ppg, rank)
+
     def percentiles(self, values: dict[str, float | None]) -> dict[str, float | None]:
         return {
             key: pool.percentile(values.get(key)) for key, pool in self.pools.items()
@@ -475,6 +487,20 @@ def _score_row(record: dict, pool: PositionPool, percentiles: dict) -> None:
         vorp_ppg = ppg - replacement
         record["vorp_ppg"] = round_value(vorp_ppg, 2)
         record["vorp"] = round_value(vorp_ppg * played, 1)
+
+    # Expected VORP (M6.1) — the same calculation on expected points, so it values the
+    # opportunity rather than what came of it. A twelve-touchdown season on six
+    # expected ones scores like six here, which is the point: it is what the Draft
+    # Value Board contrasts the market's ranking against.
+    expected_ppg = record.get("expected_fantasy_ppg")
+    expected_replacement = pool.replacement_expected_ppg
+    record["replacement_expected_ppg"] = round_value(expected_replacement, 2)
+    if expected_ppg is None or expected_replacement is None:
+        record["expected_vorp_ppg"] = record["expected_vorp"] = None
+    else:
+        expected_vorp_ppg = expected_ppg - expected_replacement
+        record["expected_vorp_ppg"] = round_value(expected_vorp_ppg, 2)
+        record["expected_vorp"] = round_value(expected_vorp_ppg * played, 1)
 
     usage_terms = FOR_USAGE_TERMS.get(record.get("position"), ())
     record["fantasy_opportunity_rating"] = round_value(
@@ -586,6 +612,7 @@ def build_intelligence(
             pos: {
                 "rank": pool.replacement_rank,
                 "ppg": round_value(pool.replacement_ppg, 2),
+                "expected_ppg": round_value(pool.replacement_expected_ppg, 2),
                 "pool_size": pool.size,
                 "shallow_pool": pool.shallow_pool,
             }

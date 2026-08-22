@@ -4,7 +4,7 @@
 > summary; this file holds the vision, architecture spines, and the milestone
 > plan. Update this when priorities change, then reconcile `CLAUDE.md`.
 
-Last updated: 2026-08-12
+Last updated: 2026-08-20 (M6 shipped)
 
 ---
 
@@ -213,23 +213,68 @@ The completion of spine C: the same state, now following you between devices.
   means one user reading another's data. Run on every pull request by
   `.github/workflows/backend-tests.yml`, the repo's first CI.
 
-### 🗓️ M6 — New Data Domains — M–L — **NEXT** (parallelizable after M1)
-Each sub-feature is its own deployable slice:
-- **Depth charts** — `load_depth_charts` (2001+), new `depth_charts` table. S–M.
-- **Strength of Schedule** — fantasy pts allowed by position, from existing stats +
-  schedule. M.
-- **Vegas board** — historical `spread_line`/`total_line` from `load_schedules`. S.
-  *Live upcoming lines* need an external **odds API** (e.g. The Odds API free tier) —
-  separate freshness pipeline. M for live.
-- **Consensus projections** — `load_ff_rankings` (draft + weekly), `projections` table
-  (multi-source schema). M. Data limit: consensus, not ours — label the source.
+### 🗓️ M6 — New Data Domains — M–L — **✅ SHIPPED**
+**Design note: [`docs/design/M6-new-data-domains.md`](design/M6-new-data-domains.md)** —
+the measured feeds, the decisions, and the slice-by-slice plan. Read it before building
+any of this.
+- **The reframe: M6 is the first milestone about the future.** M1–M5 all describe
+  completed seasons, so data was immutable, the pipeline could be manual, and "current
+  season" could be a constant. All four M6 domains are perishable — which is why the
+  milestone opens with a **season-readiness slice** rather than a feature.
+- **Build order:** **4.0 season readiness** ✅ (2026 schedule + rosters, Vegas line
+  columns, the roster-bio unlock, a scheduled GitHub Action, computed season defaults) →
+  **4.1 Draft Value Board** ✅ (the draft-season sprint) → **4.2 depth charts + team
+  pages** ✅ → **4.3 strength of schedule** ✅ → **4.4 Vegas board** ✅.
+- **Draft Value Board** ✅ — consensus ECR next to **our** expected-points VORP rank, and
+  the **gap** between them, first in **Insight ▾**. Both ranks are counted over the same
+  players and the board stops at draftable depth — see the Decision Log entry, and the
+  design note's §4.1 for the two corrections that took.
+- **Depth charts** ✅ — `load_depth_charts`, **latest snapshot only**, QB/RB/WR/TE, on a
+  **new team page** (`/teams/:teamId` — record, fixtures with lines and implied totals,
+  depth chart with each player's PPG in *your* scoring) plus a dated badge on player
+  pages. The ingest replaces rather than upserts; see the Decision Log.
+- **Strength of Schedule** ✅ — fantasy points allowed by position, **computed through
+  the scoring engine** so a TE-premium league gets its own answer, on a 0–100 scale where
+  higher is harder. Prior-season basis rolling into current-season as games are played,
+  always labelled. Windows: ROS, next 4, fantasy playoffs (15–17), full season. A team ×
+  week grid, plus a strip on team pages and a column on the draft board.
+- **Vegas board** ✅ — **no odds API needed**: `load_schedules` already carries forward
+  `spread_line`/`total_line`. Columns landed in 4.0; the board is a player view (implied
+  team totals) and a game view on one toggle. Pricing depth measured 2026-08-20: weeks
+  1–6 full, week 7 half, sporadic beyond — so "not priced yet" is the common August
+  state and renders as such, never as a low total.
+- **Consensus is a *ranking*, not a projection** — `load_ff_rankings` has no projected
+  points and no ADP. Stored in a `player_rankings` table (multi-source from day one);
+  the `projections` table stays unbuilt until there is a projection to put in it.
 
 ### 🎮 M7 — Games & Growth — S–L each (Dream, but a cheap hook can slot in early)
-- **Data:** players/teams/stats we have; "Name their college" needs `college` (in
-  `load_players`/rosters — easy add). Mock draft needs ADP from `ff_rankings`.
-- **Complexity:** "Name their college" / "Name a dude" / "17-0" ≈ S each (client-side
-  quiz over the API). "EPA draft" and "mock draft simulator" ≈ M–L (game logic + ADP +
-  deviation model).
+**Design note: [`docs/design/M7-games.md`](design/M7-games.md)** — the full option set,
+the shared engine, and the data behind each mode. Read it before building any of this.
+- **The shape:** **one puzzle engine, not N games.** A mode is a generator plus a
+  renderer over a shared candidate pool, with a date-seeded daily puzzle and
+  **server-side grading** (`/api/v1/games/{mode}/daily|practice|guess`). The earlier
+  "client-side quiz over the API" framing is superseded — it leaks its own answer and
+  can't support a shared daily. See the Decision Log entry of 2026-08-19.
+- **Shortlist (build order):** **Higher or Lower** (first — the simplest mode that
+  forces the engine to exist) → **Rank 'Em** + **Guess the Number** (same generator,
+  new graders) → **Odd One Out** → **Stat-Line Wordle** (the flagship: clue order
+  derived from percentile extremity, so content self-tunes) → **Poeltl-style Guessr**
+  (only with *fantasy* reveal columns — the standard bio grid is already taken by
+  Weddle / Gridiron Guessr).
+- **Data:** the shortlist runs entirely on data already ingested — 2,280 player-seasons
+  with 8+ games (854 distinct players) and the 76-metric registry, which *is* the
+  question generator. Only the Guessr needs new data: the **roster-bio unlock** —
+  `load_players` publishes 39 columns and `ingest_players.py` stores 7, leaving college,
+  draft, birth date, height/weight and experience on the table (one migration + ~10
+  lines). Mock draft still needs ADP from `ff_rankings`.
+- **Complexity:** engine + first mode ≈ S–M; each additional shortlist mode ≈ S, except
+  Stat-Line Wordle ≈ M (clue ranking). "EPA draft" and "mock draft simulator" ≈ M–L
+  (game logic + ADP + deviation model).
+- **Kept in the backlog** (design note §6): Target-Depth Fingerprint (the most
+  proprietary — nobody else has `player_target_depth`), Regression Roulette (doubles as
+  a public evaluation harness for the Positive-Regression Index), fantasy Immaculate
+  Grid, Start/Sit Retro (resolves in *your* scoring), Boom or Bust, plus the original
+  "Name their college" / "Name a dude" / "17-0".
 
 ### 💭 Dream tail (only when the base is proven)
 - **Fantasy trade calculator** — on VORP / rest-of-season value.
@@ -247,9 +292,10 @@ Each sub-feature is its own deployable slice:
 | Feature | Source | Verdict |
 |---|---|---|
 | Expected fantasy points | `load_ff_opportunity` | 🟢 Ready-made |
-| Consensus projections / ADP | `load_ff_rankings` | 🟢 Available (consensus) |
-| Depth charts | `load_depth_charts` (2001+) | 🟢 |
+| Consensus projections / ADP | `load_ff_rankings` | 🟡 **Rankings only** — ECR + dispersion, **no projected points, no ADP** (measured 2026-08-19). ECR→`gsis_id` via `load_ff_playerids`: 436/440 skill players, 0 misses in the top 200 |
+| Depth charts | `load_depth_charts` | 🟢 A **timestamped snapshot feed** — 152 snapshots for 2026 so far, ~450k rows/season. M6 stores the latest only; nflverse retains the rest, so a change-log is backfillable later |
 | Historical Vegas lines | `load_schedules` | 🟢 |
+| **Upcoming** Vegas lines | `load_schedules` | 🟢 **Also here** — measured 2026-08-20: weeks 1–6 fully priced, week 7 half, scattered look-ahead lines beyond. An odds API is an upgrade (intraday moves, the unpriced weeks), not a prerequisite |
 | Rush attempts by yard-line | `load_pbp` | 🟢 Derive |
 | Replacement level / VORP | derived from the position-pool distribution + league config | 🟢 Shipped M3 |
 | Buy-low / sell-high signals | derived (expected-points gap + usage + career baseline) | 🟢 Shipped M3 |
@@ -258,7 +304,7 @@ Each sub-feature is its own deployable slice:
 | Pass-play participation ("routes run") | `load_participation` × `load_pbp` | 🟢 Shipped M2 — populated **2020–2025**, GSIS ids join directly (see note below) |
 | Catchable targets | `load_ftn_charting` | 🟡 2022+ only |
 | Slot vs wide alignment | — | 🔴 No free source (see M2 design note §3) |
-| Live upcoming odds (survivor) | external odds API | 🟡 New dependency |
+| Intraday odds movement (survivor) | external odds API | 🟡 New dependency — deferred, see the row above |
 | Target depth / pass direction | `load_pbp` `air_yards` + `pass_location` | 🟢 Shipped M4 — populated **2020–2025** (see correction below) |
 | Route trees (drawn) | player tracking | 🔴 Not available free |
 | Dynasty value | — | 🔴 No free authoritative source |
@@ -292,6 +338,17 @@ Each sub-feature is its own deployable slice:
   + expected points exist. → Consensus first; own model later (Decision Log).
 - **Dynasty value:** no free authoritative source. → Approximate via VORP + contracts;
   defer a real crowd-source integration.
+- **Odds API for upcoming lines:** assumed necessary for a Vegas board; it is not.
+  nflverse's schedule feed ships forward spreads/totals ~13 weeks out. → **Reframed**
+  to an upgrade (intraday movement, unpriced late weeks), not an M6 dependency.
+- **A `projections` table in M6:** there is no projections feed — `ff_rankings` is
+  ranks, not points. → **Reframed** to `player_rankings`; a real projections table
+  waits for real projections (ours, or a user's).
+- **Headshot blur / pixelate game:** no data moat (an image crop any site could ship) and
+  murkier image rights than stat facts. → **Cut**; the M7 shortlist guesses from *stats*.
+- **Authored trivia** (records, Super Bowls, milestones): needs content we don't have and
+  can't generate, so the question bank stops growing the week someone stops writing it.
+  → **Cut** in favour of generated modes (`docs/design/M7-games.md` §1).
 
 ---
 
@@ -347,6 +404,120 @@ tells people it exists.
 
 ## Decision Log
 
+- **2026-08-20 — M6 shipped without the third-party dependency it was scoped around.**
+  The milestone was planned with an odds API as its one new integration and a
+  `projections` table as its one new schema commitment. It shipped with neither.
+  Measuring the feeds first (`docs/design/M6-new-data-domains.md` §2) showed the
+  betting lines were already arriving in the schedule file we had been downloading and
+  discarding since 2020, and that the "projections" feed publishes rankings with no
+  points in them at all. What the milestone actually needed was the opposite of a new
+  dependency: **columns from feeds already in hand** (lines and game context on `games`,
+  roster bio on `players`), two small tables for things genuinely not stored
+  (`player_rankings`, `depth_chart_entries`), and **two features with no storage at
+  all** — strength of schedule and the Vegas board are both computed per request,
+  because both depend on the scoring config. **The generalised rule, and it cost real
+  work to learn twice:** measure the feed before designing around what you assume it
+  contains. It moved a Vegas board from "M, new third-party dependency" to "S, already
+  ingested", and it stopped a projections table from being built for data that does not
+  exist.
+- **2026-08-20 — Strength of schedule is a percentile, not a rank, and it names its
+  source.** Two decisions inside one small feature. **Percentile because ranks are
+  ambiguous here**: "the number one defense against receivers" (hardest) and "the number
+  one schedule" (easiest) point in opposite directions, and a board whose whole job is
+  to be argued with cannot afford a scale people read backwards. 0–100 with higher =
+  harder also says *how much* harder, which a rank never does. **And the basis is stated
+  on every response** because defensive numbers come from games played: in August the
+  only complete measurement is last season, and defenses change over an offseason. It
+  switches to the current season after four weeks and widens from there, with **no blend
+  across seasons** — a number that is 60% one year and 40% another is harder to argue
+  with than either, and being arguable is the point. Byes are skipped rather than
+  averaged in, since an absent fixture is not an easy one. **No new tables:** points
+  allowed is an aggregation run through the scoring engine per request, the same stance
+  M3 took, for the same reason — a stored rating would need a row per scoring context.
+- **2026-08-20 — Current state and accumulated history need different ingests.** Every
+  pipeline script until M6.2 was an idempotent upsert, and the repo's standing rule said
+  so. Depth charts break it: the table holds where a player sits *today*, and a player
+  who is cut does not reappear with a worse rank — he stops appearing in the feed
+  entirely, so an upsert never touches his row and he stays listed as the WR3 forever.
+  The fix is `replace_scoped()`: delete and rewrite a whole scope (one team) inside a
+  single transaction. Two details are deliberate — only scopes **present in the feed**
+  are replaced, so a failed download cannot empty a team's chart, and the delete and
+  insert share a transaction, so a mid-run failure leaves the previous contents rather
+  than nothing. **Generalised rule:** ask whether a table accumulates facts or mirrors a
+  current state, because the second kind cannot be maintained by upsert, and the failure
+  is invisible — the data looks fine, it is just no longer true.
+- **2026-08-20 — A rank comparison is only as honest as its denominator.** Building the
+  Draft Value Board turned up a failure with no symptom: ranking the market over all 434
+  names on the consensus board while ranking ourselves over the 319 who actually played
+  last season. Both orderings looked fine; the gap between them did not, because a
+  smaller pool compresses every rank inside it upward. The board duly reported Zach Ertz
+  — consensus 384, ours 83 — as the single biggest value in the game, a +301 edge that
+  was pure arithmetic. Fixed by assigning **both** ranks over the players we can value,
+  with the raw ECR displayed alongside so the consensus's own number is never hidden
+  behind our re-ranking of it. Two things follow. **A depth limit is part of the
+  feature, not a nicety:** 93% of the consensus top 150 can be valued against ~60% past
+  pick 200, so beyond the picks a league actually makes (`teams × starters × 2`) the
+  disagreement between a market listing camp bodies and a valuation reading last
+  season's box scores is noise dressed as signal. And **the generalised rule** — any
+  feature that subtracts one ordering from another has to check that both orderings
+  count the same population first. `tests/test_draft_board.py` exists mostly to hold
+  this line.
+- **2026-08-20 — Consensus is a *ranking*, not a projection — so we ship the gap.**
+  M6 had planned "consensus projections" from `load_ff_rankings` into a `projections`
+  table. Measuring the feed killed that framing: it publishes expert consensus **ranks**
+  (`ecr`, `sd`, `best`, `worst`) with **no projected points and no ADP**. The distinction
+  matters here more than most places — a projection is stat components, which the M1
+  engine can rescore into any league; a rank is an opinion already frozen in somebody
+  else's scoring, and putting one raw inside a your-league-scoring product would
+  contradict differentiator #1. So ECR becomes one column and the **delta against our own
+  expected-points VORP rank** becomes the feature: *the market has him 41st; we have him
+  12th, and his 8 touchdowns came on 4.1 expected.* Our side is **xVORP, not actual
+  VORP** — actual VORP ranks last year's results, so a touchdown fluke rides into the gap
+  and the board ends up recommending variance. Consequence: the `projections` table stays
+  **unbuilt** (a schema commitment made by a feed that does not exist), replaced by
+  `player_rankings` with `source` + `ranking_type`, which honours the multi-source spine
+  under an honest name. Players with no NFL history render tagged, with **no** gap —
+  imputing rookies to replacement level would fabricate an "overvalued" verdict on every
+  rookie from data we do not have.
+- **2026-08-20 — M6 opens with season readiness, because the past tense is ending.**
+  Every milestone so far described completed seasons: data was immutable, a manual
+  pipeline was fine, nothing on screen could be stale, and "current season" could be a
+  constant because the newest season was always the newest one that existed. All four M6
+  domains are perishable (depth charts ~2 days, lines ~1 day, ECR ~1 week), and the
+  database stops at 2025 while Week 1 of 2026 is three weeks out. So M6.0 is not a
+  feature: the 2026 season gets ingested, season defaults become **computed** (latest
+  season *with completed games*, so the default never resolves to an empty board), every
+  M6 surface carries an "as of" stamp, and the pipeline moves to a **scheduled GitHub
+  Action split by perishability** — daily for depth charts and lines, Wednesday for stats
+  (after Monday night and Tuesday's stat corrections), weekly for ECR. **This puts a
+  production write credential in CI for the first time**, which is a real change in the
+  repo's threat surface and is scoped to the pipeline workflow deliberately. Freshness is
+  a pipeline concern and never a request concern: no endpoint fetches from nflverse at
+  request time, so a third-party outage stays out of the request path.
+- **2026-08-20 — The Vegas board needs no odds API.** The roadmap had priced live lines
+  as a separate M-sized slice with a new third-party dependency. `load_schedules([2026])`
+  already carries forward `spread_line` and `total_line` — 112 of 272 games priced today,
+  through week 13 — so the slice collapses to a few columns on `games` and a re-run of a
+  script that already exists, with implied team totals derived rather than stored. An odds
+  API buys intraday movement and the unpriced late weeks; that is an upgrade, not a
+  prerequisite. **Generalised:** the assumption that a feature needs a new data source is
+  worth re-measuring before it is worth designing around — the same way the participation
+  feed turned out not to be frozen after 2023.
+- **2026-08-19 — Games are one engine, not N client-side quizzes.** M7 had been scoped
+  as "≈ S each (client-side quiz over the API)". Recording the option set properly
+  ([`docs/design/M7-games.md`](design/M7-games.md)) made the flaw obvious: a quiz graded
+  in the browser **ships its own answer in the network tab**, so it cannot support a
+  daily puzzle everyone shares or a score worth posting — and six of them leave six
+  unrelated codebases behind. The replacement is a **puzzle engine**: a mode is a
+  *generator* plus a *renderer* over one shared candidate pool, with `seed = hash(mode,
+  date)` producing the daily puzzle (**computed, never stored** — no puzzle table, no
+  cron) and grading behind `POST /api/v1/games/{mode}/guess`. The first mode pays for the
+  engine; the next four are close to free. **The enabling asset is the metric registry:**
+  76 metrics × 2,280 player-seasons is not a question bank someone has to write, it is
+  one that already exists — so "content cost ≈ zero" became the filter that picked the
+  shortlist and rejected authored trivia outright. Games stay ungated and store nothing
+  server-side in v1 (`localStorage`, per spine C); if a results table is ever added it
+  holds user data and needs RLS with no policies, like the M5 account tables.
 - **2026-08-06 — The platform runs a second API over your database.** Found during the
   production rollout: Supabase serves the entire `public` schema through **PostgREST**
   at `/rest/v1/`, and its default privileges grant the `anon` and `authenticated` roles
