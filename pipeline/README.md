@@ -21,19 +21,32 @@ Scripts must run in dependency order — players, games, and stats resolve team
 abbreviations and foreign keys created by earlier steps.
 
 ```bash
-.venv/bin/python ingest_teams.py                       # 1. teams (run first)
-.venv/bin/python ingest_players.py                     # 2. players (QB/RB/WR/TE)
-.venv/bin/python ingest_schedules.py --seasons 2024    # 3. games
+.venv/bin/python ingest_teams.py                       # 1. teams (run first, 32 of 36)
+.venv/bin/python ingest_players.py                     # 2. players (QB/RB/WR/TE + bio)
+.venv/bin/python ingest_schedules.py --seasons 2024    # 3. games + betting lines
 .venv/bin/python ingest_stats.py --seasons 2024        # 4. per-game stats
 .venv/bin/python ingest_expected.py --seasons 2024     # 5. expected + market share
 .venv/bin/python ingest_usage.py --seasons 2024        # 6. snaps + routes
 .venv/bin/python ingest_target_depth.py --seasons 2024 # 7. target depth (M4)
+.venv/bin/python ingest_rankings.py                    # 8. consensus rankings (M6)
+.venv/bin/python ingest_depth_charts.py                # 9. depth charts (M6)
 ```
+
+Steps 8 and 9 are independent of 4–7 — they need only `players` (and `teams`) — but
+must follow step 2.
+
+`--seasons` is optional. Left off, each script asks `seasons.py` for its range, and
+**the two ranges are different on purpose**: `ingest_schedules.py` runs on the *roster*
+clock (2020 through the upcoming season — next year's fixtures are published in spring)
+while the stat scripts run on the *stats* clock (2020 through the last season played).
+Ask a stat script for a season that hasn't kicked off and it skips it with a warning
+rather than failing the run — which is what lets the scheduled refresh below run all
+summer without erroring.
 
 Steps 5–7 are **enrichment passes**: they only touch player-games step 4 already
 created, so they must run after it (in any order among themselves).
 
-Full backfill (project scope is 2020–2025):
+Full backfill (project scope starts at 2020 and runs to the current season):
 
 ```bash
 .venv/bin/python ingest_schedules.py --seasons 2020 2021 2022 2023 2024 2025
@@ -42,6 +55,21 @@ Full backfill (project scope is 2020–2025):
 .venv/bin/python ingest_usage.py     --seasons 2020 2021 2022 2023 2024 2025
 .venv/bin/python ingest_target_depth.py --seasons 2020 2021 2022 2023 2024 2025
 ```
+
+### Scheduled refresh
+
+`.github/workflows/pipeline.yml` runs this against production on a schedule, so the
+perishable domains don't go stale: **rosters + schedule daily** (the schedule feed is
+where betting lines arrive and move) and the **stats chain on Wednesdays in-season**,
+once Monday night has been played and Tuesday's official stat corrections have landed.
+It refreshes only the current season — the backfill above stays a one-off, since
+re-downloading years of play-by-play weekly would rewrite numbers that cannot change.
+Needs the `PIPELINE_DATABASE_URL` repo secret.
+
+Rankings run **daily** despite the consensus only moving weekly: the upstream file is a
+snapshot overwritten in place, so a scrape we miss is gone for good. A duplicate day
+writes nothing new (the snapshot date is part of the key); a missed week is a permanent
+hole in the history.
 
 `ingest_stats.py` downloads play-by-play to derive red-zone, inside-10/5/2, and
 unrealized-air-yard metrics. Pass `--skip-pbp` to skip that (faster, leaves those
@@ -60,6 +88,24 @@ participation + play-by-play download.
 - **Advanced (from play-by-play)** — red_zone_rush_attempts, red_zone_targets,
   red_zone_rush_share, rush_att_inside_10 / _5 / _2, unrealized_air_yards
 - **Fantasy** — fantasy_points_std / _ppr / _half
+
+`ingest_players.py` populates, beyond identity:
+
+- **Roster bio** (M6) — birth_date, height, weight, college_name, college_conference,
+  draft_year, draft_round, draft_pick, draft_team, rookie_season, years_of_experience.
+  `load_players` publishes 39 columns and this script kept 7 until M6; age and draft
+  capital are draft-board inputs. The feed is a *current* view (`latest_team`), so
+  re-running is how the roster follows free agency and the draft.
+
+`ingest_schedules.py` populates, beyond the schedule and result:
+
+- **Betting market** (M6) — spread_line, total_line, home_moneyline, away_moneyline,
+  over_odds, under_odds. Populated for finished games (closing lines) *and* upcoming
+  ones, which is why the Vegas board needs no external odds API. NULL beyond roughly 13
+  weeks out, because the market has not priced those games yet — a real state, not
+  missing data. `spread_line` is from the **home team's** perspective: positive means
+  the home team is favoured.
+- **Game context** (M6) — roof, surface, div_game.
 
 `ingest_expected.py` populates:
 
@@ -97,6 +143,49 @@ participation + play-by-play download.
 > That excludes ~10% of *pass plays* (sacks, scrambles, throwaways) but those are not
 > targets at all: bucketed targets reconcile **exactly** against `player_stats`
 > (2024: 16,903 = 16,903). See `docs/design/M4-exploration-viz.md` §5.
+
+`ingest_rankings.py` populates the **`player_rankings` table** (M6):
+
+- One row per (player, source, ranking type, season, week, scrape date) — expert
+  consensus rank (`ecr`) plus its dispersion (`sd`, `best`, `worst`), `rank_delta`, and
+  `player_owned_avg`. Draft rankings carry week 0.
+- **Rankings, not projections.** `load_ff_rankings` publishes no projected points and no
+  ADP, so there is nothing here to run through the scoring engine — the Draft Value
+  Board treats a rank as the market's opinion and contrasts it with our own valuation
+  rather than restating it in the user's scoring.
+- All 18 skill-position variants are stored (redraft / dynasty / best-ball, overall and
+  per-position, plus the superflex "op" boards) — about 4.3k rows, smaller than a single
+  week of `player_stats`. The board picks the variant matching the user's league.
+- The join to `gsis_id` runs through `load_ff_playerids`, with a normalised
+  name + position fallback. Unmatched players are **named** in the log rather than
+  counted: a miss inside the top 50 is a hole in the board, a miss at rank 340 is a
+  college player who has never taken an NFL snap. On the 2026 board, 0 of the top 200
+  were unmatched.
+
+`ingest_teams.py` writes **32 of the 36 rows `load_teams()` publishes**. The feed
+carries historical franchise codes beside current ones — LAR beside LA, OAK beside LV,
+SD beside LAC, STL beside LA — and those four play no game from 2020 on, so ingesting
+them put four teams that do not exist into every surface built from `SELECT * FROM
+teams`. The filter asks the **schedule** which teams play the seasons in scope rather
+than holding a list of abbreviations to exclude: a list would go stale at the next
+relocation and would silently bake in today's `FIRST_SEASON`, so widening the scope back
+to 2015 would leave St. Louis missing from seasons it really did play.
+
+`ingest_depth_charts.py` populates the **`depth_chart_entries` table** (M6):
+
+- One row per (season, team, player, position) from the **newest snapshot only**, with
+  `pos_rank` (1 = starter), the alignment slot, and the snapshot timestamp every surface
+  shows as its "as of".
+- The feed is a stream of timestamped snapshots — 152 for 2026 by mid-August, ~450k rows
+  a season. Keeping only the newest is reversible: nflverse retains them all, so a
+  change-log ("promoted to WR2 on Aug 12") can be backfilled later.
+- **The one ingest that is not an upsert.** It holds *current state*, and a cut player
+  does not appear with a worse rank — he stops appearing at all, so an upsert would
+  leave him listed as the WR3 forever. Each team's rows are deleted and rewritten
+  together (`replace_scoped`), and only for the teams the snapshot actually contains: a
+  team missing from a download is a glitch, not a released roster.
+- QB/RB/WR/TE only. The feed carries all 53 players, but a fantasy product has nothing
+  to say about a left guard.
 
 ### Left NULL — no free data source
 

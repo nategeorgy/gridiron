@@ -10,10 +10,10 @@ import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useSavedViews } from "../hooks/useAccount";
-import { ALL_BOARDS, EXPLORE_ITEMS } from "../constants/boards";
+import { ALL_BOARDS, EXPLORE_ITEMS, INSIGHT_TOOLS } from "../constants/boards";
 
 const SAVEABLE_PATHS = new Set(
-  [...ALL_BOARDS, ...EXPLORE_ITEMS].map((entry) => entry.path),
+  [...ALL_BOARDS, ...EXPLORE_ITEMS, ...INSIGHT_TOOLS].map((entry) => entry.path),
 );
 
 function errorMessage(error) {

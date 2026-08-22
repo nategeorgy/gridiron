@@ -16,11 +16,11 @@ import nflreadpy as nfl
 import polars as pl
 
 from db import get_engine, load_team_id_map, upsert
+from seasons import STATS, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("pipeline.stats")
 
-DEFAULT_SEASONS = list(range(2020, 2026))
 SCOPE_POSITIONS = {"QB", "RB", "WR", "TE"}
 RED_ZONE_YARDLINE = 20  # yards from the opponent's goal line
 
@@ -140,6 +140,14 @@ def compute_pbp_derived(seasons: list[int]) -> dict[str, dict]:
 
 def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
     """Load weekly stats for the given seasons and upsert player_stats rows."""
+    # This feed has nothing for a season that has not kicked off yet, and the
+    # loaders take every season in one call — so an unavailable season would fail
+    # the whole run rather than part of it. See seasons.py.
+    seasons = clamp_seasons(seasons, STATS)
+    if not seasons:
+        logger.info("nothing to ingest: no requested season is available yet")
+        return 0
+
     weekly = nfl.load_player_stats(seasons, summary_level="week")
     team_map = load_team_id_map()
     valid_players = _existing_ids("players", "player_id")
@@ -245,8 +253,8 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest per-game player stats.")
     parser.add_argument(
-        "--seasons", type=int, nargs="+", default=DEFAULT_SEASONS,
-        help="Seasons to ingest (default: 2020-2025).",
+        "--seasons", type=int, nargs="+", default=default_seasons(STATS),
+        help="Seasons to ingest (default: 2020 through the latest played season).",
     )
     parser.add_argument(
         "--skip-pbp", action="store_true",

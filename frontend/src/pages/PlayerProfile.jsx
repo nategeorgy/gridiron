@@ -19,6 +19,25 @@ function Panel({ children, className = "" }) {
   return <div className={`glass-card ${className}`}>{children}</div>;
 }
 
+// Where this player sits on their team's depth chart (M6.2). Always dated: it is the
+// most perishable thing on the page, and "WR2" with no date is a claim with no shelf
+// life. Renders nothing when no chart covers them — a normal state in June, not an
+// error worth a placeholder.
+function DepthChartBadge({ slot }) {
+  if (!slot || slot.pos_rank == null) return null;
+  const asOf = slot.as_of ? new Date(slot.as_of).toLocaleDateString() : null;
+  return (
+    <span
+      className="rounded border border-edge px-1.5 py-0.5 text-[11px] font-semibold text-muted"
+      title={asOf ? `Depth chart as of ${asOf}` : "Current depth chart"}
+    >
+      {slot.pos_abb}
+      {slot.pos_rank}
+      {asOf ? <span className="ml-1 font-normal text-faint">as of {asOf}</span> : null}
+    </span>
+  );
+}
+
 function ProfileHeader({ player }) {
   return (
     <Panel className="flex items-center gap-4 p-5">
@@ -46,7 +65,23 @@ function ProfileHeader({ player }) {
           {player.jersey_number != null && (
             <span className="stat-num text-faint">#{player.jersey_number}</span>
           )}
+          {player.age != null && <span className="stat-num text-faint">{player.age}y</span>}
+          <DepthChartBadge slot={player.depth_chart} />
         </div>
+        {player.college_name && (
+          <div className="mt-1 text-xs text-faint">
+            {player.college_name}
+            {player.draft_year && (
+              <>
+                {" · "}
+                {player.draft_round
+                  ? `${player.draft_year} round ${player.draft_round}, pick ${player.draft_pick}`
+                  : `${player.draft_year} undrafted`}
+                {player.draft_team ? ` (${player.draft_team})` : ""}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </Panel>
   );

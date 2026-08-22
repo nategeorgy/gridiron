@@ -18,15 +18,16 @@ import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useUrlState } from "../hooks/useUrlState";
-import { INSIGHT_TIMEFRAMES, POSITIONS, SEASONS, SEASON_TYPES } from "../constants";
+import { useSeasons } from "../hooks/useSeasons";
+import { INSIGHT_TIMEFRAMES, POSITIONS, SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
-const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
 
 export function InsightView({ board }) {
   // URL-backed for the same reasons as the leaderboard: shareable links and saved
   // views that actually carry a view.
-  const [season, setSeason] = useUrlState("season", String(SEASONS[0]));
+  const { seasonOptions, currentSeason } = useSeasons();
+  const [season, setSeason] = useUrlState("season", String(currentSeason));
   const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "");
   const [position, setPosition] = useUrlState("position", board.defaultPosition ?? "");
   const [seasonType, setSeasonType] = useUrlState("type", "REG");

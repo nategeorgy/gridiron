@@ -27,11 +27,10 @@ import nflreadpy as nfl
 import polars as pl
 
 from db import load_stat_keys, upsert
+from seasons import STATS, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("pipeline.target_depth")
-
-DEFAULT_SEASONS = list(range(2020, 2026))
 
 
 def _bucket_expr() -> pl.Expr:
@@ -97,6 +96,14 @@ def collect_season(season: int) -> list[dict]:
 
 def ingest_target_depth(seasons: list[int]) -> int:
     """Write target-depth rows for the given seasons. Returns rows written."""
+    # This feed has nothing for a season that has not kicked off yet, and the
+    # loaders take every season in one call — so an unavailable season would fail
+    # the whole run rather than part of it. See seasons.py.
+    seasons = clamp_seasons(seasons, STATS)
+    if not seasons:
+        logger.info("nothing to ingest: no requested season is available yet")
+        return 0
+
     # Only keep players/games we already track, so this never inserts rows for
     # defenders or out-of-scope players (the same guard the other enrichment
     # passes use).
@@ -124,8 +131,8 @@ if __name__ == "__main__":
         description="Ingest target distribution by pass depth and direction."
     )
     parser.add_argument(
-        "--seasons", type=int, nargs="+", default=DEFAULT_SEASONS,
-        help="Seasons to ingest (default: 2020-2025).",
+        "--seasons", type=int, nargs="+", default=default_seasons(STATS),
+        help="Seasons to ingest (default: 2020 through the latest played season).",
     )
     args = parser.parse_args()
     ingest_target_depth(args.seasons)

@@ -14,10 +14,10 @@ import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useScoring } from "../hooks/useScoring";
 import { useUrlState } from "../hooks/useUrlState";
 import { useMetrics } from "../hooks/useMetrics";
-import { POSITIONS, SEASONS, SEASON_TYPES, WEEKS } from "../constants";
+import { useSeasons } from "../hooks/useSeasons";
+import { POSITIONS, SEASON_TYPES, WEEKS } from "../constants";
 
 const PAGE_SIZE = 50;
-const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
 
 // Fixed-PPR equivalents used on fantasy boards when the backend can't score yet
 // (e.g. a deploy window). Both exist on the old and new backend.
@@ -29,7 +29,8 @@ const SIGNED_COLUMNS = ["fantasy_points_over_expected", "epa", "rushing_epa", "r
 export function LeaderboardView({ board }) {
   // Filters live in the URL so a board link carries its view — shareable, and what
   // makes a saved view (M5) store something more than a bare path.
-  const [season, setSeason] = useUrlState("season", String(SEASONS[0]));
+  const { seasonOptions, currentSeason } = useSeasons();
+  const [season, setSeason] = useUrlState("season", String(currentSeason));
   const [week, setWeek] = useUrlState("week", "");
   const [position, setPosition] = useUrlState("position", board.defaultPosition ?? "");
   const [seasonType, setSeasonType] = useUrlState("type", "REG");

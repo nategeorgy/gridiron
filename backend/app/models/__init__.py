@@ -6,8 +6,10 @@ metadata, which Alembic autogeneration relies on.
 
 from app.models.account import Favorite, LeagueProfile, SavedView, User
 from app.models.base import Base
+from app.models.depth_chart import DepthChartEntry
 from app.models.game import Game
 from app.models.player import Player
+from app.models.player_ranking import PlayerRanking
 from app.models.player_stats import PlayerStats
 from app.models.player_target_depth import PlayerTargetDepth
 from app.models.team import Team
@@ -18,6 +20,8 @@ __all__ = [
     "Player",
     "Game",
     "PlayerStats",
+    "PlayerRanking",
+    "DepthChartEntry",
     "PlayerTargetDepth",
     "User",
     "LeagueProfile",

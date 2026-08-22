@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.intelligence import breakdown, build_intelligence, resolve_window
 from app.league import parse_league
-from app.models import Game, Player, PlayerStats, PlayerTargetDepth, Team
+from app.models import DepthChartEntry, Game, Player, PlayerStats, PlayerTargetDepth, Team
 from app.models.player_target_depth import DEPTH_BUCKETS
 from app.schemas.common import PaginatedResponse, paginated
-from app.schemas.player import PlayerOut
+from app.schemas.player import DepthChartSlot, PlayerDetailOut, PlayerOut
 from app.schemas.stats import StatLineOut
 from app.scoring import (
     EXPECTED_COMPONENTS,
@@ -23,11 +23,52 @@ from app.scoring import (
 router = APIRouter(prefix="/players", tags=["players"])
 
 
-def _to_player_out(player: Player, team_abbreviation: str | None) -> PlayerOut:
-    """Build a PlayerOut, injecting the joined team abbreviation."""
-    out = PlayerOut.model_validate(player)
+def _to_player_out(
+    player: Player,
+    team_abbreviation: str | None,
+    schema: type[PlayerOut] = PlayerOut,
+) -> PlayerOut:
+    """Build a player response, injecting the joined team abbreviation.
+
+    ``schema`` picks the shape: the lean ``PlayerOut`` for search results, or
+    ``PlayerDetailOut`` for the profile. It has to be validated from the ORM object
+    directly — building a ``PlayerOut`` and letting FastAPI widen it to the detail
+    model would silently produce a player whose whole biography is null.
+    """
+    out = schema.model_validate(player)
     out.team_abbreviation = team_abbreviation
     return out
+
+
+def _depth_chart_slot(db: Session, player_id: str) -> DepthChartSlot | None:
+    """This player's current depth-chart position, if one is published (M6.2).
+
+    Newest season first, because the table holds one row per player per season and a
+    player page is asking about now. Returns None rather than raising when no chart
+    covers them — an undrafted rookie in June is a normal state, not an error.
+    """
+    row = db.execute(
+        select(
+            DepthChartEntry.pos_abb,
+            DepthChartEntry.pos_rank,
+            DepthChartEntry.season,
+            DepthChartEntry.snapshot_at,
+            Team.abbreviation,
+        )
+        .outerjoin(Team, DepthChartEntry.team_id == Team.team_id)
+        .where(DepthChartEntry.player_id == player_id)
+        .order_by(DepthChartEntry.season.desc(), DepthChartEntry.pos_rank)
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return DepthChartSlot(
+        team_abbreviation=row.abbreviation,
+        pos_abb=row.pos_abb,
+        pos_rank=row.pos_rank,
+        season=row.season,
+        as_of=row.snapshot_at,
+    )
 
 
 @router.get("", response_model=PaginatedResponse[PlayerOut])
@@ -63,8 +104,8 @@ def list_players(
     return paginated(items, total or 0, limit, offset)
 
 
-@router.get("/{player_id}", response_model=PlayerOut)
-def get_player(player_id: str, db: Session = Depends(get_db)) -> PlayerOut:
+@router.get("/{player_id}", response_model=PlayerDetailOut)
+def get_player(player_id: str, db: Session = Depends(get_db)) -> PlayerDetailOut:
     """Return a single player's profile."""
     row = db.execute(
         select(Player, Team.abbreviation)
@@ -74,7 +115,9 @@ def get_player(player_id: str, db: Session = Depends(get_db)) -> PlayerOut:
     if row is None:
         raise HTTPException(status_code=404, detail="Player not found")
     player, abbr = row
-    return _to_player_out(player, abbr)
+    out = _to_player_out(player, abbr, PlayerDetailOut)
+    out.depth_chart = _depth_chart_slot(db, player_id)
+    return out
 
 
 @router.get("/{player_id}/intelligence")

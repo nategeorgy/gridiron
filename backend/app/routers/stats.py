@@ -50,10 +50,14 @@ from app.custom_metrics import (
     parse_custom,
 )
 from app.database import get_db
+from app.draft_board import build_draft_board, default_ranking_type
 from app.intelligence import build_intelligence, resolve_window
 from app.league import FLEX_ELIGIBLE, parse_league
 from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
+from app.seasons import current_season, latest_scheduled_season
+from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
+from app.vegas import VIEWS as VEGAS_VIEWS, build_vegas, default_week, week_summary
 from app.scoring import (
     EXPECTED_COMPONENTS,
     POINTS_COMPONENTS,
@@ -859,4 +863,253 @@ def intelligence(
         "metric": metric, "order": order,
         "scoring": config.model_dump(), "league": league_config.model_dump(),
         "min_games": context["min_games"], "replacement": context["replacement"],
+    }
+
+
+# --- The Draft Value Board (M6.1) -------------------------------------------------
+
+# What a row can be sorted by, and which direction reads as "best first". Market rank
+# ascending is draft order, which is how a draft board is read; gap descending puts the
+# players we rate furthest above the consensus at the top.
+# `consensus` sorts by raw ECR, which every row has — so the default board reads in
+# draft order with rookies in their place, rather than dropping the rows that have
+# no comparable rank to the bottom.
+DRAFT_SORTS = {"consensus": "ecr", "market": "market_rank", "value": "value_rank", "gap": "gap"}
+
+
+@router.get("/draft-board")
+def draft_board(
+    season: int | None = Query(
+        None,
+        description="Valuation season — the season we value players from. Defaults to "
+                    "the latest season with stats, which is the last one played.",
+    ),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    scoring: str = Query(
+        "ppr",
+        description="League scoring as preset[:overrides], e.g. 'ppr' or 'ppr:pass_td=6'",
+    ),
+    league: str = Query(
+        "12", description="League context as teams[:slot=value], e.g. '12' or '12:superflex=1'"
+    ),
+    ranking_type: str | None = Query(
+        None,
+        description="Consensus variant (redraft-overall, redraft-op, dynasty-overall, …). "
+                    "Defaults to the one matching your league: superflex leagues get "
+                    "the superflex board.",
+    ),
+    position: str | None = Query(None, description="QB, RB, WR, or TE"),
+    sort: str = Query("consensus", pattern="^(consensus|market|value|gap)$"),
+    order: str = Query("asc", pattern="^(asc|desc)$"),
+    min_games: int | None = Query(
+        None, ge=0, description="Games needed to be valued. Defaults to ~a third of the season."
+    ),
+    depth: int | None = Query(
+        None, ge=0,
+        description="How many consensus picks to include. Defaults to what this league "
+                    "actually drafts (teams x starters x 2); 0 for the whole list.",
+    ),
+    player_ids: str = Query(
+        "", description="Comma-separated player ids to narrow to (the M5 watchlist filter)"
+    ),
+    limit: int = Query(100, ge=1, le=300),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Consensus expert rank against our expected-points valuation, and the gap.
+
+    Two seasons are in play and they are deliberately different: the rankings are for
+    the season about to start, while the valuation comes from the last season actually
+    played. `season` names the latter.
+
+    A positive gap means we rate the player above the consensus. Players with no NFL
+    history keep their consensus place and carry no gap — see `app.draft_board`.
+    """
+    try:
+        config = parse_scoring(scoring)
+        league_config = parse_league(league)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    valuation_season = season if season is not None else current_season(db)
+    if valuation_season is None:
+        raise HTTPException(status_code=404, detail="No seasons with stats are loaded")
+
+    window = resolve_window(db, valuation_season, season_type, None)
+    rows, context = build_draft_board(
+        db,
+        window,
+        config,
+        league_config,
+        ranking_type=ranking_type or default_ranking_type(league_config),
+        min_games=min_games,
+        position=position,
+        depth=depth,
+    )
+
+    # Applied after the ranks are assigned, so a watchlist view still shows each
+    # player's true place on the board rather than renumbering them 1..n.
+    watchlist = _parse_player_ids(player_ids)
+    if watchlist is not None:
+        wanted = set(watchlist)
+        rows = [row for row in rows if row.get("player_id") in wanted]
+
+    key = DRAFT_SORTS[sort]
+    descending = order == "desc"
+
+    def sort_key(row: dict) -> tuple[int, float]:
+        """Unvalued players sort last in both directions — they are not "rank 0",
+        they are unranked, and floating them to the top of a gap sort would be a
+        claim about them."""
+        value = row.get(key)
+        if value is None:
+            return (1, 0.0)
+        return (0, -value if descending else value)
+
+    rows.sort(key=sort_key)
+
+    total = len(rows)
+    page_rows = rows[offset : offset + limit]
+    page = (offset // limit) + 1 if limit else 1
+    return {
+        "data": page_rows, "total": total, "page": page, "limit": limit, "offset": offset,
+        "valuation_season": valuation_season, "season_type": season_type,
+        "window": window.as_dict(),
+        "sort": sort, "order": order,
+        "scoring": config.model_dump(), "league": league_config.model_dump(),
+        "ranking_type": context["ranking_type"], "source": context["source"],
+        "ranking_season": context["ranking_season"], "scraped_at": context["scraped_at"],
+        "ranked_players": context["ranked_players"],
+        "valued_players": context.get("valued_players", 0),
+        "depth": context.get("depth"),
+        "min_games": context.get("min_games"),
+        "replacement": context.get("replacement"),
+    }
+
+
+# --- Strength of schedule (M6.3) ---------------------------------------------------
+
+
+@router.get("/sos")
+def strength_of_schedule(
+    season: int | None = Query(
+        None, description="Schedule season. Defaults to the newest season on the schedule."
+    ),
+    position: str = Query("WR", description="QB, RB, WR, or TE"),
+    window: str = Query("full", description="full | ros | next4 | playoffs"),
+    scoring: str = Query(
+        "ppr", description="League scoring, e.g. 'ppr' or 'ppr:te_rec=1.5'"
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    """How hard each team's fixtures are for one position, in the user's own scoring.
+
+    Difficulty is fantasy points allowed per game by each defense, expressed as a 0–100
+    percentile where **higher is harder**. Computed per request rather than stored: in a
+    TE-premium league the tight ends a defense gives up are worth more, so the hardest
+    schedule for a tight end is a different list of teams.
+
+    The response always names its **basis** — which season's defensive numbers are
+    behind the ratings. In August that is necessarily last season, and defenses change
+    over an offseason.
+    """
+    upper = position.upper()
+    if upper not in SOS_POSITIONS:
+        raise HTTPException(status_code=400, detail=f"Unknown position '{position}'")
+    if window not in SOS_WINDOWS:
+        raise HTTPException(status_code=400, detail=f"Unknown window '{window}'")
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    schedule_season = season if season is not None else latest_scheduled_season(db)
+    if schedule_season is None:
+        raise HTTPException(status_code=404, detail="No seasons are loaded")
+
+    rows, context = build_sos(db, schedule_season, config, upper, window)
+    return {
+        "data": rows,
+        "total": len(rows),
+        "season": schedule_season,
+        "scoring": config.model_dump(),
+        **context,
+    }
+
+
+# --- The Vegas board (M6.4) --------------------------------------------------------
+
+
+@router.get("/vegas")
+def vegas_board(
+    season: int | None = Query(
+        None, description="Schedule season. Defaults to the newest season on the schedule."
+    ),
+    week: int | None = Query(
+        None, ge=1, le=22,
+        description="Week to show. Defaults to the next week not yet played.",
+    ),
+    view: str = Query("players", description="players | games"),
+    position: str | None = Query(None, description="QB, RB, WR, or TE (players view)"),
+    scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'ppr:te_rec=1.5'"),
+    limit: int = Query(100, ge=1, le=400),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict:
+    """One week's betting market, as a slate of games or a ranked list of players.
+
+    The market prices each game twice — a spread and a total — and splitting them apart
+    gives each team's **implied total**, the points the market expects that offense to
+    score. That is the forward-looking read on how many fantasy points are available,
+    which is why the default view ranks *players* by the environment they are in rather
+    than listing fixtures.
+
+    Both views come from the `games` columns M6.0 already ingests: no odds API, and no
+    stored implied totals. Games the market has not priced are returned with null lines
+    and sort last — "no line" is not "a low total".
+    """
+    if view not in VEGAS_VIEWS:
+        raise HTTPException(status_code=400, detail=f"Unknown view '{view}'")
+    if position and position.upper() not in POSITIONS:
+        raise HTTPException(status_code=400, detail=f"Unknown position '{position}'")
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    schedule_season = season if season is not None else latest_scheduled_season(db)
+    if schedule_season is None:
+        raise HTTPException(status_code=404, detail="No seasons are loaded")
+
+    resolved_week = week if week is not None else default_week(db, schedule_season)
+    if resolved_week is None:
+        raise HTTPException(status_code=404, detail="No games are loaded for this season")
+
+    # Production context comes from the last season actually played, exactly as on the
+    # team page: in August the numbers beside a name are last year's.
+    latest_played = current_season(db)
+    production_season = (
+        schedule_season
+        if latest_played is not None and schedule_season <= latest_played
+        else latest_played
+    )
+
+    players, games = build_vegas(
+        db, schedule_season, resolved_week, config, production_season, position
+    )
+    rows = players if view == "players" else games
+    page_rows = rows[offset : offset + limit]
+
+    return {
+        "data": page_rows,
+        "total": len(rows),
+        "page": (offset // limit) + 1 if limit else 1,
+        "limit": limit,
+        "offset": offset,
+        "view": view,
+        "season": schedule_season,
+        "week": resolved_week,
+        "production_season": production_season,
+        "weeks": week_summary(db, schedule_season),
+        "scoring": config.model_dump(),
     }
