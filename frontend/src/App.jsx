@@ -7,6 +7,7 @@ import { InsightView } from "./pages/InsightView";
 import { LeaderboardView } from "./pages/LeaderboardView";
 import { PlayerProfile } from "./pages/PlayerProfile";
 import { ScatterView } from "./pages/ScatterView";
+import { StyleGuide } from "./pages/StyleGuide";
 import { Teams } from "./pages/Teams";
 import { ALL_BOARDS, EXPLORE_ITEMS } from "./constants/boards";
 
@@ -53,6 +54,12 @@ export function App() {
 
         <Route path="players/:playerId" element={<PlayerProfile />} />
         <Route path="teams" element={<Teams />} />
+
+        {/* Design-token studio — a build tool, not a page of the product, so it
+            exists only under `npm run dev` and is never linked from the nav.
+            React Router ignores non-element children, which is what makes this
+            inline conditional work. */}
+        {import.meta.env.DEV && <Route path="styleguide" element={<StyleGuide />} />}
       </Route>
     </Routes>
   );
