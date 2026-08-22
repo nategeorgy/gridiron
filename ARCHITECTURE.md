@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-12 (backend test suite)
+Last updated: 2026-08-19 (design-token studio)
 
 ---
 
@@ -146,8 +146,8 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | Path | Layer | What it does |
 | --- | --- | --- |
 | `main.jsx` | entry | Boots React. Wraps the app in `QueryClientProvider` (React Query), **`AuthProvider`** (M5 — inside the query client, since it clears cached account queries on sign-out), and `BrowserRouter`. Imports global CSS. |
-| `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/insight/*` → `InsightView`; **`/explore/*` → the M4 tools** (`ScatterView`, `CompareView`, mapped from `EXPLORE_ITEMS`); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`. All wrapped in `Layout`. |
-| `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
+| `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/insight/*` → `InsightView`; **`/explore/*` → the M4 tools** (`ScatterView`, `CompareView`, mapped from `EXPLORE_ITEMS`); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`; and **`/styleguide` → the design-token studio, registered only when `import.meta.env.DEV`** so it never ships. All wrapped in `Layout`. |
+| `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. **The single source of truth for every theme value** — `/styleguide` reads these at runtime rather than copying them. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | **`pages/`** | pages | Top-level screens, one per route. |
 | `pages/Home.jsx` | page | **The home screen (`/`) — the Command Center.** A Bento dashboard that opens on the fantasy question: the current fantasy-points leader (spotlight), live fantasy leaders, entry tiles, the active league scoring, and **live Buy-Low / Sell-High signal tiles** from the M3 intelligence API. |
 | `pages/LeaderboardView.jsx` | page | The generalized leaderboard, driven by a **board config** (`constants/boards.js`). Every `/fantasy/*` and `/nfl/*` route renders this with a different board — fantasy boards show the league-scoring editor + scoring-aware columns; NFL boards show raw stats with the same filters (season / week / position / type). |
@@ -156,6 +156,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `pages/CompareView.jsx` | page | ⭐ **The comparison builder (M4)** at `/explore/compare`. Up to five players side by side, with headshots. Each row shows who **leads** that stat and by how much over the runner-up (direction from the registry's `higher_is_better`, so fewest fumbles wins). Only metrics applying to *every* compared position are shown. Plus an overlaid weekly chart and a percentile radar. Selection lives in the URL. |
 | `pages/PlayerProfile.jsx` | page | One player: header, season summary cards, the **Insight panel** (M3 scores + breakdown), an Expected vs Actual panel, a weekly fantasy trend chart, **the M4 usage-trend and target-depth charts**, and a game-by-game log. |
 | `pages/Teams.jsx` | page | Team leaderboard — ranked team offensive production for a season. |
+| `pages/StyleGuide.jsx` | page (dev only) | ⭐ **The design-token studio** at `/styleguide` — a build tool, not a product page, so `App.jsx` only registers it under `npm run dev` and nothing links to it. Renders every surface the Liquid Glass material produces beside a live editor for the theme's CSS variables, and emits the CSS to paste back into `index.css`. Reads the current values with `getComputedStyle` (so `index.css` stays the single source of truth), applies edits as inline custom properties on `<html>`, and **removes them on unmount** — a draft can never leak into the rest of the app. One page rather than one per theme: the glass is `backdrop-filter`, so a light panel nested in a dark page would blur an environment that does not exist. |
 | **`components/`** | UI | Reusable pieces used by pages. |
 | `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, the four dropdowns — Insight / Explore / Fantasy / NFL — and Teams), search box, the theme toggle, and **the account menu**; renders the current page inside. Also the single mount point for `useProfileSync`. The page background (the Liquid Glass "environment") is painted on `<body>`. |
 | `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
@@ -167,6 +168,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `components/SaveViewButton.jsx` | UI | ⭐ **"Save view" (M5)** on every board and both Explore tools — names the current route + query string. Saving under an existing name updates it. Validates the path against the board registry (the catalog check the backend deliberately leaves to the client). |
 | `components/ui/NavDropdown.jsx` | UI (base) | The **Insight ▾ / Explore ▾ / Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
 | `components/StatTable.jsx` | UI | The ranked stat table + pager **shared by the leaderboard and Insight boards**: click-to-sort headers, accented active column, and positive/negative tinting for columns whose sign carries the meaning. |
+| `components/TokenPanel.jsx` | UI (dev only) | ⭐ **The editor half of the token studio** — one control per token (colour + alpha, slider, or raw text), a live WCAG contrast readout that composites the translucent surface over the background before scoring, and the copyable CSS. Re-declares every token at its *baseline* value on its own root, so setting `--fg` to the surface colour blanks the gallery but never the controls that would undo it. |
 | `components/ScoringControl.jsx` | UI | The league-scoring editor: preset picker (PPR/Half/Std/TE-Premium) + an expandable custom-weights panel. Emits a scoring spec string. |
 | `components/LeagueControl.jsx` | UI | ⭐ **The league-context editor (M3)**: team count + starting lineup (QB/RB/WR/TE/FLEX/SUPERFLEX), showing the **replacement level it produces per position** so the link between lineup and value is visible. Emits a league spec string. |
 | `components/InsightPanel.jsx` | UI | The player page's fantasy-intelligence panel: VORP / Opportunity Rating / Buy-Low / Sell-High with meters, the badges they imply ("Buy Low", "Sell High", "Elite Opportunity", "Below Replacement", "Small Sample"), and a collapsible **per-score breakdown** showing every weighted input with its value and percentile. |
@@ -212,9 +214,11 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `constants/league.js` | config | League size + starting-lineup defaults and the (de)serialize helpers that mirror the backend's league grammar. **Must stay in sync with `backend/app/league.py`.** |
 | `constants/storage.js` | config | The `localStorage` keys for scoring and league, plus safe read/write helpers — shared by the state hooks and `useProfileSync`, which both write them. |
 | `constants/scatters.js` | config | ⭐ **The pre-canned scatters (M4)** — six position groups (All / QB / RB / WR / TE / Flex), each with a handful of curated charts. The scatter builder deliberately offers *questions*, not free axis choice: two metrics picked at random usually produce a meaningless cloud, and the curation is the product. |
+| `constants/designTokens.js` | config | ⭐ **The token registry behind `/styleguide`** — grouping, labels and control types for every theme variable, plus the contrast pairs worth watching. Deliberately holds **no values**: the studio reads those from the stylesheet, so this file cannot drift out of sync with `index.css`. Adding a token to the theme means adding one entry here. |
 | **`utils/`** | util | Pure helpers. |
 | `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. Plus `formatPercentile` (0.92 → "92nd") and `formatSigned` (explicit `+` on gaps). |
 | `utils/csv.js` | util | CSV export (M4): `toCsv` (with quote escaping), `buildBoardExport` (rows/columns for any ranked board), `downloadCsv`, `slugify`. |
+| `utils/color.js` | util | Colour maths for the token studio: parse hex/`rgba()` into channels + alpha, format back the way `index.css` authors it, alpha-composite a layer stack, and score WCAG contrast. Used only by `/styleguide` — components consume tokens, they never reason about what one resolves to. |
 
 ---
 
@@ -510,6 +514,7 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
 | Add a new **page/screen** | a component in `frontend/src/pages/`, a route in `frontend/src/App.jsx`, a nav link in `components/Layout.jsx`. |
 | Add a new **board** (or change its columns) | add/edit a board in `frontend/src/constants/boards.js` (columns, default sort/position, fantasy vs NFL vs `insight`). The route, nav dropdown item, and page all pick it up automatically. |
 | Change the **look/theme** | `frontend/src/index.css` (Liquid Glass tokens per theme + `.glass-*` classes) + `frontend/tailwind.config.js` (semantic token names). Use the `.glass-*` classes and `text-fg`/`text-muted`/`text-accent`/`border-line` tokens — never hardcode theme colors. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
+| **Tune** the look (rather than restructure it) | run `npm run dev` and open **`/styleguide`** — the token studio applies edits live across every surface at once and hands you the CSS to paste into `index.css`. Adding a *new* token to the theme means one entry in `frontend/src/constants/designTokens.js` so the studio can edit it too. |
 | Add a **board filter that should survive sharing/saving** | use `useUrlState` in the view rather than `useState`, and give it a fallback (kept out of the URL) plus an optional whitelist. Saved views and share links then pick it up with no other change. |
 | Add something to the **account** (a new saved thing) | 1) a model in `backend/app/models/account.py` (cascade from `users`) → 2) a migration → 3) schemas in `schemas/account.py` → 4) routes in `routers/account.py`, scoped to `get_current_user` and **never taking a user id** → 5) a service in `frontend/src/services/account.js` + a hook in `hooks/useAccount.js` keyed under `["account", …]`. |
 | Change **data scope** (seasons, etc.) | re-run `pipeline/` scripts with new `--seasons`; update `frontend/src/constants/index.js` `SEASONS`. |
@@ -553,6 +558,17 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-08-19** — **Design-token studio** (§4). New dev-only `/styleguide`
+  (`pages/StyleGuide.jsx` + `components/TokenPanel.jsx` + `constants/designTokens.js` +
+  `utils/color.js`): every Liquid Glass surface on one screen next to a live editor for
+  the theme's CSS variables, with a WCAG readout and copyable CSS. Built so design
+  tweaks stop requiring a code round-trip. Three decisions worth keeping: the registry
+  holds **no values** (they are read from the stylesheet with `getComputedStyle`, so
+  `index.css` stays the single source of truth); edits are inline custom properties on
+  `<html>` **removed on unmount**, so a draft cannot leak into the app; and the panel
+  pins itself to the baseline theme so a broken `--fg` cannot make its own undo
+  invisible. Registered only under `import.meta.env.DEV` and verified absent from the
+  production bundle. It ships nothing to users and changes no product behaviour.
 - **2026-08-12** — **First CI** (§2). New `.github/workflows/backend-tests.yml` runs the
   backend suite on every pull request and on `main`, against a PostgreSQL 16 service
   container using the same credentials as `docker-compose.yml` — so CI runs the identical
