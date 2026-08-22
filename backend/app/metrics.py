@@ -112,6 +112,21 @@ REGISTRY: list[MetricDef] = [
        rankable=False,
        description="Points per game of the last startable player at this position in "
                    "your league — the baseline VORP is measured against."),
+    _m("expected_vorp", "Expected VORP", "xVORP", 1, "insight", "intelligence",
+       modelled=True,
+       description="Value over replacement measured on *expected* points instead of "
+                   "actual ones — what the player's usage was worth above the last "
+                   "startable player at their position. Strips touchdown luck and "
+                   "efficiency out of value, so it reads opportunity rather than "
+                   "results. The valuation behind the Draft Value Board."),
+    _m("expected_vorp_ppg", "Expected VORP Per Game", "xVORP/G", 2, "insight",
+       "intelligence", modelled=True,
+       description="Expected value over replacement per game, so a player who missed "
+                   "time is judged on the weeks they played."),
+    _m("replacement_expected_ppg", "Replacement Level (Expected)", "xREPL", 2, "insight",
+       "intelligence", rankable=False, modelled=True,
+       description="Expected points per game of the last startable player at this "
+                   "position — the baseline expected VORP is measured against."),
     _m("fantasy_opportunity_rating", "Fantasy Opportunity Rating", "FOR", 1, "insight",
        "intelligence", modelled=True,
        description="0–100: how much of the offense runs through this player, "

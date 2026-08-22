@@ -30,3 +30,31 @@ export async function getCompare(params) {
   const { data } = await api.get("/stats/compare", { params });
   return data;
 }
+
+/**
+ * Fetch the Draft Value Board (M6.1). Params: season? (valuation season),
+ * scoring, league, ranking_type?, position?, sort, order, depth?, limit, offset.
+ * Returns { data, total, ranking_type, ranking_season, scraped_at, ... }.
+ */
+export async function getDraftBoard(params) {
+  const { data } = await api.get("/stats/draft-board", { params });
+  return data;
+}
+
+/**
+ * Fetch strength of schedule (M6.3). Params: season?, position, window, scoring.
+ * Returns { data (teams, easiest first), defense, basis, weeks, ... }.
+ */
+export async function getSos(params) {
+  const { data } = await api.get("/stats/sos", { params });
+  return data;
+}
+
+/**
+ * Fetch the Vegas board (M6.4). Params: season?, week?, view ("players"|"games"),
+ * position?, scoring, limit, offset. Returns { data, weeks, week, ... }.
+ */
+export async function getVegas(params) {
+  const { data } = await api.get("/stats/vegas", { params });
+  return data;
+}

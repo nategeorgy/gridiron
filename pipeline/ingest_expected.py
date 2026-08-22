@@ -35,11 +35,11 @@ import logging
 import nflreadpy as nfl
 
 from db import load_stat_keys, upsert
+from seasons import STATS, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("pipeline.expected")
 
-DEFAULT_SEASONS = list(range(2020, 2026))
 
 # ffopportunity column -> our player_stats column, for the expected components that
 # map one-to-one.
@@ -82,6 +82,14 @@ def _share(numerator: float | None, denominator: float | None) -> float | None:
 
 def ingest_expected(seasons: list[int]) -> int:
     """Load ffopportunity weekly data and update expected + market-share columns."""
+    # This feed has nothing for a season that has not kicked off yet, and the
+    # loaders take every season in one call — so an unavailable season would fail
+    # the whole run rather than part of it. See seasons.py.
+    seasons = clamp_seasons(seasons, STATS)
+    if not seasons:
+        logger.info("nothing to ingest: no requested season is available yet")
+        return 0
+
     opportunity = nfl.load_ff_opportunity(seasons=seasons, stat_type="weekly")
     stat_keys = load_stat_keys()
 
@@ -135,8 +143,8 @@ if __name__ == "__main__":
         description="Ingest expected stat components + market share (ffopportunity)."
     )
     parser.add_argument(
-        "--seasons", type=int, nargs="+", default=DEFAULT_SEASONS,
-        help="Seasons to ingest (default: 2020-2025).",
+        "--seasons", type=int, nargs="+", default=default_seasons(STATS),
+        help="Seasons to ingest (default: 2020 through the latest played season).",
     )
     args = parser.parse_args()
     ingest_expected(args.seasons)

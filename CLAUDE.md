@@ -138,7 +138,21 @@ players (
   team_id       INT REFERENCES teams(team_id),
   jersey_number INT,
   status        VARCHAR(20),              -- active, inactive, etc.
-  headshot_url  VARCHAR(255)
+  headshot_url  VARCHAR(255),
+
+  -- Roster bio (M6). load_players publishes 39 columns; these are the ones worth
+  -- storing. Age is DERIVED from birth_date in the API, never stored.
+  birth_date          DATE,
+  height              INT,          -- inches
+  weight              INT,          -- pounds
+  college_name        VARCHAR(100),
+  college_conference  VARCHAR(100),
+  draft_year          INT,
+  draft_round         INT,
+  draft_pick          INT,
+  draft_team          VARCHAR(10),  -- deliberately NOT a FK: may name a defunct code
+  rookie_season       INT,
+  years_of_experience INT
 )
 
 -- Games
@@ -149,9 +163,25 @@ games (
   season_type   VARCHAR(20),              -- REG, POST
   home_team_id  INT REFERENCES teams(team_id),
   away_team_id  INT REFERENCES teams(team_id),
-  home_score    INT,
+  home_score    INT,                      -- NULL until played
   away_score    INT,
-  game_date     DATE
+  game_date     DATE,
+
+  -- Betting market (M6). Same load_schedules feed, populated for finished games
+  -- (closing lines) AND upcoming ones — which is why the Vegas board needs no odds
+  -- API. NULL past ~13 weeks out: unpriced, not missing. Implied team totals are
+  -- DERIVED at query time (total/2 ± spread/2), never stored.
+  spread_line    FLOAT,   -- home team's perspective: positive = home favoured
+  total_line     FLOAT,
+  home_moneyline INT,
+  away_moneyline INT,
+  over_odds      INT,
+  under_odds     INT,
+
+  -- Game context (M6)
+  roof          VARCHAR(20),
+  surface       VARCHAR(20),
+  div_game      BOOLEAN
 )
 
 -- Player Stats (one row per player per game)
@@ -240,6 +270,52 @@ player_stats (
   UNIQUE(player_id, game_id)
 )
 
+-- Depth charts (M6.2). CURRENT STATE, not history: one row per player from the
+-- newest snapshot. The feed publishes ~150 snapshots a season; keeping only the
+-- newest is reversible, since nflverse retains them all and a change-log could be
+-- backfilled later. Because it is current state, the ingest REPLACES each team's
+-- rows rather than upserting — a cut player stops appearing in the feed instead of
+-- appearing with a worse rank, so an upsert would leave him at WR3 forever.
+depth_chart_entries (
+  season       INT,
+  team_id      INT REFERENCES teams(team_id),
+  player_id    VARCHAR(50) REFERENCES players(player_id),
+  pos_abb      VARCHAR(5),    -- QB | RB | WR | TE (project scope; the feed has all 53)
+  pos_rank     INT,           -- depth at that position; 1 = starter. "WR2" is a claim
+                              -- about targets, which is why this is the fantasy number
+  pos_slot     INT,           -- alignment slot; stored because it is free. NOT a
+                              -- substitute for the slot snaps no free source provides
+  pos_grp      VARCHAR(30),
+  pos_name     VARCHAR(50),
+  snapshot_at  TIMESTAMPTZ,   -- the "as of" every surface shows
+  PRIMARY KEY (season, team_id, player_id, pos_abb)
+)
+
+-- Consensus expert rankings (M6.1) — the market half of the Draft Value Board.
+-- RANKINGS, NOT PROJECTIONS: load_ff_rankings publishes ECR + dispersion, never
+-- projected points and never ADP. A rank is frozen in someone else's scoring and
+-- cannot be recomputed, which is why it is shown as the market's opinion and
+-- contrasted with our valuation rather than restated in the user's scoring. The
+-- `projections` table the roadmap planned stays UNBUILT until there is a real
+-- projection source (ours, or a user's).
+player_rankings (
+  player_id      VARCHAR(50) REFERENCES players(player_id),
+  source         VARCHAR(30),   -- 'fantasypros'. Multi-source from day one.
+  ranking_type   VARCHAR(40),   -- redraft-overall | redraft-op | dynasty-overall | ...
+  season         INT,
+  week           INT,           -- 0 = draft ranking (a PK column cannot be NULL)
+  scraped_at     DATE,          -- in the KEY: the upstream file is a snapshot
+                                -- overwritten in place, so history accrues only from
+                                -- our first ingest and is NOT backfillable
+  ecr              FLOAT,       -- expert consensus rank
+  sd               FLOAT,       -- how much the experts disagree
+  best             INT,
+  worst            INT,
+  rank_delta       FLOAT,
+  player_owned_avg FLOAT,
+  PRIMARY KEY (player_id, source, ranking_type, season, week, scraped_at)
+)
+
 -- Target distribution by pass depth and direction (M4).
 -- A different grain from player_stats, which is why it is its own table: air_yards is
 -- stored there as a per-game total, and a total cannot be un-summed into buckets.
@@ -267,7 +343,10 @@ player_target_depth (
 
 ## Data Scope
 
-- **Seasons:** 2020–2025 (regular season + playoffs)
+- **Seasons:** 2020 through the current season (regular season + playoffs).
+  **Computed, never hardcoded** (`pipeline/seasons.py`, `GET /api/v1/seasons`). The
+  schedule runs a season ahead of the stats for most of the year — 2026 fixtures and
+  betting lines are loaded while 2025 is still the newest season with stats
 - **Positions:** QB, RB, WR, TE
 - **Source:** `nfl_data_py` (wraps nflverse data)
 
@@ -378,9 +457,24 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
   the URL still outranks the account so shared links never lie.
 
 ### Later phases (see ROADMAP for detail)
-- **M6 — New data domains**: depth charts, strength of schedule, Vegas board, consensus
-  projections (`load_ff_rankings`).
-- **M7 — Games & growth**: college/name trivia, EPA draft, mock draft simulator.
+- **M6 — New data domains** (✅ SHIPPED): opened with a **season-readiness** slice, because
+  M1–M5 all describe completed seasons and every M6 domain is perishable — 2026 ingested,
+  season defaults computed rather than hardcoded, and the pipeline moved to a **scheduled
+  GitHub Action**. Then a **Draft Value Board** (consensus ECR vs *our* expected-points
+  VORP rank, and the gap between them), **depth charts + new team pages**
+  (`/teams/:teamId`), **strength of schedule** (points allowed, scoring-aware), and a
+  **Vegas board** (no odds API needed — `load_schedules` ships forward lines). Consensus
+  is a *ranking*, not a projection: `player_rankings`, and no `projections` table until
+  there is a projection. Full plan in
+  [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) — **read it
+  before building any of this.**
+- **M7 — Games & growth**: player guessing games built as **one puzzle engine** (a mode
+  is a generator + a renderer; date-seeded daily puzzle, server-side grading) rather
+  than N client-side quizzes. Shortlist: Higher or Lower → Rank 'Em + Guess the Number
+  → Odd One Out → Stat-Line Wordle → Poeltl-style Guessr. Plus EPA draft and mock draft
+  simulator. Full option set, backlog, and rejected ideas in
+  [`docs/design/M7-games.md`](docs/design/M7-games.md) — **read it before building any
+  game**, and add new ideas there rather than losing them in a conversation.
 - **Dream**: trade calculator (on VORP), GridironIQ + user-generated projection models,
   survivor pool, dynasty value + league import.
 
@@ -412,10 +506,28 @@ GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdo
 GET /api/v1/players/{player_id}/target-depth ← M4 targets by pass depth
 GET /api/v1/stats/leaderboard                ← filterable leaderboard
 GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / buy / sell)
+GET /api/v1/stats/vegas                      ← M6 one week's market: players ranked by
+                                               implied team total, or the slate.
+                                               view=players|games
+GET /api/v1/stats/sos                        ← M6 strength of schedule: points allowed
+                                               by position, in your scoring. 0-100,
+                                               higher is harder. Windows: full | ros |
+                                               next4 | playoffs
+GET /api/v1/stats/draft-board                ← M6 consensus rank vs our expected-VORP
+                                               rank, and the gap. Both ranks counted
+                                               over the same players; stops at
+                                               draftable depth
 GET /api/v1/stats/scatter                    ← M4 any two metrics (UI offers presets only)
 GET /api/v1/stats/compare                    ← M4 up to 5 players, position-intersected
 GET /api/v1/metrics                          ← metric registry
+GET /api/v1/seasons                          ← seasons held + the current one.
+                                               "Current" = newest season WITH STATS,
+                                               not newest on the schedule
 GET /api/v1/teams                            ← all teams
+GET /api/v1/teams/{team_id}                  ← M6 team page: record, fixtures with
+                                               their lines + implied totals, and the
+                                               depth chart with production in your
+                                               scoring
 GET /api/v1/teams/{team_id}/stats            ← team stats
 GET /api/v1/games                            ← game schedule/results
 
@@ -547,6 +659,8 @@ cd pipeline
 pip install -r requirements.txt
 python ingest_players.py
 python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
+# --seasons is optional: each script computes its own range (pipeline/seasons.py).
+# Production refreshes on a schedule — .github/workflows/pipeline.yml.
 ```
 
 ---
@@ -586,7 +700,9 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `saved_views`, migration `990003c7c7cf`); `/me` endpoints scoped entirely to the
       token subject; header account menu, profile bar on the scoring editor, watchlist
       star + server-side board filter, saved views, and a "My Players" tile. Also
-      backfilled spine C: the 17 boards now keep their filters in the URL
+      backfilled spine C: the 17 boards now keep their filters in the URL (the Teams
+      leaderboard and the two Explore tools followed on 2026-08-20, so every ranked view
+      is now URL-described)
       (see [`docs/design/M5-accounts-saved-state.md`](docs/design/M5-accounts-saved-state.md))
 - [x] M3 — Fantasy Intelligence: VORP, Fantasy Opportunity Rating, Positive-Regression
       (buy-low) and Sell-High indices; league context (size + starting lineup) as a
@@ -594,7 +710,38 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       explanation breakdown, and live signal tiles on the Command Center. No new DB
       columns — everything is query-time
       (see [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md))
-- [x] Backend test suite (`backend/tests/`, 150 tests) — the repo's first automated
+- [x] M6.0 — Season readiness: the app knows what year it is. `GET /api/v1/seasons`
+      + `useSeasons()` replace the hardcoded `SEASONS` array, where **current = newest
+      season with stats** (not newest on the schedule, which runs months ahead);
+      `pipeline/seasons.py` computes each script's range from nflreadpy's two season
+      clocks and skips feeds that have nothing yet; migration `7fa8428b7a1d` adds
+      betting lines + context to `games` and roster bio to `players`, both backfilled
+      2020–2026; and `.github/workflows/pipeline.yml` refreshes production on a
+      schedule split by perishability
+      (see [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) §4.0)
+- [x] M6.1 — Draft Value Board (`/insight/draft`): consensus ECR beside our
+      **expected-VORP** rank, and the gap between them. `player_rankings` (migration
+      `319f1f54a7f0`) + `ingest_rankings.py`; `app/draft_board.py` and
+      `GET /stats/draft-board`; expected VORP added to `app/intelligence.py`. The
+      consensus variant follows the league config, so a superflex league gets superflex
+      ranks unasked
+      (see [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) §4.1)
+- [x] M6.2 — Depth charts + team pages: `depth_chart_entries` (migration
+      `a6763fb36779`) + `ingest_depth_charts.py`; `GET /teams/{id}` and a new
+      `TeamProfile` page at `/teams/:teamId` (record, fixtures with lines and implied
+      totals, depth chart with each player's PPG in your scoring); a dated depth-chart
+      badge plus the bio line on player pages
+      (see [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) §4.2)
+- [x] M6.3 — Strength of Schedule (`/insight/sos`): fantasy points allowed by position,
+      **computed through the scoring engine per request** — no new tables, the M3 stance.
+      A team × week grid with fantasy-playoff and rest-of-season windows, plus a strip on
+      team pages and a column on the draft board
+      (see [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) §4.3)
+- [x] M6.4 — Vegas Board (`/insight/vegas`): implied team totals from the spread and
+      the total, as a ranked player list or the week's slate. **No odds API and no new
+      columns** — the lines arrived with the M6.0 schedule ingest
+      (see [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) §4.4)
+- [x] Backend test suite (`backend/tests/`, 199 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -707,6 +854,74 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - A **watchlist filter narrows output only on the Insight boards.** Those scores are
   percentiles within a position pool, so filtering before scoring would silently
   redefine what a percentile means. On the leaderboard it goes in the SQL
+- **SOS difficulty is a percentile, never a rank.** "The number one defense against
+  receivers" and "the number one schedule" point in opposite directions, and a board
+  cannot afford that ambiguity. `app/sos.py` returns 0–100 where **higher is harder**,
+  which also says *how much* harder rather than only which side of the median. Byes are
+  skipped rather than averaged in — an absent fixture is not an easy one
+- **SOS always states its basis.** Defensive numbers come from games played, so in
+  August they are necessarily last season's, and defenses change over an offseason.
+  `resolve_basis()` switches to the current season after `MIN_BASIS_WEEKS`; there is
+  deliberately **no blend** across seasons, because a number that is 60% one year and
+  40% another is harder to argue with than either
+- **`load_teams()` publishes 36 franchise codes; only 32 play.** LAR, OAK, SD and STL
+  are historical codes sitting beside their current equivalents (LA, LV, LAC, LA). They
+  used to be ingested, which ranked 36 teams on the SOS board and gave the team page an
+  empty 200 to render. `ingest_teams.py` now keeps only teams that appear in the
+  schedule for the seasons in scope — **derived from the schedule, never a hardcoded
+  exclusion list**, so it stays correct when a franchise moves or `FIRST_SEASON` changes
+  — and migration `8530feb2c2ff` deleted the rows already written. `GET /teams/{id}`
+  404s for a team with no games in any season. A *per-season* filter is still needed
+  wherever a surface ranks teams, which is a different question: a real team can have no
+  fixtures in the season being asked about
+- ⚠️ **A table of *current state* cannot be maintained by upsert.** `depth_chart_entries`
+  holds where a player sits today, and a cut player does not reappear with a worse rank —
+  he stops appearing at all, so an upsert never touches his row. Use
+  `replace_scoped()` in `pipeline/db.py`: delete and rewrite a whole scope (a team) in
+  one transaction, and only for scopes the feed actually contains, so a failed download
+  cannot empty a team. Every other ingest here is append/update and stays an upsert
+- **The schedule is stored home-team-first.** `games.spread_line` is positive when the
+  *home* team is favoured, so any surface showing a game from one team's point of view
+  has to flip the sign on away games and swap the scores. Implied team total is
+  `total/2 ± spread/2` — derived at query time, never stored (`app/vegas.py`)
+- **An unpriced game is a state, not a zero.** The market prices a few weeks out plus
+  scattered look-ahead lines, so most of a season carries no line in August. A null must
+  render as "no line" and sort *last*, never as a low total — and any week picker should
+  say how much of a week is priced before someone clicks it
+- **A rank comparison must count the same players on both sides.** The Draft Value
+  Board's gap is `market_rank - value_rank`, and both are dense ranks over *the players
+  we can value* — never the market over everyone and us over a subset, which compresses
+  our ranks upward and manufactures value at the tail (the first build reported a +301
+  gap on a deep tight end this way). Any future board that subtracts one ordering from
+  another inherits this rule
+- **The draft board values with *expected* points, not actual.** Actual VORP ranks last
+  season's results, so touchdown luck rides into the gap and the board recommends
+  variance. Expected VORP ranks the opportunity behind them. It is also why the board is
+  honest about what it is: last season's usage against next season's market, so a gap
+  can be news about the offseason rather than a mispricing
+- **Consensus rankings are an opinion, not a measurement.** `load_ff_rankings` has no
+  projected points and no ADP. Never run a rank through the scoring engine — it is
+  already frozen in someone else's scoring. What *is* league-aware is which variant we
+  read (superflex leagues get `redraft-op`)
+- **Never hardcode a season.** `SEASONS = [2025, …]` and
+  `DEFAULT_SEASONS = list(range(2020, 2026))` were both correct the day they were
+  written and wrong the next September. The frontend calls `useSeasons()`; the pipeline
+  asks `pipeline/seasons.py`; the backend derives the list from the data. Only
+  `FIRST_SEASON` is a constant, because it is a scope decision rather than a fact
+- **Two season clocks, and they disagree for half the year.** nflreadpy's *roster* year
+  turns over on 15 March (schedules, rosters, players, depth charts all exist before
+  kickoff) and its *stats* year at the first game. So a stat feed **raises** for the
+  upcoming season — and since the loaders take every season in one call, one unstarted
+  season fails a whole run. Any new ingest script must pick a clock and pass its
+  seasons through `clamp_seasons()`
+- **"Current season" means the newest season with *stats*.** The schedule knows about a
+  season months before anyone plays in it, so defaulting a board to the newest season
+  outright opens the app on an empty table. `GET /api/v1/seasons` returns `has_stats`
+  and `completed_games` so schedule-shaped surfaces can still offer the full list
+- ⚠️ **`.github/workflows/pipeline.yml` writes to production.** It holds
+  `PIPELINE_DATABASE_URL`, the first credential in CI that can change real data. Keep it
+  scoped to that workflow, keep the ingests idempotent, and remember that a new ingest
+  script added to it runs unattended at 6am
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

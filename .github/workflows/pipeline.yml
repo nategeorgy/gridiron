@@ -1,0 +1,173 @@
+# Scheduled data refresh (M6.0) — the repo's second workflow, and the first one that
+# writes to production.
+#
+# Until M6 every domain in this app described a *completed* season: last year's numbers
+# do not change, so a manual pipeline run whenever someone remembered was fine. Depth
+# charts, betting lines and consensus rankings are perishable, and a stale depth chart
+# is worse than no depth chart — so the refresh has to happen without anyone deciding
+# to do it.
+#
+# **Cadence is split by perishability**, not run as one nightly job. Play-by-play is by
+# far the largest download and the slowest-changing input, so folding it into the daily
+# run would spend most of the minutes here re-deriving numbers that did not move.
+#
+#   daily     — rosters, the schedule (which carries the betting lines), depth charts,
+#               and the consensus rankings
+#   Wednesday — the full stats chain, and only once the season has kicked off
+#
+# Wednesday because a week's numbers are not final until Monday night has been played
+# and Tuesday's official stat corrections have landed.
+#
+# Every M6 domain is now covered; a new one slots in beside these with no restructuring.
+name: Data pipeline
+
+on:
+  schedule:
+    # 10:00 UTC = 06:00 EDT / 05:00 EST. Deliberately different times rather than two
+    # crons at the same hour: GitHub fires each matching cron separately, so identical
+    # times would run the workflow twice on a Wednesday.
+    - cron: "0 10 * * *"
+    - cron: "0 11 * * 3"
+  workflow_dispatch:
+    inputs:
+      run_stats:
+        description: "Also run the stats chain (ignores the in-season check)"
+        type: boolean
+        default: false
+      seasons:
+        description: "Seasons for the stats chain (default: the current one)"
+        type: string
+        default: ""
+
+# Never let two runs write to the same database at once. Not cancel-in-progress: a
+# half-finished ingest is worse than a late one, and the upserts are idempotent so the
+# next run cleans up regardless.
+concurrency:
+  group: data-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Rosters + schedule. Cheap, and the schedule is where betting lines arrive, so this
+  # is what keeps the Vegas board current.
+  roster:
+    name: Rosters, schedule, depth charts and rankings
+    if: github.event.schedule == '0 10 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.PIPELINE_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.12 for the same reason as the test workflow: psycopg2-binary publishes no
+          # wheels for 3.13+.
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      # Fail loudly and immediately rather than letting every ingest script raise its
+      # own "DATABASE_URL is not set" a minute later.
+      # Fail loudly and immediately rather than letting every ingest script raise its
+      # own "DATABASE_URL is not set" a minute later.
+      - name: Check the database credential is configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::PIPELINE_DATABASE_URL is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      # ingest_players uses latest_team, so this is what follows free agency, trades
+      # and the draft. ingest_schedules defaults to 2020 through the current *roster*
+      # year, so next season's fixtures — and the lines on them — enter the database as
+      # soon as nflverse publishes them, months before kickoff.
+      - name: Refresh teams, players and the schedule
+        working-directory: pipeline
+        run: |
+          python ingest_teams.py
+          python ingest_players.py
+          python ingest_schedules.py
+
+      # Daily rather than weekly, even though the consensus only moves once a week.
+      # The upstream file is a snapshot overwritten in place, so a scrape we fail to
+      # capture is gone for good — there is no backfill. A duplicate day costs one
+      # small download and writes nothing new (the snapshot date is part of the key);
+      # a missed week is a permanent hole in the ECR history.
+      - name: Refresh consensus rankings
+        working-directory: pipeline
+        run: python ingest_rankings.py
+
+      # The most perishable feed here — camp battles and injuries move it daily, and a
+      # week-old depth chart is worse than none. Note this ingest *replaces* each team's
+      # rows rather than upserting, because a cut player stops appearing in the feed
+      # instead of appearing with a worse rank.
+      - name: Refresh depth charts
+        working-directory: pipeline
+        run: python ingest_depth_charts.py
+
+  # The stats chain: weekly numbers, then the three enrichment passes over them.
+  stats:
+    name: Stats and enrichment
+    if: github.event.schedule == '0 11 * * 3' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.PIPELINE_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      # nflreadpy owns both season clocks and pipeline/seasons.py reads them.
+      # `in_season` is true only once the roster year has actually kicked off, which
+      # keeps this job idle from March to September instead of re-downloading six
+      # finished seasons every week.
+      - name: Read the season clock
+        id: clock
+        working-directory: pipeline
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import seasons
+          print(f"season={seasons.latest_season(seasons.STATS)}")
+          print(f"in_season={str(seasons.in_season()).lower()}")
+          PY
+
+      - name: Report an idle offseason run
+        if: steps.clock.outputs.in_season != 'true' && inputs.run_stats != true
+        run: |
+          echo "::notice::Offseason — the ${{ steps.clock.outputs.season }} season is complete and nothing new has been played. Skipping."
+
+      # Only the current season is refreshed. The 2020- backfill is a one-off run by
+      # hand; re-ingesting it weekly would download years of play-by-play to rewrite
+      # numbers that cannot change.
+      #
+      # The order is a dependency, not a preference: the three enrichment passes only
+      # update stat lines ingest_stats.py has already created (pipeline/README.md).
+      - name: Refresh the current season
+        if: steps.clock.outputs.in_season == 'true' || inputs.run_stats == true
+        working-directory: pipeline
+        env:
+          SEASONS: ${{ inputs.seasons || steps.clock.outputs.season }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::PIPELINE_DATABASE_URL is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          python ingest_stats.py        --seasons $SEASONS
+          python ingest_expected.py     --seasons $SEASONS
+          python ingest_usage.py        --seasons $SEASONS
+          python ingest_target_depth.py --seasons $SEASONS

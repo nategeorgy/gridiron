@@ -1,17 +1,27 @@
 // Team leaderboard: ranked offensive production, filterable by season.
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { useTeamLeaderboard } from "../hooks/useTeamLeaderboard";
+import { useUrlState } from "../hooks/useUrlState";
 import { formatStat } from "../utils/format";
-import { SEASONS, SEASON_TYPES, TEAM_COLUMNS, TEAM_METRICS } from "../constants";
+import { useSeasons } from "../hooks/useSeasons";
+import { SEASON_TYPES, TEAM_COLUMNS, TEAM_METRICS } from "../constants";
 
-const seasonOptions = SEASONS.map((year) => ({ value: String(year), label: String(year) }));
 const sortOptions = TEAM_COLUMNS.map((key) => ({ value: key, label: TEAM_METRICS[key].label }));
+const SEASON_TYPE_VALUES = SEASON_TYPES.map((option) => option.value);
 
 export function Teams() {
-  const [season, setSeason] = useState(String(SEASONS[0]));
-  const [seasonType, setSeasonType] = useState("REG");
-  const [metric, setMetric] = useState("total_yards");
+  // Filters live in the URL so a link carries its view — shareable, and what makes a
+  // saved view (M5) store something more than a bare path.
+  //
+  // Seasons come from the API (M6), and `String(currentSeason)` is the fallback rather
+  // than a literal: the default stays out of the query string *and* tracks the served
+  // current season, so this view rolls over when the data does.
+  const { seasonOptions, currentSeason } = useSeasons();
+  const [season, setSeason] = useUrlState("season", String(currentSeason));
+  const [seasonType, setSeasonType] = useUrlState("type", "REG", SEASON_TYPE_VALUES);
+  const [metric, setMetric] = useUrlState("metric", "total_yards", TEAM_COLUMNS);
 
   const params = useMemo(
     () => ({ season: Number(season), season_type: seasonType, metric, order: "desc" }),
@@ -26,7 +36,8 @@ export function Teams() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-fg">Team Leaderboard</h1>
         <p className="mt-1 text-sm text-muted">
-          Offensive production by team. Click a column to rank by it.
+          Offensive production by team. Click a team for their depth chart and fixtures,
+          or a column to rank by it.
         </p>
       </div>
 
@@ -63,7 +74,12 @@ export function Teams() {
               <tr key={row.team_id} className="border-b border-line last:border-0 hover:bg-surface-2">
                 <td className="stat-num px-3 py-2.5 text-right text-faint">{index + 1}</td>
                 <td className="px-3 py-2.5">
-                  <span className="font-medium text-fg">{row.name}</span>
+                  <Link
+                    to={`/teams/${row.team_id}`}
+                    className="font-medium text-fg hover:text-accent hover:underline"
+                  >
+                    {row.name}
+                  </Link>
                   <span className="stat-num ml-2 text-xs text-faint">{row.abbreviation}</span>
                 </td>
                 <td className="stat-num px-3 py-2.5 text-right text-muted">{row.games}</td>

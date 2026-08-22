@@ -74,6 +74,49 @@ def upsert(table_name: str, rows: list[dict], conflict_columns: list[str]) -> in
     return len(rows)
 
 
+def replace_scoped(table_name: str, rows: list[dict], scope_columns: list[str]) -> int:
+    """Replace whole groups of rows in one transaction. Returns rows written.
+
+    For tables holding **current state** rather than accumulated history, an upsert is
+    not enough: a row that should no longer exist simply stops appearing in the source,
+    so nothing ever updates it and it survives forever. A depth chart is the clear case
+    — a cut player would still be listed as the WR3.
+
+    So each distinct combination of ``scope_columns`` present in ``rows`` (e.g. every
+    season+team in this snapshot) is deleted and rewritten. Scopes *absent* from ``rows``
+    are left alone on purpose: a team missing from a feed is far more likely to be an
+    upstream glitch than a team that has released its entire roster, and deleting on
+    that basis would turn a bad download into data loss.
+
+    Delete and insert share one transaction, so a failure mid-run leaves the previous
+    contents intact rather than an empty table.
+    """
+    if not rows:
+        logger.info("replace %s: no rows to write", table_name)
+        return 0
+
+    table = _reflect_table(table_name)
+    scopes = {tuple(row[column] for column in scope_columns) for row in rows}
+
+    with get_engine().begin() as connection:
+        for scope in scopes:
+            connection.execute(
+                table.delete().where(
+                    *[
+                        table.c[column] == value
+                        for column, value in zip(scope_columns, scope)
+                    ]
+                )
+            )
+        connection.execute(table.insert(), rows)
+
+    logger.info(
+        "replace %s: wrote %d rows across %d %s groups",
+        table_name, len(rows), len(scopes), "+".join(scope_columns),
+    )
+    return len(rows)
+
+
 def load_stat_keys() -> set[tuple[str, str]]:
     """Return every existing ``(player_id, game_id)`` pair in player_stats.
 
