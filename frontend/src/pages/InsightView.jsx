@@ -19,6 +19,12 @@ import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useUrlState } from "../hooks/useUrlState";
 import { useSeasons } from "../hooks/useSeasons";
+import { AvailabilityNotice } from "../components/AvailabilityNotice";
+import {
+  firstAvailableColumn,
+  isMetricAvailable,
+  unavailableColumns,
+} from "../utils/availability";
 import { INSIGHT_TIMEFRAMES, POSITIONS, SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
@@ -38,13 +44,23 @@ export function InsightView({ board }) {
   const { metrics } = useMetrics();
   const watchlist = useWatchlistFilter();
 
+  const columns = board.columns;
+
+  // The Insight scores are not uniformly available across the 1999-onwards range
+  // (M8): everything built on expected points starts in 2009, because before then the
+  // expected model has no usable receiving side. Ranking by one of those in 2001
+  // returns a page of nulls in arbitrary order, so the sort falls back and the notice
+  // below says which columns the season cannot answer.
+  const sortMetric = firstAvailableColumn(columns, metrics, season, metric);
+  const sortFellBack = sortMetric !== metric;
+
   const params = useMemo(
     () => ({
       season: Number(season),
       ...(lastWeeks ? { last_weeks: Number(lastWeeks) } : {}),
       season_type: seasonType,
       ...(position ? { position } : {}),
-      metric,
+      metric: sortMetric,
       scoring,
       league,
       order: "desc",
@@ -54,7 +70,7 @@ export function InsightView({ board }) {
       offset,
     }),
     [
-      season, lastWeeks, position, seasonType, metric, scoring, league, offset,
+      season, lastWeeks, position, seasonType, sortMetric, scoring, league, offset,
       watchlist.params.player_ids,
     ],
   );
@@ -64,8 +80,22 @@ export function InsightView({ board }) {
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
   const window = data?.window;
-  const columns = board.columns;
-  const sortOptions = columns.map((key) => ({ value: key, label: metrics[key]?.label ?? key }));
+  const sortOptions = columns.map((key) => {
+    const available = isMetricAvailable({ id: key, ...(metrics[key] ?? {}) }, season);
+    return {
+      value: key,
+      label: metrics[key]?.label ?? key,
+      disabled: !available,
+      hint: available ? undefined : `Not recorded in ${season}`,
+    };
+  });
+
+  // A header for a column with no data this season is inert rather than misleading.
+  const sortByColumn = (key) => {
+    if (!isMetricAvailable({ id: key, ...(metrics[key] ?? {}) }, season)) return;
+    setMetric(key);
+    setOffset(0);
+  };
 
   const withReset = (setter) => (value) => {
     setter(value);
@@ -93,7 +123,7 @@ export function InsightView({ board }) {
         />
         <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
-        <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
+        <Select label="Sort by" value={sortMetric} onChange={withReset(setMetric)} options={sortOptions} />
         <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
@@ -104,7 +134,7 @@ export function InsightView({ board }) {
             context={[
               `GridironIQ — ${board.title}`,
               `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} played weeks` : " · full season"}${position ? ` · ${position}` : ""}`,
-              `sorted by ${metrics[metric]?.label ?? metric} · scoring: ${scoring} · league: ${league}`,
+              `sorted by ${metrics[sortMetric]?.label ?? sortMetric} · scoring: ${scoring} · league: ${league}`,
               "Scores are percentiles within each player's position pool, not absolute values.",
             ]}
           />
@@ -122,14 +152,22 @@ export function InsightView({ board }) {
         <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
       )}
 
+      <AvailabilityNotice
+        columns={columns}
+        metrics={metrics}
+        season={season}
+        sortFallback={sortFellBack ? (metrics[sortMetric]?.label ?? sortMetric) : null}
+      />
+
       <StatTable
         columns={columns}
         rows={rows}
         metrics={metrics}
-        sortMetric={metric}
-        onSort={withReset(setMetric)}
+        sortMetric={sortMetric}
+        onSort={sortByColumn}
         offset={offset}
         signedColumns={board.signed ?? []}
+        unavailableColumns={unavailableColumns(columns, metrics, season).map((m) => m.id)}
         isLoading={isLoading}
         isError={isError}
         error={error}

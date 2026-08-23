@@ -134,6 +134,15 @@ SHI_TERMS: tuple[Term, ...] = (
 # remaining inputs describe usage, not regression, so no score is reported.
 REGRESSION_REQUIRED_INPUT = "points_over_expected_pg"
 
+# The opportunity rating is half expected points by definition (FOR_EXPECTED_WEIGHT),
+# so it needs them for the same reason. _weighted_score renormalises around a missing
+# term, which is right when *one* player lacks a career baseline and wrong when the
+# input is absent for everyone: before 2009 the expected model has no usable receiving
+# side (see app/availability.py), and renormalising there would quietly turn a 50/50
+# score into a usage-only one while still presenting it as the rating. A season-wide
+# gap changes what the number means; a per-player gap does not.
+FOR_REQUIRED_INPUT = "expected_fantasy_ppg"
+
 
 # --- Percentile machinery ---
 
@@ -502,10 +511,13 @@ def _score_row(record: dict, pool: PositionPool, percentiles: dict) -> None:
         record["expected_vorp_ppg"] = round_value(expected_vorp_ppg, 2)
         record["expected_vorp"] = round_value(expected_vorp_ppg * played, 1)
 
-    usage_terms = FOR_USAGE_TERMS.get(record.get("position"), ())
-    record["fantasy_opportunity_rating"] = round_value(
-        _weighted_score((FOR_EXPECTED_TERM, *usage_terms), percentiles), 1
-    )
+    if percentiles.get(FOR_REQUIRED_INPUT) is None:
+        record["fantasy_opportunity_rating"] = None
+    else:
+        usage_terms = FOR_USAGE_TERMS.get(record.get("position"), ())
+        record["fantasy_opportunity_rating"] = round_value(
+            _weighted_score((FOR_EXPECTED_TERM, *usage_terms), percentiles), 1
+        )
 
 
 def _score_regression(record: dict, inputs: dict, percentiles: dict) -> None:

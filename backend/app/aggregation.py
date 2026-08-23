@@ -17,6 +17,8 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.custom_metrics import GAMES, BUILTIN_COMPOSITES, CustomMetric, compute_custom
 from app.metrics import REGISTRY, REGISTRY_BY_ID, ids_with_aggregation
+from sqlalchemy.dialects.postgresql import aggregate_order_by
+
 from app.models import Player, PlayerStats, Team
 from app.scoring import (
     ScoringConfig,
@@ -83,23 +85,46 @@ def window_filters(
 
 
 def aggregate_select(filters: list[ColumnElement], games: ColumnElement) -> Select:
-    """One aggregated row per player: identity, games played, and every stored metric."""
+    """One aggregated row per player: identity, games played, and every stored metric.
+
+    **The team comes from the stat lines, not from the player.** ``players.team_id`` is
+    whoever employs someone *now*, which is the right answer for a profile page and the
+    wrong one for a season row: it put Torry Holt on Jacksonville in 2004 and Javon
+    Walker on Las Vegas, because that is where each of them finished up years later.
+    A leaderboard row is about a season, so the team has to be too — and with scope
+    reaching back to 1999 that gap is most of the table rather than a rare edge case.
+
+    A player can also change team mid-season, so this takes the team from his *latest*
+    game in the window and reports how many he played for, letting the caller mark the
+    difference rather than silently picking one.
+    """
     labeled = [func.sum(getattr(PlayerStats, name)).label(name) for name in SUM_METRICS]
     labeled += [func.avg(getattr(PlayerStats, name)).label(name) for name in AVG_METRICS]
+
+    # The team he finished the window with. array_agg keeps the ordering inside the
+    # aggregate, so this stays one grouped pass rather than a correlated subquery.
+    latest_team = func.array_agg(
+        aggregate_order_by(
+            Team.abbreviation,
+            PlayerStats.season.desc(),
+            PlayerStats.week.desc(),
+        )
+    )[1].label("team_abbreviation")
 
     return (
         select(
             Player.player_id,
             Player.name.label("name"),
             Player.position.label("position"),
-            Team.abbreviation.label("team_abbreviation"),
+            latest_team,
+            func.count(func.distinct(PlayerStats.team_id)).label("teams_played_for"),
             games.label("games_played"),
             *labeled,
         )
         .join(Player, PlayerStats.player_id == Player.player_id)
-        .outerjoin(Team, Player.team_id == Team.team_id)
+        .outerjoin(Team, PlayerStats.team_id == Team.team_id)
         .where(*filters)
-        .group_by(Player.player_id, Player.name, Player.position, Team.abbreviation)
+        .group_by(Player.player_id, Player.name, Player.position)
     )
 
 

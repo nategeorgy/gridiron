@@ -36,6 +36,10 @@ export function useMetrics() {
         // most receiving yards wins. Used by the comparison table's lead margins.
         higherIsBetter: metric.higher_is_better !== false,
         appliesTo: metric.applies_to,
+        // Which seasons this metric has data in (M8). Absent for the bundled
+        // fallbacks, which utils/availability treats as "available" — the right
+        // default, since the only time they are used is before /metrics answers.
+        availability: metric.availability,
       };
     }
   }

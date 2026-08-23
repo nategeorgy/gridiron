@@ -36,25 +36,40 @@ Steps 8 and 9 are independent of 4–7 — they need only `players` (and `teams`
 must follow step 2.
 
 `--seasons` is optional. Left off, each script asks `seasons.py` for its range, and
-**the two ranges are different on purpose**: `ingest_schedules.py` runs on the *roster*
-clock (2020 through the upcoming season — next year's fixtures are published in spring)
-while the stat scripts run on the *stats* clock (2020 through the last season played).
-Ask a stat script for a season that hasn't kicked off and it skips it with a warning
-rather than failing the run — which is what lets the scheduled refresh below run all
-summer without erroring.
+**the ranges are different on purpose**. Two things vary:
+
+- **Which clock bounds it above.** `ingest_schedules.py` runs on the *roster* clock
+  (through the upcoming season — next year's fixtures are published in spring) while
+  the stat scripts run on the *stats* clock (through the last season played). Ask a
+  stat script for a season that hasn't kicked off and it skips it with a warning
+  rather than failing the run — which is what lets the scheduled refresh below run all
+  summer without erroring.
+- **Where the feed starts.** Project scope reaches back to 1999, but each feed has its
+  own floor and several **raise** below it rather than returning empty:
+  play-by-play 1999, depth charts 2001, ffopportunity 2006, snap counts 2013,
+  participation 2016 (and it *ends* a season early — nflverse no longer publishes it).
+  `clamp_seasons()` clamps both ends against a `Feed`, so asking any script for 1999
+  is safe and simply logs what it skipped.
+
+Note that a feed serving a season is not the same as that season having usable data —
+see **Column coverage** below and `availability.py`.
 
 Steps 5–7 are **enrichment passes**: they only touch player-games step 4 already
 created, so they must run after it (in any order among themselves).
 
-Full backfill (project scope starts at 2020 and runs to the current season):
+Full backfill (project scope starts at **1999** and runs to the current season). Each
+script clamps to its own feed's window, so the same range can be passed to all of them:
 
 ```bash
-.venv/bin/python ingest_schedules.py --seasons 2020 2021 2022 2023 2024 2025
-.venv/bin/python ingest_stats.py     --seasons 2020 2021 2022 2023 2024 2025
-.venv/bin/python ingest_expected.py  --seasons 2020 2021 2022 2023 2024 2025
-.venv/bin/python ingest_usage.py     --seasons 2020 2021 2022 2023 2024 2025
-.venv/bin/python ingest_target_depth.py --seasons 2020 2021 2022 2023 2024 2025
+.venv/bin/python ingest_schedules.py    # all seasons in one file; no --seasons needed
+.venv/bin/python ingest_stats.py        --seasons $(seq 1999 2025)
+.venv/bin/python ingest_expected.py     --seasons $(seq 1999 2025)
+.venv/bin/python ingest_usage.py        --seasons $(seq 1999 2025)
+.venv/bin/python ingest_target_depth.py --seasons $(seq 1999 2025)
 ```
+
+`ingest_stats.py` downloads a season of play-by-play at a time, so a full backfill is
+best run in chunks of four or five seasons rather than as one call.
 
 ### Scheduled refresh
 
@@ -77,6 +92,16 @@ columns NULL). `ingest_usage.py --skip-routes` does snaps only, skipping the
 participation + play-by-play download.
 
 ## Column coverage
+
+⚠️ **Populated is not the same as available in every season** (M8). The feeds report a
+stat nobody measured as `0`, not as missing — a 2004 receiver with 90 catches arrives
+carrying `targets = 0`. `availability.py` holds the measured window for every
+restricted column and `mask_unavailable()` NULLs the rest at ingest, so the database
+never stores a zero that means "never recorded". The short version: the box score,
+fantasy points, EPA and all rushing detail reach 1999; charted passing starts 2006,
+snaps 2013, routes 2016–2025, expected points 2009, and **targets are unrecoverable
+2003–2008**. Full audit in
+[`docs/design/M8-historical-depth.md`](../docs/design/M8-historical-depth.md).
 
 `ingest_stats.py` populates:
 
@@ -162,14 +187,22 @@ participation + play-by-play download.
   college player who has never taken an NFL snap. On the 2026 board, 0 of the top 200
   were unmatched.
 
-`ingest_teams.py` writes **32 of the 36 rows `load_teams()` publishes**. The feed
+`ingest_teams.py` writes **35 of the 36 rows `load_teams()` publishes**. The feed
 carries historical franchise codes beside current ones — LAR beside LA, OAK beside LV,
-SD beside LAC, STL beside LA — and those four play no game from 2020 on, so ingesting
-them put four teams that do not exist into every surface built from `SELECT * FROM
-teams`. The filter asks the **schedule** which teams play the seasons in scope rather
-than holding a list of abbreviations to exclude: a list would go stale at the next
-relocation and would silently bake in today's `FIRST_SEASON`, so widening the scope back
-to 2015 would leave St. Louis missing from seasons it really did play.
+SD beside LAC, STL beside LA. The filter asks the **schedule** which teams play the
+seasons in scope rather than holding a list of abbreviations to exclude, and M8 is the
+payoff for that choice: widening scope to 1999 brought OAK, SD and STL back on its own,
+because they really did play those seasons, while LAR — a pure alias that appears in no
+schedule — stayed out. A hardcoded exclusion list would have needed editing, and an
+older one would have left St. Louis missing from seventeen seasons it played.
+
+Because the table now spans eras, **any surface that ranks teams must filter by season**
+— a real team can have no fixtures in the season being asked about. SOS and the team
+leaderboard already do; that is why the 2004 SOS board returns 32 teams, not 35.
+
+Note the separate problem this does *not* solve: the schedule and the stats feeds
+disagree about which code a franchise used in a given season (`STL` vs `LA`). See
+`franchises.py`.
 
 `ingest_depth_charts.py` populates the **`depth_chart_entries` table** (M6):
 

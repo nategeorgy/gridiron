@@ -18,6 +18,10 @@ class StatLineOut(BaseModel):
     game_date: date | None = None
     team_id: int | None = None
     opponent_abbreviation: str | None = None
+    # The team he played this game for, in the code that team used at the time (M8).
+    # Not the same as the player's current team once scope reaches back to 1999:
+    # Marshall Faulk's 2001 line belongs to STL, while `players.team_id` says LA.
+    team_abbreviation: str | None = None
 
     # General
     passing_yards: int | None = None

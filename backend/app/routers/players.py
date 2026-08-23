@@ -300,6 +300,7 @@ def get_player_game_log(
         line = StatLineOut.model_validate(stat_line)
         line.game_date = game_date
         line.opponent_abbreviation = team_abbr.get(opponent_id)
+        line.team_abbreviation = team_abbr.get(stat_line.team_id)
         # Fantasy + expected points in the requested scoring, from the same engine
         # the leaderboard uses (M1 spine A).
         components = {name: getattr(stat_line, name) for name in POINTS_COMPONENTS}

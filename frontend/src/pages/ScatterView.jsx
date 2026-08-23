@@ -19,6 +19,8 @@ import { useScatter } from "../hooks/useExplore";
 import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
+import { AvailabilityNotice } from "../components/AvailabilityNotice";
+import { unavailableColumns } from "../utils/availability";
 import { DENSITY_OPTIONS, SCATTER_GROUPS, findGroup } from "../constants/scatters";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
@@ -105,6 +107,13 @@ export function ScatterView({ board }) {
 
   const points = data?.data ?? [];
   const axes = data?.axes;
+
+  // A preset's axes are not answerable in every season (M8) — "Expected vs Actual PPG"
+  // needs expected points, which start in 2009. The chart already drops players
+  // missing either axis rather than plotting them at zero, so it renders correctly;
+  // what it cannot do on its own is explain that 2004 is empty for a reason.
+  const presetMetrics = [preset.x, preset.y, ...(preset.size ? [preset.size] : [])];
+  const missingAxes = unavailableColumns(presetMetrics, metrics, season);
 
   const exportColumns = [
     { key: "name", label: "Player" },
@@ -206,9 +215,16 @@ export function ScatterView({ board }) {
             {error?.response?.data?.detail ?? error?.message ?? "Failed to load."}
           </div>
         )}
+        {missingAxes.length > 0 && (
+          <div className="mb-3">
+            <AvailabilityNotice columns={presetMetrics} metrics={metrics} season={season} />
+          </div>
+        )}
         {!isLoading && !isError && points.length === 0 && (
           <div className="p-16 text-center text-sm text-muted">
-            Nothing to plot for these filters.
+            {missingAxes.length > 0
+              ? `This chart needs a stat the ${season} season doesn't have — try a later season, or another question above.`
+              : "Nothing to plot for these filters."}
           </div>
         )}
         {!isLoading && !isError && points.length > 0 && axes && (

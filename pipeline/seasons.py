@@ -18,12 +18,22 @@ range is computed instead.
 
 That second rule is why :func:`clamp_seasons` exists. The loaders take the whole
 season list in one call, so a single unavailable season fails the entire run — and
-between March and September the computed default always contains one. Rather than
-let a scheduled job fail every week from spring to kickoff, the unavailable seasons
-are dropped and logged.
+between March and September the computed default always contains one.
+
+**A feed also has a floor, and they are all different (M8).** Extending the project
+scope back to 1999 turned the upper bound into only half the problem: ``load_pbp``
+starts in 1999, ``load_depth_charts`` in 2001, ``load_ff_opportunity`` in 2006,
+``load_snap_counts`` in 2013 and ``load_participation`` in 2016 — and three of those
+*raise* below their floor exactly like an unstarted season does. So a feed is
+described here by both ends of its window, and every ingest clamps to it.
+
+``load_participation`` is the odd one: it ends as well as starts. FTN stopped
+publishing it, and nflreadpy caps it at the roster year minus one, so it is the only
+feed whose newest season is behind the clock.
 """
 
 import logging
+from dataclasses import dataclass
 
 import nflreadpy as nfl
 
@@ -31,26 +41,70 @@ logger = logging.getLogger("pipeline.seasons")
 
 # The first season in project scope. The only hardcoded year left in the pipeline:
 # it is a scope decision (how far back we backfill), not a fact about today.
-FIRST_SEASON = 2020
+#
+# 1999 is not arbitrary — it is the first season nflverse publishes play-by-play for,
+# so it is the floor of the whole ecosystem rather than a preference.
+FIRST_SEASON = 1999
 
-ROSTER = "roster"
-STATS = "stats"
 
+@dataclass(frozen=True)
+class Feed:
+    """One nflverse data feed and the window of seasons it can serve.
 
-def latest_season(feed: str = STATS) -> int:
-    """Return the newest season ``feed`` can serve.
-
-    ``ROSTER`` covers schedules, rosters, players and depth charts; ``STATS`` covers
-    everything derived from games actually being played.
+    ``clock`` is which of nflreadpy's two rollovers bounds the feed above — see the
+    module docstring. ``first_season`` is where the feed starts; ``lag`` is how many
+    seasons *behind* its clock the feed ends, which is zero for everything except
+    participation.
     """
-    if feed not in (ROSTER, STATS):
-        raise ValueError(f"unknown feed {feed!r} (expected {ROSTER!r} or {STATS!r})")
-    return nfl.get_current_season(roster=(feed == ROSTER))
+
+    name: str
+    clock: str  # "roster" | "stats"
+    first_season: int
+    lag: int = 0
+
+    def latest(self) -> int:
+        """The newest season this feed can serve."""
+        return nfl.get_current_season(roster=(self.clock == "roster")) - self.lag
+
+    def window(self) -> tuple[int, int]:
+        """(first, last) season this feed can serve, ignoring project scope."""
+        return self.first_season, self.latest()
 
 
-def default_seasons(feed: str = STATS) -> list[int]:
-    """Return every season in project scope that ``feed`` can serve."""
-    return list(range(FIRST_SEASON, latest_season(feed) + 1))
+# The two clocks, kept as feeds so existing call sites read unchanged. Everything
+# derived from games being played uses STATS; anything that exists before kickoff
+# (schedule, rosters, players) uses ROSTER.
+STATS = Feed("stats", clock="stats", first_season=1999)
+ROSTER = Feed("roster", clock="roster", first_season=1999)
+
+# Feeds with a floor of their own. Each floor is enforced by nflreadpy itself — a
+# season below it raises ValueError rather than returning empty — so these are not
+# defensive guesses but the library's own contract.
+PBP = Feed("pbp", clock="stats", first_season=1999)
+EXPECTED = Feed("expected", clock="stats", first_season=2006)  # load_ff_opportunity
+# load_snap_counts: nflreadpy documents (and accepts) 2012, but that season's PFR
+# file is empty upstream, so the first season with data is 2013.
+SNAPS = Feed("snaps", clock="stats", first_season=2013)
+DEPTH_CHARTS = Feed("depth_charts", clock="roster", first_season=2001)
+# Participation ended: FTN stopped publishing it. nflreadpy caps it at the ROSTER year
+# minus one — which is a season ahead of the stats clock through the summer, so the
+# clock here has to be the roster one to match the library's own bound exactly.
+PARTICIPATION = Feed("participation", clock="roster", first_season=2016, lag=1)
+
+
+def latest_season(feed: Feed = STATS) -> int:
+    """Return the newest season ``feed`` can serve."""
+    return feed.latest()
+
+
+def default_seasons(feed: Feed = STATS) -> list[int]:
+    """Return every season in project scope that ``feed`` can serve.
+
+    Clamped at *both* ends: a feed that starts in 2012 gets 2012 onwards even though
+    project scope reaches back to 1999.
+    """
+    first = max(FIRST_SEASON, feed.first_season)
+    return list(range(first, feed.latest() + 1))
 
 
 def in_season() -> bool:
@@ -59,26 +113,33 @@ def in_season() -> bool:
     The two clocks agreeing *is* the definition of in-season: from mid-March the
     roster year is the upcoming season while the stats year is still the last one
     played, and they converge at the first game. The scheduled stats refresh uses
-    this to stay idle through the summer instead of re-downloading six finished
-    seasons every week.
+    this to stay idle through the summer instead of re-downloading finished seasons
+    every week.
     """
-    return latest_season(ROSTER) == latest_season(STATS)
+    return ROSTER.latest() == STATS.latest()
 
 
-def clamp_seasons(seasons: list[int], feed: str = STATS) -> list[int]:
-    """Drop seasons ``feed`` cannot serve yet, logging what was skipped.
+def clamp_seasons(seasons: list[int], feed: Feed = STATS) -> list[int]:
+    """Drop seasons ``feed`` cannot serve, logging what was skipped and why.
 
-    Requesting an unstarted season raises inside nflreadpy, and one bad season fails
-    a whole run — so a scheduled job that always asks for the current season needs
-    this between March and kickoff.
+    Both ends matter. Requesting an unstarted season raises inside nflreadpy, and so
+    does requesting one before the feed exists — and either way a single bad season
+    fails the whole run, because the loaders take the list in one call.
     """
-    latest = latest_season(feed)
-    kept = [season for season in seasons if season <= latest]
-    skipped = [season for season in seasons if season > latest]
-    if skipped:
+    first, last = feed.window()
+    kept = [season for season in seasons if first <= season <= last]
+
+    too_new = [season for season in seasons if season > last]
+    too_old = [season for season in seasons if season < first]
+    if too_new:
         logger.warning(
             "skipping season(s) %s: the %s feed has nothing for them yet "
             "(latest available: %d)",
-            skipped, feed, latest,
+            too_new, feed.name, last,
+        )
+    if too_old:
+        logger.info(
+            "skipping season(s) %s: the %s feed starts in %d",
+            too_old, feed.name, first,
         )
     return kept

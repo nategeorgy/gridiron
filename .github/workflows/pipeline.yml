@@ -75,8 +75,6 @@ jobs:
 
       # Fail loudly and immediately rather than letting every ingest script raise its
       # own "DATABASE_URL is not set" a minute later.
-      # Fail loudly and immediately rather than letting every ingest script raise its
-      # own "DATABASE_URL is not set" a minute later.
       - name: Check the database credential is configured
         run: |
           if [ -z "$DATABASE_URL" ]; then
@@ -85,9 +83,14 @@ jobs:
           fi
 
       # ingest_players uses latest_team, so this is what follows free agency, trades
-      # and the draft. ingest_schedules defaults to 2020 through the current *roster*
+      # and the draft. ingest_schedules defaults to 1999 through the current *roster*
       # year, so next season's fixtures — and the lines on them — enter the database as
       # soon as nflverse publishes them, months before kickoff.
+      #
+      # The whole range every day is deliberate and cheap: nflverse publishes the
+      # schedule as one file, so asking for 28 seasons is the same single download as
+      # asking for six, and it means a correction to a historical result lands without
+      # anyone running a backfill by hand.
       - name: Refresh teams, players and the schedule
         working-directory: pipeline
         run: |
@@ -151,9 +154,14 @@ jobs:
         run: |
           echo "::notice::Offseason — the ${{ steps.clock.outputs.season }} season is complete and nothing new has been played. Skipping."
 
-      # Only the current season is refreshed. The 2020- backfill is a one-off run by
-      # hand; re-ingesting it weekly would download years of play-by-play to rewrite
-      # numbers that cannot change.
+      # Only the current season is refreshed. The 1999- backfill is a one-off run by
+      # hand; re-ingesting it weekly would download a quarter-century of play-by-play
+      # to rewrite numbers that cannot change.
+      #
+      # Each script clamps the requested seasons to its own feed's window, so this
+      # stays correct out of season and would stay correct if the range were widened:
+      # snaps start in 2013 and routes in 2016, and asking either for something older
+      # raises rather than returning empty. See pipeline/seasons.py.
       #
       # The order is a dependency, not a preference: the three enrichment passes only
       # update stat lines ingest_stats.py has already created (pipeline/README.md).

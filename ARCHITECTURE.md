@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-20 (M6.4 Vegas board — M6 complete; teams cleanup)
+Last updated: 2026-08-23 (M8 historical depth — scope back to 1999, metric availability)
 
 ---
 
@@ -216,7 +216,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `services/metrics.js` | network | Fetches the metric registry. |
 | `services/seasons.js` | network | Fetches the season list + current season (M6.0). |
 | **`constants/`** | config | App-wide constant data (no logic/network). |
-| `constants/index.js` | config | Positions, weeks, Insight timeframes, the metric label/format map (seed for `useMetrics`), and the team-leaderboard + game-log column sets. Seasons are **no longer a literal list** (M6.0): it holds `FIRST_SEASON` plus a calendar-derived `fallbackCurrentSeason()` / `FALLBACK_SEASONS`, used only until `/seasons` answers — components call `useSeasons()`. |
+| `constants/index.js` | config | Positions, `weekOptions(season)` (17 weeks before 2021, 18 after — M8), Insight timeframes, the metric label/format map (seed for `useMetrics`), and the team-leaderboard + game-log column sets. Seasons are **no longer a literal list** (M6.0): it holds `FIRST_SEASON` plus a calendar-derived `fallbackCurrentSeason()` / `FALLBACK_SEASONS`, used only until `/seasons` answers — components call `useSeasons()`. |
 | `constants/boards.js` | config | **The 17 "boards"** (4 Insight + 5 Fantasy + 8 NFL) — each declares its columns (metric ids), default sort/position, whether it's a scoring (fantasy) board, and whether it's an `insight` board (rendered by `InsightView` against `/stats/intelligence`). Also holds **`EXPLORE_ITEMS`** (M4) and **`INSIGHT_TOOLS`** (M6 — the Draft Value Board), which are tools rather than boards (no columns) and route to their own pages. Drives the four nav dropdowns. Adding a board here is all it takes. |
 | `constants/scoring.js` | config | League-scoring presets + editable weights, and the (de)serialize helpers that mirror the backend's scoring grammar. **Must stay in sync with `backend/app/scoring.py`.** |
 | `constants/league.js` | config | League size + starting-lineup defaults and the (de)serialize helpers that mirror the backend's league grammar. **Must stay in sync with `backend/app/league.py`.** |
@@ -225,6 +225,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `constants/designTokens.js` | config | ⭐ **The token registry behind `/styleguide`** — grouping, labels and control types for every theme variable, plus the contrast pairs worth watching. Deliberately holds **no values**: the studio reads those from the stylesheet, so this file cannot drift out of sync with `index.css`. Adding a token to the theme means adding one entry here. |
 | **`utils/`** | util | Pure helpers. |
 | `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. Plus `ordinal` (21 → "21st"), `formatPercentile` (0.92 → "92nd", built on it) and `formatSigned` (explicit `+` on gaps). |
+| `utils/availability.js` | util | ⭐ **Reading a metric's season window in the UI (M8).** `isMetricAvailable`, `describeAvailability` ("1999–2002, 2009–present"), and `firstAvailableColumn` — the sort fallback, because ranking by a stat the season has no data for orders the table arbitrarily. The windows come from the registry, never from constants here. |
 | `utils/csv.js` | util | CSV export (M4): `toCsv` (with quote escaping), `buildBoardExport` (rows/columns for any ranked board), `downloadCsv`, `slugify`. |
 | `utils/color.js` | util | Colour maths for the token studio: parse hex/`rgba()` into channels + alpha, format back the way `index.css` authors it, alpha-composite a layer stack, and score WCAG contrast. Used only by `/styleguide` — components consume tokens, they never reason about what one resolves to. |
 
@@ -260,6 +261,7 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `metrics.py` | ⭐ **The metric registry (architecture "spine B").** One canonical definition per metric (id, label, short label, description, format, category, how it aggregates, which positions it applies to). The single source of truth for metric metadata — the leaderboard reads aggregation behavior from here, and the frontend fetches it via `/metrics`. **Adding a stat starts here.** |
 | `aggregation.py` | The **shared season/window aggregation layer**: which registry metrics are summed vs averaged vs per-game derived, and `finalize_row()`, which fills in the scoring-aware, expected-points, and composite/custom columns. Also `metric_expr()` — **the one place that maps any metric id to a SQL expression**, so the leaderboard's ORDER BY and the scatter's SELECT can never disagree about what a metric means. Used by the leaderboard, the intelligence engine, and both Explore endpoints. |
 | `custom_metrics.py` | ⭐ **The custom-metric engine (M4)** — the third per-request config, after scoring and league. Parses `custom=name=formula[;…]` into a weighted sum over an optional divisor. Deliberately **structured, not free-form**: every term is a registry id, so there is no expression parser and no `eval`. Also holds `BUILTIN_COMPOSITES`, the registry's `composite` metrics parsed at import time — so a built-in and a user's metric run through one evaluator. See [`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md). |
+| `availability.py` | ⭐ **Which seasons a metric has data in (M8).** The UI half of the pipeline module of the same name — ⚠️ **change both together.** The pipeline's copy decides what gets *stored*; this one decides what the UI *offers*, and it reaches the frontend on every `MetricDef`. Composite and per-game metrics **derive** their window by intersecting their inputs, so a new composite can never claim a season its own inputs lack. `tests/test_availability.py` fails if the two drift. |
 | `seasons.py` | ⭐ **Which seasons exist, and which is current (M6.0).** "Current" = the newest season *with stats*, not the newest on the schedule — those differ for most of the year, and defaulting to the latter opens a board on an empty table. Shared by `/seasons` and the draft board. |
 | `vegas.py` | ⭐ **The Vegas board (M6.4).** Splits each game's spread and total into **implied team totals** — the points the market expects an offense to score, and the sharpest forward-looking read on how many fantasy points will exist. No odds API and no new columns: the lines arrive in the M6.0 schedule ingest, and implied totals are derived rather than stored. Handles *unpriced* as a first-class state — the market prices a few weeks out, so most of a season carries no line in August, and a null must never sort as a low total. |
 | `sos.py` | ⭐ **Strength of schedule (M6.3).** Fantasy points allowed per game by each defense to each position, **computed through the scoring engine on every request** — a TE-premium league has a different hardest schedule for tight ends, so a stored rating would need a row per scoring context. Difficulty is a **0–100 percentile, higher is harder**, deliberately not a rank ("the number one defense against receivers" and "the number one schedule" point opposite ways). States its **basis** on every response: last season until four weeks of the current one exist, then the current one, never a blend. Byes are skipped, not averaged in as easy weeks. |
@@ -346,6 +348,8 @@ so **the migrated schema is the single source of truth.** Every script is
 | `requirements.txt` | Pipeline Python dependencies. |
 | `db.py` | Shared DB helpers — connection, the idempotent `upsert` used by most scripts, **`replace_scoped()`** (M6.2 — delete-and-rewrite whole groups in one transaction, for tables holding *current state* where a row that should vanish simply stops appearing in the source), and `load_stat_keys()` (the guard that keeps enrichment passes from inserting half-empty stat lines). |
 | `seasons.py` | ⭐ **The season clock (M6.0).** Replaced `DEFAULT_SEASONS = list(range(2020, 2026))`, copied into every script and wrong from the next September. nflreadpy owns two rollovers and this reads both: the **roster** year turns over on 15 March (schedules, rosters, players, depth charts exist months before kickoff), the **stats** year at the first game. `clamp_seasons()` drops seasons a feed can't serve yet — the loaders take every season in one call, so one unstarted season would otherwise fail an entire scheduled run. `in_season()` is the two clocks agreeing. |
+| `availability.py` | ⭐ **Which stored columns are trustworthy in which season (M8).** The feeds report a stat nobody measured as `0`, not as missing — so a 2004 receiver with 90 catches arrives carrying `targets = 0`, which sorts and averages and poisons every share derived from it. `mask_unavailable()` NULLs those at ingest, in one place, from **measured** windows: charted passing starts 2006, snaps 2013, routes 2016–2025, and targets are unrecoverable 2003–2008. Mirrored by `backend/app/availability.py`. |
+| `franchises.py` | ⭐ **Which code a franchise used in a given season (M8).** `load_schedules` says `STL`; `load_player_stats` and `load_pbp` normalise the same team to today's `LA`. Unreconciled, `games` and `player_stats` point at different `teams` rows — so SOS credited every Rams stat line from 1999–2015 to the wrong defense. The mapping is **derived, never hardcoded**: a franchise is its nickname (36 codes, 32 nicknames, 3 relocations), and the code in use is whichever appears in that season's schedule. |
 | `ingest_teams.py` | **Run 1st.** Keeps only teams that appear in the schedule for the seasons in scope — `load_teams()` publishes 36 franchise codes and just 32 play. The filter is derived from the schedule rather than an exclusion list, so it survives a relocation and a change of `FIRST_SEASON`. Loads all NFL teams (everything else resolves team IDs from here). |
 | `ingest_players.py` | **Run 2nd.** Loads QB/RB/WR/TE players, now including the **roster-bio columns** (M6.0). Reads `latest_team`, so re-running is what follows free agency, trades and the draft. |
 | `ingest_schedules.py` | **Run 3rd.** Loads games (schedule + results) for the given `--seasons`, plus the **betting lines and game context** (M6.0). Defaults to the **roster** season range, so next season's fixtures enter the database as soon as nflverse publishes them. |
@@ -553,7 +557,7 @@ CLAUDE.md's rule is to touch all four layers: schema → pipeline → API → fr
 | **Tune** the look (rather than restructure it) | run `npm run dev` and open **`/styleguide`** — the token studio applies edits live across every surface at once and hands you the CSS to paste into `index.css`. Adding a *new* token to the theme means one entry in `frontend/src/constants/designTokens.js` so the studio can edit it too. |
 | Add a **board filter that should survive sharing/saving** | use `useUrlState` in the view rather than `useState`, and give it a fallback (kept out of the URL) plus an optional whitelist. Saved views and share links then pick it up with no other change. |
 | Add something to the **account** (a new saved thing) | 1) a model in `backend/app/models/account.py` (cascade from `users`) → 2) a migration → 3) schemas in `schemas/account.py` → 4) routes in `routers/account.py`, scoped to `get_current_user` and **never taking a user id** → 5) a service in `frontend/src/services/account.js` + a hook in `hooks/useAccount.js` keyed under `["account", …]`. |
-| Change **data scope** (seasons, etc.) | re-run `pipeline/` scripts with new `--seasons`. The season *list* is no longer edited anywhere: the backend derives it from the data (`routers/seasons.py`) and the frontend reads it (`hooks/useSeasons.js`). Only `FIRST_SEASON` (in `pipeline/seasons.py`, mirrored in `constants/index.js`) is a decision rather than a fact. |
+| Change **data scope** (seasons, etc.) | re-run `pipeline/` scripts with new `--seasons`. The season *list* is no longer edited anywhere: the backend derives it from the data (`routers/seasons.py`) and the frontend reads it (`hooks/useSeasons.js`). Only `FIRST_SEASON` (in `pipeline/seasons.py`, mirrored in `constants/index.js`) is a decision rather than a fact — it is **1999** since M8, the floor of nflverse play-by-play. A *metric's* season window is a measured fact and lives in `availability.py` (both copies). |
 
 ---
 
@@ -593,6 +597,28 @@ repo. Update it in the *same change* that alters the project's structure — spe
 - Bump the **Last updated** date at the top and add a line to the changelog below.
 
 ### Changelog
+
+- **2026-08-23** — **M8: scope back to 1999, and metric availability** (§4, §5, §6, §7).
+  27 seasons instead of six, ~150,000 stat lines instead of 36,000. The ingest was the
+  easy half; the work was that **the data does not arrive all at once and the feeds
+  report a stat nobody measured as `0`**. Two new mirrored modules
+  (`pipeline/availability.py`, `backend/app/availability.py`) hold **measured** windows
+  and NULL everything else at ingest: charted passing starts 2006, snaps 2013, routes
+  2016–2025, expected points 2009, and targets are unrecoverable 2003–2008 because
+  play-by-play names a receiver only on completions. `MetricDef.availability` carries
+  the window to the UI, where boards dim unanswerable columns, disable them in the sort
+  picker, fall back to a sortable one, and say why (`components/AvailabilityNotice.jsx`,
+  `utils/availability.js`). Composite metrics **derive** their window from their inputs.
+  Also fixed two bugs the range exposed and that were invisible at 2020 scope: season
+  rows took the team from `players.team_id` (Torry Holt's 2004 was a Jacksonville
+  season), and the schedule and stats feeds disagree about historical franchise codes
+  (`STL` vs `LA`), which had been crediting every Rams stat line from 1999–2015 to the
+  wrong defense in SOS — reconciled by `pipeline/franchises.py`, derived from nicknames
+  and the schedule rather than a hardcoded list. `teams` now holds 35 rows (OAK, SD and
+  STL played seasons in scope); the week picker follows the 17→18 week change in 2021.
+  25 tests in `tests/test_availability.py`, including one that fails if the two
+  availability tables drift. Full audit and evidence in
+  [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md).
 
 - **2026-08-20** — **`teams` holds only teams that play** (§4, §5). `load_teams()`
   publishes 36 franchise codes — LAR, OAK, SD and STL sit beside LA, LV, LAC and LA —

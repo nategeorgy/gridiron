@@ -16,6 +16,8 @@ import nflreadpy as nfl
 import polars as pl
 
 from db import get_engine, load_team_id_map, upsert
+from availability import mask_unavailable, unavailable_columns
+from franchises import contemporary_code_map, resolve
 from seasons import STATS, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -112,9 +114,16 @@ def compute_pbp_derived(seasons: list[int]) -> dict[str, dict]:
     # Unrealized air yards: how much downfield opportunity was thrown at a player and
     # not converted — a target that fell incomplete still bought him nothing.
     incomplete = pbp.filter((pbp["pass_attempt"] == 1) & (pbp["complete_pass"] == 0))
+    # `sum()` over an all-null group returns 0 in polars, not null — which in a season
+    # with no charted air yards at all would invent "0 unrealized air yards" for every
+    # receiver. Only sum where at least one value is actually present.
     unrealized = (
         incomplete.group_by(["game_id", "receiver_player_id"])
-        .agg(air_yards=pl.col("air_yards").sum())
+        .agg(
+            air_yards=pl.when(pl.col("air_yards").is_not_null().any())
+            .then(pl.col("air_yards").sum())
+            .otherwise(None)
+        )
     )
     unrealized_air = {
         (row["game_id"], row["receiver_player_id"]): row["air_yards"]
@@ -150,6 +159,11 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
 
     weekly = nfl.load_player_stats(seasons, summary_level="week")
     team_map = load_team_id_map()
+    # The stats and play-by-play feeds normalise every franchise to its *current* code
+    # (the 2004 Rams arrive as LA); the schedule, and therefore `games` and `teams`,
+    # uses the code that was actually in use (STL). Reconcile onto the schedule's
+    # answer so a stat line and its fixture point at the same team. See franchises.py.
+    franchise_codes = contemporary_code_map(seasons)
     valid_players = _existing_ids("players", "player_id")
     valid_games = _existing_ids("games", "game_id")
 
@@ -170,7 +184,12 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
             skipped += 1
             continue
 
+        # Two codes, deliberately. `team_abbr` stays as the feed wrote it, because the
+        # play-by-play lookups below are keyed by the same normalised code; only the
+        # stored team_id is resolved back to the one the schedule uses.
+        season = record.get("season")
         team_abbr = record.get("team")
+        team_id = team_map.get(resolve(franchise_codes, season, team_abbr))
         targets = record.get("targets")
         receptions = record.get("receptions")
         receiving_yards = record.get("receiving_yards")
@@ -183,11 +202,14 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
         ppr = record.get("fantasy_points_ppr")
         half = (std + ppr) / 2 if std is not None and ppr is not None else None
 
-        rows[(player_id, game_id)] = {
+        # A feed reports an unavailable stat as 0, not as missing — see
+        # availability.py. Mask before storing so a season that never recorded
+        # targets stores NULL rather than a zero that sorts and averages.
+        rows[(player_id, game_id)] = mask_unavailable({
             "player_id": player_id,
             "game_id": game_id,
-            "team_id": team_map.get(team_abbr),
-            "season": record.get("season"),
+            "team_id": team_id,
+            "season": season,
             "week": record.get("week"),
             "season_type": record.get("season_type"),
             # General
@@ -237,7 +259,7 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
             "fantasy_points_std": std,
             "fantasy_points_ppr": ppr,
             "fantasy_points_half": half,
-        }
+        }, season)
 
     written = upsert(
         "player_stats", list(rows.values()),
@@ -247,6 +269,11 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
         "ingested %d player_stats rows for seasons %s (skipped %d unmatched)",
         written, seasons, skipped,
     )
+    for season in seasons:
+        masked = unavailable_columns(season)
+        if masked:
+            logger.info("%d: stored NULL for %d column(s) with no data that season: %s",
+                        season, len(masked), ", ".join(masked))
     return written
 
 

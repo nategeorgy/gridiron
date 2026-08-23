@@ -28,6 +28,13 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.availability import (
+    METRIC_AVAILABILITY,
+    Availability,
+    for_metric,
+    intersect,
+)
+
 Aggregation = Literal[
     "sum", "avg", "derived", "scoring", "expected", "intelligence", "composite"
 ]
@@ -57,6 +64,10 @@ class MetricDef(BaseModel):
     # ffopportunity expected values). The UI labels these so they are never mistaken
     # for observed data. See docs/design/M2-expanded-metrics.md.
     modelled: bool = False
+    # Which seasons this metric has data in (M8). Filled in below rather than passed
+    # per metric: most metrics are available for the whole range, and the ones that
+    # are not are either listed in app.availability or derived from their inputs.
+    availability: Availability | None = None
 
 
 def _m(id: str, label: str, short: str, fmt: Format, category: str, agg: Aggregation, **kw) -> MetricDef:
@@ -300,7 +311,51 @@ REGISTRY: list[MetricDef] = [
        higher_is_better=False, description="Fumbles lost to the defense."),
 ]
 
+
 REGISTRY_BY_ID: dict[str, MetricDef] = {metric.id: metric for metric in REGISTRY}
+
+
+# --- Availability (M8): which seasons each metric actually has data in ---
+#
+# Three kinds of answer, in order of preference:
+#   1. An explicit window in app.availability (every stored column with a restriction).
+#   2. Derived from what the metric is built from — a per-game metric is only as
+#      available as the column it divides, and a composite only as available as its
+#      narrowest input. Deriving these means adding a composite can never accidentally
+#      claim a season its own inputs do not have.
+#   3. The full range, for everything else.
+def _derive_availability(metric: MetricDef) -> Availability:
+    """Resolve one metric's window, following `base` and `formula` to their inputs."""
+    explicit = for_metric(metric.id)
+    if metric.id in _EXPLICIT_IDS:
+        return explicit
+
+    if metric.aggregation == "derived" and metric.base:
+        return for_metric(metric.base)
+
+    if metric.aggregation == "composite" and metric.formula:
+        # Parsed here rather than re-implemented: the same grammar the engine uses.
+        # Imported inside the function because app.custom_metrics imports this
+        # module — by the time this runs, REGISTRY_BY_ID above exists, which is
+        # all it needs from us.
+        from app.custom_metrics import parse_formula
+
+        parsed = parse_formula(metric.id, metric.formula, builtin=True)
+        inputs = [term.metric for term in parsed.terms]
+        if parsed.denominator and parsed.denominator != "games":
+            inputs.append(parsed.denominator)
+        resolved = explicit
+        for input_id in inputs:
+            resolved = intersect(resolved, for_metric(input_id))
+        return resolved
+
+    return explicit
+
+
+_EXPLICIT_IDS = set(METRIC_AVAILABILITY)
+
+for _metric in REGISTRY:
+    _metric.availability = _derive_availability(_metric)
 
 
 def ids_with_aggregation(aggregation: Aggregation) -> list[str]:

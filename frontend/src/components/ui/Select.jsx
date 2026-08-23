@@ -1,4 +1,8 @@
 // Styled labeled <select> used across the filter bars.
+//
+// An option may set `disabled` with a `hint` (M8): the season picker and the sort
+// picker both need to offer a choice while explaining that it has no data — removing
+// it outright would leave the user wondering where a metric they know exists went.
 
 export function Select({ label, value, onChange, options }) {
   return (
@@ -17,9 +21,15 @@ export function Select({ label, value, onChange, options }) {
           <option
             key={option.value}
             value={option.value}
-            style={{ background: "var(--surface-solid)", color: "var(--fg)" }}
+            disabled={option.disabled}
+            title={option.hint}
+            style={{
+              background: "var(--surface-solid)",
+              color: option.disabled ? "var(--faint)" : "var(--fg)",
+            }}
           >
             {option.label}
+            {option.disabled ? " — no data" : ""}
           </option>
         ))}
       </select>
