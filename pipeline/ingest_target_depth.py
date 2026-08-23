@@ -26,6 +26,7 @@ import logging
 import nflreadpy as nfl
 import polars as pl
 
+from availability import FIRST_TARGET_DEPTH_SEASON
 from db import load_stat_keys, upsert
 from seasons import STATS, clamp_seasons, default_seasons
 
@@ -100,8 +101,20 @@ def ingest_target_depth(seasons: list[int]) -> int:
     # loaders take every season in one call — so an unavailable season would fail
     # the whole run rather than part of it. See seasons.py.
     seasons = clamp_seasons(seasons, STATS)
+    # Before 2009 the filters in collect_season would quietly do the wrong thing
+    # rather than fail: pre-2006 they match no plays at all, and in 2006-2008 they
+    # match only completions, which builds a depth chart that looks complete and
+    # describes just the caught balls. Cut those seasons explicitly instead.
+    too_early = [season for season in seasons if season < FIRST_TARGET_DEPTH_SEASON]
+    if too_early:
+        logger.info(
+            "skipping season(s) %s: target depth needs a receiver named on "
+            "incompletions, which play-by-play only has from %d",
+            too_early, FIRST_TARGET_DEPTH_SEASON,
+        )
+    seasons = [season for season in seasons if season >= FIRST_TARGET_DEPTH_SEASON]
     if not seasons:
-        logger.info("nothing to ingest: no requested season is available yet")
+        logger.info("nothing to ingest: no requested season is available")
         return 0
 
     # Only keep players/games we already track, so this never inserts rows for
@@ -132,7 +145,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--seasons", type=int, nargs="+", default=default_seasons(STATS),
-        help="Seasons to ingest (default: 2020 through the latest played season).",
+        help="Seasons to ingest (default: 2009 — the first season with a receiver "
+             "named on incompletions — through the latest played season).",
     )
     args = parser.parse_args()
     ingest_target_depth(args.seasons)

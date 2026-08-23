@@ -3,7 +3,10 @@
 // in constants/boards.js, one set per board.
 
 // The first season in project scope — a scope decision, not a fact about today.
-export const FIRST_SEASON = 2020;
+// 1999 is where nflverse's play-by-play begins, so it is the floor of the whole
+// ecosystem rather than a preference. Note that the *depth* of coverage varies by
+// season: see utils/availability.js and the registry's per-metric windows.
+export const FIRST_SEASON = 1999;
 
 /**
  * The season a date falls in, for use *before* /seasons answers.
@@ -38,14 +41,22 @@ export const POSITIONS = [
   { value: "TE", label: "TE" },
 ];
 
-// Weeks 1-18 regular season; "" = full season aggregate.
-export const WEEKS = [
-  { value: "", label: "Full Season" },
-  ...Array.from({ length: 18 }, (_, i) => ({
-    value: String(i + 1),
-    label: `Week ${i + 1}`,
-  })),
-];
+// The regular season went from 17 games to 18 weeks in 2021, so the week picker has
+// to follow the season rather than offering a week that was never played. "" = the
+// full-season aggregate.
+export const FIRST_18_WEEK_SEASON = 2021;
+
+export function weekOptions(season) {
+  const weeks = Number(season) >= FIRST_18_WEEK_SEASON ? 18 : 17;
+  return [
+    { value: "", label: "Full Season" },
+    ...Array.from({ length: weeks }, (_, index) => ({
+      value: String(index + 1),
+      label: `Week ${index + 1}`,
+    })),
+  ];
+}
+
 
 // Timeframes for the Insight boards (M3). "" = the full season; a number is a
 // trailing window of that many *played* weeks, which is how buy-low and sell-high

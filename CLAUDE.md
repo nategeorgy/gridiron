@@ -343,10 +343,17 @@ player_target_depth (
 
 ## Data Scope
 
-- **Seasons:** 2020 through the current season (regular season + playoffs).
+- **Seasons:** **1999** through the current season (regular season + playoffs) — the
+  floor of nflverse play-by-play, not a preference.
   **Computed, never hardcoded** (`pipeline/seasons.py`, `GET /api/v1/seasons`). The
   schedule runs a season ahead of the stats for most of the year — 2026 fixtures and
   betting lines are loaded while 2025 is still the newest season with stats
+- ⚠️ **Depth of coverage varies by season, and the feeds don't say so** (M8). The box
+  score, fantasy points, EPA and all rushing detail reach 1999; charted passing starts
+  2006, snaps 2013, routes 2016–2025, expected points 2009, and **targets are
+  unrecoverable 2003–2008**. Every window is measured and lives in `availability.py`
+  (pipeline *and* backend — mirrored). See
+  [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md)
 - **Positions:** QB, RB, WR, TE
 - **Source:** `nfl_data_py` (wraps nflverse data)
 
@@ -741,7 +748,17 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       the total, as a ranked player list or the week's slate. **No odds API and no new
       columns** — the lines arrived with the M6.0 schedule ingest
       (see [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) §4.4)
-- [x] Backend test suite (`backend/tests/`, 199 tests) — the repo's first automated
+- [x] M8 — Historical depth: scope back to **1999** (27 seasons, ~150k stat lines).
+      Coverage deepens rather than starting complete, so `availability.py` (pipeline +
+      backend, mirrored) holds the **measured** window for every restricted column and
+      NULLs the rest at ingest — the feeds report an unmeasured stat as `0`. The
+      registry carries each window to the UI, where boards dim unanswerable columns,
+      disable them in the sort picker, fall back to a sortable one and say why. Also
+      fixed two bugs the range exposed: season rows took the team from `players.team_id`,
+      and the schedule/stats feeds disagree about historical franchise codes
+      (`pipeline/franchises.py`). `teams` now holds 35 rows
+      (see [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md))
+- [x] Backend test suite (`backend/tests/`, 226 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -903,11 +920,53 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   projected points and no ADP. Never run a rank through the scoring engine — it is
   already frozen in someone else's scoring. What *is* league-aware is which variant we
   read (superflex leagues get `redraft-op`)
+- ⚠️ **A feed reports what nobody measured as `0`, not as NULL — never store it.**
+  This is the single most dangerous thing about the 1999 range: a 2004 receiver with 90
+  catches arrives carrying `targets = 0`, and a zero sorts, averages, and poisons every
+  share and percentile built on it. `pipeline/availability.py` masks these at ingest so
+  the database never holds one. Adding a stored column means asking *which seasons it
+  actually exists in* and adding it there — the default (absent from the table) is
+  "available from 1999", which is a claim, not a fallback
+- **The two availability tables are mirrors — change both together.**
+  `pipeline/availability.py` decides what is *stored*; `backend/app/availability.py`
+  decides what the UI *offers* and rides along on every `MetricDef`. If they drift, the
+  UI either offers a permanently empty metric or hides one that has data.
+  `tests/test_availability.py` fails on any disagreement. A **composite or per-game**
+  metric needs no entry at all: its window is derived by intersecting its inputs
+- **An aggregate that matches is not evidence the attribution does.** The first build of
+  M8 "rescued" 2006–2008 targets from `load_ff_opportunity`, whose league total is
+  exactly the right size. Per player it was reporting receptions — Randy Moss's 2007
+  came out as 105 targets and 105 catches, because the unattributable incompletions sit
+  pooled on ~700 rows a season with no player id. Validate a backfill **per entity**,
+  and never on the seasons where both sources are healthy
+- **A score must not quietly renormalise around a season-wide gap.** `_weighted_score`
+  drops missing terms and reweights the rest, which is right when *one* player lacks a
+  career baseline and wrong when an input is absent for *everyone*: before 2009 that
+  turned Fantasy Opportunity Rating into a usage-only number still labelled as half
+  expected points. Composite scores now require their defining input (`FOR_REQUIRED_INPUT`,
+  `REGRESSION_REQUIRED_INPUT`) and return None rather than a redefined score
+- **A row's team comes from its stat lines, never from `players.team_id`.** That column
+  is who employs someone *now* — right for a profile page, wrong for a season row. It
+  put Torry Holt's 2004 in Jacksonville. Season aggregates take the team from the
+  player's latest game in the window and report `teams_played_for` so a mid-season trade
+  can be marked rather than silently resolved
+- ⚠️ **The schedule and the stats feeds disagree about historical team codes.**
+  `load_schedules` records the code in use at the time (`STL`); `load_player_stats` and
+  `load_pbp` normalise every franchise to today's (`LA`). Storing both makes `games` and
+  `player_stats` point at different `teams` rows for the same team — which broke SOS
+  silently, because it derives the opposing defense by asking which side of the game the
+  player was *not* on, and that test is false for both sides. `pipeline/franchises.py`
+  reconciles onto the schedule's answer. The mapping is **derived from nicknames plus
+  the schedule, never a hardcoded alias list**, so it survives the next relocation.
+  Note the asymmetry: pbp lookups keep the *normalised* code (both sides of those joins
+  use it); only the stored `team_id` is resolved back
 - **Never hardcode a season.** `SEASONS = [2025, …]` and
   `DEFAULT_SEASONS = list(range(2020, 2026))` were both correct the day they were
   written and wrong the next September. The frontend calls `useSeasons()`; the pipeline
   asks `pipeline/seasons.py`; the backend derives the list from the data. Only
-  `FIRST_SEASON` is a constant, because it is a scope decision rather than a fact
+  `FIRST_SEASON` is a constant, because it is a scope decision rather than a fact —
+  and a *feed's* floor is not a scope decision at all: each one has its own, several
+  **raise** below it, so `clamp_seasons()` now clamps both ends against a `Feed`
 - **Two season clocks, and they disagree for half the year.** nflreadpy's *roster* year
   turns over on 15 March (schedules, rosters, players, depth charts all exist before
   kickoff) and its *stats* year at the first game. So a stat feed **raises** for the

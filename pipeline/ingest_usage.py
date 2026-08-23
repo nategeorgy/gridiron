@@ -41,7 +41,7 @@ import polars as pl
 from sqlalchemy import text
 
 from db import get_engine, load_stat_keys, upsert
-from seasons import STATS, clamp_seasons, default_seasons
+from seasons import PARTICIPATION, SNAPS, STATS, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("pipeline.usage")
@@ -172,12 +172,19 @@ def _derive_route_rates(seasons: list[int]) -> int:
 
 def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
     """Update snap and route usage columns for the given seasons."""
-    # This feed has nothing for a season that has not kicked off yet, and the
-    # loaders take every season in one call — so an unavailable season would fail
-    # the whole run rather than part of it. See seasons.py.
-    seasons = clamp_seasons(seasons, STATS)
-    if not seasons:
-        logger.info("nothing to ingest: no requested season is available yet")
+    # The two sources here have *different* windows, so each is clamped to its own
+    # rather than both to the stats clock. Snaps come from PFR and start in 2012;
+    # participation started in 2016 and has stopped being published, so it also ends
+    # a season early. Asking either for a season outside its window raises inside
+    # nflreadpy and would fail the whole run. See seasons.py.
+    snap_seasons = clamp_seasons(seasons, SNAPS)
+    route_seasons = clamp_seasons(seasons, PARTICIPATION) if include_routes else []
+    if not snap_seasons and not route_seasons:
+        logger.info(
+            "nothing to ingest: no requested season is inside the snap (%s) or "
+            "participation (%s) window",
+            SNAPS.window(), PARTICIPATION.window(),
+        )
         return 0
 
     stat_keys = load_stat_keys()
@@ -197,20 +204,25 @@ def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
             row.update(values)
         return skipped
 
-    skipped = merge(collect_snaps(seasons, _pfr_to_gsis()))
-    if include_routes:
-        # Participation and play-by-play are large; process one season at a time.
-        for season in seasons:
-            skipped += merge(collect_routes(season, positions))
+    skipped = 0
+    if snap_seasons:
+        skipped += merge(collect_snaps(snap_seasons, _pfr_to_gsis()))
+    # Participation and play-by-play are large; process one season at a time.
+    for season in route_seasons:
+        skipped += merge(collect_routes(season, positions))
 
     # Every row in a batch insert must carry the same keys, so fill the gaps: a
     # player-game found by one source but not the other gets an explicit NULL. This
     # script owns these columns and re-derives them in full on every run, so that is
     # the honest value — "this run found no snaps/routes for that player-game".
+    # ...but only for the columns this run actually re-derived. Defaulting routes to
+    # NULL for a season outside the participation window would erase good data with
+    # a value this run never looked for.
     for row in merged.values():
-        row.setdefault("snap_count", None)
-        row.setdefault("snap_share", None)
-        if include_routes:
+        if snap_seasons:
+            row.setdefault("snap_count", None)
+            row.setdefault("snap_share", None)
+        if route_seasons:
             row.setdefault("routes_run", None)
             row.setdefault("route_participation", None)
 
@@ -218,11 +230,12 @@ def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
         "player_stats", list(merged.values()),
         conflict_columns=["player_id", "game_id"],
     )
-    if include_routes:
-        _derive_route_rates(seasons)
+    if route_seasons:
+        _derive_route_rates(route_seasons)
     logger.info(
-        "usage: updated %d stat lines for seasons %s (skipped %d with no matching stat line)",
-        written, seasons, skipped,
+        "usage: updated %d stat lines (snaps %s, routes %s; skipped %d with no "
+        "matching stat line)",
+        written, snap_seasons or "none", route_seasons or "none", skipped,
     )
     return written
 
@@ -231,7 +244,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest snap counts and route usage.")
     parser.add_argument(
         "--seasons", type=int, nargs="+", default=default_seasons(STATS),
-        help="Seasons to ingest (default: 2020 through the latest played season).",
+        help="Seasons to ingest. Each source is clamped to its own window: snaps "
+             "2012+, routes 2016 to the last published participation season.",
     )
     parser.add_argument(
         "--skip-routes", action="store_true",

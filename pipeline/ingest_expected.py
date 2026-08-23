@@ -35,7 +35,8 @@ import logging
 import nflreadpy as nfl
 
 from db import load_stat_keys, upsert
-from seasons import STATS, clamp_seasons, default_seasons
+from availability import mask_unavailable
+from seasons import EXPECTED, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("pipeline.expected")
@@ -80,14 +81,19 @@ def _share(numerator: float | None, denominator: float | None) -> float | None:
     return (numerator or 0) / denominator
 
 
+
 def ingest_expected(seasons: list[int]) -> int:
     """Load ffopportunity weekly data and update expected + market-share columns."""
-    # This feed has nothing for a season that has not kicked off yet, and the
-    # loaders take every season in one call — so an unavailable season would fail
-    # the whole run rather than part of it. See seasons.py.
-    seasons = clamp_seasons(seasons, STATS)
+    # ffopportunity's model starts in 2006 and, like every stats feed, has nothing
+    # for a season that has not kicked off. Either end raises inside nflreadpy, and
+    # the loader takes every season in one call — so one bad season fails the whole
+    # run rather than part of it. See seasons.py.
+    seasons = clamp_seasons(seasons, EXPECTED)
     if not seasons:
-        logger.info("nothing to ingest: no requested season is available yet")
+        logger.info(
+            "nothing to ingest: no requested season is inside the expected-points "
+            "window %s", EXPECTED.window(),
+        )
         return 0
 
     opportunity = nfl.load_ff_opportunity(seasons=seasons, stat_type="weekly")
@@ -124,7 +130,13 @@ def ingest_expected(seasons: list[int]) -> int:
         }
         for source_column, target_column in EXPECTED_COLUMNS.items():
             row[target_column] = record.get(source_column)
-        rows[(player_id, game_id)] = row
+
+        # ffopportunity types season as a string; every consumer here wants the year.
+        # The mask matters most for this feed: its receiving model runs at roughly
+        # two-thirds of actual in 2006-2008, because it is fed by targets that could
+        # not be attributed. See availability.py.
+        season = int(record["season"]) if record.get("season") is not None else None
+        rows[(player_id, game_id)] = mask_unavailable(row, season) if season else row
 
     written = upsert(
         "player_stats", list(rows.values()),
@@ -143,8 +155,8 @@ if __name__ == "__main__":
         description="Ingest expected stat components + market share (ffopportunity)."
     )
     parser.add_argument(
-        "--seasons", type=int, nargs="+", default=default_seasons(STATS),
-        help="Seasons to ingest (default: 2020 through the latest played season).",
+        "--seasons", type=int, nargs="+", default=default_seasons(EXPECTED),
+        help="Seasons to ingest (default: 2006 — the model's first season — onwards).",
     )
     args = parser.parse_args()
     ingest_expected(args.seasons)

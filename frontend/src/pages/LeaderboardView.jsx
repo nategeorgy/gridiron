@@ -15,7 +15,13 @@ import { useScoring } from "../hooks/useScoring";
 import { useUrlState } from "../hooks/useUrlState";
 import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
-import { POSITIONS, SEASON_TYPES, WEEKS } from "../constants";
+import { AvailabilityNotice } from "../components/AvailabilityNotice";
+import {
+  firstAvailableColumn,
+  isMetricAvailable,
+  unavailableColumns,
+} from "../utils/availability";
+import { POSITIONS, SEASON_TYPES, weekOptions } from "../constants";
 
 const PAGE_SIZE = 50;
 
@@ -45,13 +51,30 @@ export function LeaderboardView({ board }) {
   const toBackendMetric = (key) =>
     (board.scoring && !supportsScoring && FANTASY_FALLBACK[key]) || key;
 
+  const columns = board.columns;
+
+  // Coverage deepens over the 1999-onwards range (M8), so a board's columns are not
+  // all answerable in every season. Sorting by one that isn't returns a page of
+  // dashes in arbitrary order, so the sort falls back and AvailabilityNotice says so.
+  const sortMetric = firstAvailableColumn(columns, metrics, season, metric);
+  const sortFellBack = sortMetric !== metric;
+
+  const sortOptions = columns.map((key) => {
+    const available = isMetricAvailable({ id: key, ...(metrics[key] ?? {}) }, season);
+    return {
+      value: key,
+      label: metrics[key]?.label ?? key,
+      disabled: !available,
+      hint: available ? undefined : `Not recorded in ${season}`,
+    };
+  });
   const params = useMemo(
     () => ({
       season: Number(season),
       ...(week ? { week: Number(week) } : {}),
       season_type: seasonType,
       ...(position ? { position } : {}),
-      metric: toBackendMetric(metric),
+      metric: toBackendMetric(sortMetric),
       ...(board.scoring ? { scoring } : {}),
       order: "desc",
       ...watchlist.params,
@@ -61,15 +84,13 @@ export function LeaderboardView({ board }) {
     // watchlist.params is derived from the favorites list, so its serialised form is
     // the dependency — the object identity changes on every render.
     [
-      season, week, position, seasonType, metric, scoring, offset, supportsScoring,
+      season, week, position, seasonType, sortMetric, scoring, offset, supportsScoring,
       board, watchlist.params.player_ids,
     ],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useLeaderboard(params);
 
-  const columns = board.columns;
-  const sortOptions = columns.map((key) => ({ value: key, label: metrics[key]?.label ?? key }));
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
 
@@ -79,6 +100,8 @@ export function LeaderboardView({ board }) {
   };
 
   const sortByColumn = (key) => {
+    // A header for a column with no data this season is inert rather than misleading.
+    if (!isMetricAvailable({ id: key, ...(metrics[key] ?? {}) }, season)) return;
     setMetric(key);
     setOffset(0);
   };
@@ -103,10 +126,10 @@ export function LeaderboardView({ board }) {
 
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
-        <Select label="Timeframe" value={week} onChange={withReset(setWeek)} options={WEEKS} />
+        <Select label="Timeframe" value={week} onChange={withReset(setWeek)} options={weekOptions(season)} />
         <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
-        <Select label="Sort by" value={metric} onChange={withReset(setMetric)} options={sortOptions} />
+        <Select label="Sort by" value={sortMetric} onChange={withReset(setMetric)} options={sortOptions} />
         <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
@@ -117,7 +140,7 @@ export function LeaderboardView({ board }) {
             context={[
               `GridironIQ — ${board.title}`,
               `${season} ${seasonType}${week ? ` · week ${week}` : " · full season"}${position ? ` · ${position}` : ""}`,
-              `sorted by ${metrics[metric]?.label ?? metric}${board.scoring ? ` · scoring: ${scoring}` : ""}`,
+              `sorted by ${metrics[sortMetric]?.label ?? sortMetric}${board.scoring ? ` · scoring: ${scoring}` : ""}`,
             ]}
           />
         </div>
@@ -125,15 +148,23 @@ export function LeaderboardView({ board }) {
 
       {board.scoring && supportsScoring && <ScoringControl scoring={scoring} onChange={changeScoring} />}
 
+      <AvailabilityNotice
+        columns={columns}
+        metrics={metrics}
+        season={season}
+        sortFallback={sortFellBack ? (metrics[sortMetric]?.label ?? sortMetric) : null}
+      />
+
       <StatTable
         columns={columns}
         rows={rows}
         metrics={metrics}
-        sortMetric={metric}
+        sortMetric={sortMetric}
         onSort={sortByColumn}
         offset={offset}
         columnKey={toBackendMetric}
         signedColumns={SIGNED_COLUMNS}
+        unavailableColumns={unavailableColumns(columns, metrics, season).map((m) => m.id)}
         isLoading={isLoading}
         isError={isError}
         error={error}

@@ -247,6 +247,28 @@ any of this.
   points and no ADP. Stored in a `player_rankings` table (multi-source from day one);
   the `projections` table stays unbuilt until there is a projection to put in it.
 
+### 🕰️ M8 — Historical Depth (1999–present) — M — **✅ SHIPPED**
+**Design note: [`docs/design/M8-historical-depth.md`](design/M8-historical-depth.md)** —
+the measured audit behind every window. Read it before touching `availability.py`.
+- **Scope back to 1999**, the floor of nflverse play-by-play: 27 seasons instead of six,
+  ~150k stat lines instead of 36k. Betting lines came along for free — 7,388 of 7,548
+  games are priced back to 1999, so the Vegas board gained a quarter-century of history
+  with no new ingest.
+- **The real work was honesty about depth, not the ingest.** Coverage arrives in layers
+  and the feeds report what nobody measured as `0`. Box score, fantasy points, EPA and
+  all rushing detail reach 1999; charted passing starts 2006, snaps 2013, routes
+  2016–2025, expected points 2009 — and **targets are unrecoverable 2003–2008**, because
+  play-by-play in those seasons names a receiver only on completions.
+- **One measured table, mirrored** (`pipeline/availability.py` +
+  `backend/app/availability.py`): the pipeline NULLs what a season cannot support, the
+  registry carries each window to the UI, and a test fails if the two drift. Composite
+  metrics derive their window from their inputs.
+- **Two silent bugs the range exposed:** season rows took the team from
+  `players.team_id` (Torry Holt's 2004 was a Jacksonville season), and the schedule and
+  stats feeds disagree about historical franchise codes — which had been crediting every
+  Rams stat line from 1999–2015 to the wrong defense in SOS.
+- **Not done:** production is still 2020–2025; the backfill is local only.
+
 ### 🎮 M7 — Games & Growth — S–L each (Dream, but a cheap hook can slot in early)
 **Design note: [`docs/design/M7-games.md`](design/M7-games.md)** — the full option set,
 the shared engine, and the data behind each mode. Read it before building any of this.
@@ -297,6 +319,10 @@ the shared engine, and the data behind each mode. Read it before building any of
 | Historical Vegas lines | `load_schedules` | 🟢 |
 | **Upcoming** Vegas lines | `load_schedules` | 🟢 **Also here** — measured 2026-08-20: weeks 1–6 fully priced, week 7 half, scattered look-ahead lines beyond. An odds API is an upgrade (intraday moves, the unpriced weeks), not a prerequisite |
 | Rush attempts by yard-line | `load_pbp` | 🟢 Derive |
+| **Seasons 1999–2019** | `load_pbp`, `load_player_stats`, `load_schedules` | 🟢 **Shipped M8** — all three reach 1999. Coverage is layered, not uniform: see the M8 design note |
+| Targets, 2003–2008 | `load_pbp` | 🔴 **Unrecoverable** — a receiver is named only on completions, so incompletions cannot be attributed. `load_ff_opportunity` looks like it has them and is reporting receptions (measured 2026-08-23) |
+| Snap counts | `load_snap_counts` | 🟡 **2013+**, not the documented 2012 — nflreadpy accepts 2012 but the file is empty upstream |
+| Participation / routes | `load_participation` | 🟡 **2016–2025 and ended** — FTN stopped publishing. The registry reads the real ceiling from the data rather than hardcoding a year |
 | Replacement level / VORP | derived from the position-pool distribution + league config | 🟢 Shipped M3 |
 | Buy-low / sell-high signals | derived (expected-points gap + usage + career baseline) | 🟢 Shipped M3 |
 | Snap share / NGS / PFR adv | `load_snap_counts` / `load_nextgen_stats` / `load_pfr_advstats` | 🟢 (NGS 2016+, PFR 2018+) |

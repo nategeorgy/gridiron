@@ -133,7 +133,7 @@ def _leaderboard_week(
             PlayerStats,
         )
         .join(Player, PlayerStats.player_id == Player.player_id)
-        .outerjoin(Team, Player.team_id == Team.team_id)
+        .outerjoin(Team, PlayerStats.team_id == Team.team_id)
         .where(*filters)
     )
 
@@ -755,7 +755,7 @@ def _scatter_game_rows(
             *labeled,
         )
         .join(Player, PlayerStats.player_id == Player.player_id)
-        .outerjoin(Team, Player.team_id == Team.team_id)
+        .outerjoin(Team, PlayerStats.team_id == Team.team_id)
         .where(*window_filters(
             window.season, window.season_type, positions=positions or POSITIONS,
             week_from=window.week_from, week_to=window.week_to,

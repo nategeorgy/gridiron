@@ -17,6 +17,11 @@ export function StatTable({
   // leaderboard's fixed-PPR fallback). Identity by default.
   columnKey = (key) => key,
   signedColumns = [],
+  // Columns the selected season has no data for (M8). Their headers are dimmed and
+  // inert rather than hidden: a receiving board that quietly drops Air Yards for 2004
+  // leaves the reader thinking the page is broken, while a greyed header with a
+  // tooltip tells them something true about 2004.
+  unavailableColumns = [],
   isLoading = false,
   isError = false,
   error = null,
@@ -24,6 +29,7 @@ export function StatTable({
   emptyMessage = "No results for these filters.",
 }) {
   const signed = new Set(signedColumns);
+  const unavailable = new Set(unavailableColumns);
 
   const valueClass = (key, value) => {
     if (sortMetric === key) return "font-semibold text-accent";
@@ -42,19 +48,28 @@ export function StatTable({
             <th className="px-3 py-3">Player</th>
             <th className="px-3 py-3">Team</th>
             <th className="px-3 py-3 text-right">G</th>
-            {columns.map((key) => (
-              <th
-                key={key}
-                onClick={() => onSort(key)}
-                className={`cursor-pointer whitespace-nowrap px-3 py-3 text-right transition hover:text-fg ${
-                  sortMetric === key ? "text-accent" : ""
-                }`}
-                title={metrics[key]?.description ?? metrics[key]?.label ?? key}
-              >
-                {metrics[key]?.short ?? key}
-                {sortMetric === key ? " ↓" : ""}
-              </th>
-            ))}
+            {columns.map((key) => {
+              const isUnavailable = unavailable.has(key);
+              return (
+                <th
+                  key={key}
+                  onClick={isUnavailable ? undefined : () => onSort(key)}
+                  className={`whitespace-nowrap px-3 py-3 text-right transition ${
+                    isUnavailable
+                      ? "cursor-default opacity-40"
+                      : `cursor-pointer hover:text-fg ${sortMetric === key ? "text-accent" : ""}`
+                  }`}
+                  title={
+                    isUnavailable
+                      ? `Not recorded in this season`
+                      : (metrics[key]?.description ?? metrics[key]?.label ?? key)
+                  }
+                >
+                  {metrics[key]?.short ?? key}
+                  {sortMetric === key && !isUnavailable ? " ↓" : ""}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className={dimmed ? "opacity-60 transition" : "transition"}>

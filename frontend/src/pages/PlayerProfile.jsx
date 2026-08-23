@@ -38,7 +38,7 @@ function DepthChartBadge({ slot }) {
   );
 }
 
-function ProfileHeader({ player }) {
+function ProfileHeader({ player, seasonTeam }) {
   return (
     <Panel className="flex items-center gap-4 p-5">
       {player.headshot_url ? (
@@ -61,7 +61,10 @@ function ProfileHeader({ player }) {
           <span className="rounded bg-surface-2 px-2 py-0.5 text-xs font-semibold text-accent">
             {player.position}
           </span>
-          <span className="stat-num">{player.team_abbreviation ?? "FA"}</span>
+          {/* The team he played for in the season on screen, which is not the same
+              as the team that employs him now once the range reaches back to 1999 —
+              Marshall Faulk's 2001 belongs to STL, while his player record says LA. */}
+          <span className="stat-num">{seasonTeam ?? player.team_abbreviation ?? "FA"}</span>
           {player.jersey_number != null && (
             <span className="stat-num text-faint">#{player.jersey_number}</span>
           )}
@@ -92,8 +95,16 @@ function SummaryCards({ position, games }) {
   const gameCount = games.length;
 
   const values = stats.map((stat) => {
-    const sum = games.reduce((acc, game) => acc + (game[stat.base ?? stat.key] ?? 0), 0);
-    const value = stat.agg === "ppg" ? (gameCount ? sum / gameCount : 0) : sum;
+    const field = stat.base ?? stat.key;
+    // A stat the season never recorded must stay null, not fall to zero. Coercing it
+    // put "XFPTS 0.0" on every pre-2009 season, which reads as "this player earned no
+    // expected points" rather than "nobody measured expected points back then".
+    // Seasons where the stat exists and the player genuinely has none still show 0.
+    const present = games.filter((game) => game[field] != null);
+    const sum = present.reduce((acc, game) => acc + game[field], 0);
+    const value = present.length === 0
+      ? null
+      : stat.agg === "ppg" ? sum / (gameCount || 1) : sum;
     return { ...stat, value };
   });
 
@@ -270,7 +281,10 @@ export function PlayerProfile() {
         ← Leaderboard
       </Link>
 
-      <ProfileHeader player={player} />
+      <ProfileHeader
+        player={player}
+        seasonTeam={seasonGames[seasonGames.length - 1]?.team_abbreviation}
+      />
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-fg">Season Stats</h2>
