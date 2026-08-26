@@ -307,7 +307,7 @@ the first code in the project where a bug means one user reading another user's 
 | `helpers.py` | Test constants and token minting. Imports nothing from `app`, because `conftest.py` reads these constants to build the environment *before* the first `import app` — `settings` and the engine are both built at import time. |
 | `test_auth.py` | ⭐ Token verification with **real** signed tokens and nothing overridden — signature, expiry, issuer, audience, `alg=none`, the asymmetric ES256/JWKS path, algorithm confusion, and JIT provisioning (including the email-local-part `display_name` fallback). |
 | `test_cross_user_isolation.py` | ⭐ **The file that matters most.** User B attempting to read, patch, and delete user A's profiles, saved views, and favorites. The answer is always **404, never 403** — a 403 confirms the id is real and turns the endpoint into an enumeration oracle. |
-| `test_rls.py` | ⭐ The row-level-security lockdown from `8f73b5b2b1a1`, and the reason the suite migrates rather than using `create_all()`: this layer is a property of the *schema*, invisible to every request-level test. Asserts the mechanism, not the flag — a role standing in for PostgREST's `anon` is granted `SELECT` and must still see nothing. |
+| `test_rls.py` | ⭐ The row-level-security lockdown (`8f73b5b2b1a1`, `69b660509e58`), and the reason the suite migrates rather than using `create_all()`: this layer is a property of the *schema*, invisible to every request-level test. Asserts the mechanism, not the flag — a role standing in for PostgREST's `anon` is granted `SELECT`/`DELETE` and must still see nothing and destroy nothing. `test_no_public_table_is_left_unlocked` **enumerates the schema** rather than a hand-maintained list, so a table added without RLS fails the suite instead of shipping. |
 | `test_league_profiles.py` | CRUD, spec validation, the one-active-profile invariant (including the partial unique index itself), and successor promotion. |
 | `test_saved_views.py` | CRUD and the path validation that keeps a stored URL on-site. |
 | `test_favorites.py` | Idempotent add/remove, unknown players, the cap. |
@@ -330,6 +330,11 @@ machine (your laptop, Supabase) can be brought to the exact same schema with
 | `alembic/versions/7852e5b550b0_*.py` | Migration #4 (M4) — creates `player_target_depth` (targets by depth bucket × direction). |
 | `alembic/versions/990003c7c7cf_*.py` | Migration #5 (M5) — creates the four account tables (`users`, `league_profiles`, `favorites`, `saved_views`) with the one-active-profile partial index. |
 | `alembic/versions/8f73b5b2b1a1_*.py` | Migration #6 (M5 security) — **enables RLS on the account tables and revokes `anon`/`authenticated`**. Required: Supabase serves the whole `public` schema through PostgREST, so without it those tables are readable and writable by anyone holding the (public) anon key, bypassing the API entirely. |
+| `alembic/versions/7fa8428b7a1d_*.py` | Migration #7 (M6.0) — adds betting lines + game context to `games`, and roster bio to `players`. |
+| `alembic/versions/319f1f54a7f0_*.py` | Migration #8 (M6.1) — creates `player_rankings` (consensus ECR, multi-source from day one). |
+| `alembic/versions/a6763fb36779_*.py` | Migration #9 (M6.2) — creates `depth_chart_entries` (current state, replaced per team rather than upserted). |
+| `alembic/versions/8530feb2c2ff_*.py` | Migration #10 (M6.5) — deletes the franchise rows that never play (LAR, OAK, SD, STL). |
+| `alembic/versions/69b660509e58_*.py` | Migration #11 (security) — ⭐ **enables RLS and revokes `anon`/`authenticated` on every remaining table in `public`**: the seven NFL tables plus `alembic_version`. Closes the exemption `8f73b5b2b1a1` left for "public read-only reference data", which was never a privilege level — Supabase's default privileges grant `anon` **ALL**, so `player_target_depth`, `player_rankings` and `depth_chart_entries` were world-writable in production. Also revokes the *default* privileges, so the next table is not exposed merely by existing. |
 | `alembic/script.py.mako` | Template used when generating a new migration. |
 
 ---
@@ -396,13 +401,21 @@ routes — the same doc explains what that over- and under-states.
   can't disturb user data. `users.user_id` is the Supabase Auth subject verbatim rather
   than a locally-generated id, because Supabase owns `auth.users` in a schema Alembic
   does not manage.
-- ⚠️ **The account tables must keep RLS enabled** (migration `8f73b5b2b1a1`). Supabase
-  serves the whole `public` schema through PostgREST at `/rest/v1/`, and its default
-  privileges grant `anon` access to new tables — so any account table created *without*
-  RLS is readable and writable by anyone holding the anon key, which ships in the public
-  JS bundle. The backend is unaffected because it connects as the table owner, which
-  bypasses RLS. **Any future user-data table needs the same treatment**; the NFL
-  reference tables do not, being public read-only data.
+- ⚠️ **Every table in `public` keeps RLS enabled** — the account tables in
+  `8f73b5b2b1a1`, and everything else in `69b660509e58`. Supabase serves the whole
+  `public` schema through PostgREST at `/rest/v1/`, and its default privileges grant
+  `anon` **ALL** on new tables — so any table created *without* RLS is readable and
+  writable by anyone holding the anon key, which ships in the public JS bundle. The
+  backend and the pipeline are unaffected because both connect as the table owner,
+  which bypasses RLS.
+- ⚠️ **The NFL tables are not exempt, and that exemption was a real hole.** The original
+  lockdown reasoned that reference data is "public read-only", which describes our
+  intent rather than the privileges in force: `player_target_depth`, `player_rankings`
+  and `depth_chart_entries` were each created after it and sat readable *and deletable*
+  through PostgREST until Supabase's linter flagged them. RLS had been switched on for
+  the original four tables **in the dashboard**, which is why the hole was invisible
+  locally — an out-of-band fix protects the tables that exist the day it is clicked and
+  exempts every one added later. Lock tables in the migration, never in the dashboard.
 
 **Important schema rule (repeated everywhere for a reason):** per-game stats are
 stored; **season-level derived metrics** (`fantasy_ppg_*`, `routes_run_per_game`) and
@@ -597,6 +610,23 @@ repo. Update it in the *same change* that alters the project's structure — spe
 - Bump the **Last updated** date at the top and add a line to the changelog below.
 
 ### Changelog
+
+- **2026-08-26** — **Security: RLS across the whole `public` schema** (`69b660509e58`).
+  A Supabase linter alert (`rls_disabled_in_public`) turned out to be accurate and
+  under-stated. `8f73b5b2b1a1` had locked the account tables and exempted the NFL ones
+  as "public read-only reference data" — but Supabase's default privileges grant the
+  publishable `anon` key **ALL** on tables in `public`, so read-only was never true of
+  the privileges, only of our intent. Probing production with the bundle's own anon key
+  showed `player_target_depth` (214,889 rows), `player_rankings` (4,390) and
+  `depth_chart_entries` (904) readable anonymously, and a zero-row `PATCH` returned
+  `204` where a revoked table returns `42501` — so the grant was real, not merely
+  theoretical. The original four tables were protected by RLS someone had enabled **in
+  the dashboard**, which is why nothing was visible locally, and why the three tables
+  created after that click were missed. The migration enables RLS and revokes
+  `anon`/`authenticated` on all seven NFL tables plus `alembic_version`, and revokes the
+  *default* privileges so a future table is not exposed merely by existing.
+  `tests/test_rls.py` was inverted accordingly: it no longer pins the reference tables
+  as exempt, and now enumerates the schema so a table added without RLS fails the suite.
 
 - **2026-08-23** — **M8: scope back to 1999, and metric availability** (§4, §5, §6, §7).
   27 seasons instead of six, ~150,000 stat lines instead of 36,000. The ingest was the

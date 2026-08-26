@@ -858,13 +858,25 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - **No account endpoint may accept a user id.** The id comes from the verified token
   and nowhere else, so no request shape can reach another user's rows. Filter every
   lookup on `user_id` *and* the primary key, so a guessed id 404s like a missing one
-- ⚠️ **Any new table holding user data must enable RLS in its migration** (see
-  `8f73b5b2b1a1`). Supabase serves the whole `public` schema through PostgREST, and its
-  default privileges grant the public `anon` key access — so a user-data table without
-  RLS is world-readable *and writable*, bypassing the API entirely. The backend connects
-  as the table owner and bypasses RLS, so this costs nothing. Create **no policies**:
-  a policy is the first step toward the browser talking to the database directly, which
-  this architecture rejects. NFL reference tables are exempt (public read-only data)
+- ⚠️ **Every table in `public` must enable RLS in the migration that creates it —
+  the NFL tables included** (see `8f73b5b2b1a1`, `69b660509e58`). Supabase serves the
+  whole `public` schema through PostgREST, and its default privileges grant the
+  publishable `anon` key **ALL** on new tables there — so a table without RLS is
+  world-readable *and writable*, bypassing the API entirely. The backend and the
+  pipeline both connect as the table owner and bypass RLS, so this costs nothing.
+  Create **no policies**: a policy is the first step toward the browser talking to the
+  database directly, which this architecture rejects
+- ⚠️ **"Public read-only reference data" is not a privilege level, and NFL tables are
+  not exempt.** That exemption is exactly what left `player_target_depth` (214,889
+  rows), `player_rankings` and `depth_chart_entries` readable *and writable* by anyone
+  holding the bundle's anon key, from the day each was created until Supabase's linter
+  flagged them. Reading is free; `DELETE FROM player_stats` is a full 1999–2025
+  backfill. Note the shape of the near-miss: RLS had been switched on for the *original*
+  four tables in the Supabase dashboard, which protected the tables that existed the day
+  it was clicked and silently exempted every table added afterwards — a fix applied
+  out of band is a fix that only one environment has. It belongs in a migration.
+  `tests/test_rls.py` now enumerates the schema rather than a hand-maintained list, so
+  the next missed table fails the suite instead of shipping
 - **Board filters belong in the URL** (`useUrlState`), not `useState` — that is what
   makes a board link shareable and a saved view worth saving. Keep defaults out of the
   query string, and pass a whitelist for anything the API would reject
