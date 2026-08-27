@@ -339,28 +339,13 @@ export const NFL_BOARDS = [
 export const ALL_BOARDS = [...INSIGHT_BOARDS, ...FANTASY_BOARDS, ...NFL_BOARDS];
 
 // --- Insight tools (M6) ---
-// Same nav-item shape as a board, but routed to its own page: the Draft Value Board's
-// columns are properties of a *comparison* (two ranks and the distance between them),
-// not registry metrics of a player, and one of its rows can legitimately have no value
-// at all — a rookie the consensus ranks and we have never seen play. Listed ahead of
-// the boards because in August it is the reason to open the site.
+// Same nav-item shape as a board, but routed to its own page: their columns are
+// properties of a *comparison* or a schedule rather than registry metrics of a player.
+// Listed ahead of the boards because they are the reason to open the site.
+//
+// The Draft Value Board used to live here and moved to Draft ▾ in M9 — it was always a
+// draft tool sitting in an insight menu. /insight/draft redirects.
 export const INSIGHT_TOOLS = [
-  {
-    id: "insight-draft",
-    label: "Draft Value Board",
-    path: "/insight/draft",
-    menuDesc: "Where the consensus and our valuation disagree",
-    title: "Draft Value Board",
-    description:
-      "Expert consensus rank next to what each player's usage was actually worth, in " +
-      "your scoring and league size — and the gap between the two. A positive gap is " +
-      "a player we rate above the market.",
-    lede:
-      "Our side is built on expected points, not actual ones: a player who scored " +
-      "twelve touchdowns on six touchdowns' worth of usage is valued at six here. " +
-      "That is the point — it prices the opportunity, which tends to repeat, rather " +
-      "than the finish, which often does not.",
-  },
   {
     id: "insight-sos",
     label: "Strength of Schedule",
@@ -393,6 +378,56 @@ export const INSIGHT_TOOLS = [
   },
 ];
 
+
+// --- Draft (M9) ---
+// The fourth product surface. Rankings is the board you read; Mock Draft is the room
+// you practise in; the Value Board is the M6.1 comparison, moved here from Insight ▾
+// because a draft tool belongs in the draft menu (the old /insight/draft redirects, so
+// saved views and shared links survive).
+export const DRAFT_ITEMS = [
+  {
+    id: "draft-rankings",
+    label: "Rankings",
+    path: "/draft/rankings",
+    menuDesc: "The consensus board, or one of your own",
+    title: "Rankings",
+    description:
+      "Expert consensus by default, with our valuation of every player beside it — " +
+      "and your own boards, uploaded or built here, in the same table.",
+    lede:
+      "The consensus is a blend of every expert board we hold, each re-ranked over " +
+      "the players it lists before averaging, so a deep board does not outvote a " +
+      "short one. Where the experts disagree, the range says so.",
+  },
+  {
+    id: "draft-mock",
+    label: "Mock Draft",
+    path: "/draft/mock",
+    menuDesc: "Practise against bots, from any board",
+    title: "Mock Draft",
+    description:
+      "A snake draft against bots, in your scoring and league settings, from whichever " +
+      "board you want to practise against — then graded on what your roster was " +
+      "actually worth.",
+  },
+  {
+    id: "draft-value",
+    label: "Value Board",
+    path: "/draft/value",
+    menuDesc: "Where the consensus and our valuation disagree",
+    title: "Draft Value Board",
+    description:
+      "Expert consensus rank next to what each player's usage was actually worth, in " +
+      "your scoring and league size — and the gap between the two. A positive gap is " +
+      "a player we rate above the market.",
+    lede:
+      "Our side is built on expected points, not actual ones: a player who scored " +
+      "twelve touchdowns on six touchdowns' worth of usage is valued at six here. " +
+      "That is the point — it prices the opportunity, which tends to repeat, rather " +
+      "than the finish, which often does not.",
+  },
+];
+
 // --- Explore (M4) ---
 // Not boards: these are tools, not ranked tables, so they have no `columns` and are
 // routed to their own pages. They share the nav-item shape so the dropdown can render
@@ -422,9 +457,11 @@ export const EXPLORE_ITEMS = [
   },
 ];
 
-// Nav dropdown groups. Insight leads — it is the reason to come back.
+// Nav dropdown groups. Insight leads — it is the reason to come back — and Draft sits
+// next to it, because from July to September it is the reason to come back.
 export const NAV_GROUPS = [
   { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
+  { label: "Draft", items: DRAFT_ITEMS, match: "/draft" },
   { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" },
   { label: "Fantasy Leaderboards", items: FANTASY_BOARDS, match: "/fantasy" },
   { label: "NFL Leaderboards", items: NFL_BOARDS, match: "/nfl" },

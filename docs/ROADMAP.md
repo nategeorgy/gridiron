@@ -298,6 +298,38 @@ the shared engine, and the data behind each mode. Read it before building any of
   Grid, Start/Sit Retro (resolves in *your* scoring), Boom or Bust, plus the original
   "Name their college" / "Name a dude" / "17-0".
 
+### ✅ M9 — Draft (shipped 2026-08-23, ahead of M7)
+
+- **Shipped:** a fifth nav dropdown, **Draft ▾** — **Rankings** (`/draft/rankings`), the
+  **Mock Draft** room (`/draft/mock`), and the M6.1 **Value Board**, moved here from
+  `/insight/draft` (which redirects, so saved views survive).
+- **Rankings leads with the market, not with us.** A consensus ordering with our
+  expected-VORP valuation as the column beside it — never a re-ranking of the consensus
+  by our own numbers, because the board that *is* our opinion already exists next door
+  and two pages both claiming to be "the ranking" is how a user stops trusting either.
+- **"Consensus" is now a blend.** FantasyPros plus any expert board dropped into
+  `pipeline/data/rankings/` as CSV, each **densely re-ranked before averaging** so a
+  400-name board cannot outvote a 150-name one. The blend is **anonymous by
+  construction**: the source registry is fail-closed, so a paywalled input can only ever
+  leave the server inside an average. A first build required two sources per player and
+  silently truncated the whole consensus to the shallowest board's depth.
+- **Users bring their own boards** — a strict CSV upload (unmatched names come back with
+  their ranks rather than being dropped) or a drag-and-drop editor. An account is needed
+  to *keep* a board, never to read one.
+- **Mock draft runs client-side, grades server-side.** Bots have no ADP — none exists
+  free — so their reach and fall are drawn from the consensus's own disagreement, plus
+  positional need and a randomness dial. Graded on expected VORP, for the M6.1 reason.
+  QB/RB/WR/TE only: we hold no kicker or defense data and a placeholder round would be
+  a fake.
+- **In-season it becomes a weekly board.** Data-driven, not calendar-driven. There is
+  deliberately **no rest-of-season ranking** — no free source publishes one, and
+  building one would be a projection wearing a ranking's clothes (still a Dream item).
+- **Also found:** the ECR *archive* is a real time series back to 2019, so ECR history
+  **is** backfillable after all — M6.1's note applies only to the snapshot file beside
+  it. And a latent import cycle in `app/metrics.py` that made three modules unimportable
+  on their own.
+- Full design note: [`docs/design/M9-draft.md`](design/M9-draft.md).
+
 ### 💭 Dream tail (only when the base is proven)
 - **Fantasy trade calculator** — on VORP / rest-of-season value.
 - **GridironIQ projection model** — own weekly/season model (see Decision Log).

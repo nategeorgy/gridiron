@@ -107,6 +107,23 @@ jobs:
         working-directory: pipeline
         run: python ingest_rankings.py
 
+      # Weekly rankings (M9) come from the ECR *archive*, which — unlike the draft
+      # snapshot above — is a real time series, so a missed day is recoverable and a
+      # re-run simply rewrites rows that already match. The script no-ops out of season:
+      # with no regular-season schedule held for the season, there are no weeks to map
+      # scrape dates onto.
+      - name: Refresh weekly rankings
+        working-directory: pipeline
+        run: python ingest_rankings.py --weekly
+
+      # Expert boards dropped into pipeline/data/rankings as CSVs (M9). They blend
+      # anonymously into the GridironIQ Consensus and are never individually exposed —
+      # the API's source registry is fail-closed, so a board added here reaches nobody
+      # by name. No-ops when the folder is empty.
+      - name: Ingest expert ranking boards
+        working-directory: pipeline
+        run: python ingest_expert_boards.py
+
       # The most perishable feed here — camp battles and injuries move it daily, and a
       # week-old depth chart is worse than none. Note this ingest *replaces* each team's
       # rows rather than upserting, because a cut player stops appearing in the feed

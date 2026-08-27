@@ -106,6 +106,20 @@ export const TOKEN_GROUPS = [
     ],
   },
   {
+    id: "positions",
+    label: "Position identity",
+    blurb:
+      "The four positions on the draft board. Aliases of four series hues rather than new colours, because a position is exactly the kind of categorical identity those were validated for — so the board inherits the colour-vision separation for free. Editing one here overrides the alias. The two tint strengths differ per theme on purpose: a hue mixed with `transparent` darkens over a dark surface and lightens over a light one, so one percentage cannot serve both.",
+    tokens: [
+      { name: "--position-qb", label: "QB", type: "color" },
+      { name: "--position-rb", label: "RB", type: "color" },
+      { name: "--position-wr", label: "WR", type: "color" },
+      { name: "--position-te", label: "TE", type: "color" },
+      { name: "--cell-tint", label: "Cell tint strength", type: "raw" },
+      { name: "--cell-tint-edge", label: "Cell edge strength", type: "raw" },
+    ],
+  },
+  {
     id: "material",
     label: "Material",
     blurb: "Geometry and depth — the three knobs that most change how 'glass' the app feels.",

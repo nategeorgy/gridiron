@@ -29,11 +29,14 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_usage.py --seasons 2024        # 6. snaps + routes
 .venv/bin/python ingest_target_depth.py --seasons 2024 # 7. target depth (M4)
 .venv/bin/python ingest_rankings.py                    # 8. consensus rankings (M6)
+.venv/bin/python ingest_rankings.py --weekly           # 8b. weekly rankings (M9, in season)
+.venv/bin/python ingest_expert_boards.py               # 8c. expert CSV boards (M9)
 .venv/bin/python ingest_depth_charts.py                # 9. depth charts (M6)
 ```
 
 Steps 8 and 9 are independent of 4–7 — they need only `players` (and `teams`) — but
-must follow step 2.
+must follow step 2. Step 8b additionally needs the **schedule** (step 3): the archive
+carries no week number, so the week is derived from when each week's games finished.
 
 `--seasons` is optional. Left off, each script asks `seasons.py` for its range, and
 **the ranges are different on purpose**. Two things vary:
@@ -186,6 +189,36 @@ snaps 2013, routes 2016–2025, expected points 2009, and **targets are unrecove
   counted: a miss inside the top 50 is a hole in the board, a miss at rank 340 is a
   college player who has never taken an NFL snap. On the 2026 board, 0 of the top 200
   were unmatched.
+
+`ingest_rankings.py --weekly` (M9) loads **in-season weekly rankings** into the same
+table, at the real week number:
+
+- Reads the ECR **archive** (`load_ff_rankings("all")`, 1.8M rows back to 2019) rather
+  than the latest-weekly file, which publishes only positional pages. The archive has
+  `weekly-op` — the one overall weekly board still published, since `weekly-offense` was
+  discontinued in October 2020 — alongside `weekly-qb/rb/wr/te`.
+- **The archive is a real time series**, unlike the draft snapshot, so a missed day is
+  recoverable and a re-run rewrites rows that already match. This corrects the M6.1 note
+  about history accruing only from our first ingest: that is true of the snapshot file,
+  not of the archive beside it.
+- The week is **derived from the schedule** — a board scraped on date D belongs to the
+  first week whose games have not all finished by then. No calendar constant.
+- **No-ops before kickoff.** The archive is a large download and there are no weekly
+  boards in the offseason, so the scheduled run skips it until the season starts. An
+  explicit `--season` is always honoured: that is a deliberate backfill.
+
+`ingest_expert_boards.py` (M9) ingests **expert boards dropped in as CSVs** from
+`data/rankings/` — see the README in that folder for the format, which is the same one
+the in-app upload accepts.
+
+- Boards blend **anonymously** into the GridironIQ Consensus. The backend's source
+  registry is fail-closed, so a source id nobody registered can reach a user only as one
+  un-named input to an average — several of these are paywalled. The script refuses to
+  write a source id the API publishes, and never writes a display name.
+- A single expert's rank goes in `ecr`; `sd`, `best` and `worst` stay NULL. One person
+  is not a consensus, and a zero spread would claim perfect agreement.
+- Filenames are `<source-id>_<YYYY-MM-DD>.csv`. The date becomes `scraped_at`, which is
+  part of the key — re-dropping the same board overwrites, a new date accrues history.
 
 `ingest_teams.py` writes **35 of the 36 rows `load_teams()` publishes**. The feed
 carries historical franchise codes beside current ones — LAR beside LA, OAK beside LV,

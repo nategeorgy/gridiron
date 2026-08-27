@@ -1,8 +1,11 @@
 // Route table for the app.
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { BoardEditor } from "./pages/BoardEditor";
 import { CompareView } from "./pages/CompareView";
 import { DraftBoardView } from "./pages/DraftBoardView";
+import { MockDraftView } from "./pages/MockDraftView";
+import { RankingsView } from "./pages/RankingsView";
 import { Home } from "./pages/Home";
 import { InsightView } from "./pages/InsightView";
 import { LeaderboardView } from "./pages/LeaderboardView";
@@ -13,7 +16,7 @@ import { VegasView } from "./pages/VegasView";
 import { StyleGuide } from "./pages/StyleGuide";
 import { TeamProfile } from "./pages/TeamProfile";
 import { Teams } from "./pages/Teams";
-import { ALL_BOARDS, EXPLORE_ITEMS, INSIGHT_TOOLS } from "./constants/boards";
+import { ALL_BOARDS, DRAFT_ITEMS, EXPLORE_ITEMS, INSIGHT_TOOLS } from "./constants/boards";
 
 // Explore tools are pages rather than boards, so they map to their own components.
 const EXPLORE_VIEWS = {
@@ -23,9 +26,15 @@ const EXPLORE_VIEWS = {
 
 // Insight tools (M6) — same idea, under /insight.
 const INSIGHT_TOOL_VIEWS = {
-  "insight-draft": DraftBoardView,
   "insight-sos": SosView,
   "insight-vegas": VegasView,
+};
+
+// Draft (M9) — under /draft. The Value Board is the M6.1 page, moved here.
+const DRAFT_VIEWS = {
+  "draft-rankings": RankingsView,
+  "draft-mock": MockDraftView,
+  "draft-value": DraftBoardView,
 };
 
 export function App() {
@@ -60,6 +69,26 @@ export function App() {
             />
           );
         })}
+
+        {/* Draft (M9): rankings, the mock draft room, and the value board. */}
+        {DRAFT_ITEMS.map((item) => {
+          const View = DRAFT_VIEWS[item.id];
+          return (
+            <Route
+              key={item.id}
+              path={item.path.replace(/^\//, "")}
+              element={<View key={item.id} board={item} />}
+            />
+          );
+        })}
+
+        {/* The board editor is its own route so a board being built is a URL you can
+            come back to, rather than a modal that dies with the page. */}
+        <Route path="draft/boards/:boardId" element={<BoardEditor />} />
+
+        {/* The Value Board moved out of Insight ▾ in M9. Redirected rather than
+            renamed, so shared links and saved views keep working. */}
+        <Route path="insight/draft" element={<Navigate to="/draft/value" replace />} />
 
         {/* Explore tools (M4): scatter + comparison builders. */}
         {EXPLORE_ITEMS.map((item) => {

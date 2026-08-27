@@ -232,8 +232,15 @@ function OpportunityPanels({ playerId, position, season, games }) {
   );
 }
 
-export function PlayerProfile() {
-  const { playerId } = useParams();
+/**
+ * @param {string} [playerId] render a specific player instead of the route's.
+ *   The draft room opens this inside a dialog, where there is no route param to read
+ *   — and a second, near-identical "profile card" component would drift from this one
+ *   the first time either changed.
+ */
+export function PlayerProfile({ playerId: playerIdProp } = {}) {
+  const params = useParams();
+  const playerId = playerIdProp ?? params.playerId;
   const [scoring, setScoring] = useScoring();
   const playerQuery = usePlayer(playerId);
   const gameLogQuery = usePlayerGameLog(playerId, scoring);
@@ -277,9 +284,14 @@ export function PlayerProfile() {
 
   return (
     <div className="space-y-5">
-      <Link to="/fantasy/leaders" className="inline-block text-sm text-muted transition hover:text-accent">
-        ← Leaderboard
-      </Link>
+      {/* Only when this is the page. Embedded in a dialog there is nothing to go back
+          *to* — the thing behind it is the draft board, and the close button is the
+          way out. */}
+      {!playerIdProp && (
+        <Link to="/fantasy/leaders" className="inline-block text-sm text-muted transition hover:text-accent">
+          ← Leaderboard
+        </Link>
+      )}
 
       <ProfileHeader
         player={player}

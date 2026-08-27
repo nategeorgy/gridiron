@@ -1,5 +1,9 @@
 // The Draft Value Board (M6.1) — the consensus ranking against our own valuation.
 //
+// Lives at /draft/value since M9; /insight/draft redirects. It was always a draft tool
+// sitting in an insight menu, and it now sits beside Rankings, which is the board you
+// read, and the Mock Draft room, which is where you act on both.
+//
 // Every other Insight board ranks players by a number we computed. This one puts two
 // *orderings* side by side and shows where they disagree: expert consensus rank, our
 // expected-VORP rank, and the gap. A positive gap means we rate a player above the
@@ -144,7 +148,7 @@ export function DraftBoardView({ board }) {
   return (
     <div className="space-y-5">
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Insight</div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Draft</div>
         <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
       </div>

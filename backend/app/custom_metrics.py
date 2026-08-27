@@ -251,3 +251,11 @@ BUILTIN_COMPOSITES: dict[str, CustomMetric] = {
     for definition in REGISTRY
     if definition.aggregation == "composite" and definition.formula
 }
+
+
+# app.metrics defers stamping composite availability until this module exists, because
+# resolving a composite's window needs the formula grammar above. Whichever of the two
+# modules is imported second finishes the job; see metrics.finalize_availability.
+from app.metrics import finalize_availability  # noqa: E402
+
+finalize_availability()

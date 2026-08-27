@@ -53,6 +53,28 @@
     --series-4: #c98500;
     --series-5: #d55181;
 
+    /* Position identity (M9 — the draft board). A position is a categorical
+       identity, which is exactly what the series hues were validated for, so these
+       alias four of them rather than introducing new colours to re-validate. Aliased
+       rather than used directly so the two can diverge later without one silently
+       changing the other. Named --position-* and never --pos-*: `--pos` already means
+       "good", and a quarterback is not good news. */
+    --position-qb: var(--series-4);  /* gold */
+    --position-rb: var(--series-1);  /* blue */
+    --position-wr: var(--series-3);  /* green */
+    --position-te: var(--series-5);  /* rose — the nearest "light red" that stays
+                                        separable from the quarterback gold. `--neg`
+                                        is a truer red but carries "bad", which a
+                                        position must not borrow. */
+
+    /* How hard a board cell is tinted by its position. A percentage rather than a
+       colour, because the mix is with `transparent`: the same 42% *darkens* toward
+       the hue on this theme and *lightens* toward it on the light one, so one number
+       cannot serve both. Tuned per theme to land on a similar perceived saturation
+       while keeping the cell's text above 4.5:1. */
+    --cell-tint: 42%;
+    --cell-tint-edge: 70%;
+
     --shadow: 0 20px 55px -22px rgba(0, 0, 0, 0.7);
     --radius: 20px;
     --blur: 24px;
@@ -95,6 +117,21 @@
     --series-3: #1baf7a;
     --series-4: #eda100;
     --series-5: #e87ba4;
+
+    /* Same aliasing on light; the series values underneath were re-stepped for this
+       surface, so the positions inherit that for free. */
+    --position-qb: var(--series-4);  /* gold */
+    --position-rb: var(--series-1);  /* blue */
+    --position-wr: var(--series-3);  /* green */
+    --position-te: var(--series-5);  /* rose — the nearest "light red" that stays
+                                        separable from the quarterback gold. `--neg`
+                                        is a truer red but carries "bad", which a
+                                        position must not borrow. */
+
+    /* Higher than dark: mixing toward `transparent` over a near-white surface
+       lightens, so the dark theme's 42% reads as a wash here. */
+    --cell-tint: 58%;
+    --cell-tint-edge: 85%;
 
     --shadow: 0 18px 44px -22px rgba(20, 30, 60, 0.35);
     --radius: 20px;
@@ -146,6 +183,31 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
     color: var(--muted);
+  }
+
+  /* The draft-room Draft button (M9). On dark, accent text on a frosted pill reads
+     clearly. On light the same treatment is a pale outline on a pale card — and this
+     is the one control in the room that gets pressed constantly, so it is the worst
+     one to lose. Light therefore fills the pill with the accent and puts the page's
+     own text colour on top: measured 6.4:1, where accent-on-surface was under 3.
+     Deliberately not `--accent-ink` (white on light), which would be the same
+     low-contrast trap in the other direction on this hue. */
+  .draft-pill {
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  :root[data-theme="light"] .draft-pill {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--fg);
+  }
+
+  .draft-pill:disabled {
+    opacity: 0.4;
   }
 
   .glass-input {

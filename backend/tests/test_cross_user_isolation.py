@@ -173,3 +173,145 @@ def test_unknown_ids_answer_the_same_as_another_users(client_a, client_b, profil
 
     assert someone_elses.status_code == made_up.status_code == 404
     assert someone_elses.json() == made_up.json()
+
+
+# --- Ranking boards and mock drafts (M9) -------------------------------------
+#
+# Two more owned resources, and the same rule: a resource id is the only lever an
+# attacker has, and every use of someone else's must 404 rather than 403.
+#
+# The ranking board adds one lever the M5 resources did not have — it is addressable
+# through a *public* endpoint too, as `?source=board:<uuid>` on the rankings board.
+# That path takes an optional user rather than requiring one, which is exactly the
+# kind of asymmetry where an isolation hole would hide.
+
+
+BOARDS = "/api/v1/me/ranking-boards"
+MOCKS = "/api/v1/me/mock-drafts"
+
+MOCK = {
+    "scoring_spec": "ppr",
+    "league_spec": "12",
+    "teams": 12,
+    "rounds": 15,
+    "draft_slot": 4,
+    "bot_source": "consensus",
+    "bot_randomness": 0.5,
+    "grade_vorp": 42.0,
+    "grade_rank": 1,
+}
+
+
+@pytest.fixture
+def ranking_board_of_a(client_a, player) -> str:
+    """A ranking board owned by user A. Returns its id."""
+    response = client_a.post(
+        BOARDS, json={"name": "A's Cheat Sheet", "entries": [{"player_id": player.player_id}]}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["board_id"]
+
+
+@pytest.fixture
+def mock_of_a(client_a, player) -> str:
+    """A finished mock owned by user A. Returns its id."""
+    response = client_a.post(
+        MOCKS,
+        json={
+            **MOCK,
+            "picks": [
+                {
+                    "pick_number": 1,
+                    "round": 1,
+                    "team_slot": 4,
+                    "player_id": player.player_id,
+                    "is_user": True,
+                }
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["mock_id"]
+
+
+def test_b_cannot_see_as_ranking_board_in_a_list(client_b, ranking_board_of_a):
+    response = client_b.get(BOARDS)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_b_cannot_read_as_ranking_board(client_b, ranking_board_of_a):
+    assert client_b.get(f"{BOARDS}/{ranking_board_of_a}").status_code == 404
+
+
+def test_b_cannot_rename_as_ranking_board(client_a, client_b, ranking_board_of_a):
+    response = client_b.patch(f"{BOARDS}/{ranking_board_of_a}", json={"name": "Stolen"})
+
+    assert response.status_code == 404
+    assert client_a.get(BOARDS).json()[0]["name"] == "A's Cheat Sheet"
+
+
+def test_b_cannot_rewrite_as_ranking_board(client_a, client_b, ranking_board_of_a, other_player):
+    response = client_b.put(
+        f"{BOARDS}/{ranking_board_of_a}/entries",
+        json={"entries": [{"player_id": other_player.player_id}]},
+    )
+
+    assert response.status_code == 404
+    entries = client_a.get(f"{BOARDS}/{ranking_board_of_a}").json()["entries"]
+    assert entries[0]["player_id"] != other_player.player_id
+
+
+def test_b_cannot_delete_as_ranking_board(client_a, client_b, ranking_board_of_a):
+    assert client_b.delete(f"{BOARDS}/{ranking_board_of_a}").status_code == 404
+    assert len(client_a.get(BOARDS).json()) == 1
+
+
+def test_b_cannot_draft_from_as_ranking_board(client_b, ranking_board_of_a):
+    """The public rankings endpoint must not become the back door to a private board.
+
+    It takes an *optional* user, so a signed-in B naming A's board id must get the
+    same 404 as a source that never existed — and a signed-out caller likewise.
+    """
+    response = client_b.get(
+        "/api/v1/draft/rankings", params={"source": f"board:{ranking_board_of_a}"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_signed_out_callers_cannot_draft_from_a_private_board(client, ranking_board_of_a):
+    response = client.get(
+        "/api/v1/draft/rankings", params={"source": f"board:{ranking_board_of_a}"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_b_cannot_see_as_mock_in_a_list(client_b, mock_of_a):
+    response = client_b.get(MOCKS)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_b_cannot_read_as_mock(client_b, mock_of_a):
+    assert client_b.get(f"{MOCKS}/{mock_of_a}").status_code == 404
+
+
+def test_b_cannot_delete_as_mock(client_a, client_b, mock_of_a):
+    assert client_b.delete(f"{MOCKS}/{mock_of_a}").status_code == 404
+    assert len(client_a.get(MOCKS).json()) == 1
+
+
+def test_unknown_board_id_answers_the_same_as_another_users(
+    client_b, ranking_board_of_a
+):
+    unknown = uuid.uuid4()
+
+    someone_elses = client_b.get(f"{BOARDS}/{ranking_board_of_a}")
+    made_up = client_b.get(f"{BOARDS}/{unknown}")
+
+    assert someone_elses.status_code == made_up.status_code == 404
+    assert someone_elses.json() == made_up.json()
