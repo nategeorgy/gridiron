@@ -1,13 +1,19 @@
 // App shell: frosted sticky header with brand + primary nav (Home, the two
 // leaderboard dropdowns, Teams), search, and the light/dark theme toggle.
 // The page background (the Liquid Glass "environment") is painted on <body>.
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { AccountMenu } from "./AccountMenu";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { NavDropdown } from "./ui/NavDropdown";
 import { NAV_GROUPS } from "../constants/boards";
 import { useProfileSync } from "../hooks/useProfileSync";
+
+// Routes that opt out of the 1280px shell. The draft room is a *board* — twelve
+// columns of picks plus a player pool plus a roster — and the whole argument for a
+// board is seeing it at once. Capped rather than full-bleed so it does not stretch to
+// absurd cell sizes on an ultrawide display.
+const WIDE_ROUTES = ["/draft/mock"];
 
 const navLinkClass = ({ isActive }) =>
   `whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
@@ -33,6 +39,9 @@ export function Layout() {
   // Mounted once, here: migrates pre-account localStorage into a profile on first
   // sign-in, and mirrors the active profile back into localStorage after that.
   useProfileSync();
+
+  const { pathname } = useLocation();
+  const wide = WIDE_ROUTES.some((route) => pathname.startsWith(route));
 
   return (
     <div className="min-h-screen">
@@ -62,7 +71,7 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className={`mx-auto px-4 py-6 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
         <Outlet />
       </main>
     </div>

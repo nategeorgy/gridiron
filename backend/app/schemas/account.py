@@ -21,7 +21,7 @@ from app.scoring import parse_scoring
 # has to be kept in sync. What the backend must guarantee is narrower and stable —
 # that a stored path is a same-origin app route and can never become an off-site
 # redirect. The frontend, which owns the registry, rejects unknown boards at save time.
-SAVED_VIEW_SECTIONS: tuple[str, ...] = ("fantasy", "insight", "nfl", "explore")
+SAVED_VIEW_SECTIONS: tuple[str, ...] = ("fantasy", "insight", "nfl", "explore", "draft")
 
 
 # --- Shared field validators -------------------------------------------------

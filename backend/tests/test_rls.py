@@ -33,6 +33,10 @@ ACCOUNT_TABLES = (
     "league_profiles",
     "favorites",
     "saved_views",
+    "ranking_boards",
+    "ranking_board_entries",
+    "mock_drafts",
+    "mock_draft_picks",
 )
 # NFL reference data. Public to *read through our API*, which is not the same thing as
 # writable by anyone holding the publishable key. Locked by `69b660509e58`.

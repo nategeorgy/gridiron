@@ -316,6 +316,64 @@ player_rankings (
   PRIMARY KEY (player_id, source, ranking_type, season, week, scraped_at)
 )
 
+-- A user's own ranking board (M9) — uploaded from a CSV, or built in the editor.
+-- ⚠️ RLS-locked in migration 0fd5c30c9287, like every table holding user data.
+-- A *global* source is deliberately NOT here: FantasyPros and the dropped expert
+-- boards are rows in player_rankings, which was multi-source from day one.
+ranking_boards (
+  board_id     UUID PRIMARY KEY,
+  user_id      UUID REFERENCES users(user_id) ON DELETE CASCADE,
+  name         VARCHAR(60),
+  ranking_type VARCHAR(40),   -- same vocabulary as player_rankings.ranking_type
+  origin       VARCHAR(20),   -- 'upload' | 'custom'
+  seeded_from  VARCHAR(60),   -- provenance; free text, survives its parent's deletion
+  created_at   TIMESTAMPTZ,
+  updated_at   TIMESTAMPTZ,
+  UNIQUE(user_id, name)
+)
+
+-- rank is stored DENSELY and rewritten wholesale on every save. A board is edited by
+-- dragging, so the unit of change is the board, not the row — a partial update has no
+-- meaning here, and an upsert would leave a removed player on the board forever.
+ranking_board_entries (
+  board_id   UUID REFERENCES ranking_boards(board_id) ON DELETE CASCADE,
+  player_id  VARCHAR(50) REFERENCES players(player_id),
+  rank       INT,
+  tier       INT,           -- the user's own grouping; optional
+  note       VARCHAR(200),
+  PRIMARY KEY (board_id, player_id)
+)
+
+-- Finished mock drafts (M9). IN-PROGRESS mocks are not here: the room runs in the
+-- browser and mirrors to localStorage, so a mock never requires an account.
+mock_drafts (
+  mock_id        UUID PRIMARY KEY,
+  user_id        UUID REFERENCES users(user_id) ON DELETE CASCADE,
+  scoring_spec   VARCHAR(500),  -- the same spec strings the URL carries (M5 pattern)
+  league_spec    VARCHAR(200),
+  teams          INT,
+  rounds         INT,
+  draft_slot     INT,           -- 1-based; the user's seat
+  bot_source     VARCHAR(60),   -- a global source id, or "board:<uuid>". NOT a FK
+  bot_randomness FLOAT,         -- 0 = strict board order, 1 = maximum chaos
+  -- Stored as the grade WAS GIVEN, never recomputed on read: replacement level moves
+  -- as data lands, and a history that silently re-grades itself is not a history.
+  grade_vorp     FLOAT,
+  grade_rank     INT,
+  created_at     TIMESTAMPTZ
+)
+
+mock_draft_picks (
+  mock_id     UUID REFERENCES mock_drafts(mock_id) ON DELETE CASCADE,
+  pick_number INT,            -- 1-based overall
+  round       INT,
+  team_slot   INT,
+  player_id   VARCHAR(50) REFERENCES players(player_id),
+  is_user     BOOLEAN,
+  auto        BOOLEAN,        -- kept so a bad grade reads as "I autopicked four times"
+  PRIMARY KEY (mock_id, pick_number)
+)
+
 -- Target distribution by pass depth and direction (M4).
 -- A different grain from player_stats, which is why it is its own table: air_yards is
 -- stored there as a per-game total, and a total cannot be un-summed into buckets.
@@ -475,6 +533,13 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
   there is a projection. Full plan in
   [`docs/design/M6-new-data-domains.md`](docs/design/M6-new-data-domains.md) — **read it
   before building any of this.**
+- **M9 — Draft** (✅ SHIPPED, ahead of M7 — draft season is now): a **Draft ▾** surface
+  with Rankings, a Mock Draft room, and the Value Board moved in from Insight. The
+  default board is the **market**, not us; our valuation is the column beside it. Users
+  bring their own boards by CSV or build them here (an account is needed to *keep* a
+  board, never to read one). In-season the page becomes a **weekly** board — there is
+  deliberately no rest-of-season ranking, because no free source publishes one. Full
+  plan in [`docs/design/M9-draft.md`](docs/design/M9-draft.md).
 - **M7 — Games & growth**: player guessing games built as **one puzzle engine** (a mode
   is a generator + a renderer; date-seeded daily puzzle, server-side grading) rather
   than N client-side quizzes. Shortlist: Higher or Lower → Rank 'Em + Guess the Number
@@ -524,6 +589,16 @@ GET /api/v1/stats/draft-board                ← M6 consensus rank vs our expect
                                                rank, and the gap. Both ranks counted
                                                over the same players; stops at
                                                draftable depth
+GET /api/v1/draft/sources                    ← M9 the boards this caller may pick:
+                                               public globals + the blend + their own.
+                                               Private sources are absent by
+                                               construction, never filtered out
+GET /api/v1/draft/rankings                   ← M9 one board's players, with our
+                                               expected-VORP valuation beside the
+                                               board's own order.
+                                               ?source=consensus|fantasypros|board:<uuid>
+POST /api/v1/draft/mock-grade                ← M9 value the rosters out of a finished
+                                               mock. Needs no account
 GET /api/v1/stats/scatter                    ← M4 any two metrics (UI offers presets only)
 GET /api/v1/stats/compare                    ← M4 up to 5 players, position-intersected
 GET /api/v1/metrics                          ← metric registry
@@ -543,6 +618,10 @@ GET/DELETE /api/v1/me                        ← profile + counts / delete accou
 CRUD       /api/v1/me/league-profiles        ← named scoring+league bundles
 GET/PUT/DELETE /api/v1/me/favorites[/{id}]   ← watchlist (idempotent add/remove)
 CRUD       /api/v1/me/saved-views            ← named route + query string
+CRUD       /api/v1/me/ranking-boards         ← M9 a user's own boards
+PUT        /api/v1/me/ranking-boards/{id}/entries  ← replace the whole board
+POST       /api/v1/me/ranking-boards/import  ← CSV upload (JSON body, not multipart)
+GET/POST/DELETE /api/v1/me/mock-drafts[/{id}] ← finished-mock history
 
 GET /api/v1/health                           ← API + DB liveness (Render health check)
 GET /api/v1/health/auth                      ← is token verification wired? (issuer,
@@ -758,7 +837,20 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       and the schedule/stats feeds disagree about historical franchise codes
       (`pipeline/franchises.py`). `teams` now holds 35 rows
       (see [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md))
-- [x] Backend test suite (`backend/tests/`, 226 tests) — the repo's first automated
+- [x] M9 — Draft: a fifth nav dropdown, **Draft ▾** — **Rankings** (`/draft/rankings`),
+      **Mock Draft** (`/draft/mock`), and the M6.1 **Value Board**, moved here from
+      `/insight/draft` (which redirects). Rankings defaults to the *market* with our
+      expected-VORP valuation beside it, where "consensus" is a **blend** of every
+      expert board held — each densely re-ranked before averaging, and **anonymous by
+      construction**, since `app/rankings.py`'s source registry is fail-closed and only
+      a registered public source can be named. Users can upload a board (strict CSV;
+      unmatched names come back with their ranks) or build one in a drag-and-drop
+      editor. The mock draft runs client-side against bots whose reach and fall come
+      from the consensus's own disagreement rather than ADP, and is graded server-side
+      on expected VORP. Four RLS-locked tables (migration `0fd5c30c9287`),
+      `ingest_expert_boards.py`, and `ingest_rankings.py --weekly`
+      (see [`docs/design/M9-draft.md`](docs/design/M9-draft.md))
+- [x] Backend test suite (`backend/tests/`, 280 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -859,13 +951,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   and nowhere else, so no request shape can reach another user's rows. Filter every
   lookup on `user_id` *and* the primary key, so a guessed id 404s like a missing one
 - ⚠️ **Every table in `public` must enable RLS in the migration that creates it —
-  the NFL tables included** (see `8f73b5b2b1a1`, `69b660509e58`). Supabase serves the
-  whole `public` schema through PostgREST, and its default privileges grant the
-  publishable `anon` key **ALL** on new tables there — so a table without RLS is
-  world-readable *and writable*, bypassing the API entirely. The backend and the
-  pipeline both connect as the table owner and bypass RLS, so this costs nothing.
-  Create **no policies**: a policy is the first step toward the browser talking to the
-  database directly, which this architecture rejects
+  the NFL tables included** (see `8f73b5b2b1a1`, `69b660509e58`, `0fd5c30c9287`).
+  Supabase serves the whole `public` schema through PostgREST, and its default
+  privileges grant the publishable `anon` key **ALL** on new tables there — so a table
+  without RLS is world-readable *and writable*, bypassing the API entirely. The backend
+  and the pipeline both connect as the table owner and bypass RLS, so this costs
+  nothing. Create **no policies**: a policy is the first step toward the browser talking
+  to the database directly, which this architecture rejects
 - ⚠️ **"Public read-only reference data" is not a privilege level, and NFL tables are
   not exempt.** That exemption is exactly what left `player_target_depth` (214,889
   rows), `player_rankings` and `depth_chart_entries` readable *and writable* by anyone
@@ -928,6 +1020,41 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   variance. Expected VORP ranks the opportunity behind them. It is also why the board is
   honest about what it is: last season's usage against next season's market, so a gap
   can be news about the offseason rather than a mispricing
+- ⚠️ **A private ranking source may never leave the server on its own** (M9). Several
+  boards blended into the GridironIQ Consensus are paywalled, so `app/rankings.py`'s
+  source registry is **fail-closed**: only a source marked `public` can be named in a
+  request or returned by name, and a source nobody registered can reach a user *only*
+  as one un-named input to an average. Private, unknown, another user's board and
+  never-existed all produce the identical 404, so the endpoint is never an oracle for
+  which boards we hold. Dropping a new CSV into `pipeline/data/rankings/` exposes
+  nothing by default — which is the right way round for this to fail
+- **Blending two boards means densifying each one first.** A source's own numbering is
+  not comparable across boards (ECR carries decimals, an expert's list carries gaps);
+  its *ordering* is. And a player a board omits is imputed at that board's depth + 1
+  rather than skipped — that constant penalty is what lets a 434-name board blend with
+  a 150-name one without truncating the result to 150. Requiring two sources before
+  ranking a player did exactly that truncation, which is why one is now enough with
+  `sources_count` shown on the row
+- **A ranking board is current state, so it is replaced, never upserted** — the same
+  rule as `depth_chart_entries`. A player dragged off a board does not reappear with a
+  worse rank; he stops being on it. `rank` is stored densely and the whole board is
+  rewritten on every save, which is also why the API takes **no rank field**: position
+  in the list is the rank, and a second representation would be something to disagree
+  with
+- **The mock draft runs in the browser; the server owns the board and the grade.** A
+  mock is ~150 picks with nothing to cheat at, and a round trip per pick would make the
+  room feel like a form. It is also what keeps a mock **ungated** — the draft mirrors to
+  `localStorage` and resumes for everyone; signing in adds a history and nothing else
+- **Bots draft from the setup board; the user's board is a view.** Switching the
+  available-players ordering mid-draft must not change a single bot decision, or picking
+  a better cheat sheet would also change the room you are practising against. With no
+  ADP to work from, bot reach and fall are drawn from the consensus's **own
+  disagreement** — a contested player moves, a unanimous one does not
+- **A draft is graded on expected points, and the lineup is filled on actual ones.**
+  Two different questions: who to start is a *points* question, who won the draft is a
+  *value* question. Grading on last season's results would reward whoever drafted the
+  most touchdown luck. An unvaluable pick scores zero rather than being imputed to
+  replacement level, and the count of those is shown beside the score
 - **Consensus rankings are an opinion, not a measurement.** `load_ff_rankings` has no
   projected points and no ADP. Never run a rank through the scoring engine — it is
   already frozen in someone else's scoring. What *is* league-aware is which variant we

@@ -324,8 +324,13 @@ REGISTRY_BY_ID: dict[str, MetricDef] = {metric.id: metric for metric in REGISTRY
 #      narrowest input. Deriving these means adding a composite can never accidentally
 #      claim a season its own inputs do not have.
 #   3. The full range, for everything else.
-def _derive_availability(metric: MetricDef) -> Availability:
-    """Resolve one metric's window, following `base` and `formula` to their inputs."""
+def _derive_availability(metric: MetricDef, parse_formula) -> Availability:
+    """Resolve one metric's window, following `base` and `formula` to their inputs.
+
+    ``parse_formula`` is passed in rather than imported: it lives in
+    ``app.custom_metrics``, which imports this module, and taking it as an argument is
+    what keeps that cycle out of this function. See :func:`finalize_availability`.
+    """
     explicit = for_metric(metric.id)
     if metric.id in _EXPLICIT_IDS:
         return explicit
@@ -334,12 +339,7 @@ def _derive_availability(metric: MetricDef) -> Availability:
         return for_metric(metric.base)
 
     if metric.aggregation == "composite" and metric.formula:
-        # Parsed here rather than re-implemented: the same grammar the engine uses.
-        # Imported inside the function because app.custom_metrics imports this
-        # module — by the time this runs, REGISTRY_BY_ID above exists, which is
-        # all it needs from us.
-        from app.custom_metrics import parse_formula
-
+        # Parsed rather than re-implemented: the same grammar the engine uses.
         parsed = parse_formula(metric.id, metric.formula, builtin=True)
         inputs = [term.metric for term in parsed.terms]
         if parsed.denominator and parsed.denominator != "games":
@@ -354,8 +354,43 @@ def _derive_availability(metric: MetricDef) -> Availability:
 
 _EXPLICIT_IDS = set(METRIC_AVAILABILITY)
 
-for _metric in REGISTRY:
-    _metric.availability = _derive_availability(_metric)
+_availability_resolved = False
+
+
+def finalize_availability() -> None:
+    """Stamp every metric with its availability window. Idempotent.
+
+    **This exists to break a genuine import cycle**, not for laziness' sake: resolving
+    a *composite* metric's window needs the formula grammar in ``app.custom_metrics``,
+    and that module needs ``REGISTRY`` from this one. Whichever of the two is imported
+    first cannot finish the job, so both call this and whichever finishes second does
+    the work.
+
+    Before this, importing ``app.custom_metrics`` (or anything reaching it first, such
+    as ``app.intelligence`` or ``app.routers.stats``) raised ImportError outright. It
+    only ever worked because ``app.main`` happened to import this module first — an
+    ordering nothing stated and nothing enforced.
+    """
+    global _availability_resolved
+    if _availability_resolved:
+        return
+    from app.custom_metrics import parse_formula
+
+    # A nested call may have completed while that import ran — it does exactly this,
+    # from the bottom of app.custom_metrics.
+    if _availability_resolved:
+        return
+    for metric in REGISTRY:
+        metric.availability = _derive_availability(metric, parse_formula)
+    _availability_resolved = True
+
+
+# Try now, in case this module was imported first. If app.custom_metrics is
+# mid-import, the parser does not exist yet and it finishes the job on its way out.
+try:
+    finalize_availability()
+except ImportError:
+    pass
 
 
 def ids_with_aggregation(aggregation: Aggregation) -> list[str]:

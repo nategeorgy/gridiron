@@ -59,7 +59,7 @@ from jwt.exceptions import PyJWKClientError  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
-from app.auth import get_current_user  # noqa: E402
+from app.auth import get_current_user, get_optional_user  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.database import get_db  # noqa: E402
 from app.main import app  # noqa: E402
@@ -285,6 +285,22 @@ def _override_get_current_user(
     return user
 
 
+def _override_get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_fake_bearer),
+    session: Session = Depends(get_db),
+) -> User | None:
+    """The same trade for endpoints that are public but richer when signed in.
+
+    Signed out is a valid answer here rather than a 401 — which is the whole point of
+    `get_optional_user`, and why it needs its own override: a board listing must work
+    for an anonymous caller and additionally show that caller's own boards when there
+    is one.
+    """
+    if credentials is None or not credentials.credentials:
+        return None
+    return session.get(User, uuid.UUID(credentials.credentials))
+
+
 def _client_as(db: Session, user: User) -> TestClient:
     """A client that authenticates as ``user`` on every request."""
 
@@ -293,6 +309,7 @@ def _client_as(db: Session, user: User) -> TestClient:
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = _override_get_current_user
+    app.dependency_overrides[get_optional_user] = _override_get_optional_user
     return TestClient(app, headers=auth_header(str(user.user_id)))
 
 
