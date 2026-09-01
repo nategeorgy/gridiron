@@ -60,9 +60,9 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.PIPELINE_DATABASE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           # 3.12 for the same reason as the test workflow: psycopg2-binary publishes no
           # wheels for 3.13+.
@@ -141,9 +141,9 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.PIPELINE_DATABASE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
