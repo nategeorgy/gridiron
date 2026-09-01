@@ -666,17 +666,23 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   the default) and light ("Clear"), toggled from the header and persisted in
   `localStorage`. High-contrast data in both. See
   [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md).
-- **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**
-  (a Bento dashboard that opens on "who's leading in your scoring"), *not* the
-  leaderboard. Boards live in six nav dropdowns: **Insight** (`/insight/*` — VORP /
-  Opportunity Rating / Buy Low / Sell High, the M3 derived signals, with both the
-  scoring and league editors), **Explore** (`/explore/*` — the M4 Scatter and Compare
-  builders, tools rather than ranked tables), **Fantasy Leaderboards** (`/fantasy/*` —
-  Leaders / Expected Points / Passing / Receiving / Rushing, with the league-scoring
-  editor) and **NFL Leaderboards** (`/nfl/*` — All / Passing / Receiving / Rushing,
-  each General & Advanced, raw stats). All 17 boards plus the 2 Explore tools are
-  configured in `frontend/src/constants/boards.js`; Insight is listed first — it is the
-  reason to come back.
+- **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**,
+  *not* the leaderboard. Rebuilt in M10 as a two-column **Fantasy Desk** (it was a Bento
+  grid through M9): a wide column carrying the reading order a manager follows — trending
+  usage, last week's scoring, opportunity leaders, quarterbacks, a featured head-to-head —
+  beside a **sticky rail** of reference (scoreboard, watchlist, the two signal cards).
+  The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
+  in the code and in these docs. Boards live in **six** nav dropdowns: **Insight**
+  (`/insight/*` — VORP / Opportunity Rating / Buy Low / Sell High, the M3 derived
+  signals, with both the scoring and league editors), **Draft** (`/draft/*` — Rankings,
+  Mock Draft, Value Board), **Explore** (`/explore/*` — the M4 Scatter and Compare
+  builders, tools rather than ranked tables), **Schedule** (`/schedule/*` — Games, By
+  Team, Vegas Board), **Fantasy Leaderboards** (`/fantasy/*` — Leaders / Expected Points
+  / Passing / Receiving / Rushing, with the league-scoring editor) and **NFL
+  Leaderboards** (`/nfl/*` — All / Passing / Receiving / Rushing, each General &
+  Advanced, raw stats). All 17 boards plus the 9 tool pages are configured in
+  `frontend/src/constants/boards.js`; Insight is listed first — it is the reason to come
+  back.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -873,7 +879,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       ranks a *change* rather than a season. The home page is rebuilt as a two-column
       **Fantasy Desk** (`components/home/`), and a sixth nav group, **Schedule ▾**, holds
       Games, By Team, and the Vegas board moved from `/insight/vegas` (redirected)
-- [x] Backend test suite (`backend/tests/`, 280 tests) — the repo's first automated
+      (see [`docs/design/M10-command-center-schedule.md`](docs/design/M10-command-center-schedule.md))
+- [x] Backend test suite (`backend/tests/`, 328 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own

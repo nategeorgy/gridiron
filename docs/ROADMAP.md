@@ -330,6 +330,39 @@ the shared engine, and the data behind each mode. Read it before building any of
   on their own.
 - Full design note: [`docs/design/M9-draft.md`](design/M9-draft.md).
 
+### ✅ M10 — Command Center rebuild & the Schedule tab (shipped 2026-08-31)
+
+- **Shipped:** the home page rebuilt as a two-column **Fantasy Desk**, a sixth nav
+  dropdown **Schedule ▾** (**Games** `/schedule/games`, **By Team** `/schedule/by-team`,
+  and the M6.4 **Vegas Board** moved from `/insight/vegas`, which redirects), plus
+  `GET /api/v1/games`, `/games/weeks`, `/games/scoreboard` and `GET /stats/trending`.
+- **The games endpoint finally exists.** It had been listed as a target in `CLAUDE.md`
+  since the first milestone and nothing had built it; the home scoreboard is what forced
+  the issue.
+- **One new column.** Migration `c4e1a72b9f30` adds `games.kickoff_time`, a naive `TIME`
+  that always means Eastern. Deliberately not the four originally scoped — `weekday` is a
+  pure function of `game_date`, and `stadium` / `espn` have no surface asking for them.
+- **"Which two weeks" is a server decision.** `/games/scoreboard` pairs the week just
+  played with the week coming up. From January to September those straddle *different
+  seasons*, so each window names its own.
+- **Trending ranks a change, and its floors are the feature.** Sorted on the raw
+  snap-share swing the riser board was backup tight ends in garbage time, so a riser must
+  clear a fantasy floor **in the recent window** and have moved in **opportunity share**,
+  not just snaps. The falling side takes the mirror floor. QB is out of scope — a starter
+  plays every snap, so the signal does not exist for the position.
+- **A preseason mode, because a trailing window does not exist in August.** The card
+  switches to a hand-picked 2026 opportunity outlook and back again on its own. Three
+  kinds of evidence, each used only where valid: on/off splits, season trajectories, and
+  **vacated share** for when there is no on/off sample at all.
+- **Also found:** an on/off split must exclude games the *subject* did not play in full
+  (averaging Smith's two Brown-less games described neither), and `derived` metrics had
+  *games* hardcoded as their denominator, so a rate per opportunity could not exist until
+  `MetricDef.per` was added — which is what `epa_per_play` needed.
+- **No live scores.** nflverse publishes finals, not a live feed, and the pipeline
+  refreshes on a schedule; an in-progress score is not something this stack can honestly
+  render today.
+- Full design note: [`docs/design/M10-command-center-schedule.md`](design/M10-command-center-schedule.md).
+
 ### 💭 Dream tail (only when the base is proven)
 - **Fantasy trade calculator** — on VORP / rest-of-season value.
 - **GridironIQ projection model** — own weekly/season model (see Decision Log).
