@@ -86,11 +86,17 @@ cost of silently mis-ranking every skill player in them.
 
 - **Snaps start in 2013, not 2012.** nflreadpy documents 2012 as the floor and accepts
   it; the file is empty upstream. `load_snap_counts(seasons=[2012])` returns 0 rows.
-- **Routes end, and the ceiling is read from data.** The participation feed is no
-  longer published. Rather than hardcode the last season, the registry marks these
-  metrics with a `data_ceiling_column` and `GET /metrics` resolves the real ceiling
-  with `MAX(season) WHERE routes_run IS NOT NULL`, so it stays right whether or not the
-  feed ever resumes.
+- **Routes lag by a season, and the ceiling is read from data.** The participation
+  feed is *not* discontinued — a claim this document made until it was checked in
+  September 2026, and which the code comments repeated. FTN delivers a season only
+  once its post-season is complete, so `nflreadpy` caps the feed at the roster year
+  minus one, and checking in August makes a one-year lag look like an ending. Verified
+  from data: `load_participation(2025)` returns 45,184 rows and `routes_run` is
+  populated for ~5,100 stat lines in every season from 2016 to 2025 with no taper.
+  This is precisely why the registry marks these metrics with a `data_ceiling_column`
+  and `GET /metrics` resolves the real ceiling from `MAX(season) WHERE routes_run IS
+  NOT NULL` rather than hardcoding a year — the mechanism stayed right while the prose
+  around it went stale.
 
 ## 6. How the honesty is enforced
 

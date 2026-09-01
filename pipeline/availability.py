@@ -37,8 +37,8 @@ inherits the null instead of dividing by a lie.
   throughout, which is why those keep the earlier floor.
 - **Snaps start in 2013.** nflreadpy documents 2012 as the floor and accepts it, but
   that season's Pro Football Reference file is empty upstream.
-- **Routes start in 2016** and end with the participation feed nflverse no longer
-  publishes.
+- **Routes start in 2016** and always stop a season short of the roster year: the
+  participation feed is delivered only once a season's post-season is complete.
 
 Rushing is the happy exception: ``rusher_player_id`` is 100% populated in every season
 back to 1999, so carries, red-zone rushing and the inside-10/5/2 columns are complete
@@ -48,8 +48,9 @@ too — a completion always names its receiver.
 
 from dataclasses import dataclass, field
 
-# The participation feed stopped being published. Routes end with it, and the last
-# season is resolved at runtime rather than hardcoded — see pipeline/seasons.py.
+# The participation feed publishes on a one-season lag (FTN delivers after the
+# post-season), so routes always stop a year short of the roster year. The ceiling is
+# resolved at runtime rather than hardcoded — see pipeline/seasons.py.
 from seasons import PARTICIPATION
 
 
@@ -119,6 +120,35 @@ _EXPECTED_RECEIVING = Availability(
          "while incompletions cannot be attributed.",
 )
 
+# The Next Gen Stats columns (M11). Listed once and reused, because every one of them
+# shares a single window and the list is long enough that repeating it invites a typo
+# that the mirror test would report as a drift.
+NEXTGEN_COLUMNS: tuple[str, ...] = (
+    "ngs_pass_time_to_throw",
+    "ngs_pass_completed_air_yards",
+    "ngs_pass_intended_air_yards",
+    "ngs_pass_air_yards_differential",
+    "ngs_pass_aggressiveness",
+    "ngs_pass_air_yards_to_sticks",
+    "ngs_pass_expected_completion_pct",
+    "ngs_pass_completion_pct_above_expectation",
+    "ngs_rec_cushion",
+    "ngs_rec_separation",
+    "ngs_rec_intended_air_yards",
+    "ngs_rec_pct_share_intended_air_yards",
+    "ngs_rec_catch_pct",
+    "ngs_rec_yac",
+    "ngs_rec_expected_yac",
+    "ngs_rec_yac_above_expectation",
+    "ngs_rush_efficiency",
+    "ngs_rush_time_to_los",
+    "ngs_rush_pct_attempts_eight_defenders",
+    "ngs_rush_expected_yards",
+    "ngs_rush_yards_over_expected",
+    "ngs_rush_yards_over_expected_per_att",
+    "ngs_rush_pct_over_expected",
+)
+
 # Only columns with a restriction appear here. Anything absent is available from 1999.
 COLUMN_AVAILABILITY: dict[str, Availability] = {
     # --- Targets and everything that divides by them ---
@@ -183,13 +213,39 @@ COLUMN_AVAILABILITY: dict[str, Availability] = {
     **{
         column: Availability(
             first=2016, last=PARTICIPATION.latest(),
-            note="Derived from the nflverse participation feed, which is no longer "
-                 "published.",
+            note="Derived from the nflverse participation feed, which publishes on "
+                 "a one-season lag: FTN delivers a season only after its post-season "
+                 "is complete, so routes always stop a year short of the roster year.",
         )
         for column in (
             "routes_run", "route_participation",
             "targets_per_route_run", "yards_per_route_run",
         )
+    },
+
+    # --- Next Gen Stats: nflverse's scrape of nextgenstats.nfl.com, 2016+ ---
+    #
+    # Two separate limits, and only the first is a season window. NGS publishes from
+    # 2016, so nothing before that exists at all. But *inside* the window it covers
+    # only players it qualifies — roughly 65 receivers in a week where 200+ play — and
+    # it files a player under one phase only, so a pass-catching back has rushing NGS
+    # and no receiving NGS. That second limit is per player, not per season, so it
+    # cannot live in this table: it shows up simply as NULL on the rows the feed
+    # skipped, which is the honest rendering of "NGS did not rank him".
+    **{
+        column: Availability(
+            first=2016,
+            note=(
+                "NFL Next Gen Stats, scraped from nextgenstats.nfl.com by nflverse. "
+                "Published from 2016, and only for players NGS qualifies — and only for "
+                "the WEEKS it qualifies them, which is the sharper limit: the weekly feed "
+                "requires roughly 15 attempts, 5 targets or 10 carries, so in 2024 a "
+                "receiver's published weeks covered a median 79% of his targets and a "
+                "back's 86% of his carries (quarterbacks: 100%). A season aggregate built "
+                "from these rows describes a player's busier games."
+            ),
+        )
+        for column in NEXTGEN_COLUMNS
     },
 
     # No free source has ever published per-player alignment.

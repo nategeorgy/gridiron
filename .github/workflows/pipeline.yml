@@ -180,7 +180,7 @@ jobs:
       # snaps start in 2013 and routes in 2016, and asking either for something older
       # raises rather than returning empty. See pipeline/seasons.py.
       #
-      # The order is a dependency, not a preference: the three enrichment passes only
+      # The order is a dependency, not a preference: the four enrichment passes only
       # update stat lines ingest_stats.py has already created (pipeline/README.md).
       - name: Refresh the current season
         if: steps.clock.outputs.in_season == 'true' || inputs.run_stats == true
@@ -196,3 +196,4 @@ jobs:
           python ingest_expected.py     --seasons $SEASONS
           python ingest_usage.py        --seasons $SEASONS
           python ingest_target_depth.py --seasons $SEASONS
+          python ingest_nextgen.py      --seasons $SEASONS

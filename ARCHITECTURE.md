@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-31 (M10 shipped; CI on v7; stored per-game rates now volume-weighted)
+Last updated: 2026-09-01 (M11: Next Gen Stats; non-finite floats scrubbed at the write boundary)
 
 ---
 
@@ -346,6 +346,7 @@ the first code in the project where a bug means one user reading another user's 
 | `test_player_list.py` | The `player_ids` filter (M10). Mostly there for the empty-list trap: an explicitly empty list must mean *none*, never "no filter" — the rule the watchlist depends on. |
 | `test_trending.py` | ⭐ **The relevance floors (M10)** — the feature, so the tests are about them. A fixture of four backs: a real riser, a garbage-time backup with the biggest swing on the board and no fantasy value, one whose snaps rose while opportunity fell (the blowout case), and a genuine faller. ⚠️ Its stat lines set `fantasy_points_std`, because `compute_points` starts from that stored total and adds only the *delta* from standard weights — a fixture without it scores as though the player gained no yards, and silently tests nothing but receptions. |
 | `test_rls.py` | ⭐ The row-level-security lockdown (`8f73b5b2b1a1`, `0fd5c30c9287`, `69b660509e58`), and the reason the suite migrates rather than using `create_all()`: this layer is a property of the *schema*, invisible to every request-level test. Asserts the mechanism, not the flag — a role standing in for PostgREST's `anon` is granted `SELECT`/`DELETE` and must still see nothing and destroy nothing. `test_no_public_table_is_left_unlocked` **enumerates the schema** rather than a hand-maintained list, so a table added without RLS fails the suite instead of shipping. |
+| `test_non_finite_scrub.py` | ⭐ **The NaN guard.** Postgres `FLOAT` accepts IEEE NaN and NaN *propagates* through aggregates rather than being skipped like NULL, so one bad value made `AVG(target_share)` return NaN for the whole table with nothing raising. Tests `pipeline.db.scrub_non_finite` directly (no database — the invariant is a pure function), including that a real `0.0` survives, which a `if not value` guard would erase. The last two tests parse **db.py's own AST** to find every function that mutates a table and assert it scrubs first, so a new write helper fails the suite the day it lands rather than the day a NaN reaches a leaderboard. |
 | `test_rankings.py` | ⭐ **The fail-closed source registry and the blend (M9).** Asserts the registry property directly — every listed source must be `public`, and a private source must 404 *identically* to one that never existed, so the endpoint is not an oracle for which paywalled boards we hold. Plus the arithmetic: each source densified before averaging, and a player listed by only one board still reaching the consensus (an earlier rule requiring two silently truncated the whole board to the depth of the shallowest source). |
 | `test_ranking_boards.py` | ⭐ **User boards and CSV import (M9).** The wholesale-replace semantics (a player dragged off a board must actually be gone — the upsert failure mode), rank densification, and an import that reports what it could not match instead of dropping it. |
 | `test_league_profiles.py` | CRUD, spec validation, the one-active-profile invariant (including the partial unique index itself), and successor promotion. |
@@ -408,6 +409,7 @@ so **the migrated schema is the single source of truth.** Every script is
 | `ingest_expert_boards.py` | ⭐ **Expert CSV boards (M9).** Reads `data/rankings/*.csv` and blends them **anonymously** into the GridironIQ Consensus — several are paywalled, so the script refuses to write a source id the API publishes and never writes a display name. A single expert's rank goes in `ecr` with `sd`/`best`/`worst` left NULL: one person is not a consensus and a zero spread would claim perfect agreement. |
 | `data/rankings/` | The drop folder for those boards, plus `TEMPLATE.csv` and a README stating the format — the same format the in-app upload accepts. Files are named `<source-id>_<YYYY-MM-DD>.csv`; the source id stays server-side and the date becomes `scraped_at`, which is in the key, so re-dropping the same board overwrites and a new date accrues history. |
 | `ingest_target_depth.py` | **Run 7th** (M4). Aggregates play-by-play targets into `player_target_depth` by air-yard bucket × pass direction. Writes its own table rather than columns on `player_stats` — the grain is different. |
+| `ingest_nextgen.py` | ⭐ **Run 10th** (M11, enrichment). NFL **Next Gen Stats** — 23 tracking-derived columns (`ngs_*`) across passing, receiving and rushing, from `load_nextgen_stats`. Joins on `player_gsis_id`, which *is* our `player_id`, so no crosswalk is needed; the game is resolved from `player_stats` because NGS carries no game id. Drops NGS's `week = 0` season-aggregate rows. ⚠️ **The weekly feed is a biased subset** — a row needs roughly 15 attempts / 5 targets / 10 carries, so a receiver's published weeks cover a median 79% of his targets. Documented in the script and in both availability tables rather than corrected. |
 
 **Data scope:** positions **QB/RB/WR/TE**; seasons **2020 through the current
 season**, computed rather than hardcoded (see `seasons.py`). The two halves diverge for
@@ -661,6 +663,32 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-01** — **NaN guard at the write boundary.** `pipeline/db.py` gained
+  `scrub_non_finite()`, called by both `upsert()` and `replace_scoped()`, coercing every
+  NaN and ±Infinity to NULL before it reaches Postgres. `load_player_stats` publishes
+  ~305,000 NaNs (`target_share`, `air_yards_share`, `wopr`, all in 1999–2008) and six
+  infinities; the M8 availability mask had been catching all but one of them by
+  coincidence, and the survivor — Steve Bono, 1999 week 9 — made `AVG(target_share)`
+  return NaN for the entire table. Migration `b3f81a5c2d47` scrubs every float column on
+  `player_stats` as a one-off data fix so production gets it too. New test file
+  `tests/test_non_finite_scrub.py` (9 tests, 354 total) parses db.py's AST to find any
+  function that mutates a table without scrubbing first.
+- **2026-09-01** — **M11: Next Gen Stats.** Added 23 `ngs_*` columns to `player_stats`
+  (migration `e2b7d4a91c60`) fed by a new `pipeline/ingest_nextgen.py`, from nflverse's
+  scrape of nextgenstats.nfl.com (`load_nextgen_stats`, 2016+) — separation, cushion,
+  YAC over expected, time to throw, aggressiveness, stacked-box rate and rush yards over
+  expected among them. The official NGS API is a credentialed club portal, so this is the
+  free path and the only one; raw tracking data stays out of reach. 23 registry entries in
+  `app/metrics.py`, each carrying a `weight_by` so a stored per-week rate is never
+  averaged flat, and a `NEXTGEN` window in **both** availability tables. Added to
+  `.github/workflows/pipeline.yml` as the fourth enrichment pass. **Also corrected a
+  stale fact**: the participation feed routes are built from is *not* discontinued — it
+  lags one season because FTN delivers after the postseason, verified from data (45,184
+  rows for 2025, ~5,100 stat lines with routes in every season 2016–2025). The
+  `data_ceiling_column` mechanism had kept the app honest while the prose around it went
+  stale; `pipeline/seasons.py`, both `availability.py` files and
+  `docs/design/M8-historical-depth.md` are corrected. New reference:
+  `docs/GridironIQ-stat-inventory.xlsx`.
 - **2026-08-30** — **M10: games, trending usage, the Schedule tab, and the Command
   Center rebuild.** Four things that turned out to be one thing: the home page needed a
   scoreboard, which needed the `GET /api/v1/games` endpoint this document had listed as

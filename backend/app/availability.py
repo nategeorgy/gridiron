@@ -2,8 +2,8 @@
 
 Project scope reaches back to 1999, but the data does not arrive all at once: the NFL
 began publishing charted passing data in 2006, Pro Football Reference began publishing
-snap counts in 2013, and the participation feed that routes are built from ran only
-from 2016 until nflverse stopped publishing it. There is also one true hole —
+snap counts in 2013, the participation feed that routes are built from starts in 2016
+and lands a season late, and Next Gen Stats begin in 2016. There is also one true hole —
 2003–2005 play-by-play names a receiver only on completions, so targets in those
 seasons are unrecoverable rather than merely unpublished.
 
@@ -119,10 +119,50 @@ SNAPS = Availability(
 )
 ROUTES = Availability(
     first_season=2016, data_ceiling_column="routes_run",
-    note="Built from the nflverse participation feed, which is no longer published.",
+    note="Built from the nflverse participation feed, which publishes on a one-season "
+         "lag — FTN delivers a season only after its post-season is complete, so "
+         "routes always stop a year short of the roster year.",
+)
+NEXTGEN = Availability(
+    first_season=2016,
+    note="NFL Next Gen Stats, scraped from nextgenstats.nfl.com by nflverse. "
+         "Published from 2016, and only for players NGS qualifies — and only for "
+         "the WEEKS it qualifies them, which is the sharper limit: the weekly "
+         "feed requires roughly 15 attempts, 5 targets or 10 carries, so in 2024 "
+         "a receiver's published weeks covered a median 79% of his targets and a "
+         "back's 86% of his carries (quarterbacks: 100%). A season aggregate "
+         "built from these rows describes a player's busier games.",
 )
 NEVER = Availability(
     first_season=9999, note="No free data source publishes per-player alignment.",
+)
+
+# Mirrors NEXTGEN_COLUMNS in pipeline/availability.py — see the warning at the top of
+# this module about the two tables drifting.
+NEXTGEN_COLUMNS: tuple[str, ...] = (
+    "ngs_pass_time_to_throw",
+    "ngs_pass_completed_air_yards",
+    "ngs_pass_intended_air_yards",
+    "ngs_pass_air_yards_differential",
+    "ngs_pass_aggressiveness",
+    "ngs_pass_air_yards_to_sticks",
+    "ngs_pass_expected_completion_pct",
+    "ngs_pass_completion_pct_above_expectation",
+    "ngs_rec_cushion",
+    "ngs_rec_separation",
+    "ngs_rec_intended_air_yards",
+    "ngs_rec_pct_share_intended_air_yards",
+    "ngs_rec_catch_pct",
+    "ngs_rec_yac",
+    "ngs_rec_expected_yac",
+    "ngs_rec_yac_above_expectation",
+    "ngs_rush_efficiency",
+    "ngs_rush_time_to_los",
+    "ngs_rush_pct_attempts_eight_defenders",
+    "ngs_rush_expected_yards",
+    "ngs_rush_yards_over_expected",
+    "ngs_rush_yards_over_expected_per_att",
+    "ngs_rush_pct_over_expected",
 )
 
 METRIC_AVAILABILITY: dict[str, Availability] = {
@@ -150,6 +190,10 @@ METRIC_AVAILABILITY: dict[str, Availability] = {
     "targets_per_route_run": ROUTES,
     "yards_per_route_run": ROUTES,
     "slot_snaps": NEVER,
+    # Next Gen Stats (M11). One window for all 23, mirroring NEXTGEN_COLUMNS in
+    # pipeline/availability.py — the UI needs to grey these out before 2016 rather
+    # than serve an empty column and let the user conclude the board is broken.
+    **{metric_id: NEXTGEN for metric_id in NEXTGEN_COLUMNS},
     # Market shares come from ffopportunity's *actual* team totals, not its model, so
     # they are sound as soon as that feed starts.
     **{metric_id: EXPECTED for metric_id in ("market_share", "rush_attempt_share")},

@@ -9,6 +9,7 @@ UPDATE`` to stay idempotent — safe to run repeatedly without duplicating rows.
 import logging
 import os
 from functools import lru_cache
+from math import isfinite
 
 from dotenv import load_dotenv
 from sqlalchemy import Engine, MetaData, Table, create_engine
@@ -37,6 +38,51 @@ def _reflect_table(table_name: str) -> Table:
     return Table(table_name, metadata, autoload_with=get_engine())
 
 
+def scrub_non_finite(rows: list[dict]) -> int:
+    """Replace every NaN and ±Infinity in ``rows`` with None. Returns how many.
+
+    **PostgreSQL's FLOAT accepts IEEE NaN, and NaN is contagious in a way NULL is
+    not.** `AVG(col)` over a set containing one NaN returns NaN for the whole set —
+    not an error, not a skipped row, just a silently poisoned aggregate. `MAX` returns
+    NaN too, because NaN compares greater than everything. A single bad value at the
+    bottom of a 150,000-row table is enough to make a season leaderboard, an Insight
+    percentile pool or a scatter axis return nothing usable, and nothing anywhere
+    raises. NULL, by contrast, is what every aggregate here already knows how to skip.
+
+    This is the same class of problem as the availability masking in
+    ``availability.py`` — a feed reporting something it does not have — one layer
+    down. There the wrong value is a plausible-looking ``0``; here it is a value that
+    is not a number at all.
+
+    ⚠️ **It belongs at the write boundary, not at a division site.** We do not compute
+    these: ``load_player_stats`` publishes ``target_share``, ``air_yards_share`` and
+    ``wopr`` with NaN already in them — 305,000 rows of it across 1999-2008, plus six
+    infinities — and we store the column verbatim. Our *own* divisions have been
+    guarded all along (``_safe_div`` in ingest_stats.py, ``_share`` in
+    ingest_expected.py). So the only place that can be complete is the one every
+    ingest passes through on its way to the database, which is here. A new ingest
+    script inherits the guard instead of having to remember it.
+    """
+    scrubbed = 0
+    for row in rows:
+        for key, value in row.items():
+            if isinstance(value, float) and not isfinite(value):
+                row[key] = None
+                scrubbed += 1
+    return scrubbed
+
+
+def _scrub_and_log(table_name: str, rows: list[dict]) -> None:
+    """Scrub non-finite values in place, logging when any were found."""
+    scrubbed = scrub_non_finite(rows)
+    if scrubbed:
+        logger.warning(
+            "%s: replaced %d non-finite value(s) (NaN/Infinity) with NULL before "
+            "writing — the upstream feed published them",
+            table_name, scrubbed,
+        )
+
+
 def upsert(table_name: str, rows: list[dict], conflict_columns: list[str]) -> int:
     """Insert rows, updating existing ones on a conflict of ``conflict_columns``.
 
@@ -50,6 +96,7 @@ def upsert(table_name: str, rows: list[dict], conflict_columns: list[str]) -> in
         logger.info("upsert %s: no rows to write", table_name)
         return 0
 
+    _scrub_and_log(table_name, rows)
     table = _reflect_table(table_name)
     present_columns = {key for row in rows for key in row}
 
@@ -95,6 +142,7 @@ def replace_scoped(table_name: str, rows: list[dict], scope_columns: list[str]) 
         logger.info("replace %s: no rows to write", table_name)
         return 0
 
+    _scrub_and_log(table_name, rows)
     table = _reflect_table(table_name)
     scopes = {tuple(row[column] for column in scope_columns) for row in rows}
 

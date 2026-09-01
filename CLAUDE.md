@@ -263,6 +263,34 @@ player_stats (
   receptions_exp            FLOAT,
   two_point_conv_exp        FLOAT,
 
+  -- Next Gen Stats (M11). Player-tracking derivatives, from nflverse's scrape of
+  -- nextgenstats.nfl.com. 2016+, and only for players NGS qualifies. The ngs_ prefix
+  -- is load-bearing: NGS publishes its OWN cpoe and its own depth of target, and they
+  -- are different numbers from the cpoe/adot above, which come from play-by-play.
+  ngs_pass_time_to_throw                    FLOAT,
+  ngs_pass_completed_air_yards              FLOAT,
+  ngs_pass_intended_air_yards               FLOAT,
+  ngs_pass_air_yards_differential           FLOAT,
+  ngs_pass_aggressiveness                   FLOAT,   -- share thrown into tight coverage
+  ngs_pass_air_yards_to_sticks              FLOAT,
+  ngs_pass_expected_completion_pct          FLOAT,
+  ngs_pass_completion_pct_above_expectation FLOAT,   -- NGS's CPOE, not ours
+  ngs_rec_cushion                           FLOAT,
+  ngs_rec_separation                        FLOAT,
+  ngs_rec_intended_air_yards                FLOAT,
+  ngs_rec_pct_share_intended_air_yards      FLOAT,
+  ngs_rec_catch_pct                         FLOAT,
+  ngs_rec_yac                               FLOAT,
+  ngs_rec_expected_yac                      FLOAT,
+  ngs_rec_yac_above_expectation             FLOAT,
+  ngs_rush_efficiency                       FLOAT,   -- distance travelled / yards; LOWER is better
+  ngs_rush_time_to_los                      FLOAT,   -- LOWER is better
+  ngs_rush_pct_attempts_eight_defenders     FLOAT,
+  ngs_rush_expected_yards                   FLOAT,   -- a TOTAL, summed
+  ngs_rush_yards_over_expected              FLOAT,   -- a TOTAL, summed
+  ngs_rush_yards_over_expected_per_att      FLOAT,
+  ngs_rush_pct_over_expected                FLOAT,
+
   -- Fantasy Stats
   fantasy_points_ppr        FLOAT,
   fantasy_points_half       FLOAT,
@@ -413,7 +441,8 @@ player_target_depth (
   betting lines are loaded while 2025 is still the newest season with stats
 - ⚠️ **Depth of coverage varies by season, and the feeds don't say so** (M8). The box
   score, fantasy points, EPA and all rushing detail reach 1999; charted passing starts
-  2006, snaps 2013, routes 2016–2025, expected points 2009, and **targets are
+  2006, snaps 2013, routes 2016–2025 (the participation feed lags a season, it is not
+  discontinued), Next Gen Stats 2016, expected points 2009, and **targets are
   unrecoverable 2003–2008**. Every window is measured and lives in `availability.py`
   (pipeline *and* backend — mirrored). See
   [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md)
@@ -880,7 +909,17 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       **Fantasy Desk** (`components/home/`), and a sixth nav group, **Schedule ▾**, holds
       Games, By Team, and the Vegas board moved from `/insight/vegas` (redirected)
       (see [`docs/design/M10-command-center-schedule.md`](docs/design/M10-command-center-schedule.md))
-- [x] Backend test suite (`backend/tests/`, 345 tests) — the repo's first automated
+- [x] M11 — Next Gen Stats: 23 `ngs_*` columns on `player_stats` (migration
+      `e2b7d4a91c60`) from nflverse's scrape of nextgenstats.nfl.com
+      (`load_nextgen_stats`, 2016+) via `pipeline/ingest_nextgen.py` — separation,
+      cushion, YAC over expected, time to throw, aggressiveness, stacked-box rate,
+      rush yards over expected. The **official NGS API is a credentialed club portal**
+      with no open signup, and the raw tracking data is not public at all; this free
+      nflverse path is the whole of what is available. Every column carries a
+      `weight_by` in the registry. Also corrected a stale claim across four files: the
+      participation feed is **not** discontinued, it lags a season
+      (see `docs/GridironIQ-stat-inventory.xlsx` for the full stat inventory)
+- [x] Backend test suite (`backend/tests/`, 354 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -1089,6 +1128,22 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   projected points and no ADP. Never run a rank through the scoring engine — it is
   already frozen in someone else's scoring. What *is* league-aware is which variant we
   read (superflex leagues get `redraft-op`)
+- ⚠️ **A feed also reports NaN, and NaN is worse than a zero.** Postgres `FLOAT`
+  accepts IEEE NaN, and NaN propagates through aggregates instead of being skipped the
+  way NULL is: one bad value made `AVG(target_share)` return NaN for all 149,913 rows,
+  and `MAX` return NaN too, because Postgres sorts NaN above everything. Nothing
+  raises — a leaderboard, an Insight percentile pool and a scatter axis all just stop
+  producing numbers. `load_player_stats` publishes ~305,000 NaNs across `target_share`,
+  `air_yards_share` and `wopr` in 1999–2008 plus six infinities; all but one were being
+  caught *incidentally* by the M8 availability mask, which exists to describe what the
+  NFL measured and is not a float sanitiser. `pipeline/db.py`'s `scrub_non_finite()`
+  now coerces every non-finite float to NULL inside **both** write helpers (`upsert`
+  and `replace_scoped`), so a new ingest script inherits the guard rather than having
+  to remember it, and migration `b3f81a5c2d47` cleaned the row that got through.
+  `tests/test_non_finite_scrub.py` derives the writer list from db.py's own AST, so an
+  unguarded write path fails the suite the day it lands. **Never write the guard as
+  `if not value`** — that erases a real `0`, which is exactly the distinction the
+  availability layer rests on
 - ⚠️ **A feed reports what nobody measured as `0`, not as NULL — never store it.**
   This is the single most dangerous thing about the 1999 range: a 2004 receiver with 90
   catches arrives carrying `targets = 0`, and a zero sorts, averages, and poisons every
@@ -1096,6 +1151,31 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   the database never holds one. Adding a stored column means asking *which seasons it
   actually exists in* and adding it there — the default (absent from the table) is
   "available from 1999", which is a claim, not a fallback
+- ⚠️ **NGS's weekly feed is a *biased subset* of the season, not a sample of it.** A
+  weekly row needs roughly 15 attempts, 5 targets or 10 carries, so a player's quiet
+  games are simply absent — measured on 2024, a receiver's published weeks cover a
+  median 79% of his targets and a back's 86% of his carries, while a starting
+  quarterback clears the bar every week at 100%. So a season aggregate weighted from
+  these rows describes a player's *busier games*: Marvin Mims's 2024 separation comes
+  out at 5.58 against the 5.21 on NGS's own season row, from four published weeks out
+  of seventeen. Our per-week target counts match NGS's exactly, so the weighting is
+  right and the sample is what differs. Documented rather than corrected, because
+  correcting it means storing NGS's season row as a second grain and `player_stats` is
+  per game
+- **NGS publishes its own CPOE and its own depth of target, and they are not ours.**
+  `cpoe` and `adot` come from nflverse play-by-play;
+  `ngs_pass_completion_pct_above_expectation` and `ngs_rec_intended_air_yards` come
+  from the NGS model. They disagree by a point or two and are supposed to — which is
+  why the `ngs_` prefix exists and why they are separate registry entries rather than
+  one column with two sources
+- **Half of NGS's percentages arrive 0–100 and half do not.** `aggressiveness`,
+  `catch_percentage`, `expected_completion_percentage`,
+  `percent_share_of_intended_air_yards` and `percent_attempts_gte_eight_defenders` are
+  0–100 and are divided by 100 at ingest, because every share in this database is
+  stored 0–1 (the frontend's `pct` formatter multiplies). But `rush_pct_over_expected`
+  already arrives as a fraction, and `completion_percentage_above_expectation` is a
+  signed difference in percentage points matching the existing `cpoe` scale — neither
+  is scaled. Measured against real data before it was written, not assumed
 - **The two availability tables are mirrors — change both together.**
   `pipeline/availability.py` decides what is *stored*; `backend/app/availability.py`
   decides what the UI *offers* and rides along on every `MetricDef`. If they drift, the
