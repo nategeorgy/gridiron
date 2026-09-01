@@ -86,10 +86,16 @@ EXPECTED = Feed("expected", clock="stats", first_season=2006)  # load_ff_opportu
 # file is empty upstream, so the first season with data is 2013.
 SNAPS = Feed("snaps", clock="stats", first_season=2013)
 DEPTH_CHARTS = Feed("depth_charts", clock="roster", first_season=2001)
-# Participation ended: FTN stopped publishing it. nflreadpy caps it at the ROSTER year
-# minus one — which is a season ahead of the stats clock through the summer, so the
-# clock here has to be the roster one to match the library's own bound exactly.
+# Participation runs a season BEHIND, not dead. FTN publishes it only once a season's
+# post-season is complete, so nflreadpy caps it at the ROSTER year minus one. Through
+# the summer the roster year is already the upcoming season, which makes the ceiling
+# look like a discontinuation if you check it in August — it is not. The clock here has
+# to be the roster one to match the library's own bound exactly.
 PARTICIPATION = Feed("participation", clock="roster", first_season=2016, lag=1)
+# load_nextgen_stats: nflverse scrapes nextgenstats.nfl.com; the site's own archive
+# starts in 2016. Stats clock, because a tracking number only exists once the game has
+# been played.
+NEXTGEN = Feed("nextgen", clock="stats", first_season=2016)
 
 
 def latest_season(feed: Feed = STATS) -> int:

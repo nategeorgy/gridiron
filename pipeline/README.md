@@ -28,6 +28,7 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_expected.py --seasons 2024     # 5. expected + market share
 .venv/bin/python ingest_usage.py --seasons 2024        # 6. snaps + routes
 .venv/bin/python ingest_target_depth.py --seasons 2024 # 7. target depth (M4)
+.venv/bin/python ingest_nextgen.py --seasons 2024      # 7b. Next Gen Stats (M11)
 .venv/bin/python ingest_rankings.py                    # 8. consensus rankings (M6)
 .venv/bin/python ingest_rankings.py --weekly           # 8b. weekly rankings (M9, in season)
 .venv/bin/python ingest_expert_boards.py               # 8c. expert CSV boards (M9)
@@ -50,14 +51,16 @@ carries no week number, so the week is derived from when each week's games finis
 - **Where the feed starts.** Project scope reaches back to 1999, but each feed has its
   own floor and several **raise** below it rather than returning empty:
   play-by-play 1999, depth charts 2001, ffopportunity 2006, snap counts 2013,
-  participation 2016 (and it *ends* a season early — nflverse no longer publishes it).
+  participation and Next Gen Stats 2016. Participation additionally *ends* a season
+  early — not because it stopped, but because FTN delivers a season only once its
+  post-season is complete, so it always trails the roster year by one.
   `clamp_seasons()` clamps both ends against a `Feed`, so asking any script for 1999
   is safe and simply logs what it skipped.
 
 Note that a feed serving a season is not the same as that season having usable data —
 see **Column coverage** below and `availability.py`.
 
-Steps 5–7 are **enrichment passes**: they only touch player-games step 4 already
+Steps 5–7b are **enrichment passes**: they only touch player-games step 4 already
 created, so they must run after it (in any order among themselves).
 
 Full backfill (project scope starts at **1999** and runs to the current season). Each
@@ -69,6 +72,7 @@ script clamps to its own feed's window, so the same range can be passed to all o
 .venv/bin/python ingest_expected.py     --seasons $(seq 1999 2025)
 .venv/bin/python ingest_usage.py        --seasons $(seq 1999 2025)
 .venv/bin/python ingest_target_depth.py --seasons $(seq 1999 2025)
+.venv/bin/python ingest_nextgen.py      --seasons $(seq 1999 2025)
 ```
 
 `ingest_stats.py` downloads a season of play-by-play at a time, so a full backfill is

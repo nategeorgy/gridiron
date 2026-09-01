@@ -350,6 +350,143 @@ REGISTRY: list[MetricDef] = [
        higher_is_better=False, description="Total fumbles."),
     _m("fumbles_lost", "Fumbles Lost", "FUM L", "int", "usage", "sum",
        higher_is_better=False, description="Fumbles lost to the defense."),
+
+    # --- Next Gen Stats (M11) ---
+    #
+    # Player-tracking derivatives from the chips in the ball and the pads, read via
+    # nflverse's scrape of nextgenstats.nfl.com. Three things are true of every entry
+    # below and of none of the entries above:
+    #
+    #   1. **2016+ only** (see app.availability.NEXTGEN), so half of project scope
+    #      cannot answer them.
+    #   2. **Qualified players only.** NGS ranks roughly 65 receivers a week and files
+    #      each player under a single phase, so a pass-catching back has rushing NGS
+    #      and no receiving NGS. Expect NULLs inside the window, not just outside it.
+    #   3. **Every one is a stored per-week rate**, so all but the two genuine totals
+    #      carry a ``weight_by``. Averaging these flat would let a three-target game
+    #      count as much as a twelve-target one -- the bug fixed in 062e97d.
+    #
+    # The NGS CPOE and the NGS intended air yards are NOT the ``cpoe`` and ``adot``
+    # defined above. Those come from nflverse play-by-play; these come from the NGS
+    # model. They disagree, and they are supposed to -- which is exactly why they are
+    # separate rows in this registry rather than one column with two sources.
+
+    # Passing (QB) -- weighted by attempts
+    _m("ngs_pass_time_to_throw", "Time to Throw (NGS)", "TT", 2, "passing", "avg",
+       applies_to=["QB"], weight_by="attempts",
+       description="Average seconds from snap to release. Descriptive rather than "
+                   "good or bad: a high number is a quarterback holding the ball for "
+                   "deep routes, and also one taking sacks."),
+    _m("ngs_pass_intended_air_yards", "Intended Air Yards (NGS)", "IAY", 1, "passing",
+       "avg", applies_to=["QB"], weight_by="attempts",
+       description="Average depth of target on all attempts, completed or not -- the "
+                   "quarterback's aDOT as NGS measures it. The single best read on "
+                   "whether an offense throws downfield, which is what turns receiver "
+                   "volume into fantasy points."),
+    _m("ngs_pass_completed_air_yards", "Completed Air Yards (NGS)", "CAY", 1, "passing",
+       "avg", applies_to=["QB"], weight_by="attempts",
+       description="Average air yards on completions only."),
+    _m("ngs_pass_air_yards_differential", "Air Yards Differential (NGS)", "AYD", 1,
+       "passing", "avg", applies_to=["QB"], weight_by="attempts",
+       description="Completed air yards minus intended air yards. Negative for almost "
+                   "everyone; closer to zero means a passer is actually connecting at "
+                   "the depth he is throwing to."),
+    _m("ngs_pass_aggressiveness", "Aggressiveness (NGS)", "AGG%", "pct", "passing",
+       "avg", applies_to=["QB"], weight_by="attempts",
+       description="Share of attempts thrown into tight coverage -- a defender within "
+                   "one yard of the receiver at the catch point. High aggressiveness "
+                   "on a contested receiver is a fantasy signal; on a possession "
+                   "offense it is a turnover warning."),
+    _m("ngs_pass_air_yards_to_sticks", "Air Yards to Sticks (NGS)", "AYTS", 1,
+       "passing", "avg", applies_to=["QB"], weight_by="attempts",
+       description="Average air yards relative to the first-down marker. Negative "
+                   "means the offense throws short of the sticks and asks receivers "
+                   "to make up the difference."),
+    _m("ngs_pass_expected_completion_pct", "Expected Completion % (NGS)", "xCOMP%",
+       "pct", "passing", "avg", applies_to=["QB"], weight_by="attempts", modelled=True,
+       description="The completion percentage an average quarterback would post on "
+                   "this player's throws, given depth, receiver separation and "
+                   "coverage. A low number means a hard set of throws, not a bad "
+                   "passer."),
+    _m("ngs_pass_completion_pct_above_expectation", "CPOE (NGS)", "CPOE-N", 1,
+       "passing", "avg", applies_to=["QB"], weight_by="attempts", modelled=True,
+       description="Completion percentage over expected, from the NGS tracking model. "
+                   "Deliberately separate from the play-by-play CPOE above: different "
+                   "model, different inputs, and they disagree by a point or two."),
+
+    # Receiving (WR/TE) -- weighted by targets, or by receptions for the YAC family
+    _m("ngs_rec_separation", "Separation (NGS)", "SEP", 2, "receiving", "avg",
+       applies_to=["WR", "TE"], weight_by="targets",
+       description="Average yards of separation from the nearest defender at the "
+                   "moment the ball arrives. The closest thing tracking data has to a "
+                   "measurement of whether a receiver is actually getting open."),
+    _m("ngs_rec_cushion", "Cushion (NGS)", "CUSH", 2, "receiving", "avg",
+       applies_to=["WR", "TE"], weight_by="targets",
+       description="Average yards the assigned defender lines up off the receiver "
+                   "before the snap. A shrinking cushion is respect; a large one is a "
+                   "defense conceding the underneath throw."),
+    _m("ngs_rec_intended_air_yards", "Intended Air Yards (NGS)", "IAY-R", 1,
+       "receiving", "avg", applies_to=["WR", "TE"], weight_by="targets",
+       description="Average depth of the targets thrown to this receiver, as NGS "
+                   "measures it. Not the same number as the play-by-play ADOT above."),
+    _m("ngs_rec_pct_share_intended_air_yards", "Air Yards Share (NGS)", "AY%-N", "pct",
+       "receiving", "avg", applies_to=["WR", "TE"], weight_by="targets",
+       description="Share of the team's intended air yards this receiver commanded -- "
+                   "the NGS reading of how much of the downfield passing game runs "
+                   "through him."),
+    _m("ngs_rec_catch_pct", "Catch Rate (NGS)", "CATCH%", "pct", "receiving", "avg",
+       applies_to=["WR", "TE"], weight_by="targets",
+       description="Receptions divided by targets, as NGS counts them."),
+    _m("ngs_rec_yac_above_expectation", "YAC Over Expected (NGS)", "YAC+", 2,
+       "receiving", "avg", applies_to=["WR", "TE"], weight_by="receptions",
+       modelled=True,
+       description="Yards after catch above what the tracking model expected given "
+                   "where the catch was made and where the defenders were. Separates "
+                   "a receiver creating yards from one handed a screen with blockers."),
+    _m("ngs_rec_yac", "Yards After Catch (NGS)", "YAC-N", 2, "receiving", "avg",
+       applies_to=["WR", "TE"], weight_by="receptions",
+       description="Average yards after the catch per reception."),
+    _m("ngs_rec_expected_yac", "Expected YAC (NGS)", "xYAC", 2, "receiving", "avg",
+       applies_to=["WR", "TE"], weight_by="receptions", modelled=True,
+       description="Yards after catch the model expected, per reception."),
+
+    # Rushing (RB/FB) -- weighted by carries, except the two genuine totals
+    _m("ngs_rush_yards_over_expected", "Rush Yards Over Expected (NGS)", "RYOE", 1,
+       "rushing", "sum", applies_to=["RB"], modelled=True,
+       description="Rushing yards above what the tracking model expected given the "
+                   "blocking, the box count and where every defender was at handoff. "
+                   "The cleanest available separation of a back from his offensive "
+                   "line -- a season total, so it rewards volume as well as skill."),
+    _m("ngs_rush_yards_over_expected_per_att", "RYOE / Attempt (NGS)", "RYOE/A", 2,
+       "rushing", "avg", applies_to=["RB"], weight_by="carries", modelled=True,
+       description="Rush yards over expected on a per-carry basis -- the same signal "
+                   "with volume divided out, so a committee back is judged on the "
+                   "carries he got."),
+    _m("ngs_rush_expected_yards", "Expected Rush Yards (NGS)", "xRY", "int", "rushing",
+       "sum", applies_to=["RB"], modelled=True,
+       description="Rushing yards the tracking model expected from this player's "
+                   "carries. Read beside actual yards, it is a measure of the blocking "
+                   "in front of him."),
+    _m("ngs_rush_pct_over_expected", "Carries Over Expected % (NGS)", "ROE%", "pct",
+       "rushing", "avg", applies_to=["RB"], weight_by="carries", modelled=True,
+       description="Share of carries that gained more than the model expected. "
+                   "Consistency rather than magnitude: a back at 55% is beating his "
+                   "blocking more often than not, whatever his long runs say."),
+    _m("ngs_rush_pct_attempts_eight_defenders", "Stacked Box Rate (NGS)", "8+BOX",
+       "pct", "rushing", "avg", applies_to=["RB"], weight_by="carries",
+       description="Share of carries faced with eight or more defenders in the box. "
+                   "High rates mean defenses are daring the offense to throw -- "
+                   "context that explains a poor yards-per-carry without excusing it."),
+    _m("ngs_rush_efficiency", "Rush Efficiency (NGS)", "EFF-N", 2, "rushing", "avg",
+       applies_to=["RB"], weight_by="carries", higher_is_better=False,
+       description="Total distance travelled divided by yards gained downfield. "
+                   "**Lower is better**: a back at 3.5 is running north-south, one at "
+                   "8 is dancing behind the line."),
+    _m("ngs_rush_time_to_los", "Time to Line of Scrimmage (NGS)", "TLOS", 2, "rushing",
+       "avg", applies_to=["RB"], weight_by="carries", higher_is_better=False,
+       description="Average seconds from handoff to crossing the line of scrimmage. "
+                   "**Lower is better** -- decisiveness, which is what survives a "
+                   "change of offensive line."),
 ]
 
 
