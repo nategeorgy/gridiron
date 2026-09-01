@@ -57,6 +57,12 @@ from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
 from app.seasons import current_season, latest_scheduled_season
 from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
+from app.trending import (
+    DEFAULT_WINDOW as TREND_WINDOW,
+    DIRECTIONS as TREND_DIRECTIONS,
+    POSITIONS as TREND_POSITIONS,
+    build_trending,
+)
 from app.vegas import VIEWS as VEGAS_VIEWS, build_vegas, default_week, week_summary
 from app.scoring import (
     EXPECTED_COMPONENTS,
@@ -1113,3 +1119,49 @@ def vegas_board(
         "weeks": week_summary(db, schedule_season),
         "scoring": config.model_dump(),
     }
+
+
+@router.get("/trending")
+def trending_usage(
+    season: int | None = Query(None, description="Defaults to the newest season with stats"),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    direction: str = Query("up", description="up | down"),
+    window: int = Query(TREND_WINDOW, ge=1, le=8, description="Weeks in the recent window"),
+    position: str | None = Query(None, description="RB, WR or TE"),
+    scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'ppr:te_rec=1.5'"),
+    limit: int = Query(6, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Who is gaining work, and who is losing it (M10).
+
+    Ranks a **change** rather than a season: the last few weeks of usage against the
+    pace set before them. Both directions carry a relevance floor — a riser has to be
+    startable now, a faller has to have been startable before — because the largest
+    percentage swings in the league belong to players nobody can start. See
+    `app/trending.py` for why that floor is the feature rather than a filter.
+
+    Returns the weeks each side of the comparison covers, so a caller can caption the
+    board honestly instead of implying it always means the same three weeks.
+    """
+    if direction not in TREND_DIRECTIONS:
+        raise HTTPException(status_code=400, detail=f"Unknown direction '{direction}'")
+    if position and position.upper() not in TREND_POSITIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown position '{position}'. Trending covers {', '.join(TREND_POSITIONS)}.",
+        )
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    target = season if season is not None else current_season(db)
+    if target is None:
+        raise HTTPException(status_code=404, detail="No seasons are loaded")
+
+    result = build_trending(
+        db, target, season_type, config,
+        direction=direction, window=window,
+        position=position.upper() if position else None, limit=limit,
+    )
+    return {**result, "scoring": config.model_dump()}

@@ -13,7 +13,7 @@ next season's games first enter the database.
 
 import argparse
 import logging
-from datetime import date
+from datetime import date, time
 
 import nflreadpy as nfl
 
@@ -51,6 +51,22 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+def _parse_time(value: str | None) -> time | None:
+    """Parse nflverse 'gametime' ("HH:MM") into a time.
+
+    Always Eastern — that is how the feed publishes every kickoff, London games
+    included — and stored naive, so the column holds the wall-clock time the league
+    itself quotes rather than an instant a client would convert straight back.
+    Historical rows can carry an empty string where the time was never recorded.
+    """
+    if not value:
+        return None
+    try:
+        return time.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def ingest_schedules(seasons: list[int]) -> int:
     """Load schedules for the given seasons and upsert them into games."""
     schedules = nfl.load_schedules(seasons)
@@ -75,6 +91,7 @@ def ingest_schedules(seasons: list[int]) -> int:
             "home_score": record.get("home_score"),
             "away_score": record.get("away_score"),
             "game_date": _parse_date(record.get("gameday")),
+            "kickoff_time": _parse_time(record.get("gametime")),
             # Betting market. spread_line is from the home team's perspective:
             # positive means the home team is favoured.
             "spread_line": record.get("spread_line"),

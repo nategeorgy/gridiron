@@ -32,7 +32,18 @@ from app.scoring import (
 SUM_METRICS = ids_with_aggregation("sum")  # counting stats, summed over the window
 AVG_METRICS = ids_with_aggregation("avg")  # rate / share stats, averaged over the window
 # Derived per-game metrics: id -> the column it divides by games.
-PPG_METRICS = {metric.id: metric.base for metric in REGISTRY if metric.aggregation == "derived"}
+# Derived metrics split by what they divide by: per-game (the default) and per
+# opportunity (an explicit ``per``). Both are computed in finalize_row.
+PPG_METRICS = {
+    metric.id: metric.base
+    for metric in REGISTRY
+    if metric.aggregation == "derived" and not metric.per
+}
+RATE_METRICS = {
+    metric.id: (metric.base, metric.per)
+    for metric in REGISTRY
+    if metric.aggregation == "derived" and metric.per
+}
 # Scoring-aware fantasy metrics — computed per-request from a ScoringConfig.
 SCORING_METRICS = set(ids_with_aggregation("scoring"))
 # Expected-points metrics (M2) — same engine, applied to the expected components.
@@ -182,6 +193,19 @@ def metric_expr(
 
     if aggregation == "derived":
         column = getattr(PlayerStats, definition.base)
+        if definition.per:
+            # A rate per opportunity. Aggregate first, then divide — Σepa / Σplays,
+            # never the mean of per-game rates, which would let a two-snap game count
+            # as much as a sixty-snap one (the same rule composites follow).
+            parts = [getattr(PlayerStats, name) for name in definition.per]
+            if not sum_mode:
+                denominator = sum(parts[1:], parts[0])
+                return column / func.nullif(denominator, 0)
+            denominator = sum(
+                (func.coalesce(func.sum(part), 0) for part in parts[1:]),
+                func.coalesce(func.sum(parts[0]), 0),
+            )
+            return func.sum(column) / func.nullif(denominator, 0)
         if not sum_mode:
             return column
         return func.sum(column) / func.nullif(games, 0)
@@ -260,6 +284,14 @@ def finalize_row(
     for key, column in PPG_METRICS.items():
         total = record.get(column)
         record[key] = round_value(total / played) if played and total is not None else None
+
+    for key, (column, per) in RATE_METRICS.items():
+        total = record.get(column)
+        opportunities = sum((record.get(name) or 0) for name in per)
+        record[key] = (
+            round_value(total / opportunities, 4)
+            if total is not None and opportunities else None
+        )
 
     # Composites last: they may reference any metric filled in above.
     for metric_id, definition in BUILTIN_COMPOSITES.items():
