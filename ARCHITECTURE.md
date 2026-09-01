@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-31 (M10 shipped to production; CI actions on v7)
+Last updated: 2026-08-31 (M10 shipped; CI on v7; stored per-game rates now volume-weighted)
 
 ---
 
@@ -285,7 +285,7 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | `scoring.py` | ⭐ **The scoring-aware fantasy engine (architecture "spine A").** Turns a league-scoring string like `"ppr:pass_td=6,te_rec=1.5"` into a `ScoringConfig`, and computes fantasy points from raw stat components — both as a SQL expression (for sorting/ranking in the DB) and in Python (for display). Fantasy points are **computed live, never stored per-scoring.** |
 | `league.py` | ⭐ **League context (M3).** Turns a league string like `"10:rb=2,flex=2"` into a `LeagueConfig` (teams + starting lineup) and derives the **replacement rank per position** — flex slots shared across RB/WR/TE in proportion to the lineup's flex-eligible starters, superflex credited to QB. The second per-request config alongside scoring; it's what makes *value* league-aware. |
 | `metrics.py` | ⭐ **The metric registry (architecture "spine B").** One canonical definition per metric (id, label, short label, description, format, category, how it aggregates, which positions it applies to). The single source of truth for metric metadata — the leaderboard reads aggregation behavior from here, and the frontend fetches it via `/metrics`. **Adding a stat starts here.** Composite availability is stamped by `finalize_availability()` rather than at import time: resolving a composite's window needs the formula grammar in `custom_metrics.py`, which needs this module's registry, so **whichever of the two is imported second finishes the job**. Before M9 that cycle meant `import app.custom_metrics` (or anything reaching it first) raised outright, and the app only worked because `main.py` happened to import this module first — an ordering nothing stated and nothing enforced. |
-| `aggregation.py` | The **shared season/window aggregation layer**: which registry metrics are summed vs averaged vs per-game derived, and `finalize_row()`, which fills in the scoring-aware, expected-points, and composite/custom columns. Also `metric_expr()` — **the one place that maps any metric id to a SQL expression**, so the leaderboard's ORDER BY and the scatter's SELECT can never disagree about what a metric means. Used by the leaderboard, the intelligence engine, and both Explore endpoints. |
+| `aggregation.py` | The **shared season/window aggregation layer**: `avg_expr()` is the one place that decides whether an `avg` metric is a flat mean or a **volume-weighted** one (a stored per-game rate averaged flat lets a five-attempt game count as much as a forty-five-attempt one — see `MetricDef.weight_by`); which registry metrics are summed vs averaged vs per-game derived, and `finalize_row()`, which fills in the scoring-aware, expected-points, and composite/custom columns. Also `metric_expr()` — **the one place that maps any metric id to a SQL expression**, so the leaderboard's ORDER BY and the scatter's SELECT can never disagree about what a metric means. Used by the leaderboard, the intelligence engine, and both Explore endpoints. |
 | `custom_metrics.py` | ⭐ **The custom-metric engine (M4)** — the third per-request config, after scoring and league. Parses `custom=name=formula[;…]` into a weighted sum over an optional divisor. Deliberately **structured, not free-form**: every term is a registry id, so there is no expression parser and no `eval`. Also holds `BUILTIN_COMPOSITES`, the registry's `composite` metrics parsed at import time — so a built-in and a user's metric run through one evaluator. See [`docs/design/M4-exploration-viz.md`](docs/design/M4-exploration-viz.md). |
 | `availability.py` | ⭐ **Which seasons a metric has data in (M8).** The UI half of the pipeline module of the same name — ⚠️ **change both together.** The pipeline's copy decides what gets *stored*; this one decides what the UI *offers*, and it reaches the frontend on every `MetricDef`. Composite and per-game metrics **derive** their window by intersecting their inputs, so a new composite can never claim a season its own inputs lack. `tests/test_availability.py` fails if the two drift. |
 | `seasons.py` | ⭐ **Which seasons exist, and which is current (M6.0).** "Current" = the newest season *with stats*, not the newest on the schedule — those differ for most of the year, and defaulting to the latter opens a board on an empty table. Shared by `/seasons` and the draft board. |
@@ -684,7 +684,14 @@ repo. Update it in the *same change* that alters the project's structure — spe
   one request. 25 new tests. **Shipped to production 2026-08-31** — migration applied to
   Supabase *before* the merge, since `render.yaml` runs no migrations and the new code
   reads the column on every `/games` request. Followed by `ci: actions/checkout@v7` and
-  `actions/setup-python@v7`, clearing the Node 20 deprecation warning.
+  `actions/setup-python@v7`, clearing the Node 20 deprecation warning. Then **CPOE was
+  made attempt-weighted** — it had been a flat mean of per-game rates, contradicting the
+  project's own "aggregate first, then combine" rule and overstating Drake Maye's 2025 by
+  1.42. `MetricDef.weight_by` generalises the fix, and **eight** rate metrics now use it
+  (CPOE, passer rating, aDOT, RACR, TPRR, YPRR, Y/TGT, Y/REC) — seven of them exact
+  identities returning `Σtotal / Σweight`. Shares stay flat on purpose: "average weekly
+  target share" is a real definition, and weighting it would redefine every Insight pool
+  built on it.
 - **2026-08-26** — **Security: RLS across the whole `public` schema** (`69b660509e58`).
   A Supabase linter alert (`rls_disabled_in_public`) turned out to be accurate and
   under-stated. `8f73b5b2b1a1` had locked the account tables and exempted the NFL ones

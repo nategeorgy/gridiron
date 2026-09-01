@@ -61,6 +61,11 @@ class MetricDef(BaseModel):
     # without inventing a stored column for something that is pure arithmetic on two
     # that already exist.
     per: tuple[str, ...] | None = None
+    # For aggregation="avg": weight the mean by this column instead of treating every
+    # game equally. A stored per-game *rate* averaged flat lets a five-attempt game
+    # count as much as a forty-five-attempt one — the same error the composite engine
+    # already refuses to make ("aggregate first, then combine").
+    weight_by: str | None = None
     # For aggregation="composite": the formula, in the same grammar users write for
     # custom metrics — "term[+term...][/denominator]", where a term is
     # "[weight*]metric_id" and the denominator is a metric id or the literal "games".
@@ -209,9 +214,17 @@ REGISTRY: list[MetricDef] = [
     _m("attempts", "Attempts", "ATT", "int", "passing", "sum", applies_to=["QB"],
        description="Pass attempts."),
     _m("passer_rating", "Passer Rating", "RATE", 1, "passing", "avg", applies_to=["QB"],
-       description="NFL passer rating."),
+       weight_by="attempts",
+       description="NFL passer rating, weighted by attempts. ⚠️ An approximation: the true "
+                   "season rating recomputes the formula from summed components, and "
+                   "its per-component clamps make it inexpressible as a weighted mean. "
+                   "Far closer than a flat average of per-game ratings, which lets a "
+                   "three-attempt relief appearance count as much as a full start."),
     _m("cpoe", "CPOE", "CPOE", 1, "passing", "avg", applies_to=["QB"],
-       description="Completion percentage over expected."),
+       weight_by="attempts",
+       description="Completion percentage over expected, weighted by attempts — a "
+                   "five-attempt game does not count as much as a forty-five-attempt "
+                   "one, which a flat average of per-game rates would let it do."),
 
     # Rushing
     _m("rushing_yards", "Rushing Yards", "RUSH YD", "int", "rushing", "sum", applies_to=["RB", "QB", "WR"],
@@ -251,23 +264,35 @@ REGISTRY: list[MetricDef] = [
     _m("air_yards_share", "Air Yards Share", "AY%", "pct", "receiving", "avg", applies_to=["WR", "TE", "RB"],
        description="Share of the team's air yards."),
     _m("adot", "ADOT", "ADOT", 1, "receiving", "avg", applies_to=["WR", "TE", "RB"],
-       description="Average depth of target."),
+       weight_by="targets",
+       description="Average depth of target, weighted by targets — so the season "
+                   "value is total air yards over total targets."),
     _m("yards_after_catch", "Yards After Catch", "YAC", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
        description="Total yards after the catch."),
     _m("wopr", "WOPR", "WOPR", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
        description="Weighted opportunity rating (air-yards + target share)."),
     _m("racr", "RACR", "RACR", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
-       description="Receiver air-conversion ratio."),
+       weight_by="air_yards",
+       description="Receiver air-conversion ratio, weighted by air yards — the season "
+                   "value is total receiving yards over total air yards."),
     _m("red_zone_targets", "Red Zone Targets", "RZ TGT", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
        description="Targets inside the opponent's 20."),
     _m("targets_per_route_run", "Targets Per Route Run", "TPRR", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
-       description="Targets divided by routes run."),
+       weight_by="routes_run",
+       description="Targets divided by routes run, weighted by routes — total targets "
+                   "over total routes."),
     _m("yards_per_route_run", "Yards Per Route Run", "YPRR", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
-       description="Receiving yards divided by routes run."),
+       weight_by="routes_run",
+       description="Receiving yards divided by routes run, weighted by routes — total "
+                   "yards over total routes."),
     _m("yards_per_target", "Yards Per Target", "Y/TGT", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
-       description="Receiving yards divided by targets."),
+       weight_by="targets",
+       description="Receiving yards divided by targets, weighted by targets — total "
+                   "yards over total targets."),
     _m("yards_per_reception", "Yards Per Reception", "Y/REC", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
-       description="Receiving yards divided by receptions."),
+       weight_by="receptions",
+       description="Receiving yards divided by receptions, weighted by receptions — "
+                   "total yards over total receptions."),
     _m("routes_run", "Routes Run", "RTS", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
        description="Total routes run."),
     _m("routes_run_per_game", "Routes Run / Game", "RTS/G", 1, "receiving", "derived", base="routes_run",
@@ -358,6 +383,10 @@ def _derive_availability(metric: MetricDef, parse_formula) -> Availability:
         for column in metric.per or ():
             resolved = intersect(resolved, for_metric(column))
         return resolved
+
+    if metric.aggregation == "avg" and metric.weight_by:
+        # A weighted mean needs its weight as much as its value.
+        return intersect(explicit, for_metric(metric.weight_by))
 
     if metric.aggregation == "composite" and metric.formula:
         # Parsed rather than re-implemented: the same grammar the engine uses.

@@ -12,7 +12,7 @@ endpoints also aggregate a *window* of weeks (M3) rather than a whole season.
 
 from __future__ import annotations
 
-from sqlalchemy import Select, func, literal, select
+from sqlalchemy import Select, case, func, literal, select
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.custom_metrics import GAMES, BUILTIN_COMPOSITES, CustomMetric, compute_custom
@@ -95,6 +95,29 @@ def window_filters(
     return filters
 
 
+def avg_expr(metric_id: str) -> ColumnElement:
+    """The season value of an ``avg`` metric: a flat mean, or a weighted one.
+
+    A stored per-game **rate** averaged flat lets a five-attempt game count as much as
+    a forty-five-attempt one. Where the registry names a ``weight_by`` column, this
+    returns ``Σ(rate x weight) / Σweight`` instead — the same "aggregate first, then
+    combine" rule the composite engine already follows.
+
+    The denominator is restricted to rows where the rate itself is present, so a game
+    with attempts but no charted CPOE cannot inflate the divisor and drag the mean
+    toward zero.
+    """
+    column = getattr(PlayerStats, metric_id)
+    definition = REGISTRY_BY_ID.get(metric_id)
+    weight_by = definition.weight_by if definition else None
+    if not weight_by:
+        return func.avg(column)
+    weight = getattr(PlayerStats, weight_by)
+    return func.sum(column * weight) / func.nullif(
+        func.sum(case((column.is_not(None), weight))), 0
+    )
+
+
 def aggregate_select(filters: list[ColumnElement], games: ColumnElement) -> Select:
     """One aggregated row per player: identity, games played, and every stored metric.
 
@@ -110,7 +133,7 @@ def aggregate_select(filters: list[ColumnElement], games: ColumnElement) -> Sele
     difference rather than silently picking one.
     """
     labeled = [func.sum(getattr(PlayerStats, name)).label(name) for name in SUM_METRICS]
-    labeled += [func.avg(getattr(PlayerStats, name)).label(name) for name in AVG_METRICS]
+    labeled += [avg_expr(name).label(name) for name in AVG_METRICS]
 
     # The team he finished the window with. array_agg keeps the ordering inside the
     # aggregate, so this stays one grouped pass rather than a correlated subquery.
@@ -213,7 +236,7 @@ def metric_expr(
     column = getattr(PlayerStats, metric_id)
     if not sum_mode:
         return column
-    return func.avg(column) if aggregation == "avg" else func.sum(column)
+    return avg_expr(metric_id) if aggregation == "avg" else func.sum(column)
 
 
 def _composite_expr(

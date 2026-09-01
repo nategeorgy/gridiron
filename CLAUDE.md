@@ -880,7 +880,7 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       **Fantasy Desk** (`components/home/`), and a sixth nav group, **Schedule ▾**, holds
       Games, By Team, and the Vegas board moved from `/insight/vegas` (redirected)
       (see [`docs/design/M10-command-center-schedule.md`](docs/design/M10-command-center-schedule.md))
-- [x] Backend test suite (`backend/tests/`, 328 tests) — the repo's first automated
+- [x] Backend test suite (`backend/tests/`, 345 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -1167,6 +1167,22 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   (snaps rise in a blowout; carries and targets rise when a coach changes his mind). The
   falling side takes the mirror: the player must have mattered *before*. Any future board
   that ranks a change inherits this
+- ⚠️ **A stored per-game *rate* must not be averaged flat.** `cpoe` was, and a
+  five-attempt game counted as much as a forty-five-attempt one — Drake Maye's 2025 read
+  12.16 against 10.74 attempt-weighted, enough to reorder the board. `MetricDef.weight_by`
+  names the column to weight by (`cpoe` is `weight_by="attempts"`), and `avg_expr()` in
+  `app/aggregation.py` is the one place that decides flat vs weighted. The denominator
+  counts **only games where the rate itself is present**: charted passing starts in 2006
+  while attempts reach 1999, so 4,343 quarterback games carry a weight with no value and
+  an unguarded divisor would drag every historical CPOE toward zero. **Shares are
+  deliberately left flat** — "average weekly target share" is a real definition, and
+  weighting it would silently redefine every board and Insight pool built on it. Eight
+  metrics are weighted: `cpoe`, `passer_rating`, `adot`, `racr`, `targets_per_route_run`,
+  `yards_per_route_run`, `yards_per_target`, `yards_per_reception`. Seven are **exact
+  identities** — rate x weight recovers the underlying total, so the result *is*
+  `Σtotal / Σweight`. `passer_rating` is the exception: its per-component clamps make the
+  true season rating inexpressible as a weighted mean, so attempt-weighting is an
+  approximation (far better than a flat one) and its description says so
 - **A `derived` metric may name its own denominator** (M10). It used to divide by games
   and nothing else, so a rate per *opportunity* had no way to exist — `MetricDef.per`
   now names the columns to divide by (`epa_per_play` is `base="epa",
