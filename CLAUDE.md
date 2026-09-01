@@ -166,6 +166,11 @@ games (
   home_score    INT,                      -- NULL until played
   away_score    INT,
   game_date     DATE,
+  -- Kickoff as the league quotes it (M10): a naive time that ALWAYS means Eastern.
+  -- Surfaces render it with an explicit "ET". The weekday is deliberately NOT stored —
+  -- it is a pure function of game_date, and a second representation is a second way to
+  -- be wrong. Present from 2000; the feed carries no kickoff for 1999.
+  kickoff_time  TIME,
 
   -- Betting market (M6). Same load_schedules feed, populated for finished games
   -- (closing lines) AND upcoming ones — which is why the Vegas board needs no odds
@@ -571,7 +576,8 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
 
 ### Key Endpoints (target)
 ```
-GET /api/v1/players                          ← list/search players
+GET /api/v1/players                          ← list/search players. ?player_ids= (M10)
+                                               resolves a known list in one call
 GET /api/v1/players/{player_id}              ← player profile
 GET /api/v1/players/{player_id}/stats        ← player game log
 GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdown
@@ -611,7 +617,17 @@ GET /api/v1/teams/{team_id}                  ← M6 team page: record, fixtures 
                                                depth chart with production in your
                                                scoring
 GET /api/v1/teams/{team_id}/stats            ← team stats
-GET /api/v1/games                            ← game schedule/results
+GET /api/v1/games                            ← M10 the schedule: filter by season,
+                                               week and team. Defaults to the newest
+                                               SCHEDULED season, not the newest played
+GET /api/v1/games/weeks                      ← M10 a season's weeks with how much of
+                                               each is played and priced
+GET /api/v1/games/scoreboard                 ← M10 the week just played beside the week
+                                               coming up. Straddles two seasons from
+                                               January to September, so each window
+                                               names its own
+GET /api/v1/stats/trending                   ← M10 who is gaining or losing work over a
+                                               trailing window. ?direction=up|down
 
 # M5 — accounts. All require a verified Supabase token; none takes a user id.
 GET/DELETE /api/v1/me                        ← profile + counts / delete account
@@ -652,7 +668,7 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md).
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**
   (a Bento dashboard that opens on "who's leading in your scoring"), *not* the
-  leaderboard. Boards live in four nav dropdowns: **Insight** (`/insight/*` — VORP /
+  leaderboard. Boards live in six nav dropdowns: **Insight** (`/insight/*` — VORP /
   Opportunity Rating / Buy Low / Sell High, the M3 derived signals, with both the
   scoring and league editors), **Explore** (`/explore/*` — the M4 Scatter and Compare
   builders, tools rather than ranked tables), **Fantasy Leaderboards** (`/fantasy/*` —
@@ -850,6 +866,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       on expected VORP. Four RLS-locked tables (migration `0fd5c30c9287`),
       `ingest_expert_boards.py`, and `ingest_rankings.py --weekly`
       (see [`docs/design/M9-draft.md`](docs/design/M9-draft.md))
+- [x] M10 — Command Center rebuild + the Schedule tab: `GET /api/v1/games` (the endpoint
+      this file has listed as a target since the first milestone and nothing had built),
+      `/games/weeks`, `/games/scoreboard`, and `GET /stats/trending`. Migration
+      `c4e1a72b9f30` adds **one** column — `games.kickoff_time` — and `app/trending.py`
+      ranks a *change* rather than a season. The home page is rebuilt as a two-column
+      **Fantasy Desk** (`components/home/`), and a sixth nav group, **Schedule ▾**, holds
+      Games, By Team, and the Vegas board moved from `/insight/vegas` (redirected)
 - [x] Backend test suite (`backend/tests/`, 280 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
@@ -1120,6 +1143,41 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   `PIPELINE_DATABASE_URL`, the first credential in CI that can change real data. Keep it
   scoped to that workflow, keep the ingests idempotent, and remember that a new ingest
   script added to it runs unattended at 6am
+- ⚠️ **An on/off split must exclude games the *subject* did not play in full** (M10).
+  DeVonta Smith's two 2025 games without A.J. Brown average to a 52% snap share — one is
+  a genuine 90%-snap game where he took 45% of the targets, the other a Week 18 he played
+  14% of. The mean of those describes neither. Filter on the subject's own participation
+  before splitting on the teammate's, and say the sample size out loud
+- **When there is no on/off sample, say so rather than manufacturing one.** Keenan Allen
+  played all 17 games, so no query produces a "McConkey without Allen" split. The honest
+  substitute is **vacated share** — target share that has physically left the roster —
+  which is a fact about the team, not a projection about the player
+- ⚠️ **A delta board needs a relevance floor, or it ranks people nobody can start**
+  (M10). Sorted purely on the snap-share swing, "trending up" was backup tight ends
+  going from nothing to garbage time — the largest *relative* moves in the league belong
+  to players with no role. `app/trending.py` requires a riser to clear a fantasy floor
+  **in the recent window** and to have moved in **opportunity share**, not just snaps
+  (snaps rise in a blowout; carries and targets rise when a coach changes his mind). The
+  falling side takes the mirror: the player must have mattered *before*. Any future board
+  that ranks a change inherits this
+- **A `derived` metric may name its own denominator** (M10). It used to divide by games
+  and nothing else, so a rate per *opportunity* had no way to exist — `MetricDef.per`
+  now names the columns to divide by (`epa_per_play` is `base="epa",
+  per=("attempts","carries")`), and it aggregates first exactly like a composite:
+  `Σepa / Σplays`, never the mean of per-game rates. Availability intersects numerator
+  and denominator, since a rate is only answerable where both sides are
+- ⚠️ **`compute_points` starts from the stored `fantasy_points_std`** and adds only the
+  *difference* between the caller's weights and standard ones. Real ingested rows always
+  carry it, so this is invisible in production and lethal in a fixture: a test stat line
+  without `fantasy_points_std` scores as though the player gained no yards, and a
+  scoring-aware assertion silently tests nothing but receptions
+- **A table with no `min-width` shrinks instead of overflowing.** `overflow-x: auto`
+  around a bare `<table>` does nothing in a narrow column — the columns collapse into
+  each other and the scrollbar never appears. Every table that can land in the home
+  rail or a narrow card goes through `ScrollTable`, which sets one
+- **`--series-4` (gold) cannot take white text.** It measures 2.17:1 in the light theme,
+  nowhere near the 4.5:1 floor. Any badge or fill built on a series hue needs its ink
+  chosen per hue rather than inheriting one white — see `components/home/HeadToHeadCard.jsx`
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

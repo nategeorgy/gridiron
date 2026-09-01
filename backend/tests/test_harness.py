@@ -15,7 +15,7 @@ from tests.helpers import TEST_DB_NAME
 # definition. It has already earned its keep once — it is what caught `8f73b5b2b1a1`
 # (the RLS lockdown) arriving, a migration that adds no tables and no columns and so
 # would have been invisible to any other assertion here.
-EXPECTED_HEAD = "0fd5c30c9287"
+EXPECTED_HEAD = "c4e1a72b9f30"
 
 
 def test_the_suite_runs_against_the_throwaway_database(db):

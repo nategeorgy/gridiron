@@ -1,8 +1,8 @@
 """Game ORM model."""
 
-from datetime import date
+from datetime import date, time
 
-from sqlalchemy import Boolean, Date, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, Float, ForeignKey, Integer, String, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -30,6 +30,10 @@ class Game(Base):
     home_score: Mapped[int | None] = mapped_column(Integer)
     away_score: Mapped[int | None] = mapped_column(Integer)
     game_date: Mapped[date | None] = mapped_column(Date)
+    # Kickoff as the league quotes it: a naive wall-clock time that always means
+    # Eastern (M10). Surfaces render it with an explicit "ET". The weekday is NOT
+    # stored — it is a pure function of game_date.
+    kickoff_time: Mapped[time | None] = mapped_column(Time)
 
     # --- Betting market (M6). NULL on games the market has not priced yet. ---
     # spread_line is from the home team's perspective: positive = home favoured.

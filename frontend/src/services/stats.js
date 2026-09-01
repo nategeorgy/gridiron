@@ -58,3 +58,15 @@ export async function getVegas(params) {
   const { data } = await api.get("/stats/vegas", { params });
   return data;
 }
+
+/**
+ * Fetch trending usage (M10). Params: season?, season_type, direction ("up"|"down"),
+ * window, position?, scoring, limit.
+ * Returns { data, context: { recent_from, recent_to, prior_from, prior_to, ... } }.
+ * Both directions carry a relevance floor, so an empty list means "nobody moved that
+ * much among players who matter" rather than "no data".
+ */
+export async function getTrending(params) {
+  const { data } = await api.get("/stats/trending", { params });
+  return data;
+}

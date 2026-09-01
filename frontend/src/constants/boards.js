@@ -360,10 +360,38 @@ export const INSIGHT_TOOLS = [
       "higher is harder. Position matters more than most sites admit: a defense that " +
       "smothers receivers is often the one running backs feast on.",
   },
+];
+
+// --- Schedule (M10) ---
+// A fixture list, a season grid, and the betting board. Vegas moved here from
+// Insight ▾ because it is a *schedule* surface: it answers "what happens this week",
+// not "who should I start" — the same reasoning that moved the Value Board into
+// Draft ▾ in M9. Its old URL redirects, so shared links and saved views survive.
+export const SCHEDULE_ITEMS = [
   {
-    id: "insight-vegas",
+    id: "schedule-games",
+    label: "Games",
+    path: "/schedule/games",
+    menuDesc: "Every fixture and result, back to 1999",
+    title: "Games",
+    description:
+      "The whole schedule, filterable by season, week and team — results where they " +
+      "have been played, and the betting market's view where they have not.",
+  },
+  {
+    id: "schedule-by-team",
+    label: "By Team",
+    path: "/schedule/by-team",
+    menuDesc: "One season as a team × week grid",
+    title: "Schedule by Team",
+    description:
+      "Every team's season in one grid. Reading across a row shows the run of fixtures " +
+      "a player has to get through, which a week-by-week list hides.",
+  },
+  {
+    id: "schedule-vegas",
     label: "Vegas Board",
-    path: "/insight/vegas",
+    path: "/schedule/vegas",
     menuDesc: "Who's in the best scoring environment",
     title: "Vegas Board",
     description:
@@ -463,6 +491,7 @@ export const NAV_GROUPS = [
   { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
   { label: "Draft", items: DRAFT_ITEMS, match: "/draft" },
   { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" },
+  { label: "Schedule", items: SCHEDULE_ITEMS, match: "/schedule" },
   { label: "Fantasy Leaderboards", items: FANTASY_BOARDS, match: "/fantasy" },
   { label: "NFL Leaderboards", items: NFL_BOARDS, match: "/nfl" },
 ];

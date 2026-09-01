@@ -76,11 +76,20 @@ def list_players(
     search: str | None = Query(None, description="Case-insensitive name search"),
     position: str | None = Query(None, description="QB, RB, WR, or TE"),
     team_id: int | None = Query(None),
+    player_ids: str | None = Query(
+        None, description="Comma-separated player ids — resolve a known list in one call"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[PlayerOut]:
-    """List/search players with pagination."""
+    """List/search players with pagination.
+
+    ``player_ids`` is for a caller that already knows who it wants and needs the
+    identity columns — name, position, team, headshot. Without it, resolving a list of
+    six players means six requests, and the leaderboard is the wrong endpoint to ask
+    (it aggregates stat lines, so a player with no stats in the window vanishes).
+    """
     filters = []
     if search:
         filters.append(Player.name.ilike(f"%{search}%"))
@@ -88,6 +97,11 @@ def list_players(
         filters.append(Player.position == position.upper())
     if team_id is not None:
         filters.append(Player.team_id == team_id)
+    if player_ids:
+        wanted = [pid.strip() for pid in player_ids.split(",") if pid.strip()]
+        # An explicitly empty list means "none", never "no filter" — the trap the M5
+        # watchlist filter documents on the leaderboard.
+        filters.append(Player.player_id.in_(wanted or [""]))
 
     total = db.scalar(select(func.count()).select_from(Player).where(*filters))
 

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import account, draft, health, metrics, players, seasons, stats, teams
+from app.routers import account, draft, games, health, metrics, players, seasons, stats, teams
 
 API_V1_PREFIX = "/api/v1"
 
@@ -30,6 +30,7 @@ app.add_middleware(
 app.include_router(health.router, prefix=API_V1_PREFIX)
 app.include_router(players.router, prefix=API_V1_PREFIX)
 app.include_router(teams.router, prefix=API_V1_PREFIX)
+app.include_router(games.router, prefix=API_V1_PREFIX)
 app.include_router(stats.router, prefix=API_V1_PREFIX)
 app.include_router(metrics.router, prefix=API_V1_PREFIX)
 app.include_router(seasons.router, prefix=API_V1_PREFIX)

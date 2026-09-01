@@ -54,7 +54,13 @@ class MetricDef(BaseModel):
     applies_to: list[str] | Literal["all"] = "all"
     higher_is_better: bool = True
     rankable: bool = True
-    base: str | None = None  # for aggregation="derived": the column divided by games
+    base: str | None = None  # for aggregation="derived": the column being divided
+    # For aggregation="derived": what to divide ``base`` by. None means games played,
+    # which is what every per-game metric wants. Naming columns instead gives a rate
+    # per opportunity — EPA per play is ``base="epa", per=("attempts", "carries")`` —
+    # without inventing a stored column for something that is pure arithmetic on two
+    # that already exist.
+    per: tuple[str, ...] | None = None
     # For aggregation="composite": the formula, in the same grammar users write for
     # custom metrics — "term[+term...][/denominator]", where a term is
     # "[weight*]metric_id" and the denominator is a metric id or the literal "games".
@@ -304,7 +310,17 @@ REGISTRY: list[MetricDef] = [
                    "the ball on a third of his snaps is used very differently from "
                    "one who blocks on most of them."),
     _m("epa", "EPA", "EPA", 1, "usage", "sum",
-       description="Total expected points added."),
+       description="Total expected points added — passing, rushing and receiving "
+                   "combined, which is why a quarterback's rushing shows up here."),
+    _m("epa_per_play", "EPA / Play", "EPA/PLAY", 3, "usage", "derived",
+       base="epa", per=("attempts", "carries"),
+       description="Expected points added per play, counting pass attempts and "
+                   "carries. Rate rather than volume, so it separates a quarterback "
+                   "who was efficient from one who simply threw a lot — and because "
+                   "the denominator includes carries, a running quarterback's legs "
+                   "count toward it rather than diluting it. Sacks are not in the "
+                   "denominator: no free feed publishes them per player, so this is "
+                   "per play rather than per dropback."),
     _m("fumbles", "Fumbles", "FUM", "int", "usage", "sum",
        higher_is_better=False, description="Total fumbles."),
     _m("fumbles_lost", "Fumbles Lost", "FUM L", "int", "usage", "sum",
@@ -336,7 +352,12 @@ def _derive_availability(metric: MetricDef, parse_formula) -> Availability:
         return explicit
 
     if metric.aggregation == "derived" and metric.base:
-        return for_metric(metric.base)
+        resolved = for_metric(metric.base)
+        # A rate is only answerable where BOTH sides of it are, so a per-opportunity
+        # metric inherits the narrower of its numerator's and denominator's windows.
+        for column in metric.per or ():
+            resolved = intersect(resolved, for_metric(column))
+        return resolved
 
     if metric.aggregation == "composite" and metric.formula:
         # Parsed rather than re-implemented: the same grammar the engine uses.
