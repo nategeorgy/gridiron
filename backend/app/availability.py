@@ -139,6 +139,20 @@ NEVER = Availability(
 
 # Mirrors NEXTGEN_COLUMNS in pipeline/availability.py — see the warning at the top of
 # this module about the two tables drifting.
+PFR = Availability(
+    first_season=2018,
+    note="Pro Football Reference advanced stats. Published from 2018, and only for "
+         "players PFR charts — broader than Next Gen Stats (497 receivers in 2024 "
+         "against NGS's 212) but two seasons shallower.",
+)
+
+# Mirrors PFR_COLUMNS in pipeline/availability.py.
+PFR_COLUMNS: tuple[str, ...] = (
+    "pressure_rate", "times_blitzed", "bad_throw_rate", "drops_by_receivers",
+    "rush_yards_before_contact", "rush_yards_after_contact", "rush_broken_tackles",
+    "receiving_drops", "rec_broken_tackles", "passer_rating_when_targeted",
+)
+
 NEXTGEN_COLUMNS: tuple[str, ...] = (
     "ngs_pass_time_to_throw",
     "ngs_pass_completed_air_yards",
@@ -194,6 +208,8 @@ METRIC_AVAILABILITY: dict[str, Availability] = {
     # pipeline/availability.py — the UI needs to grey these out before 2016 rather
     # than serve an empty column and let the user conclude the board is broken.
     **{metric_id: NEXTGEN for metric_id in NEXTGEN_COLUMNS},
+    # Pro Football Reference advanced stats (M12).
+    **{metric_id: PFR for metric_id in PFR_COLUMNS},
     # Market shares come from ffopportunity's *actual* team totals, not its model, so
     # they are sound as soon as that feed starts.
     **{metric_id: EXPECTED for metric_id in ("market_share", "rush_attempt_share")},
@@ -208,7 +224,9 @@ METRIC_AVAILABILITY: dict[str, Availability] = {
             "passing_yards_exp", "passing_tds_exp", "interceptions_exp",
             "rushing_yards_exp", "rushing_tds_exp",
             "receiving_yards_exp", "receiving_tds_exp", "receptions_exp",
-            "two_point_conv_exp",
+            "two_point_conv_exp", "completions_exp",
+            "passing_first_downs_exp", "rushing_first_downs_exp",
+            "receiving_first_downs_exp",
             "expected_fantasy_points", "expected_fantasy_ppg",
             "fantasy_points_over_expected",
         )

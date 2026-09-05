@@ -123,6 +123,13 @@ _EXPECTED_RECEIVING = Availability(
 # The Next Gen Stats columns (M11). Listed once and reused, because every one of them
 # shares a single window and the list is long enough that repeating it invites a typo
 # that the mirror test would report as a drift.
+# Pro Football Reference advanced stats (M12). One window for all ten.
+PFR_COLUMNS: tuple[str, ...] = (
+    "pressure_rate", "times_blitzed", "bad_throw_rate", "drops_by_receivers",
+    "rush_yards_before_contact", "rush_yards_after_contact", "rush_broken_tackles",
+    "receiving_drops", "rec_broken_tackles", "passer_rating_when_targeted",
+)
+
 NEXTGEN_COLUMNS: tuple[str, ...] = (
     "ngs_pass_time_to_throw",
     "ngs_pass_completed_air_yards",
@@ -194,7 +201,9 @@ COLUMN_AVAILABILITY: dict[str, Availability] = {
             "passing_yards_exp", "passing_tds_exp", "interceptions_exp",
             "rushing_yards_exp", "rushing_tds_exp",
             "receiving_yards_exp", "receiving_tds_exp", "receptions_exp",
-            "two_point_conv_exp",
+            "two_point_conv_exp", "completions_exp",
+            "passing_first_downs_exp", "rushing_first_downs_exp",
+            "receiving_first_downs_exp",
         )
     },
 
@@ -246,6 +255,17 @@ COLUMN_AVAILABILITY: dict[str, Availability] = {
             ),
         )
         for column in NEXTGEN_COLUMNS
+    },
+
+    # --- Pro Football Reference advanced stats, 2018+ ---
+    **{
+        column: Availability(
+            first=2018,
+            note="Pro Football Reference advanced stats. Published from 2018, and "
+                 "only for players PFR charts — broader than Next Gen Stats "
+                 "(497 receivers in 2024 against NGS's 212) but two seasons shallower.",
+        )
+        for column in PFR_COLUMNS
     },
 
     # No free source has ever published per-player alignment.

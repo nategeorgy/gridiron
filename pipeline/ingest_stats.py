@@ -227,6 +227,14 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
             "targets": targets,
             "fumbles": record.get("fumbles_total"),
             "fumbles_lost": record.get("fumbles_lost_total"),
+            # First downs and sacks. In this feed since 1999 and never read until the
+            # M12 leaderboard rebuild — which also retires the claim that no free feed
+            # publishes sacks per player.
+            "passing_first_downs": record.get("passing_first_downs"),
+            "rushing_first_downs": record.get("rushing_first_downs"),
+            "receiving_first_downs": record.get("receiving_first_downs"),
+            "sacks_suffered": record.get("sacks_suffered"),
+            "sack_fumbles_lost": record.get("sack_fumbles_lost"),
             # Advanced (direct)
             "epa": _total_epa(record),
             "cpoe": record.get("passing_cpoe"),

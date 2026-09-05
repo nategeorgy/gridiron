@@ -33,6 +33,7 @@ from app.aggregation import (
     INSIGHT_METRICS,
     POSITIONS,
     PPG_METRICS,
+    RATE_METRICS,
     SCORING_METRICS,
     SUM_METRICS,
     aggregate_select,
@@ -40,6 +41,12 @@ from app.aggregation import (
     games_expr,
     metric_expr,
     window_filters,
+)
+from app.percentiles import (
+    PercentileIndex,
+    build_index,
+    percentile_metric_ids,
+    qualify_games,
 )
 from app.custom_metrics import (
     BUILTIN_COMPOSITES,
@@ -75,8 +82,13 @@ from app.scoring import (
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
+# ⚠️ RATE_METRICS is the per-*opportunity* half of `derived` (M10 gave MetricDef a
+# `per`). It was never listed here, so every metric built on `per` — epa_per_play from
+# the day it shipped, and the M12 contact and drop rates — rendered as a column whose
+# header 400'd when clicked. Sortability is derived from the registry's aggregation
+# kinds, so a new kind has to be added in exactly this one place.
 ALLOWED_METRICS = (
-    set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS)
+    set(SUM_METRICS) | set(AVG_METRICS) | set(PPG_METRICS) | set(RATE_METRICS)
     | SCORING_METRICS | EXPECTED_METRICS | COMPOSITE_METRICS | {"games_played"}
 )
 # The intelligence board can also rank by any of the plain aggregate metrics, so its
@@ -92,11 +104,15 @@ def _leaderboard_season(
     db: Session, season: int, season_type: str, position: str | None,
     metric: str, config: ScoringConfig, descending: bool, min_games: int,
     limit: int, offset: int, custom: list[CustomMetric],
-    player_ids: tuple[str, ...] | None = None,
+    player_ids: tuple[str, ...] | None = None, team_id: int | None = None,
+    week_in: tuple[int, ...] | None = None,
 ) -> tuple[list[dict], int]:
-    """Aggregate a full season into one ranked row per player."""
+    """Aggregate a season — or an explicit set of weeks — into one row per player."""
     games = games_expr()
-    filters = window_filters(season, season_type, position=position, player_ids=player_ids)
+    filters = window_filters(
+        season, season_type, position=position, player_ids=player_ids, team_id=team_id,
+        week_in=week_in,
+    )
     base = aggregate_select(filters, games).having(games >= min_games)
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
@@ -118,11 +134,12 @@ def _leaderboard_week(
     db: Session, season: int, week: int, season_type: str, position: str | None,
     metric: str, config: ScoringConfig, descending: bool, limit: int, offset: int,
     custom: list[CustomMetric], player_ids: tuple[str, ...] | None = None,
+    team_id: int | None = None,
 ) -> tuple[list[dict], int]:
     """Return raw per-game stat lines for a single week, ranked by metric."""
     filters = window_filters(
         season, season_type, position=position, week_from=week, week_to=week,
-        player_ids=player_ids,
+        player_ids=player_ids, team_id=team_id,
     )
 
     # In single-week mode every metric is already a one-game value, so the same
@@ -191,6 +208,11 @@ def _parse_player_ids(raw: str) -> tuple[str, ...] | None:
 def leaderboard(
     season: int = Query(..., description="Season year, e.g. 2024"),
     week: int | None = Query(None, ge=1, le=22, description="Omit for a season aggregate"),
+    weeks: str = Query(
+        "",
+        description="Comma-separated weeks to aggregate over, e.g. '3,4,5'. An "
+                    "explicit selection; takes precedence over `week`.",
+    ),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
     position: str | None = Query(None, description="QB, RB, WR, or TE"),
     metric: str = Query("fantasy_points", description="Metric to rank by"),
@@ -207,6 +229,16 @@ def leaderboard(
     min_games: int = Query(1, ge=0, description="Season mode: minimum games played"),
     player_ids: str = Query(
         "", description="Comma-separated player ids to narrow to (the M5 watchlist filter)"
+    ),
+    team: str = Query("", description="Team abbreviation, e.g. 'KC'. Filters the stat "
+                                      "lines, so it means 'played for this team in "
+                                      "this window'"),
+    percentiles: str = Query(
+        "",
+        description="Comma-separated metric ids to return percentile ranks for. Each "
+                    "is ranked within that player's own position for this season, "
+                    "using the same mid-rank maths as the Insight boards. Unknown ids "
+                    "are ignored rather than rejected.",
     ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -225,16 +257,51 @@ def leaderboard(
 
     descending = order == "desc"
     watchlist = _parse_player_ids(player_ids)
-    if week is None:
+    team_id = _resolve_team_id(db, team)
+    week_list = _parse_weeks(weeks)
+
+    # An explicit set aggregates like a season, just over fewer weeks — so it takes the
+    # season path rather than the single-week one, which returns raw per-game lines.
+    if week_list:
         data, total = _leaderboard_season(
             db, season, season_type, position, metric, config, descending, min_games,
-            limit, offset, custom_metrics, watchlist,
+            limit, offset, custom_metrics, watchlist, team_id, week_list,
+        )
+    elif week is None:
+        data, total = _leaderboard_season(
+            db, season, season_type, position, metric, config, descending, min_games,
+            limit, offset, custom_metrics, watchlist, team_id,
         )
     else:
         data, total = _leaderboard_week(
             db, season, week, season_type, position, metric, config, descending,
-            limit, offset, custom_metrics, watchlist,
+            limit, offset, custom_metrics, watchlist, team_id,
         )
+
+    # Percentiles are built from the whole league at each position, never from the
+    # page — so narrowing to one team or one watchlist cannot change what an 84th
+    # percentile means. Only the returned rows are looked up against it.
+    percentile_context: dict = {}
+    metric_ids = percentile_metric_ids(percentiles, custom_metrics)
+    if metric_ids and data:
+        if week_list:
+            pool_weeks = len(week_list)
+        elif week is None:
+            pool_weeks = _window_weeks(db, season, season_type)
+        else:
+            pool_weeks = 1
+        index = build_index(
+            db, season, season_type, config, custom_metrics, metric_ids, pool_weeks,
+            week_from=week, week_to=week, week_in=week_list,
+        )
+        for row in data:
+            row["percentiles"] = index.for_row(row)
+        percentile_context = {
+            "metrics": list(metric_ids),
+            "pool_sizes": index.pool_sizes,
+            "min_games": qualify_games(pool_weeks),
+            "basis": "position, this season",
+        }
 
     page = (offset // limit) + 1 if limit else 1
     return {
@@ -242,7 +309,61 @@ def leaderboard(
         "season": season, "week": week, "season_type": season_type,
         "metric": metric, "order": order, "scoring": config.model_dump(),
         "custom": _custom_payload(custom_metrics),
+        "team": team or None,
+        "weeks": list(week_list) if week_list else None,
+        "percentiles": percentile_context or None,
     }
+
+
+def _parse_weeks(raw: str) -> tuple[int, ...] | None:
+    """Parse a comma-separated week selection, 400-ing on anything out of range."""
+    if not raw.strip():
+        return None
+    weeks: set[int] = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            week = int(part)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Week '{part}' is not a whole number."
+            ) from exc
+        if not 1 <= week <= 22:
+            raise HTTPException(
+                status_code=400, detail=f"Week {week} is outside the 1-22 range."
+            )
+        weeks.add(week)
+    return tuple(sorted(weeks)) or None
+
+
+def _resolve_team_id(db: Session, abbreviation: str) -> int | None:
+    """Turn a team abbreviation into its id, 400-ing on one that does not exist.
+
+    An unknown abbreviation is an error rather than an empty board: silently returning
+    nothing would make a typo indistinguishable from a team that genuinely had no
+    players in the window.
+    """
+    if not abbreviation:
+        return None
+    team_id = db.scalar(
+        select(Team.team_id).where(Team.abbreviation == abbreviation.strip().upper())
+    )
+    if team_id is None:
+        raise HTTPException(status_code=400, detail=f"Unknown team '{abbreviation}'")
+    return team_id
+
+
+def _window_weeks(db: Session, season: int, season_type: str) -> int:
+    """How many weeks the season actually holds — the percentile pool's denominator."""
+    bounds = db.execute(
+        select(func.min(PlayerStats.week), func.max(PlayerStats.week)).where(
+            PlayerStats.season == season, PlayerStats.season_type == season_type
+        )
+    ).one()
+    first, last = bounds[0] or 1, bounds[1] or 1
+    return max(last - first + 1, 1)
 
 
 def _custom_payload(custom: list[CustomMetric]) -> list[dict]:
@@ -788,6 +909,11 @@ def _scatter_game_rows(
 @router.get("/intelligence")
 def intelligence(
     season: int = Query(..., description="Season year, e.g. 2024"),
+    weeks: str = Query(
+        "",
+        description="Comma-separated weeks to score over, e.g. '3,4,5'. An explicit "
+                    "selection; takes precedence over `last_weeks`.",
+    ),
     last_weeks: int | None = Query(
         None, ge=1, le=22,
         description="Trailing window: score only the last N played weeks. Omit for the full season.",
@@ -813,6 +939,12 @@ def intelligence(
     player_ids: str = Query(
         "", description="Comma-separated player ids to narrow to (the M5 watchlist filter)"
     ),
+    team: str = Query("", description="Team abbreviation, e.g. 'KC'"),
+    percentiles: str = Query(
+        "",
+        description="Comma-separated metric ids to return percentile ranks for, each "
+                    "within that player's own position for this season.",
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -834,10 +966,19 @@ def intelligence(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    window = resolve_window(db, season, season_type, last_weeks)
+    window = resolve_window(db, season, season_type, last_weeks, _parse_weeks(weeks))
+    # Deliberately scored WITHOUT the position filter: the percentile index is built
+    # from these rows, and they are the only place VORP and the other query-time
+    # columns exist — re-aggregating raw stat lines the way the leaderboard does
+    # cannot see them. Position is applied further down, where it only narrows output.
     rows, context = build_intelligence(
-        db, window, config, league_config, min_games=min_games, position=position
+        db, window, config, league_config, min_games=min_games
     )
+    scored_league = rows
+
+    if position:
+        wanted_position = position.upper()
+        rows = [row for row in rows if row.get("position") == wanted_position]
 
     if not include_unqualified:
         rows = [row for row in rows if row.get("qualified")]
@@ -847,6 +988,14 @@ def intelligence(
     if watchlist is not None:
         wanted = set(watchlist)
         rows = [row for row in rows if row.get("player_id") in wanted]
+
+    # Narrowing to one team happens after scoring, exactly like the watchlist above,
+    # and for the same reason: a percentile is a claim about the league and must not
+    # change because the board is showing one roster.
+    team_id = _resolve_team_id(db, team)
+    if team_id is not None:
+        abbreviation = team.strip().upper()
+        rows = [row for row in rows if row.get("team_abbreviation") == abbreviation]
 
     descending = order == "desc"
 
@@ -862,6 +1011,22 @@ def intelligence(
 
     total = len(rows)
     page_rows = rows[offset : offset + limit]
+
+    # The same index the leaderboard builds, so a column reports the same percentile
+    # whichever board it appears on.
+    percentile_context: dict = {}
+    metric_ids = percentile_metric_ids(percentiles)
+    if metric_ids and page_rows:
+        index = PercentileIndex(scored_league, metric_ids, qualify_games(window.weeks))
+        for row in page_rows:
+            row["percentiles"] = index.for_row(row)
+        percentile_context = {
+            "metrics": list(metric_ids),
+            "pool_sizes": index.pool_sizes,
+            "min_games": qualify_games(window.weeks),
+            "basis": "position, this season",
+        }
+
     page = (offset // limit) + 1 if limit else 1
     return {
         "data": page_rows, "total": total, "page": page, "limit": limit, "offset": offset,
@@ -869,6 +1034,8 @@ def intelligence(
         "metric": metric, "order": order,
         "scoring": config.model_dump(), "league": league_config.model_dump(),
         "min_games": context["min_games"], "replacement": context["replacement"],
+        "team": team or None,
+        "percentiles": percentile_context or None,
     }
 
 

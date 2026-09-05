@@ -96,6 +96,9 @@ PARTICIPATION = Feed("participation", clock="roster", first_season=2016, lag=1)
 # starts in 2016. Stats clock, because a tracking number only exists once the game has
 # been played.
 NEXTGEN = Feed("nextgen", clock="stats", first_season=2016)
+# load_pfr_advstats: Pro Football Reference charting, 2018+. Stats clock — a
+# charted pressure only exists once the game has been played.
+PFR = Feed("pfr", clock="stats", first_season=2018)
 
 
 def latest_season(feed: Feed = STATS) -> int:

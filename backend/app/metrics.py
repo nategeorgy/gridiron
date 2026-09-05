@@ -220,6 +220,22 @@ REGISTRY: list[MetricDef] = [
                    "its per-component clamps make it inexpressible as a weighted mean. "
                    "Far closer than a flat average of per-game ratings, which lets a "
                    "three-attempt relief appearance count as much as a full start."),
+    _m("completion_pct", "Completion %", "COMP%", "pct", "passing", "derived",
+       base="completions", per=("attempts",), applies_to=["QB"],
+       description="Completions divided by attempts. The plainest passing number there "
+                   "is, and the one CPOE is measured against — read together they "
+                   "separate a passer who completes a lot from one who completes more "
+                   "than the throws he attempted should have allowed."),
+    _m("yards_per_attempt", "Yards Per Attempt", "Y/A", 1, "passing", "derived",
+       base="passing_yards", per=("attempts",), applies_to=["QB"],
+       description="Passing yards per attempt — the oldest and still the most quoted "
+                   "quarterback rate. Aggregated first, so a season is total yards "
+                   "over total attempts rather than the mean of weekly averages."),
+    _m("yards_per_completion", "Yards Per Completion", "Y/C", 1, "passing", "derived",
+       base="passing_yards", per=("completions",), applies_to=["QB"],
+       description="Passing yards per completion. Read beside Y/A it separates a "
+                   "passer who throws deep from one who completes a lot of short ones: "
+                   "the gap between the two is where the incompletions live."),
     _m("cpoe", "CPOE", "CPOE", 1, "passing", "avg", applies_to=["QB"],
        weight_by="attempts",
        description="Completion percentage over expected, weighted by attempts — a "
@@ -337,7 +353,7 @@ REGISTRY: list[MetricDef] = [
     _m("epa", "EPA", "EPA", 1, "usage", "sum",
        description="Total expected points added — passing, rushing and receiving "
                    "combined, which is why a quarterback's rushing shows up here."),
-    _m("epa_per_play", "EPA / Play", "EPA/PLAY", 3, "usage", "derived",
+    _m("epa_per_play", "EPA / Play", "EPA/PLAY", 2, "usage", "derived",
        base="epa", per=("attempts", "carries"),
        description="Expected points added per play, counting pass attempts and "
                    "carries. Rate rather than volume, so it separates a quarterback "
@@ -487,6 +503,135 @@ REGISTRY: list[MetricDef] = [
        description="Average seconds from handoff to crossing the line of scrimmage. "
                    "**Lower is better** -- decisiveness, which is what survives a "
                    "change of offensive line."),
+
+    # --- First downs and sacks (M12) ---
+    #
+    # All five have been in load_player_stats since 1999 and were simply never read.
+    # First downs are the point of the passing game in a way yardage is not: a
+    # nine-yard catch on 3rd-and-10 and a nine-yard catch on 3rd-and-8 are the same
+    # line in a box score and opposite outcomes on the field.
+    _m("dropbacks", "Dropbacks", "DB", "int", "passing", "composite",
+       formula="attempts+sacks_suffered", applies_to=["QB"],
+       description="Pass attempts plus sacks taken — every snap that was meant to be a "
+                   "pass. The honest denominator for a quarterback rate: attempts alone "
+                   "reward a passer for the plays where the pass never happened, and a "
+                   "sack is a dropback that went wrong rather than a play that was "
+                   "never called. Available from 1999, because sacks were in the stats "
+                   "feed all along."),
+    _m("passing_first_downs", "Passing First Downs", "PASS 1D", "int", "passing", "sum",
+       applies_to=["QB"],
+       description="Passes that moved the chains."),
+    _m("rushing_first_downs", "Rushing First Downs", "RUSH 1D", "int", "rushing", "sum",
+       applies_to=["RB", "QB", "WR"],
+       description="Carries that moved the chains -- the short-yardage role a "
+                   "yards-per-carry average hides completely."),
+    _m("receiving_first_downs", "Receiving First Downs", "REC 1D", "int", "receiving",
+       "sum", applies_to=["WR", "TE", "RB"],
+       description="Catches that moved the chains. The clearest split between a "
+                   "receiver used to convert and one used to pad yardage on early "
+                   "downs."),
+    _m("total_first_downs", "Total First Downs", "1D", "int", "usage", "composite",
+       formula="passing_first_downs+rushing_first_downs+receiving_first_downs",
+       description="Every first down a player produced, however he produced it. A "
+                   "growing minority of leagues score these directly; in every other "
+                   "league they are still the best single read on whether a player's "
+                   "usage was situationally valuable."),
+    _m("sacks_suffered", "Sacks Taken", "SK", "int", "passing", "sum", applies_to=["QB"],
+       higher_is_better=False,
+       description="Times sacked. Partly the offensive line and partly the "
+                   "quarterback's clock -- read it beside time to throw, which "
+                   "separates the two."),
+    _m("sack_fumbles_lost", "Sack Fumbles Lost", "SK FL", "int", "passing", "sum",
+       applies_to=["QB"], higher_is_better=False,
+       description="Fumbles lost while being sacked -- the most expensive play a "
+                   "quarterback can make in fantasy, costing yardage and possession "
+                   "at once."),
+
+    # --- Expected first downs and completions (M12, ffopportunity) ---
+    _m("passing_first_downs_exp", "Expected Passing First Downs", "xPASS 1D", 1,
+       "passing", "sum", applies_to=["QB"], modelled=True,
+       description="Modelled passing first downs, given down, distance and where each "
+                   "throw went."),
+    _m("rushing_first_downs_exp", "Expected Rushing First Downs", "xRUSH 1D", 1,
+       "rushing", "sum", applies_to=["RB", "QB", "WR"], modelled=True,
+       description="Modelled rushing first downs from carry volume and situation."),
+    _m("receiving_first_downs_exp", "Expected Receiving First Downs", "xREC 1D", 1,
+       "receiving", "sum", applies_to=["WR", "TE", "RB"], modelled=True,
+       description="Modelled receiving first downs from target depth and situation. "
+                   "Read against the actual, it says whether a receiver is converting "
+                   "the chances he is given or simply being given good ones."),
+    _m("completions_exp", "Expected Completions", "xCMP", 1, "passing", "sum",
+       applies_to=["QB"], modelled=True,
+       description="Completions an average quarterback would have made on these "
+                   "attempts."),
+
+    # --- Pro Football Reference advanced stats (M12) ---
+    #
+    # The only free source for what the DEFENSE did to the play. 2018+, and broader
+    # than NGS -- PFR has no volume qualifier, so a back with two carries still
+    # appears, where NGS would omit him.
+    #
+    # PFR publishes its own per-attempt averages for the contact and drop columns; we
+    # store the totals and derive the rates instead, so a season value is
+    # Sum(yards) / Sum(carries) rather than the mean of per-game averages.
+    _m("pressure_rate", "Pressure Rate", "PRSS%", "pct", "passing", "avg",
+       applies_to=["QB"], weight_by="attempts", higher_is_better=False,
+       description="Share of dropbacks under pressure. Mostly a fact about the "
+                   "offensive line, which is why it belongs beside a quarterback's "
+                   "efficiency rather than inside it."),
+    _m("times_blitzed", "Times Blitzed", "BLZ", "int", "passing", "sum",
+       applies_to=["QB"],
+       description="Snaps facing five or more rushers. Descriptive, not good or bad: "
+                   "defenses blitz quarterbacks they think they can rush, and blitzes "
+                   "are also what a good passer feeds on."),
+    _m("bad_throw_rate", "Bad Throw %", "BAD%", "pct", "passing", "avg",
+       applies_to=["QB"], weight_by="attempts", higher_is_better=False,
+       description="Share of attempts charted as uncatchable, excluding throwaways "
+                   "and spikes. The accuracy measure that survives a receiver having "
+                   "a bad day."),
+    _m("drops_by_receivers", "Drops By Receivers", "DRP", "int", "passing", "sum",
+       applies_to=["QB"], higher_is_better=False,
+       description="Catchable passes his receivers dropped -- production charged to "
+                   "the quarterback's stat line that was never his to control."),
+    _m("rush_yards_before_contact", "Rush Yards Before Contact", "YBC", "int",
+       "rushing", "sum", applies_to=["RB", "QB", "WR"],
+       description="Rushing yards gained before any defender made contact. This is a "
+                   "measurement of the blocking in front of the back, not of the back."),
+    _m("rush_ybc_per_att", "Yards Before Contact / Att", "YBC/A", 2, "rushing",
+       "derived", base="rush_yards_before_contact", per=("carries",),
+       applies_to=["RB", "QB", "WR"],
+       description="Blocking quality per carry -- how much of a runner's average was "
+                   "handed to him before anyone touched him."),
+    _m("rush_yards_after_contact", "Rush Yards After Contact", "YAC-R", "int",
+       "rushing", "sum", applies_to=["RB", "QB", "WR"],
+       description="Rushing yards gained after first contact. The half of a rushing "
+                   "line that belongs to the back rather than the line."),
+    _m("rush_yac_per_att", "Yards After Contact / Att", "YAC/A", 2, "rushing",
+       "derived", base="rush_yards_after_contact", per=("carries",),
+       applies_to=["RB", "QB", "WR"],
+       description="Yards created after contact per carry. The most durable measure "
+                   "of a back here: it survives a change of offensive line in a way "
+                   "yards per carry does not."),
+    _m("rush_broken_tackles", "Broken Tackles (rush)", "BT-R", "int", "rushing", "sum",
+       applies_to=["RB", "QB", "WR"],
+       description="Tackles broken or avoided as a runner."),
+    _m("receiving_drops", "Drops", "DRP", "int", "receiving", "sum",
+       applies_to=["WR", "TE", "RB"], higher_is_better=False,
+       description="Catchable passes dropped, as Pro Football Reference charts them."),
+    _m("receiving_drop_rate", "Drop %", "DRP%", "pct", "receiving", "derived",
+       base="receiving_drops", per=("targets",), applies_to=["WR", "TE", "RB"],
+       higher_is_better=False,
+       description="Drops per target. Aggregated first -- total drops over total "
+                   "targets -- so a one-target game cannot swing a season."),
+    _m("rec_broken_tackles", "Broken Tackles (rec)", "BT", "int", "receiving", "sum",
+       applies_to=["WR", "TE", "RB"],
+       description="Tackles broken or avoided after the catch. What separates a "
+                   "receiver who turns a short throw into a first down."),
+    _m("passer_rating_when_targeted", "Passer Rating When Targeted", "TGT RTG", 1,
+       "receiving", "avg", applies_to=["WR", "TE", "RB"], weight_by="targets",
+       description="The passer rating a quarterback posts when throwing to this "
+                   "player -- a receiver's value expressed the way the passing game "
+                   "actually experiences it."),
 ]
 
 
