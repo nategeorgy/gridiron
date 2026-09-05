@@ -1382,6 +1382,15 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   `Σtotal / Σweight`. `passer_rating` is the exception: its per-component clamps make the
   true season rating inexpressible as a weighted mean, so attempt-weighting is an
   approximation (far better than a flat one) and its description says so
+- ⚠️ **A `per` denominator must cover every phase its numerator does.** `epa` is the
+  total across passing, rushing *and* receiving, but `epa_per_play` divided it by
+  attempts + carries only — so a receiver's whole season was divided by his jet sweeps.
+  Justin Jefferson's 2024 read **33.51 EPA per play**, from 67.0 EPA over one carry and
+  one attempt. Written for quarterbacks in M10 and never rechecked when it reached a
+  receiving board. Targets are in the denominator now, at the cost of inheriting the
+  2003-2008 target blackout — the honest trade, since a receiver's per-play rate
+  genuinely is not computable then. When adding a `derived` metric, check the numerator
+  and denominator describe the same set of plays for **every** position that will see it
 - **A `derived` metric may name its own denominator** (M10). It used to divide by games
   and nothing else, so a rate per *opportunity* had no way to exist — `MetricDef.per`
   now names the columns to divide by (`epa_per_play` is `base="epa",

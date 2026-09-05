@@ -249,6 +249,11 @@ REGISTRY: list[MetricDef] = [
        description="Rushing touchdowns."),
     _m("carries", "Carries", "CAR", "int", "rushing", "sum", applies_to=["RB", "QB", "WR"],
        description="Rushing attempts."),
+    _m("yards_per_carry", "Yards Per Carry", "YPC", 1, "rushing", "derived",
+       base="rushing_yards", per=("carries",), applies_to=["RB", "QB", "WR"],
+       description="Rushing yards per carry. Aggregated first — total yards over total "
+                   "carries — so a season is not the mean of weekly averages, where "
+                   "one three-carry game would count as much as a twenty-five-carry one."),
     _m("red_zone_rush_attempts", "Red Zone Carries", "RZ CAR", "int", "rushing", "sum", applies_to=["RB", "QB"],
        description="Rushing attempts inside the opponent's 20."),
     _m("red_zone_rush_share", "Red Zone Rush Share", "RZ RUN%", "pct", "rushing", "avg", applies_to=["RB", "QB"],
@@ -273,6 +278,13 @@ REGISTRY: list[MetricDef] = [
        description="Catches."),
     _m("targets", "Targets", "TGT", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
        description="Times targeted."),
+    _m("catch_rate", "Catch Rate", "CATCH%", "pct", "receiving", "derived",
+       base="receptions", per=("targets",), applies_to=["WR", "TE", "RB"],
+       description="Receptions divided by targets, counted from play-by-play. Reaches "
+                   "back to 1999 and covers every player, unlike the NGS catch "
+                   "percentage, which starts in 2016 and only ranks players it "
+                   "qualifies — the same relationship completion % has to NGS's "
+                   "expected completion %."),
     _m("target_share", "Target Share", "TGT%", "pct", "receiving", "avg", applies_to=["WR", "TE", "RB"],
        description="Share of the team's targets while on the field."),
     _m("air_yards", "Air Yards", "AIR YD", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
@@ -354,14 +366,21 @@ REGISTRY: list[MetricDef] = [
        description="Total expected points added — passing, rushing and receiving "
                    "combined, which is why a quarterback's rushing shows up here."),
     _m("epa_per_play", "EPA / Play", "EPA/PLAY", 2, "usage", "derived",
-       base="epa", per=("attempts", "carries"),
-       description="Expected points added per play, counting pass attempts and "
-                   "carries. Rate rather than volume, so it separates a quarterback "
-                   "who was efficient from one who simply threw a lot — and because "
-                   "the denominator includes carries, a running quarterback's legs "
-                   "count toward it rather than diluting it. Sacks are not in the "
-                   "denominator: no free feed publishes them per player, so this is "
-                   "per play rather than per dropback."),
+       base="epa", per=("attempts", "carries", "targets"),
+       description="Expected points added per play — pass attempts, carries and "
+                   "targets. Rate rather than volume, so it separates a player who was "
+                   "efficient from one who simply had the ball a lot.\n\n"
+                   "⚠️ Targets belong in the denominator and were missing until M12. "
+                   "``epa`` is the total across all three phases, so dividing a "
+                   "receiver's by attempts + carries alone divided his season by his "
+                   "jet sweeps: Justin Jefferson's 2024 read 33.51 EPA per play, from "
+                   "67.0 EPA over one carry and one attempt. The cost is that this "
+                   "metric now inherits the 2003-2008 target blackout, which is the "
+                   "honest trade — a receiver's per-play rate genuinely is not "
+                   "computable in those seasons.\n\n"
+                   "Sacks are still not in the denominator, so this is per play rather "
+                   "than per dropback — though ``dropbacks`` now exists if that is the "
+                   "question."),
     _m("fumbles", "Fumbles", "FUM", "int", "usage", "sum",
        higher_is_better=False, description="Total fumbles."),
     _m("fumbles_lost", "Fumbles Lost", "FUM L", "int", "usage", "sum",

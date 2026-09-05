@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-04 (M12: 13 boards under one Leaderboards menu, grouped by phase)
+Last updated: 2026-09-05 (M12: 13 boards under one Leaderboards menu, grouped by phase)
 
 ---
 
@@ -665,6 +665,19 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-05** — **Rushing and Receiving boards built out.** Rushing gains a fourth
+  board (**Advanced** — Efficiency / Contact / Next Gen Stats), cut along the coverage
+  seam like Passing: yards before contact measures the offensive line, yards after
+  contact measures the back. Receiving goes the other way — **Advanced and Opportunity
+  merge into one 26-column board**, because for a receiver the usage columns and the
+  tracking columns answer the same question and splitting them meant flipping tabs to
+  read one row. Two new derived metrics, `yards_per_carry` and `catch_rate` (the plain
+  one, 1999+ and every player — NGS's catch % starts in 2016 and only ranks players it
+  qualifies). The `insight` flag is now derived from a board's columns rather than set
+  by hand. ⚠️ Fixed `epa_per_play`: `epa` totals all three phases but the denominator
+  was attempts + carries, so a receiver's season was divided by his jet sweeps — Justin
+  Jefferson's 2024 read 33.51 EPA per play. Targets added; the cost is inheriting the
+  2003-2008 target blackout.
 - **2026-09-04** — **Only percentiles carry colour on the player boards.** `signed` is
   now empty on all 12: a tinted value competes with the percentile beneath it for the
   same meaning and loses, since the percentile is the one calibrated to the position.
