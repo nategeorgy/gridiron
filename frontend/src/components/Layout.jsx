@@ -5,8 +5,9 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { AccountMenu } from "./AccountMenu";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
+import { MegaDropdown } from "./ui/MegaDropdown";
 import { NavDropdown } from "./ui/NavDropdown";
-import { NAV_GROUPS } from "../constants/boards";
+import { LEADERBOARD_MENU, NAV_GROUPS } from "../constants/boards";
 import { useProfileSync } from "../hooks/useProfileSync";
 
 // Routes that opt out of the 1280px shell. The draft room is a *board* — twelve
@@ -61,6 +62,13 @@ export function Layout() {
                   match={group.match}
                 />
               ))}
+              {/* One tab for all thirteen player boards. Its routes are still grouped
+                  by type, so the active check takes all three prefixes. */}
+              <MegaDropdown
+                label="Leaderboards"
+                columns={LEADERBOARD_MENU}
+                matches={["/fantasy", "/nfl", "/opportunity"]}
+              />
               <NavLink to="/teams" className={navLinkClass}>
                 Teams
               </NavLink>

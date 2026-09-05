@@ -12,7 +12,7 @@ import {
   serializeScoring,
 } from "../constants/scoring";
 
-export function ScoringControl({ scoring, onChange }) {
+export function ScoringControl({ scoring, onChange, bare = false }) {
   const [open, setOpen] = useState(false);
   const { preset, config } = parseScoring(scoring);
   const isCustom = scoring.includes(":");
@@ -25,7 +25,7 @@ export function ScoringControl({ scoring, onChange }) {
   };
 
   return (
-    <div className="glass-card p-4">
+    <div className={bare ? "" : "glass-card p-4"}>
       <div className="flex flex-wrap items-end gap-3">
         <Select
           label="League Scoring"

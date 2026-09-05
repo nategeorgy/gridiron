@@ -262,6 +262,33 @@ player_stats (
   receiving_tds_exp         FLOAT,
   receptions_exp            FLOAT,
   two_point_conv_exp        FLOAT,
+  passing_first_downs_exp   FLOAT,   -- M12
+  rushing_first_downs_exp   FLOAT,
+  receiving_first_downs_exp FLOAT,
+  completions_exp           FLOAT,
+
+  -- First downs and sacks (M12). In load_player_stats since 1999 and never read
+  -- until the leaderboard rebuild — which retires the old claim that no free feed
+  -- publishes sacks per player.
+  passing_first_downs       INT,
+  rushing_first_downs       INT,
+  receiving_first_downs     INT,
+  sacks_suffered            INT,
+  sack_fumbles_lost         INT,
+
+  -- Pro Football Reference advanced stats (M12). 2018+. The only free source for what
+  -- the DEFENSE did to the play. Percentages arrive as 0-1 fractions — the opposite
+  -- of NGS, where half of them arrive 0-100.
+  pressure_rate               FLOAT,
+  times_blitzed               INT,
+  bad_throw_rate              FLOAT,
+  drops_by_receivers          INT,
+  rush_yards_before_contact   INT,   -- the offensive line
+  rush_yards_after_contact    INT,   -- the back
+  rush_broken_tackles         INT,
+  receiving_drops             INT,
+  rec_broken_tackles          INT,
+  passer_rating_when_targeted FLOAT,
 
   -- Next Gen Stats (M11). Player-tracking derivatives, from nflverse's scrape of
   -- nextgenstats.nfl.com. 2016+, and only for players NGS qualifies. The ngs_ prefix
@@ -919,6 +946,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `weight_by` in the registry. Also corrected a stale claim across four files: the
       participation feed is **not** discontinued, it lags a season
       (see `docs/GridironIQ-stat-inventory.xlsx` for the full stat inventory)
+- [x] M12 — Player Leaderboards: the 17 boards become **12**, in three nav groups
+      (Fantasy / NFL Production / Opportunity × All / Passing / Rushing / Receiving),
+      generated from a categorized stat taxonomy. Columns are grouped into **sections**
+      with a spanning header, and every value shows its **percentile within its own
+      position for that season** beneath it (`app/percentiles.py`, served by both
+      `/stats/leaderboard` and `/stats/intelligence`). Added a **team filter**. Nineteen
+      new columns (migration `a91f3c5e7d02`) from three feeds, including a new
+      `pipeline/ingest_pfr.py` for Pro Football Reference advanced stats
 - [x] Backend test suite (`backend/tests/`, 354 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
@@ -1151,6 +1186,90 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   the database never holds one. Adding a stored column means asking *which seasons it
   actually exists in* and adding it there — the default (absent from the table) is
   "available from 1999", which is a claim, not a fallback
+- ⚠️ **Bench spots move replacement level more than any starting slot.** `LeagueConfig`
+  gained `bench` (M12) because replacement level is "the best player you could pick up
+  instead", and that is the last *rostered* player, not the last *startable* one. Six
+  bench spots in a 12-team league take WR replacement from WR42 to **WR74** and RB
+  replacement PPG from 11.4 to 6.1 — which reorders VORP, not just rescales it. Bench
+  slots are shared out **in proportion to how each position is started**, the same
+  assumption the flex allocation makes; the known weakness is QB in a one-QB league,
+  where most managers stream rather than roster two, so QB replacement runs slightly
+  deep. Documented in `replacement_ranks`, and it is a model rather than a measurement
+- ⚠️ **The metric registry must not be cached forever client-side.** `useMetrics` used
+  `staleTime: Infinity`, so a tab left open across a deploy kept the old registry — and
+  every metric added since rendered as its **raw id with an unrounded value**, because
+  the client had neither a label nor a format for it. It is an hour now, plus a refetch
+  on focus. `formatStat` also rounds when it has no format spec: a table printing
+  `7.542857142857143` looks broken in a way "unlabelled column" does not
+- ⚠️ **A new `aggregation` kind must be added to `ALLOWED_METRICS` in
+  `routers/stats.py`, or its columns render but cannot be sorted.** `RATE_METRICS` (the
+  `per`-based half of `derived`, added in M10) was missed, so `epa_per_play` shipped as
+  a column whose header returned 400 — visible only if someone clicked it. Sortability
+  is derived from the registry's aggregation kinds and that set is the single place
+  they are enumerated
+- **The Leaderboards menu is grouped by PHASE; the routes are grouped by TYPE.** That
+  mismatch is deliberate (M12). People arrive wanting receivers and then pick a lens, so
+  the menu reads Passing / Rushing / Receiving / All — but `/nfl/receiving` is what a
+  saved view (M5) and a shared link store, and re-cutting every URL to echo a menu
+  reorganisation would break them for nothing. `board.phase` carries the menu grouping
+- **Split a board along the *coverage* seam, not the column count.** Passing Production
+  was cut into Production (1999+) and Advanced (NGS 2016+, PFR 2018+) because the
+  alternative was one board where a third of the columns are dimmed for two-thirds of
+  the seasons. A split that leaves both halves answerable in the same eras is a worse
+  split even when it balances the column counts better
+- **A board that is *about* one position hides the position filter** (`fixedPosition`
+  in `constants/boards.js`, M12). The three passing boards are QB-only, and offering a
+  control that can only produce an empty table implies the opposite. It also ignores
+  `?position=` outright — a stale param carried from another board would otherwise
+  render an empty table with no visible cause, which is worse than not offering the
+  choice
+- **`dropbacks` is attempts + sacks, and it exists because sacks now do.** Attempts
+  alone flatter a quarterback by omitting the plays where the pass never happened; a
+  sack is a dropback that went wrong, not a play that was never called. Available from
+  1999 like both its inputs. Consider it the denominator for any future quarterback
+  rate — `epa_per_play` still divides by attempts + carries because it predates this
+- **A percentile is only offered where the ranking means something.** Passing yards are
+  ranked among quarterbacks and nowhere else; a receiver with one gadget completion is
+  not "99th percentile passing". `PERCENTILE_POSITIONS` in `app/percentiles.py` overrides
+  the registry's `applies_to` where the two questions differ — rushing is the real case,
+  since receivers keep the *column* (jet sweeps are real) but not the *rank*. Where a
+  rank is withheld the value still shows and the UI renders a dash, so "not ranked" stays
+  visibly different from "no data"
+- **The sorted column is marked in its header, not down the whole column.** Accenting
+  every value in it spends the one colour that means "good" on something that means
+  "you clicked here" — on a 30-column board that is a meaningless green stripe. Section
+  headings use `text-fg` for the same reason: they are structure, not data
+- ⚠️ **`useUrlState`'s setter takes an updater function**, and any control deriving its
+  next state from its current one must use it — a multi-select computing `next` from a
+  captured prop loses every click landing before the re-render. Note the limit: React
+  Router's `setSearchParams` is not a reducer queue, so several updates in the *same
+  tick* still collapse. That is fine for click-driven controls and would not be for a
+  programmatic one
+- **A percentile pool is never narrowed by a filter.** `app/percentiles.py` builds one
+  pool per (position, season) from the whole league, deliberately ignoring the team
+  filter, the watchlist and the caller's `min_games`. "84th percentile" is a claim
+  about the league; if narrowing a board to one roster silently redefined it, the number
+  would be worse than useless. It is the same rule the Insight boards already follow,
+  and the pool qualifier is theirs too (`QUALIFY_FRACTION`) rather than the display
+  filter — a pool containing every one-game call-up moves every percentile in it
+- **Direction is corrected before a percentile leaves the server.** The registry's
+  `higher_is_better` is applied in `PercentileIndex.for_row`, so 95th percentile always
+  reads as good — including for drops, interceptions and pressure rate. No UI should
+  ever have to know which way a metric points
+- **A board carrying a query-time column is served by `/stats/intelligence`, not the
+  leaderboard.** VORP, the buy/sell indices and usage trend do not exist as columns, so
+  six of the twelve boards set `insight: true` in `constants/boards.js`. Their percentile
+  index is built from the *scored* rows rather than re-aggregating raw stat lines —
+  a re-aggregation cannot see VORP
+- ⚠️ **`ingest_stats.py --skip-pbp` writes NULL into the play-by-play columns**, it does
+  not leave them alone. It is a fast path for a fresh load, not a way to refresh the
+  other columns — using it on a populated database erases red-zone targets, the
+  inside-10/5/2 carries and unrealized air yards for every season in the run
+- **Pro Football Reference charts everyone on the field**, including linemen and
+  defenders this project does not store, so `ingest_pfr.py` filters on
+  `load_stat_keys()`. Without it the insert trips the `players` foreign key on the
+  first guard PFR charted. Its percentages arrive as **0-1 fractions**, which is the
+  opposite of the NGS feed — check the scale of any new feed against real data
 - ⚠️ **NGS's weekly feed is a *biased subset* of the season, not a sample of it.** A
   weekly row needs roughly 15 attempts, 5 targets or 10 carries, so a player's quiet
   games are simply absent — measured on 2024, a receiver's published weeks cover a

@@ -16,8 +16,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
-import { ScoringControl } from "../components/ScoringControl";
-import { LeagueControl } from "../components/LeagueControl";
+import { LeagueSettings } from "../components/LeagueSettings";
 import { TablePager } from "../components/StatTable";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { ExportButton } from "../components/ExportButton";
@@ -210,10 +209,13 @@ export function RankingsView({ board }) {
         </div>
       </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-2">
-        <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />
-        <LeagueControl league={league} onChange={withReset(setLeague)} replacement={data?.replacement} />
-      </div>
+        <LeagueSettings
+          scoring={scoring}
+          onScoringChange={withReset(setScoring)}
+          league={league}
+          onLeagueChange={withReset(setLeague)}
+          replacement={data?.replacement}
+        />
 
       <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
 

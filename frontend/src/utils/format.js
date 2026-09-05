@@ -9,6 +9,13 @@ export function formatStat(value, format) {
   if (format === "int") return Math.round(value).toLocaleString();
   if (format === "pct") return `${(value * 100).toFixed(1)}%`;
   if (typeof format === "number") return Number(value).toFixed(format);
+  // No format spec — which happens when the registry has a metric this client's
+  // cached copy of /metrics predates. Round anyway: a stat table printing
+  // 7.542857142857143 is a bug wearing a number's clothes, and falling back to
+  // String(value) made every such metric look broken rather than merely unlabelled.
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+  }
   return String(value);
 }
 

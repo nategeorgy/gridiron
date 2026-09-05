@@ -6,9 +6,10 @@
 // games threshold, replacement level) rather than presenting a bare number.
 import { useMemo, useState } from "react";
 import { Select } from "../components/ui/Select";
-import { ScoringControl } from "../components/ScoringControl";
-import { LeagueControl } from "../components/LeagueControl";
+import { LeagueSettings } from "../components/LeagueSettings";
 import { StatTable, TablePager } from "../components/StatTable";
+import { TeamFilter } from "../components/TeamFilter";
+import { TimeframeFilter } from "../components/TimeframeFilter";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
 import { SaveViewButton } from "../components/SaveViewButton";
@@ -25,7 +26,7 @@ import {
   isMetricAvailable,
   unavailableColumns,
 } from "../utils/availability";
-import { INSIGHT_TIMEFRAMES, POSITIONS, SEASON_TYPES } from "../constants";
+import { POSITIONS, SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
 
@@ -35,8 +36,14 @@ export function InsightView({ board }) {
   const { seasonOptions, currentSeason } = useSeasons();
   const [season, setSeason] = useUrlState("season", String(currentSeason));
   const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "");
-  const [position, setPosition] = useUrlState("position", board.defaultPosition ?? "");
+  const [weeks, setWeeks] = useUrlState("weeks", "");
+  const [urlPosition, setPosition] = useUrlState("position", board.defaultPosition ?? "");
+  // A board declaring `fixedPosition` is *about* that position, so the filter is
+  // neither shown nor read from the URL — a stale ?position= from another board
+  // would otherwise render an empty passing table with no visible cause.
+  const position = board.fixedPosition ?? urlPosition;
   const [seasonType, setSeasonType] = useUrlState("type", "REG");
+  const [team, setTeam] = useUrlState("team", "");
   const [metric, setMetric] = useUrlState("metric", board.defaultSort, board.columns);
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
@@ -57,21 +64,27 @@ export function InsightView({ board }) {
   const params = useMemo(
     () => ({
       season: Number(season),
-      ...(lastWeeks ? { last_weeks: Number(lastWeeks) } : {}),
+      ...(weeks ? { weeks } : {}),
+      ...(!weeks && lastWeeks ? { last_weeks: Number(lastWeeks) } : {}),
       season_type: seasonType,
       ...(position ? { position } : {}),
       metric: sortMetric,
       scoring,
       league,
       order: "desc",
-      // Narrows the output only — scores stay relative to the full position pool.
+      // Both narrow the output only — scores and percentiles stay relative to the
+      // full position pool.
       ...watchlist.params,
+      ...(team ? { team } : {}),
+      ...(board.percentileColumns?.length
+        ? { percentiles: board.percentileColumns.join(",") }
+        : {}),
       limit: PAGE_SIZE,
       offset,
     }),
     [
-      season, lastWeeks, position, seasonType, sortMetric, scoring, league, offset,
-      watchlist.params.player_ids,
+      season, lastWeeks, weeks, position, seasonType, team, sortMetric, scoring,
+      league, offset, board, watchlist.params.player_ids,
     ],
   );
 
@@ -80,15 +93,6 @@ export function InsightView({ board }) {
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
   const window = data?.window;
-  const sortOptions = columns.map((key) => {
-    const available = isMetricAvailable({ id: key, ...(metrics[key] ?? {}) }, season);
-    return {
-      value: key,
-      label: metrics[key]?.label ?? key,
-      disabled: !available,
-      hint: available ? undefined : `Not recorded in ${season}`,
-    };
-  });
 
   // A header for a column with no data this season is inert rather than misleading.
   const sortByColumn = (key) => {
@@ -115,15 +119,25 @@ export function InsightView({ board }) {
 
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
-        <Select
-          label="Timeframe"
-          value={lastWeeks}
-          onChange={withReset(setLastWeeks)}
-          options={INSIGHT_TIMEFRAMES}
+        <TimeframeFilter
+          lastWeeks={lastWeeks}
+          weeks={weeks}
+          onChange={({ lastWeeks: next, weeks: nextWeeks }) => {
+            setLastWeeks(next);
+            setWeeks(nextWeeks);
+            setOffset(0);
+          }}
         />
-        <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
+        {!board.fixedPosition && (
+          <Select
+            label="Position"
+            value={position}
+            onChange={withReset(setPosition)}
+            options={POSITIONS}
+          />
+        )}
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
-        <Select label="Sort by" value={sortMetric} onChange={withReset(setMetric)} options={sortOptions} />
+        <TeamFilter value={team} onChange={withReset(setTeam)} />
         <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
@@ -141,12 +155,13 @@ export function InsightView({ board }) {
         </div>
       </div>
 
-      {/* Scoring and league sit side by side: both are "what league am I in?", and
-          these scores need both answers before they mean anything. */}
-      <div className="grid items-start gap-3 lg:grid-cols-2">
-        <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />
-        <LeagueControl league={league} onChange={withReset(setLeague)} replacement={data?.replacement} />
-      </div>
+        <LeagueSettings
+          scoring={scoring}
+          onScoringChange={withReset(setScoring)}
+          league={league}
+          onLeagueChange={withReset(setLeague)}
+          replacement={data?.replacement}
+        />
 
       {board.lede && (
         <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
@@ -161,6 +176,7 @@ export function InsightView({ board }) {
 
       <StatTable
         columns={columns}
+        sections={board.sections}
         rows={rows}
         metrics={metrics}
         sortMetric={sortMetric}

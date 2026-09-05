@@ -1,126 +1,1240 @@
-// Leaderboard "boards" — the config that drives every leaderboard page and the
-// two nav dropdowns. Each board is one route rendered by pages/LeaderboardView.
+// Player Leaderboards — the config behind all twelve boards and the three nav groups.
 //
-// A board declares which columns to show (metric ids from the backend registry,
-// see backend/app/metrics.py), the default sort + position, and whether it is a
-// FANTASY board (shows the league-scoring editor and scoring-aware columns) or an
-// NFL board (raw stats, no scoring — just the filters).
+// GENERATED SHAPE, hand-maintained content: each board is one route rendered by
+// pages/LeaderboardView (or pages/InsightView when it carries a query-time Insight
+// column). A board's columns are grouped into **sections** that render as a spanning
+// header row above the column headers — the sub-groups from the stat taxonomy, so a
+// 35-column receiving board reads as five short tables rather than one wide one.
 //
-// Only metrics that are actually populated in the data are used here. As of M2 the
-// snap, route, expected-points and market-share columns are all populated; the one
-// remaining exception is slot_snaps, which no free data source provides.
+// Section order is fixed across every board (SECTION_ORDER below) so a reader learns
+// one layout: what happened, what the model expected, how efficiently, what the
+// tracking cameras add, the odds and ends, and the usage underneath. Within a section
+// the columns follow the metric registry's own order.
+//
+// `percentileColumns` is what the board asks the API to rank. Percentiles are always
+// within that player's own position for that season — see backend/app/percentiles.py.
+
+/**
+ * @typedef {Object} Section
+ * @property {string} name      section heading, spanning its columns
+ * @property {string[]} columns metric ids in display order
+ */
 
 /**
  * @typedef {Object} Board
  * @property {string} id
- * @property {string} label        short label (dropdown item + tab)
- * @property {string} path         route path
- * @property {string} menuDesc     one-liner shown in the nav dropdown
- * @property {string} title        page H1
- * @property {string} description  page subtitle
- * @property {string[]} columns    metric ids, in display order
- * @property {string} defaultSort  metric id to sort by initially
- * @property {string} defaultPosition  '' | 'QB' | 'RB' | 'WR' | 'TE'
- * @property {boolean} scoring     true = fantasy board (league scoring editor + scoring-aware cols)
- * @property {boolean} [insight]   true = M3 Insight board (served by /stats/intelligence:
- *                                 adds the league-context editor and the trailing-window
- *                                 timeframe, and is rendered by pages/InsightView)
- * @property {string[]} [signed]   columns tinted positive/negative
- * @property {string} [lede]       a sentence of guidance shown above an Insight board
+ * @property {string} label           short label (nav item + tab)
+ * @property {string} path            route path
+ * @property {string} menuDesc        one-liner in the nav dropdown
+ * @property {string} title           page H1
+ * @property {string} description     page subtitle
+ * @property {Section[]} sections     column groups, in display order
+ * @property {string[]} columns       every column flattened, in display order
+ * @property {string} defaultSort     metric id to sort by initially
+ * @property {string} defaultPosition '' | 'QB' | 'RB' | 'WR' | 'TE'
+ * @property {string} phase           'passing' | 'rushing' | 'receiving' | 'all' —
+ *                                    which column of the Leaderboards menu it sits in
+ * @property {string} [fixedPosition]  the board is about exactly this position: the
+ *                                     Position filter is hidden and every request
+ *                                     sends it. Not the same as defaultPosition,
+ *                                     which is a starting point the user may change
+ * @property {boolean} scoring        true = league-scoring editor + scoring-aware columns
+ * @property {boolean} [insight]      true = served by /stats/intelligence rather than
+ *                                    /stats/leaderboard, because it carries a column
+ *                                    that only exists at query time (VORP, the buy/sell
+ *                                    indices, usage trend)
+ * @property {string[]} [signed]      columns tinted positive/negative. Empty on every
+ *                                    player board: only percentiles carry colour here,
+ *                                    and a tinted value competes with the percentile
+ *                                    beneath it for the same meaning — then loses, since
+ *                                    the percentile is the one calibrated to the
+ *                                    position. The Insight boards still use it, because
+ *                                    there the sign IS the finding
  */
 
 /** @type {Board[]} */
 export const FANTASY_BOARDS = [
   {
-    id: "fantasy-leaders",
-    label: "Leaders",
-    path: "/fantasy/leaders",
-    menuDesc: "Total points & PPG in your scoring",
-    title: "Fantasy Leaders",
-    description: "Total fantasy points and per-game average, scored in your league settings.",
-    columns: ["fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected"],
-    defaultSort: "fantasy_points",
-    defaultPosition: "",
-    scoring: true,
-  },
-  {
-    id: "fantasy-expected",
-    label: "Expected Points",
-    path: "/fantasy/expected",
-    menuDesc: "Who the opportunity says should be scoring",
-    title: "Expected Fantasy Points",
-    description:
-      "What each player's usage was worth in your scoring, next to what they actually " +
-      "scored. Big positive gaps are efficiency and touchdown luck that may not hold; " +
-      "big negative gaps are players whose opportunity says more points are coming.",
-    columns: [
-      "expected_fantasy_points", "expected_fantasy_ppg", "fantasy_points", "fantasy_ppg",
-      "fantasy_points_over_expected", "receptions_exp", "receiving_yards_exp",
-      "receiving_tds_exp", "rushing_yards_exp", "rushing_tds_exp",
+    "id": "fantasy-all",
+    "label": "Fantasy",
+    "path": "/fantasy/all",
+    "menuDesc": "Points, value and the buy/sell signals",
+    "title": "Fantasy Leaders",
+    "description": "Every fantasy-relevant number in one place, scored in your league settings.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "snap_share",
+          "fantasy_points",
+          "fantasy_ppg"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "expected_fantasy_points",
+          "expected_fantasy_ppg",
+          "fantasy_points_over_expected",
+          "vorp",
+          "vorp_ppg",
+          "expected_vorp",
+          "expected_vorp_ppg",
+          "high_value_touches_per_game"
+        ]
+      },
+      {
+        "name": "Receiving",
+        "columns": [
+          "targets",
+          "receptions",
+          "receiving_yards",
+          "receiving_tds"
+        ]
+      },
+      {
+        "name": "Rushing",
+        "columns": [
+          "carries",
+          "rushing_yards",
+          "rushing_tds"
+        ]
+      },
+      {
+        "name": "Passing",
+        "columns": [
+          "passing_yards",
+          "passing_tds",
+          "interceptions"
+        ]
+      }
     ],
-    defaultSort: "expected_fantasy_points",
-    defaultPosition: "",
-    scoring: true,
+    "columns": [
+      "snap_share",
+      "fantasy_points",
+      "fantasy_ppg",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "vorp",
+      "vorp_ppg",
+      "expected_vorp",
+      "expected_vorp_ppg",
+      "high_value_touches_per_game",
+      "targets",
+      "receptions",
+      "receiving_yards",
+      "receiving_tds",
+      "carries",
+      "rushing_yards",
+      "rushing_tds",
+      "passing_yards",
+      "passing_tds",
+      "interceptions"
+    ],
+    "defaultSort": "fantasy_points",
+    "defaultPosition": "",
+    "scoring": true,
+    "insight": true,
+    "signed": [],
+    "percentileColumns": [
+      "snap_share",
+      "fantasy_points",
+      "fantasy_ppg",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "vorp",
+      "vorp_ppg",
+      "expected_vorp",
+      "expected_vorp_ppg",
+      "high_value_touches_per_game",
+      "targets",
+      "receptions",
+      "receiving_yards",
+      "receiving_tds",
+      "carries",
+      "rushing_yards",
+      "rushing_tds",
+      "passing_yards",
+      "passing_tds",
+      "interceptions"
+    ],
+    "phase": "all"
   },
   {
-    id: "fantasy-passing",
+    "id": "fantasy-passing",
+    "label": "Fantasy",
+    "path": "/fantasy/passing",
+    "menuDesc": "Points, value and expected",
+    "title": "Fantasy — Passing",
+    "description": "Quarterback fantasy production and the opportunity behind it.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "fantasy_points",
+          "fantasy_ppg",
+          "passing_yards",
+          "passing_tds",
+          "interceptions",
+          "completions",
+          "attempts",
+          "dropbacks",
+          "snap_share"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "expected_fantasy_points",
+          "expected_fantasy_ppg",
+          "fantasy_points_over_expected",
+          "vorp",
+          "vorp_ppg",
+          "expected_vorp",
+          "expected_vorp_ppg"
+        ]
+      }
+    ],
+    "columns": [
+      "fantasy_points",
+      "fantasy_ppg",
+      "passing_yards",
+      "passing_tds",
+      "interceptions",
+      "completions",
+      "attempts",
+      "dropbacks",
+      "snap_share",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "vorp",
+      "vorp_ppg",
+      "expected_vorp",
+      "expected_vorp_ppg"
+    ],
+    "defaultSort": "fantasy_points",
+    "scoring": true,
+    "signed": [],
+    "percentileColumns": [
+      "fantasy_points",
+      "fantasy_ppg",
+      "passing_yards",
+      "passing_tds",
+      "interceptions",
+      "completions",
+      "attempts",
+      "dropbacks",
+      "snap_share",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "vorp",
+      "vorp_ppg",
+      "expected_vorp",
+      "expected_vorp_ppg"
+    ],
+    "insight": true,
+    "fixedPosition": "QB",
+    "defaultPosition": "QB",
+    "phase": "passing"
+  },
+  {
+    "id": "fantasy-rushing",
+    "label": "Fantasy",
+    "path": "/fantasy/rushing",
+    "menuDesc": "Points, value and expected",
+    "title": "Fantasy — Rushing",
+    "description": "Rushing fantasy production, expected points, and the carries that generated them.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "fantasy_points",
+          "fantasy_ppg",
+          "rushing_yards",
+          "rushing_tds"
+        ]
+      },
+      {
+        "name": "Expected",
+        "columns": [
+          "expected_fantasy_points",
+          "expected_fantasy_ppg",
+          "fantasy_points_over_expected",
+          "rushing_yards_exp",
+          "rushing_tds_exp"
+        ]
+      },
+      {
+        "name": "Opportunity",
+        "columns": [
+          "carries",
+          "snap_share",
+          "high_value_touches_per_game"
+        ]
+      }
+    ],
+    "columns": [
+      "fantasy_points",
+      "fantasy_ppg",
+      "rushing_yards",
+      "rushing_tds",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "rushing_yards_exp",
+      "rushing_tds_exp",
+      "carries",
+      "snap_share",
+      "high_value_touches_per_game"
+    ],
+    "defaultSort": "fantasy_points",
+    "defaultPosition": "RB",
+    "scoring": true,
+    "signed": [],
+    "percentileColumns": [
+      "fantasy_points",
+      "fantasy_ppg",
+      "rushing_yards",
+      "rushing_tds",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "rushing_yards_exp",
+      "rushing_tds_exp",
+      "carries",
+      "snap_share",
+      "high_value_touches_per_game"
+    ],
+    "phase": "rushing"
+  },
+  {
+    "id": "fantasy-receiving",
+    "label": "Fantasy",
+    "path": "/fantasy/receiving",
+    "menuDesc": "Points, value and expected",
+    "title": "Fantasy — Receiving",
+    "description": "Receiving fantasy production against the targets and routes behind it.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "fantasy_points",
+          "fantasy_ppg",
+          "receiving_yards",
+          "receiving_tds",
+          "receptions"
+        ]
+      },
+      {
+        "name": "Expected",
+        "columns": [
+          "expected_fantasy_points",
+          "expected_fantasy_ppg",
+          "fantasy_points_over_expected",
+          "receiving_yards_exp",
+          "receiving_tds_exp",
+          "receptions_exp"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "yards_per_route_run",
+          "yards_per_target",
+          "yards_per_reception"
+        ]
+      },
+      {
+        "name": "Opportunity",
+        "columns": [
+          "targets",
+          "target_share",
+          "red_zone_targets",
+          "targets_per_route_run",
+          "routes_run",
+          "routes_run_per_game",
+          "route_participation",
+          "snap_share",
+          "high_value_touches_per_game"
+        ]
+      }
+    ],
+    "columns": [
+      "fantasy_points",
+      "fantasy_ppg",
+      "receiving_yards",
+      "receiving_tds",
+      "receptions",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "receiving_yards_exp",
+      "receiving_tds_exp",
+      "receptions_exp",
+      "yards_per_route_run",
+      "yards_per_target",
+      "yards_per_reception",
+      "targets",
+      "target_share",
+      "red_zone_targets",
+      "targets_per_route_run",
+      "routes_run",
+      "routes_run_per_game",
+      "route_participation",
+      "snap_share",
+      "high_value_touches_per_game"
+    ],
+    "defaultSort": "fantasy_points",
+    "defaultPosition": "WR",
+    "scoring": true,
+    "signed": [],
+    "percentileColumns": [
+      "fantasy_points",
+      "fantasy_ppg",
+      "receiving_yards",
+      "receiving_tds",
+      "receptions",
+      "expected_fantasy_points",
+      "expected_fantasy_ppg",
+      "fantasy_points_over_expected",
+      "receiving_yards_exp",
+      "receiving_tds_exp",
+      "receptions_exp",
+      "yards_per_route_run",
+      "yards_per_target",
+      "yards_per_reception",
+      "targets",
+      "target_share",
+      "red_zone_targets",
+      "targets_per_route_run",
+      "routes_run",
+      "routes_run_per_game",
+      "route_participation",
+      "snap_share",
+      "high_value_touches_per_game"
+    ],
+    "phase": "receiving"
+  }
+];
+
+/** @type {Board[]} */
+export const NFL_BOARDS = [
+  {
+    "id": "nfl-all",
+    "label": "Production",
+    "path": "/nfl/all",
+    "menuDesc": "Raw production, every phase",
+    "title": "NFL Production",
+    "description": "Raw on-field production across every phase, with no fantasy scoring applied.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "passing_yards",
+          "passing_tds",
+          "rushing_yards",
+          "rushing_tds",
+          "receiving_yards",
+          "receiving_tds",
+          "receptions",
+          "fumbles",
+          "fumbles_lost",
+          "total_first_downs"
+        ]
+      },
+      {
+        "name": "Expected",
+        "columns": [
+          "tds_over_expected"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "efficiency_over_baseline",
+          "rushing_epa",
+          "receiving_epa",
+          "market_share",
+          "epa",
+          "epa_per_play"
+        ]
+      },
+      {
+        "name": "Opportunity",
+        "columns": [
+          "snap_share"
+        ]
+      }
+    ],
+    "columns": [
+      "passing_yards",
+      "passing_tds",
+      "rushing_yards",
+      "rushing_tds",
+      "receiving_yards",
+      "receiving_tds",
+      "receptions",
+      "fumbles",
+      "fumbles_lost",
+      "total_first_downs",
+      "tds_over_expected",
+      "efficiency_over_baseline",
+      "rushing_epa",
+      "receiving_epa",
+      "market_share",
+      "epa",
+      "epa_per_play",
+      "snap_share"
+    ],
+    "defaultSort": "epa",
+    "defaultPosition": "",
+    "scoring": false,
+    "insight": true,
+    "signed": [],
+    "percentileColumns": [
+      "passing_yards",
+      "passing_tds",
+      "rushing_yards",
+      "rushing_tds",
+      "receiving_yards",
+      "receiving_tds",
+      "receptions",
+      "fumbles",
+      "fumbles_lost",
+      "total_first_downs",
+      "tds_over_expected",
+      "efficiency_over_baseline",
+      "rushing_epa",
+      "receiving_epa",
+      "market_share",
+      "epa",
+      "epa_per_play",
+      "snap_share"
+    ],
+    "phase": "all"
+  },
+  {
+    "id": "nfl-passing",
+    "label": "Production",
+    "path": "/nfl/passing",
+    "menuDesc": "Box score, rate stats and expected",
+    "title": "Passing Production",
+    "description": "Everything a quarterback produced — volume, efficiency, and what the model expected from the same opportunity. Answers back to 1999.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "passing_yards",
+          "passing_tds",
+          "interceptions",
+          "completions",
+          "attempts",
+          "completion_pct",
+          "dropbacks",
+          "passing_first_downs"
+        ]
+      },
+      {
+        "name": "Efficiency",
+        "columns": [
+          "epa",
+          "epa_per_play",
+          "cpoe",
+          "yards_per_attempt",
+          "yards_per_completion",
+          "passer_rating"
+        ]
+      },
+      {
+        "name": "Expected",
+        "columns": [
+          "passing_yards_exp",
+          "passing_tds_exp",
+          "interceptions_exp",
+          "completions_exp",
+          "ngs_pass_expected_completion_pct",
+          "passing_first_downs_exp"
+        ]
+      }
+    ],
+    "columns": [
+      "passing_yards",
+      "passing_tds",
+      "interceptions",
+      "completions",
+      "attempts",
+      "completion_pct",
+      "dropbacks",
+      "passing_first_downs",
+      "epa",
+      "epa_per_play",
+      "cpoe",
+      "yards_per_attempt",
+      "yards_per_completion",
+      "passer_rating",
+      "passing_yards_exp",
+      "passing_tds_exp",
+      "interceptions_exp",
+      "completions_exp",
+      "ngs_pass_expected_completion_pct",
+      "passing_first_downs_exp"
+    ],
+    "defaultSort": "passing_yards",
+    "scoring": false,
+    "signed": [],
+    "percentileColumns": [
+      "passing_yards",
+      "passing_tds",
+      "interceptions",
+      "completions",
+      "attempts",
+      "completion_pct",
+      "dropbacks",
+      "passing_first_downs",
+      "epa",
+      "epa_per_play",
+      "cpoe",
+      "yards_per_attempt",
+      "yards_per_completion",
+      "passer_rating",
+      "passing_yards_exp",
+      "passing_tds_exp",
+      "interceptions_exp",
+      "completions_exp",
+      "ngs_pass_expected_completion_pct",
+      "passing_first_downs_exp"
+    ],
+    "fixedPosition": "QB",
+    "defaultPosition": "QB",
+    "phase": "passing"
+  },
+  {
+    "id": "nfl-passing-advanced",
+    "label": "Advanced",
+    "path": "/nfl/passing-advanced",
+    "menuDesc": "Air yards, release, pressure",
+    "title": "Passing Advanced",
+    "description": "How the throw happened and what the quarterback was up against — tracking and charting data. Starts in 2016; the pressure columns in 2018.",
+    "sections": [
+      {
+        "name": "Efficiency",
+        "columns": [
+          "epa",
+          "epa_per_play",
+          "cpoe",
+          "yards_per_attempt",
+          "yards_per_completion",
+          "passer_rating"
+        ]
+      },
+      {
+        "name": "Ball Placement",
+        "columns": [
+          "ngs_pass_intended_air_yards",
+          "bad_throw_rate",
+          "drops_by_receivers",
+          "ngs_pass_completed_air_yards",
+          "ngs_pass_air_yards_differential",
+          "ngs_pass_air_yards_to_sticks",
+          "ngs_pass_aggressiveness"
+        ]
+      },
+      {
+        "name": "Pressure",
+        "columns": [
+          "sacks_suffered",
+          "pressure_rate",
+          "ngs_pass_time_to_throw",
+          "times_blitzed",
+          "sack_fumbles_lost"
+        ]
+      }
+    ],
+    "columns": [
+      "epa",
+      "epa_per_play",
+      "cpoe",
+      "yards_per_attempt",
+      "yards_per_completion",
+      "passer_rating",
+      "ngs_pass_intended_air_yards",
+      "bad_throw_rate",
+      "drops_by_receivers",
+      "ngs_pass_completed_air_yards",
+      "ngs_pass_air_yards_differential",
+      "ngs_pass_air_yards_to_sticks",
+      "ngs_pass_aggressiveness",
+      "sacks_suffered",
+      "pressure_rate",
+      "ngs_pass_time_to_throw",
+      "times_blitzed",
+      "sack_fumbles_lost"
+    ],
+    "defaultSort": "epa",
+    "defaultPosition": "QB",
+    "fixedPosition": "QB",
+    "scoring": false,
+    "signed": [],
+    "percentileColumns": [
+      "epa",
+      "epa_per_play",
+      "cpoe",
+      "yards_per_attempt",
+      "yards_per_completion",
+      "passer_rating",
+      "ngs_pass_intended_air_yards",
+      "bad_throw_rate",
+      "drops_by_receivers",
+      "ngs_pass_completed_air_yards",
+      "ngs_pass_air_yards_differential",
+      "ngs_pass_air_yards_to_sticks",
+      "ngs_pass_aggressiveness",
+      "sacks_suffered",
+      "pressure_rate",
+      "ngs_pass_time_to_throw",
+      "times_blitzed",
+      "sack_fumbles_lost"
+    ],
+    "phase": "passing"
+  },
+  {
+    "id": "nfl-rushing",
+    "label": "Production",
+    "path": "/nfl/rushing",
+    "menuDesc": "Yards before and after contact",
+    "title": "Rushing Production",
+    "description": "Rushing production, and the split between what the line gave and what the back created.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "rushing_yards",
+          "rushing_tds",
+          "rushing_first_downs"
+        ]
+      },
+      {
+        "name": "Expected",
+        "columns": [
+          "rushing_yards_exp",
+          "rushing_tds_exp",
+          "rushing_first_downs_exp"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "rushing_epa",
+          "market_share",
+          "epa",
+          "epa_per_play",
+          "rush_yards_after_contact",
+          "rush_yac_per_att",
+          "rush_broken_tackles"
+        ]
+      },
+      {
+        "name": "Next Gen",
+        "columns": [
+          "ngs_rush_yards_over_expected",
+          "ngs_rush_yards_over_expected_per_att",
+          "ngs_rush_expected_yards",
+          "ngs_rush_pct_over_expected",
+          "ngs_rush_pct_attempts_eight_defenders",
+          "ngs_rush_efficiency"
+        ]
+      },
+      {
+        "name": "Opportunity",
+        "columns": [
+          "carries",
+          "snap_share"
+        ]
+      }
+    ],
+    "columns": [
+      "rushing_yards",
+      "rushing_tds",
+      "rushing_first_downs",
+      "rushing_yards_exp",
+      "rushing_tds_exp",
+      "rushing_first_downs_exp",
+      "rushing_epa",
+      "market_share",
+      "epa",
+      "epa_per_play",
+      "rush_yards_after_contact",
+      "rush_yac_per_att",
+      "rush_broken_tackles",
+      "ngs_rush_yards_over_expected",
+      "ngs_rush_yards_over_expected_per_att",
+      "ngs_rush_expected_yards",
+      "ngs_rush_pct_over_expected",
+      "ngs_rush_pct_attempts_eight_defenders",
+      "ngs_rush_efficiency",
+      "carries",
+      "snap_share"
+    ],
+    "defaultSort": "rushing_yards",
+    "defaultPosition": "RB",
+    "scoring": false,
+    "signed": [],
+    "percentileColumns": [
+      "rushing_yards",
+      "rushing_tds",
+      "rushing_first_downs",
+      "rushing_yards_exp",
+      "rushing_tds_exp",
+      "rushing_first_downs_exp",
+      "rushing_epa",
+      "market_share",
+      "epa",
+      "epa_per_play",
+      "rush_yards_after_contact",
+      "rush_yac_per_att",
+      "rush_broken_tackles",
+      "ngs_rush_yards_over_expected",
+      "ngs_rush_yards_over_expected_per_att",
+      "ngs_rush_expected_yards",
+      "ngs_rush_pct_over_expected",
+      "ngs_rush_pct_attempts_eight_defenders",
+      "ngs_rush_efficiency",
+      "carries",
+      "snap_share"
+    ],
+    "phase": "rushing"
+  },
+  {
+    "id": "nfl-receiving",
+    "label": "Production",
+    "path": "/nfl/receiving",
+    "menuDesc": "Separation, YAC and efficiency",
+    "title": "Receiving Production",
+    "description": "Receiving production, efficiency, and how open receivers actually got.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "receiving_yards",
+          "receiving_tds",
+          "receptions",
+          "air_yards_share",
+          "yards_after_catch"
+        ]
+      },
+      {
+        "name": "Expected",
+        "columns": [
+          "receiving_yards_exp",
+          "receiving_tds_exp",
+          "receptions_exp",
+          "receiving_first_downs_exp"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "yards_per_route_run",
+          "yards_per_target",
+          "yards_per_reception",
+          "receiving_epa",
+          "market_share",
+          "epa",
+          "epa_per_play",
+          "passer_rating_when_targeted"
+        ]
+      },
+      {
+        "name": "Next Gen",
+        "columns": [
+          "racr",
+          "ngs_rec_separation",
+          "ngs_rec_catch_pct",
+          "ngs_rec_yac"
+        ]
+      },
+      {
+        "name": "Other",
+        "columns": [
+          "receiving_first_downs",
+          "receiving_drops",
+          "receiving_drop_rate",
+          "rec_broken_tackles"
+        ]
+      },
+      {
+        "name": "Opportunity",
+        "columns": [
+          "targets",
+          "target_share",
+          "air_yards",
+          "adot",
+          "targets_per_route_run",
+          "routes_run",
+          "routes_run_per_game",
+          "route_participation",
+          "unrealized_air_yards",
+          "snap_share"
+        ]
+      }
+    ],
+    "columns": [
+      "receiving_yards",
+      "receiving_tds",
+      "receptions",
+      "air_yards_share",
+      "yards_after_catch",
+      "receiving_yards_exp",
+      "receiving_tds_exp",
+      "receptions_exp",
+      "receiving_first_downs_exp",
+      "yards_per_route_run",
+      "yards_per_target",
+      "yards_per_reception",
+      "receiving_epa",
+      "market_share",
+      "epa",
+      "epa_per_play",
+      "passer_rating_when_targeted",
+      "racr",
+      "ngs_rec_separation",
+      "ngs_rec_catch_pct",
+      "ngs_rec_yac",
+      "receiving_first_downs",
+      "receiving_drops",
+      "receiving_drop_rate",
+      "rec_broken_tackles",
+      "targets",
+      "target_share",
+      "air_yards",
+      "adot",
+      "targets_per_route_run",
+      "routes_run",
+      "routes_run_per_game",
+      "route_participation",
+      "unrealized_air_yards",
+      "snap_share"
+    ],
+    "defaultSort": "receiving_yards",
+    "defaultPosition": "WR",
+    "scoring": false,
+    "signed": [],
+    "percentileColumns": [
+      "receiving_yards",
+      "receiving_tds",
+      "receptions",
+      "air_yards_share",
+      "yards_after_catch",
+      "receiving_yards_exp",
+      "receiving_tds_exp",
+      "receptions_exp",
+      "receiving_first_downs_exp",
+      "yards_per_route_run",
+      "yards_per_target",
+      "yards_per_reception",
+      "receiving_epa",
+      "market_share",
+      "epa",
+      "epa_per_play",
+      "passer_rating_when_targeted",
+      "racr",
+      "ngs_rec_separation",
+      "ngs_rec_catch_pct",
+      "ngs_rec_yac",
+      "receiving_first_downs",
+      "receiving_drops",
+      "receiving_drop_rate",
+      "rec_broken_tackles",
+      "targets",
+      "target_share",
+      "air_yards",
+      "adot",
+      "targets_per_route_run",
+      "routes_run",
+      "routes_run_per_game",
+      "route_participation",
+      "unrealized_air_yards",
+      "snap_share"
+    ],
+    "phase": "receiving"
+  }
+];
+
+/** @type {Board[]} */
+export const OPPORTUNITY_BOARDS = [
+  {
+    "id": "opportunity-all",
+    "label": "Opportunity",
+    "path": "/opportunity/all",
+    "menuDesc": "Share of the offense",
+    "title": "Opportunity",
+    "description": "Who the offense is running through, before any of it turns into points.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "fantasy_opportunity_rating",
+          "opportunity_trend",
+          "carries",
+          "targets",
+          "target_share",
+          "snap_count",
+          "snap_share",
+          "high_value_touches_per_game",
+          "touches_per_snap"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "opportunity_share"
+        ]
+      }
+    ],
+    "columns": [
+      "fantasy_opportunity_rating",
+      "opportunity_trend",
+      "carries",
+      "targets",
+      "target_share",
+      "snap_count",
+      "snap_share",
+      "high_value_touches_per_game",
+      "touches_per_snap",
+      "opportunity_share"
+    ],
+    "defaultSort": "opportunity_share",
+    "defaultPosition": "",
+    "scoring": false,
+    "insight": true,
+    "signed": [],
+    "percentileColumns": [
+      "fantasy_opportunity_rating",
+      "opportunity_trend",
+      "carries",
+      "targets",
+      "target_share",
+      "snap_count",
+      "snap_share",
+      "high_value_touches_per_game",
+      "touches_per_snap",
+      "opportunity_share"
+    ],
+    "phase": "all"
+  }
+,
+  {
+    "id": "opportunity-rushing",
+    "label": "Opportunity",
+    "path": "/opportunity/rushing",
+    "menuDesc": "Carries and goal-line work",
+    "title": "Rushing Opportunity",
+    "description": "Carries, goal-line work, and share of the ground game.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "opportunity_trend",
+          "carries",
+          "red_zone_rush_attempts",
+          "red_zone_rush_share",
+          "rush_att_inside_10",
+          "rush_att_inside_5",
+          "rush_att_inside_2",
+          "rush_attempt_share",
+          "snap_count",
+          "snap_share",
+          "high_value_touches_per_game",
+          "touches_per_snap",
+          "rush_yards_before_contact",
+          "rush_ybc_per_att"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "opportunity_share"
+        ]
+      }
+    ],
+    "columns": [
+      "opportunity_trend",
+      "carries",
+      "red_zone_rush_attempts",
+      "red_zone_rush_share",
+      "rush_att_inside_10",
+      "rush_att_inside_5",
+      "rush_att_inside_2",
+      "rush_attempt_share",
+      "snap_count",
+      "snap_share",
+      "high_value_touches_per_game",
+      "touches_per_snap",
+      "rush_yards_before_contact",
+      "rush_ybc_per_att",
+      "opportunity_share"
+    ],
+    "defaultSort": "carries",
+    "defaultPosition": "RB",
+    "scoring": false,
+    "insight": true,
+    "signed": [],
+    "percentileColumns": [
+      "opportunity_trend",
+      "carries",
+      "red_zone_rush_attempts",
+      "red_zone_rush_share",
+      "rush_att_inside_10",
+      "rush_att_inside_5",
+      "rush_att_inside_2",
+      "rush_attempt_share",
+      "snap_count",
+      "snap_share",
+      "high_value_touches_per_game",
+      "touches_per_snap",
+      "rush_yards_before_contact",
+      "rush_ybc_per_att",
+      "opportunity_share"
+    ],
+    "phase": "rushing"
+  },
+  {
+    "id": "opportunity-receiving",
+    "label": "Opportunity",
+    "path": "/opportunity/receiving",
+    "menuDesc": "Targets, routes and air yards",
+    "title": "Receiving Opportunity",
+    "description": "Targets, routes, air yards — the raw material of receiving production.",
+    "sections": [
+      {
+        "name": "General",
+        "columns": [
+          "opportunity_trend",
+          "targets",
+          "target_share",
+          "air_yards",
+          "air_yards_share",
+          "adot",
+          "wopr",
+          "red_zone_targets",
+          "targets_per_route_run",
+          "routes_run",
+          "routes_run_per_game",
+          "route_participation",
+          "unrealized_air_yards",
+          "snap_count",
+          "snap_share",
+          "high_value_touches_per_game",
+          "touches_per_snap"
+        ]
+      },
+      {
+        "name": "Advanced",
+        "columns": [
+          "opportunity_share"
+        ]
+      }
+    ],
+    "columns": [
+      "opportunity_trend",
+      "targets",
+      "target_share",
+      "air_yards",
+      "air_yards_share",
+      "adot",
+      "wopr",
+      "red_zone_targets",
+      "targets_per_route_run",
+      "routes_run",
+      "routes_run_per_game",
+      "route_participation",
+      "unrealized_air_yards",
+      "snap_count",
+      "snap_share",
+      "high_value_touches_per_game",
+      "touches_per_snap",
+      "opportunity_share"
+    ],
+    "defaultSort": "targets",
+    "defaultPosition": "WR",
+    "scoring": false,
+    "insight": true,
+    "signed": [],
+    "percentileColumns": [
+      "opportunity_trend",
+      "targets",
+      "target_share",
+      "air_yards",
+      "air_yards_share",
+      "adot",
+      "wopr",
+      "red_zone_targets",
+      "targets_per_route_run",
+      "routes_run",
+      "routes_run_per_game",
+      "route_participation",
+      "unrealized_air_yards",
+      "snap_count",
+      "snap_share",
+      "high_value_touches_per_game",
+      "touches_per_snap",
+      "opportunity_share"
+    ],
+    "phase": "receiving"
+  }
+];
+
+// One "Leaderboards" tab, opening a Baseball-Savant-style mega menu: a column per
+// PHASE, listing the board types inside it. Phase-first because that is how someone
+// arrives — they want receivers, then decide whether they want the fantasy view, the
+// production view, or the usage behind both.
+//
+// ⚠️ The routes are unchanged and stay grouped by *type* (`/fantasy/receiving`,
+// `/nfl/receiving`). That mismatch is deliberate: a route is what a saved view (M5)
+// and a shared link store, and re-grouping the menu is a presentation change. Breaking
+// every saved board link to make the URL echo the menu would be a poor trade.
+export const LEADERBOARD_MENU = [
+  {
     label: "Passing",
-    path: "/fantasy/passing",
-    menuDesc: "QB fantasy + passing efficiency",
-    title: "Fantasy Passing",
-    description: "Quarterback fantasy production and passing efficiency, scored in your league.",
-    columns: [
-      "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
-      "passing_yards", "passing_tds", "interceptions",
-      "rushing_yards", "rushing_tds", "passer_rating", "cpoe", "epa",
+    items: [
+      FANTASY_BOARDS.find((board) => board.phase === "passing"),
+      NFL_BOARDS.find((board) => board.id === "nfl-passing"),
+      NFL_BOARDS.find((board) => board.id === "nfl-passing-advanced"),
     ],
-    defaultSort: "fantasy_points",
-    defaultPosition: "QB",
-    scoring: true,
   },
   {
-    id: "fantasy-receiving",
-    label: "Receiving",
-    path: "/fantasy/receiving",
-    menuDesc: "Receiving fantasy + opportunity",
-    title: "Fantasy Receiving",
-    description: "Receiving fantasy production and the opportunity behind it, scored in your league.",
-    columns: [
-      "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
-      "receptions", "targets", "receiving_yards", "receiving_tds",
-      "target_share", "routes_run", "route_participation", "targets_per_route_run",
-      "yards_per_route_run", "air_yards", "red_zone_targets",
-      "high_value_touches_per_game", "wopr",
-    ],
-    defaultSort: "fantasy_points",
-    defaultPosition: "WR",
-    scoring: true,
-  },
-  {
-    id: "fantasy-rushing",
     label: "Rushing",
-    path: "/fantasy/rushing",
-    menuDesc: "Rushing fantasy + opportunity",
-    title: "Fantasy Rushing",
-    description: "Rushing fantasy production and the opportunity behind it, scored in your league.",
-    columns: [
-      "fantasy_points", "fantasy_ppg", "expected_fantasy_points", "fantasy_points_over_expected",
-      "carries", "rushing_yards", "rushing_tds", "rush_attempt_share", "opportunity_share",
-      "high_value_touches_per_game", "rush_att_inside_10", "rush_att_inside_5",
-      "rush_att_inside_2", "red_zone_rush_share", "touches_per_snap",
-      "receptions", "receiving_yards",
+    items: [
+      FANTASY_BOARDS.find((board) => board.phase === "rushing"),
+      NFL_BOARDS.find((board) => board.id === "nfl-rushing"),
+      OPPORTUNITY_BOARDS.find((board) => board.phase === "rushing"),
     ],
-    defaultSort: "fantasy_points",
-    defaultPosition: "RB",
-    scoring: true,
+  },
+  {
+    label: "Receiving",
+    items: [
+      FANTASY_BOARDS.find((board) => board.phase === "receiving"),
+      NFL_BOARDS.find((board) => board.id === "nfl-receiving"),
+      OPPORTUNITY_BOARDS.find((board) => board.phase === "receiving"),
+    ],
+  },
+  {
+    label: "All",
+    items: [
+      FANTASY_BOARDS.find((board) => board.phase === "all"),
+      NFL_BOARDS.find((board) => board.id === "nfl-all"),
+      OPPORTUNITY_BOARDS.find((board) => board.phase === "all"),
+    ],
   },
 ];
 
-// --- Insight boards (M3) ---
-// These are served by /stats/intelligence, not the leaderboard: their scores rank a
-// player against their whole position pool, and they respond to league size and
-// starting lineup as well as scoring. Each board answers one question.
-/** @type {Board[]} */
+/** Every player board, flattened — routing, and resolving a path back to a board. */
+export const ALL_PLAYER_BOARDS = LEADERBOARD_MENU.flatMap((group) => group.items);
+
 export const INSIGHT_BOARDS = [
   {
     id: "insight-vorp",
@@ -222,129 +1336,6 @@ export const INSIGHT_BOARDS = [
 ];
 
 /** @type {Board[]} */
-export const NFL_BOARDS = [
-  {
-    id: "nfl-all-general",
-    label: "All General",
-    path: "/nfl/all-general",
-    menuDesc: "Box-score stats, all positions",
-    title: "NFL — All General",
-    description: "Core box-score production across every position.",
-    columns: [
-      "passing_yards", "passing_tds", "interceptions", "rushing_yards", "rushing_tds",
-      "receptions", "targets", "receiving_yards", "receiving_tds", "fumbles_lost", "epa",
-    ],
-    defaultSort: "epa",
-    defaultPosition: "",
-    scoring: false,
-  },
-  {
-    id: "nfl-all-advanced",
-    label: "All Advanced",
-    path: "/nfl/all-advanced",
-    menuDesc: "Efficiency & opportunity, all positions",
-    title: "NFL — All Advanced",
-    description: "Advanced efficiency, value, and opportunity metrics across positions.",
-    columns: [
-      "epa", "cpoe", "snap_count", "snap_share", "target_share", "air_yards", "adot",
-      "wopr", "opportunity_share", "market_share", "touches_per_snap",
-      "red_zone_targets", "rushing_epa", "receiving_epa",
-    ],
-    defaultSort: "epa",
-    defaultPosition: "",
-    scoring: false,
-  },
-  {
-    id: "nfl-passing-general",
-    label: "Passing General",
-    path: "/nfl/passing-general",
-    menuDesc: "Yards, TDs, INT, rating",
-    title: "NFL Passing — General",
-    description: "Passing box-score stats.",
-    columns: ["completions", "attempts", "passing_yards", "passing_tds", "interceptions", "passer_rating"],
-    defaultSort: "passing_yards",
-    defaultPosition: "QB",
-    scoring: false,
-  },
-  {
-    id: "nfl-passing-advanced",
-    label: "Passing Advanced",
-    path: "/nfl/passing-advanced",
-    menuDesc: "CPOE, EPA, efficiency",
-    title: "NFL Passing — Advanced",
-    description: "Passing efficiency and value beyond the box score.",
-    columns: ["attempts", "passing_yards", "passer_rating", "cpoe", "epa"],
-    defaultSort: "epa",
-    defaultPosition: "QB",
-    scoring: false,
-  },
-  {
-    id: "nfl-receiving-general",
-    label: "Receiving General",
-    path: "/nfl/receiving-general",
-    menuDesc: "Rec, targets, yards, TDs",
-    title: "NFL Receiving — General",
-    description: "Receiving box-score stats.",
-    columns: ["receptions", "targets", "receiving_yards", "receiving_tds", "yards_after_catch", "yards_per_reception"],
-    defaultSort: "receiving_yards",
-    defaultPosition: "",
-    scoring: false,
-  },
-  {
-    id: "nfl-receiving-advanced",
-    label: "Receiving Advanced",
-    path: "/nfl/receiving-advanced",
-    menuDesc: "Routes, target share, air yards, WOPR",
-    title: "NFL Receiving — Advanced",
-    description: "Receiving opportunity and efficiency metrics.",
-    columns: [
-      "routes_run", "route_participation", "targets_per_route_run", "yards_per_route_run",
-      "target_share", "air_yards", "air_yards_share", "unrealized_air_yards", "adot",
-      "wopr", "racr", "yards_per_target", "red_zone_targets", "receiving_epa",
-    ],
-    defaultSort: "target_share",
-    defaultPosition: "",
-    scoring: false,
-  },
-  {
-    id: "nfl-rushing-general",
-    label: "Rushing General",
-    path: "/nfl/rushing-general",
-    menuDesc: "Carries, yards, TDs",
-    title: "NFL Rushing — General",
-    description: "Rushing box-score stats.",
-    columns: ["carries", "rushing_yards", "rushing_tds", "red_zone_rush_attempts", "rush_att_inside_5"],
-    defaultSort: "rushing_yards",
-    defaultPosition: "",
-    scoring: false,
-  },
-  {
-    id: "nfl-rushing-advanced",
-    label: "Rushing Advanced",
-    path: "/nfl/rushing-advanced",
-    menuDesc: "Rushing EPA, market share, goal line",
-    title: "NFL Rushing — Advanced",
-    description: "Rushing efficiency, market share, and goal-line opportunity.",
-    columns: [
-      "carries", "rushing_yards", "rushing_epa", "rush_attempt_share", "market_share",
-      "red_zone_rush_attempts", "red_zone_rush_share",
-      "rush_att_inside_10", "rush_att_inside_5", "rush_att_inside_2",
-    ],
-    defaultSort: "rushing_epa",
-    defaultPosition: "",
-    scoring: false,
-  },
-];
-
-export const ALL_BOARDS = [...INSIGHT_BOARDS, ...FANTASY_BOARDS, ...NFL_BOARDS];
-
-// --- Insight tools (M6) ---
-// Same nav-item shape as a board, but routed to its own page: their columns are
-// properties of a *comparison* or a schedule rather than registry metrics of a player.
-// Listed ahead of the boards because they are the reason to open the site.
-//
-// The Draft Value Board used to live here and moved to Draft ▾ in M9 — it was always a
-// draft tool sitting in an insight menu. /insight/draft redirects.
 export const INSIGHT_TOOLS = [
   {
     id: "insight-sos",
@@ -485,13 +1476,17 @@ export const EXPLORE_ITEMS = [
   },
 ];
 
+
 // Nav dropdown groups. Insight leads — it is the reason to come back — and Draft sits
-// next to it, because from July to September it is the reason to come back.
+// next to it, because from July to September it is the reason to come back. The three
+// player leaderboards are no longer here: they are one "Leaderboards" tab rendered
+// from LEADERBOARD_MENU above.
 export const NAV_GROUPS = [
   { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
   { label: "Draft", items: DRAFT_ITEMS, match: "/draft" },
   { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" },
   { label: "Schedule", items: SCHEDULE_ITEMS, match: "/schedule" },
-  { label: "Fantasy Leaderboards", items: FANTASY_BOARDS, match: "/fantasy" },
-  { label: "NFL Leaderboards", items: NFL_BOARDS, match: "/nfl" },
 ];
+
+/** Every ranked board, for routing and for saved-view path validation. */
+export const ALL_BOARDS = [...INSIGHT_BOARDS, ...ALL_PLAYER_BOARDS];

@@ -10,13 +10,14 @@ import { formatStat } from "../utils/format";
 import {
   DEFAULT_LINEUP,
   LINEUP_SLOTS,
+  slotMax,
   TEAM_COUNT_OPTIONS,
   leagueLabel,
   parseLeague,
   serializeLeague,
 } from "../constants/league";
 
-export function LeagueControl({ league, onChange, replacement }) {
+export function LeagueControl({ league, onChange, replacement, bare = false }) {
   const [open, setOpen] = useState(false);
   const { teams, lineup } = parseLeague(league);
   const isCustom = league.includes(":");
@@ -28,7 +29,7 @@ export function LeagueControl({ league, onChange, replacement }) {
   };
 
   return (
-    <div className="glass-card p-4">
+    <div className={bare ? "" : "glass-card p-4"}>
       <div className="flex flex-wrap items-end gap-3">
         <Select
           label="League Size"
@@ -59,7 +60,7 @@ export function LeagueControl({ league, onChange, replacement }) {
 
       {open && (
         <div className="mt-4 border-t border-line pt-4">
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-7">
             {LINEUP_SLOTS.map(({ key, label }) => (
               <label key={key} className="flex flex-col gap-1">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
@@ -68,7 +69,7 @@ export function LeagueControl({ league, onChange, replacement }) {
                 <input
                   type="number"
                   min={0}
-                  max={6}
+                  max={slotMax(key)}
                   step={1}
                   value={lineup[key]}
                   onChange={(event) => setSlot(key, event.target.value)}
@@ -77,6 +78,13 @@ export function LeagueControl({ league, onChange, replacement }) {
               </label>
             ))}
           </div>
+
+          <p className="mt-3 text-xs text-muted">
+            Bench spots move replacement level more than any starting slot: they decide
+            how many players are rostered at all, and replacement level is the best
+            player you could pick up <em>instead</em>. Six bench spots in a 12-team
+            league take receiver replacement from WR42 to WR74.
+          </p>
 
           {replacement && (
             <div className="mt-4">

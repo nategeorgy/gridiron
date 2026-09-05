@@ -15,7 +15,13 @@ export function useMetrics() {
   const { data } = useQuery({
     queryKey: ["metrics"],
     queryFn: getMetrics,
-    staleTime: Infinity,
+    // NOT Infinity. The registry changes whenever a metric is added, and a tab left
+    // open across a deploy would keep serving the old one — every new metric rendering
+    // as its raw id with an unrounded value, because neither a label nor a format
+    // exists for it client-side. An hour is long enough that this is still fetched
+    // once per session in practice.
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: true,
     retry: 1,
   });
 
