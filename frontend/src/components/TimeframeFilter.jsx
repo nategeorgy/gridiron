@@ -1,10 +1,8 @@
 // Timeframe picker for the ranked boards (M12).
 //
-// Two controls that are really one choice: a preset (full season / last 4 / last 8)
-// and an explicit set of weeks. Picking weeks clears the preset and vice versa,
-// because "last 4 weeks AND weeks 2, 9" has no meaning — a rolling window and a fixed
-// selection are different questions, and the API treats an explicit set as the more
-// specific of the two.
+// One control: an explicit set of weeks, or none for the full season. The rolling
+// presets (last 4 / last 8) were a second way to ask a question this already answers,
+// and two controls for one choice invited the meaningless combination of both.
 //
 // The week list is a popover rather than a multi-select: a native multi-select needs
 // ctrl-click to add a second value, which almost nobody discovers.
@@ -16,18 +14,11 @@
 // disappears behind the scoring editor below it.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Select } from "./ui/Select";
-
-const PRESETS = [
-  { value: "", label: "Full season" },
-  { value: "4", label: "Last 4 weeks" },
-  { value: "8", label: "Last 8 weeks" },
-];
 
 /** Weeks 1..18 — the regular season. Post-season boards filter by type instead. */
 const WEEKS = Array.from({ length: 18 }, (_, index) => index + 1);
 
-export function TimeframeFilter({ lastWeeks, weeks, onChange }) {
+export function TimeframeFilter({ weeks, onChange }) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState(null);
   const container = useRef(null);
@@ -62,38 +53,29 @@ export function TimeframeFilter({ lastWeeks, weeks, onChange }) {
   // Derived from the *current* value rather than the captured prop, so a burst of
   // clicks before the next render does not collapse to the last one.
   const toggleWeek = (week) => {
-    onChange({
-      lastWeeks: "",
-      weeks: (current) => {
-        const now = current ? current.split(",").filter(Boolean).map(Number) : [];
-        const next = now.includes(week)
-          ? now.filter((value) => value !== week)
-          : [...now, week].sort((a, b) => a - b);
-        return next.join(",");
-      },
+    onChange((current) => {
+      const now = current ? current.split(",").filter(Boolean).map(Number) : [];
+      const next = now.includes(week)
+        ? now.filter((value) => value !== week)
+        : [...now, week].sort((a, b) => a - b);
+      return next.join(",");
     });
   };
 
   const label = selected.length
     ? `${selected.length} week${selected.length > 1 ? "s" : ""}`
-    : "Pick weeks";
+    : "Full season";
 
   return (
     <div className="flex items-end gap-2" ref={container}>
-      <Select
-        label="Timeframe"
-        value={selected.length ? "" : lastWeeks}
-        onChange={(value) => onChange({ lastWeeks: value, weeks: "" })}
-        options={PRESETS}
-      />
       <div className="relative flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">Weeks</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">Timeframe</span>
         <button
           type="button"
           ref={button}
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
-          className={`glass-input px-3 py-2 text-left text-sm ${
+          className={`glass-input min-w-[124px] px-3 py-2 text-left text-sm ${
             selected.length ? "!text-accent" : ""
           }`}
         >
@@ -130,7 +112,7 @@ export function TimeframeFilter({ lastWeeks, weeks, onChange }) {
               </div>
               <div className="mt-2 flex items-center justify-between text-xs">
                 <span className="text-faint">
-                  {selected.length ? `Weeks ${selected.join(", ")}` : "Any weeks"}
+                  {selected.length ? `Weeks ${selected.join(", ")}` : "Whole season"}
                 </span>
                 <button
                   type="button"

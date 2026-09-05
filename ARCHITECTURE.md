@@ -665,6 +665,14 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-05** — **Two-tier board tabs, multi-select position, one timeframe control.**
+  `BoardTabs` becomes phase-then-board: the second row never holds more than four items,
+  nothing scrolls sideways, and the active phase is stated rather than inferred. The
+  position filter is now a multi-select popover (`components/PositionFilter.jsx`) backed
+  by a new `positions` parameter on both ranked endpoints — pools stay per position, so a
+  tight end shown beside receivers is still ranked among tight ends. The rolling
+  timeframe presets are gone: they were a second way to ask what the weeks picker already
+  answers, and two controls for one choice invited the meaningless combination of both.
 - **2026-09-05** — **In-page board tabs, instant tooltips, Insight boards aligned.**
   New `components/BoardTabs.jsx` puts all fourteen boards one click from each other
   without returning to the header — grouped by phase, the same map the nav menu teaches.

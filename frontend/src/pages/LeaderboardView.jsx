@@ -10,6 +10,7 @@ import { BoardTabs } from "../components/BoardTabs";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
 import { TeamFilter } from "../components/TeamFilter";
+import { PositionFilter } from "../components/PositionFilter";
 import { TimeframeFilter } from "../components/TimeframeFilter";
 import { SaveViewButton } from "../components/SaveViewButton";
 import { buildBoardExport } from "../utils/csv";
@@ -24,7 +25,7 @@ import {
   isMetricAvailable,
   unavailableColumns,
 } from "../utils/availability";
-import { POSITIONS, SEASON_TYPES, weekOptions } from "../constants";
+import { SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
 
@@ -40,13 +41,12 @@ export function LeaderboardView({ board }) {
   // makes a saved view (M5) store something more than a bare path.
   const { seasonOptions, currentSeason } = useSeasons();
   const [season, setSeason] = useUrlState("season", String(currentSeason));
-  const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "");
   const [weeks, setWeeks] = useUrlState("weeks", "");
-  const [urlPosition, setPosition] = useUrlState("position", board.defaultPosition ?? "");
+  const [urlPositions, setPositions] = useUrlState("positions", board.defaultPosition ?? "");
   // A board declaring `fixedPosition` is *about* that position, so the filter is
   // neither shown nor read from the URL — a stale ?position= from another board
   // would otherwise render an empty passing table with no visible cause.
-  const position = board.fixedPosition ?? urlPosition;
+  const positions = board.fixedPosition ?? urlPositions;
   const [seasonType, setSeasonType] = useUrlState("type", "REG");
   const [team, setTeam] = useUrlState("team", "");
   const [metric, setMetric] = useUrlState("metric", board.defaultSort, board.columns);
@@ -72,9 +72,8 @@ export function LeaderboardView({ board }) {
     () => ({
       season: Number(season),
       ...(weeks ? { weeks } : {}),
-      ...(!weeks && lastWeeks ? { last_weeks: Number(lastWeeks) } : {}),
       season_type: seasonType,
-      ...(position ? { position } : {}),
+      ...(positions ? { positions } : {}),
       metric: toBackendMetric(sortMetric),
       ...(board.scoring ? { scoring } : {}),
       ...(team ? { team } : {}),
@@ -91,8 +90,8 @@ export function LeaderboardView({ board }) {
     // watchlist.params is derived from the favorites list, so its serialised form is
     // the dependency — the object identity changes on every render.
     [
-      season, lastWeeks, weeks, position, seasonType, team, sortMetric, scoring,
-      offset, supportsScoring, board, watchlist.params.player_ids,
+      season, weeks, positions, seasonType, team, sortMetric, scoring, offset,
+      supportsScoring, board, watchlist.params.player_ids,
     ],
   );
 
@@ -135,22 +134,9 @@ export function LeaderboardView({ board }) {
 
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
-        <TimeframeFilter
-          lastWeeks={lastWeeks}
-          weeks={weeks}
-          onChange={({ lastWeeks: next, weeks: nextWeeks }) => {
-            setLastWeeks(next);
-            setWeeks(nextWeeks);
-            setOffset(0);
-          }}
-        />
+        <TimeframeFilter weeks={weeks} onChange={withReset(setWeeks)} />
         {!board.fixedPosition && (
-          <Select
-            label="Position"
-            value={position}
-            onChange={withReset(setPosition)}
-            options={POSITIONS}
-          />
+          <PositionFilter value={positions} onChange={withReset(setPositions)} />
         )}
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <TeamFilter value={team} onChange={withReset(setTeam)} />
@@ -164,8 +150,8 @@ export function LeaderboardView({ board }) {
             context={[
               `GridironIQ — ${board.title}`,
               `${season} ${seasonType}${
-                weeks ? ` · weeks ${weeks}` : lastWeeks ? ` · last ${lastWeeks}` : " · full season"
-              }${position ? ` · ${position}` : ""}${team ? ` · ${team}` : ""}`,
+                weeks ? ` · weeks ${weeks}` : " · full season"
+              }${positions ? ` · ${positions}` : ""}${team ? ` · ${team}` : ""}`,
               `sorted by ${metrics[sortMetric]?.label ?? sortMetric}${board.scoring ? ` · scoring: ${scoring}` : ""}`,
             ]}
           />

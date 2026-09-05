@@ -1195,6 +1195,12 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   assumption the flex allocation makes; the known weakness is QB in a one-QB league,
   where most managers stream rather than roster two, so QB replacement runs slightly
   deep. Documented in `replacement_ranks`, and it is a model rather than a measurement
+- **A filter narrows the board, never the percentile pool.** The position filter is
+  multi-select (M12), so "receivers and tight ends" is one view — and a tight end in it
+  is still ranked among tight ends. CeeDee Lamb and Brock Bowers both gained 1,194
+  receiving yards in 2024 and read 96th and 99th percentile respectively, which is the
+  behaviour working rather than an inconsistency. Same rule as the team filter and the
+  watchlist
 - **A stat's definition has to arrive before the reader moves on.** The native `title`
   attribute waits roughly a second and renders in OS chrome, which made the one place a
   metric is explained look like an error message. `components/StatTooltip.jsx` shows in

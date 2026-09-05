@@ -106,12 +106,15 @@ def _leaderboard_season(
     limit: int, offset: int, custom: list[CustomMetric],
     player_ids: tuple[str, ...] | None = None, team_id: int | None = None,
     week_in: tuple[int, ...] | None = None,
+    position_list: tuple[str, ...] | None = None,
 ) -> tuple[list[dict], int]:
     """Aggregate a season — or an explicit set of weeks — into one row per player."""
     games = games_expr()
     filters = window_filters(
-        season, season_type, position=position, player_ids=player_ids, team_id=team_id,
-        week_in=week_in,
+        season, season_type,
+        position=None if position_list else position,
+        positions=position_list,
+        player_ids=player_ids, team_id=team_id, week_in=week_in,
     )
     base = aggregate_select(filters, games).having(games >= min_games)
 
@@ -134,12 +137,14 @@ def _leaderboard_week(
     db: Session, season: int, week: int, season_type: str, position: str | None,
     metric: str, config: ScoringConfig, descending: bool, limit: int, offset: int,
     custom: list[CustomMetric], player_ids: tuple[str, ...] | None = None,
-    team_id: int | None = None,
+    team_id: int | None = None, position_list: tuple[str, ...] | None = None,
 ) -> tuple[list[dict], int]:
     """Return raw per-game stat lines for a single week, ranked by metric."""
     filters = window_filters(
-        season, season_type, position=position, week_from=week, week_to=week,
-        player_ids=player_ids, team_id=team_id,
+        season, season_type,
+        position=None if position_list else position,
+        positions=position_list,
+        week_from=week, week_to=week, player_ids=player_ids, team_id=team_id,
     )
 
     # In single-week mode every metric is already a one-game value, so the same
@@ -215,6 +220,12 @@ def leaderboard(
     ),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
     position: str | None = Query(None, description="QB, RB, WR, or TE"),
+    positions: str = Query(
+        "",
+        description="Comma-separated positions, e.g. 'RB,WR'. Takes precedence over "
+                    "`position`. Percentile pools are unaffected — they are always per "
+                    "position, whatever the board is filtered to.",
+    ),
     metric: str = Query("fantasy_points", description="Metric to rank by"),
     scoring: str = Query(
         "ppr",
@@ -259,23 +270,24 @@ def leaderboard(
     watchlist = _parse_player_ids(player_ids)
     team_id = _resolve_team_id(db, team)
     week_list = _parse_weeks(weeks)
+    position_list = _parse_positions(positions)
 
     # An explicit set aggregates like a season, just over fewer weeks — so it takes the
     # season path rather than the single-week one, which returns raw per-game lines.
     if week_list:
         data, total = _leaderboard_season(
             db, season, season_type, position, metric, config, descending, min_games,
-            limit, offset, custom_metrics, watchlist, team_id, week_list,
+            limit, offset, custom_metrics, watchlist, team_id, week_list, position_list,
         )
     elif week is None:
         data, total = _leaderboard_season(
             db, season, season_type, position, metric, config, descending, min_games,
-            limit, offset, custom_metrics, watchlist, team_id,
+            limit, offset, custom_metrics, watchlist, team_id, None, position_list,
         )
     else:
         data, total = _leaderboard_week(
             db, season, week, season_type, position, metric, config, descending,
-            limit, offset, custom_metrics, watchlist, team_id,
+            limit, offset, custom_metrics, watchlist, team_id, position_list,
         )
 
     # Percentiles are built from the whole league at each position, never from the
@@ -311,8 +323,23 @@ def leaderboard(
         "custom": _custom_payload(custom_metrics),
         "team": team or None,
         "weeks": list(week_list) if week_list else None,
+        "positions": list(position_list) if position_list else None,
         "percentiles": percentile_context or None,
     }
+
+
+def _parse_positions(raw: str) -> tuple[str, ...] | None:
+    """Parse a comma-separated position selection, intersected with covered positions.
+
+    Unknown entries are dropped rather than rejected: the position list is a display
+    choice, and a stale link naming a position this product does not cover should lose
+    that filter, not the page. An empty result means "no filter", never "no rows".
+    """
+    wanted = tuple(
+        part.strip().upper() for part in raw.split(",")
+        if part.strip().upper() in POSITIONS
+    )
+    return tuple(dict.fromkeys(wanted)) or None
 
 
 def _parse_weeks(raw: str) -> tuple[int, ...] | None:
@@ -920,6 +947,10 @@ def intelligence(
     ),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
     position: str | None = Query(None, description="QB, RB, WR, or TE"),
+    positions: str = Query(
+        "", description="Comma-separated positions, e.g. 'RB,WR'. Narrows the output "
+                        "only — pools stay per position, as with `position`.",
+    ),
     metric: str = Query("positive_regression_index", description="Metric to rank by"),
     scoring: str = Query(
         "ppr",
@@ -976,7 +1007,10 @@ def intelligence(
     )
     scored_league = rows
 
-    if position:
+    position_list = _parse_positions(positions)
+    if position_list:
+        rows = [row for row in rows if row.get("position") in position_list]
+    elif position:
         wanted_position = position.upper()
         rows = [row for row in rows if row.get("position") == wanted_position]
 
@@ -1035,6 +1069,7 @@ def intelligence(
         "scoring": config.model_dump(), "league": league_config.model_dump(),
         "min_games": context["min_games"], "replacement": context["replacement"],
         "team": team or None,
+        "positions": list(position_list) if position_list else None,
         "percentiles": percentile_context or None,
     }
 

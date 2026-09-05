@@ -10,6 +10,7 @@ import { LeagueSettings } from "../components/LeagueSettings";
 import { StatTable, TablePager } from "../components/StatTable";
 import { BoardTabs } from "../components/BoardTabs";
 import { TeamFilter } from "../components/TeamFilter";
+import { PositionFilter } from "../components/PositionFilter";
 import { TimeframeFilter } from "../components/TimeframeFilter";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
@@ -27,7 +28,7 @@ import {
   isMetricAvailable,
   unavailableColumns,
 } from "../utils/availability";
-import { POSITIONS, SEASON_TYPES } from "../constants";
+import { SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
 
@@ -36,13 +37,12 @@ export function InsightView({ board }) {
   // views that actually carry a view.
   const { seasonOptions, currentSeason } = useSeasons();
   const [season, setSeason] = useUrlState("season", String(currentSeason));
-  const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "");
   const [weeks, setWeeks] = useUrlState("weeks", "");
-  const [urlPosition, setPosition] = useUrlState("position", board.defaultPosition ?? "");
+  const [urlPositions, setPositions] = useUrlState("positions", board.defaultPosition ?? "");
   // A board declaring `fixedPosition` is *about* that position, so the filter is
   // neither shown nor read from the URL — a stale ?position= from another board
   // would otherwise render an empty passing table with no visible cause.
-  const position = board.fixedPosition ?? urlPosition;
+  const positions = board.fixedPosition ?? urlPositions;
   const [seasonType, setSeasonType] = useUrlState("type", "REG");
   const [team, setTeam] = useUrlState("team", "");
   const [metric, setMetric] = useUrlState("metric", board.defaultSort, board.columns);
@@ -66,9 +66,8 @@ export function InsightView({ board }) {
     () => ({
       season: Number(season),
       ...(weeks ? { weeks } : {}),
-      ...(!weeks && lastWeeks ? { last_weeks: Number(lastWeeks) } : {}),
       season_type: seasonType,
-      ...(position ? { position } : {}),
+      ...(positions ? { positions } : {}),
       metric: sortMetric,
       scoring,
       league,
@@ -84,8 +83,8 @@ export function InsightView({ board }) {
       offset,
     }),
     [
-      season, lastWeeks, weeks, position, seasonType, team, sortMetric, scoring,
-      league, offset, board, watchlist.params.player_ids,
+      season, weeks, positions, seasonType, team, sortMetric, scoring, league,
+      offset, board, watchlist.params.player_ids,
     ],
   );
 
@@ -122,22 +121,9 @@ export function InsightView({ board }) {
 
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
-        <TimeframeFilter
-          lastWeeks={lastWeeks}
-          weeks={weeks}
-          onChange={({ lastWeeks: next, weeks: nextWeeks }) => {
-            setLastWeeks(next);
-            setWeeks(nextWeeks);
-            setOffset(0);
-          }}
-        />
+        <TimeframeFilter weeks={weeks} onChange={withReset(setWeeks)} />
         {!board.fixedPosition && (
-          <Select
-            label="Position"
-            value={position}
-            onChange={withReset(setPosition)}
-            options={POSITIONS}
-          />
+          <PositionFilter value={positions} onChange={withReset(setPositions)} />
         )}
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <TeamFilter value={team} onChange={withReset(setTeam)} />
@@ -150,7 +136,7 @@ export function InsightView({ board }) {
             columns={exportData.columns}
             context={[
               `GridironIQ — ${board.title}`,
-              `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} played weeks` : " · full season"}${position ? ` · ${position}` : ""}`,
+              `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} played weeks` : " · full season"}${positions ? ` · ${positions}` : ""}`,
               `sorted by ${metrics[sortMetric]?.label ?? sortMetric} · scoring: ${scoring} · league: ${league}`,
               "Scores are percentiles within each player's position pool, not absolute values.",
             ]}
