@@ -5,9 +5,9 @@
 // same players' usage, and should not have to reopen a dropdown to get it.
 //
 // Two tiers rather than one flat strip of fourteen: the second row never holds more
-// than four items, nothing scrolls sideways, and the phase you are in is stated rather
-// than inferred from which pill happens to be lit. Switching phase lands on that
-// phase's first board, which is always Fantasy.
+// than four items, nothing scrolls sideways, and the area you are in is stated rather
+// than inferred from which pill happens to be lit. Switching area lands on that area's
+// first board, which is always Fantasy.
 import { NavLink, useLocation } from "react-router-dom";
 import { LEADERBOARD_MENU } from "../constants/boards";
 
@@ -34,7 +34,7 @@ export function BoardTabs() {
 
   return (
     <nav aria-label="Leaderboards" className="glass-card flex flex-col gap-2 p-3">
-      <Tier label="Phase">
+      <Tier label="Area">
         {LEADERBOARD_MENU.map((group) => {
           const isActive = group.label === activeGroup.label;
           return (

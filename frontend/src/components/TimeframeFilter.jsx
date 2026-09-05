@@ -12,19 +12,54 @@
 // containing block and a stacking context, so an absolutely-positioned child cannot
 // paint above a *sibling* card no matter what z-index it claims. Rendered in place it
 // disappears behind the scoring editor below it.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useGameWeeks } from "../hooks/useGames";
 
 /** Weeks 1..18 — the regular season. Post-season boards filter by type instead. */
 const WEEKS = Array.from({ length: 18 }, (_, index) => index + 1);
 
-export function TimeframeFilter({ weeks, onChange }) {
+/** Trailing-window shortcuts, in weeks. */
+const SHORTCUTS = [4, 8];
+
+export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange }) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState(null);
   const container = useRef(null);
   const button = useRef(null);
   const popover = useRef(null);
   const selected = weeks ? weeks.split(",").filter(Boolean).map(Number) : [];
+
+  // "Last 4" has to mean the last four weeks that were *played*, not weeks 15-18 of a
+  // season that has only reached week 9 — which is the one thing the old rolling
+  // preset did that a bare week grid cannot. The schedule knows; the client asks it.
+  const { data: weekData } = useGameWeeks(
+    { season: Number(season), season_type: seasonType },
+    { enabled: Boolean(season) },
+  );
+  const playedWeeks = useMemo(
+    () =>
+      (weekData?.weeks ?? [])
+        .filter((entry) => entry.played > 0)
+        .map((entry) => entry.week)
+        .sort((a, b) => a - b),
+    [weekData],
+  );
+
+  const selectLast = (count) => {
+    const window = playedWeeks.slice(-count);
+    if (window.length) onChange(window.join(","));
+  };
+
+  /** True when the current selection is exactly that trailing window. */
+  const isLast = (count) => {
+    const window = playedWeeks.slice(-count);
+    return (
+      window.length > 0 &&
+      window.length === selected.length &&
+      window.every((week, index) => week === selected[index])
+    );
+  };
 
   // Position from the trigger's viewport rect, since the popover no longer lives
   // beside it in the tree.
@@ -62,9 +97,12 @@ export function TimeframeFilter({ weeks, onChange }) {
     });
   };
 
-  const label = selected.length
-    ? `${selected.length} week${selected.length > 1 ? "s" : ""}`
-    : "Full season";
+  const shortcutLabel = SHORTCUTS.find((count) => isLast(count));
+  const label = shortcutLabel
+    ? `Last ${shortcutLabel}`
+    : selected.length
+      ? `${selected.length} week${selected.length > 1 ? "s" : ""}`
+      : "Full season";
 
   return (
     <div className="flex items-end gap-2" ref={container}>
@@ -90,6 +128,24 @@ export function TimeframeFilter({ weeks, onChange }) {
               className="fixed z-50 w-64 rounded-xl border border-line p-3 shadow-xl"
               style={{ top: anchor.top, left: anchor.left, background: "var(--surface-solid)" }}
             >
+              <div className="mb-2 flex gap-1">
+                {SHORTCUTS.map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => selectLast(count)}
+                    disabled={playedWeeks.length < count}
+                    aria-pressed={isLast(count)}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
+                      isLast(count)
+                        ? "bg-accent text-[color:var(--accent-ink)]"
+                        : "bg-surface-2 text-muted enabled:hover:text-fg"
+                    }`}
+                  >
+                    Last {count}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-6 gap-1">
                 {WEEKS.map((week) => {
                   const active = selected.includes(week);

@@ -134,7 +134,12 @@ export function LeaderboardView({ board }) {
 
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
-        <TimeframeFilter weeks={weeks} onChange={withReset(setWeeks)} />
+        <TimeframeFilter
+          weeks={weeks}
+          season={season}
+          seasonType={seasonType}
+          onChange={withReset(setWeeks)}
+        />
         {!board.fixedPosition && (
           <PositionFilter value={positions} onChange={withReset(setPositions)} />
         )}

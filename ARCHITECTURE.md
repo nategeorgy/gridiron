@@ -665,6 +665,12 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-05** — **Trailing-window shortcuts, and the tiers are Area / Board.**
+  "Last 4" and "Last 8" live inside the weeks picker and resolve to the last four or
+  eight weeks *actually played*, read from `/games/weeks` — the one thing the removed
+  rolling preset did that a bare week grid cannot, since mid-season the reader would
+  otherwise have to know what week it is. The button reads "Last 4" when the selection
+  matches that window and the week count otherwise.
 - **2026-09-05** — **Two-tier board tabs, multi-select position, one timeframe control.**
   `BoardTabs` becomes phase-then-board: the second row never holds more than four items,
   nothing scrolls sideways, and the active phase is stated rather than inferred. The
