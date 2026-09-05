@@ -155,6 +155,11 @@ export function InsightView({ board }) {
         </div>
       </div>
 
+      {/* A board is served by this endpoint whenever it carries a query-time column,
+          which is not the same as it being scoring-aware. NFL Production routes here
+          only for TDs-over-expected — a number no scoring config changes — so showing
+          a league editor there would offer a control that does nothing. */}
+      {board.scoring && (
         <LeagueSettings
           scoring={scoring}
           onScoringChange={withReset(setScoring)}
@@ -162,6 +167,7 @@ export function InsightView({ board }) {
           onLeagueChange={withReset(setLeague)}
           replacement={data?.replacement}
         />
+      )}
 
       {board.lede && (
         <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
