@@ -196,9 +196,15 @@ class Window:
     week_from: int
     week_to: int
     last_weeks: int | None
+    # An explicit selection, when the caller picked weeks rather than a trailing
+    # window. week_from/week_to still bracket it so anything reading the range stays
+    # correct, but the filters use the set.
+    week_list: tuple[int, ...] | None = None
 
     @property
     def weeks(self) -> int:
+        if self.week_list:
+            return len(self.week_list)
         return max(self.week_to - self.week_from + 1, 1)
 
     @property
@@ -215,17 +221,26 @@ class Window:
             "week_to": self.week_to,
             "weeks": self.weeks,
             "last_weeks": self.last_weeks,
+            "week_list": list(self.week_list) if self.week_list else None,
         }
 
 
 def resolve_window(
-    db: Session, season: int, season_type: str, last_weeks: int | None
+    db: Session,
+    season: int,
+    season_type: str,
+    last_weeks: int | None,
+    week_list: tuple[int, ...] | None = None,
 ) -> Window:
-    """Resolve a full season or a trailing ``last_weeks`` window to concrete weeks.
+    """Resolve a full season, a trailing ``last_weeks`` window, or an explicit set.
 
     The trailing window is anchored to the last week that actually has data, so
     "last 4 weeks" means the last four *played* weeks, not weeks 15–18 of a season
     that has only reached week 9.
+
+    ``week_list`` wins over ``last_weeks`` when both are given: an explicit choice is
+    more specific than a rolling one, and offering both at once is the caller's bug
+    rather than something to resolve silently.
     """
     bounds = db.execute(
         select(func.min(PlayerStats.week), func.max(PlayerStats.week)).where(
@@ -233,6 +248,12 @@ def resolve_window(
         )
     ).one()
     first_week, last_week = bounds[0] or 1, bounds[1] or 1
+
+    if week_list:
+        selected = tuple(sorted(set(week_list)))
+        return Window(
+            season, season_type, min(selected), max(selected), None, week_list=selected
+        )
 
     week_from = first_week
     if last_weeks:
@@ -286,9 +307,17 @@ def fetch_usage_trend(db: Session, window: Window) -> dict[str, dict[str, float 
     if window.weeks < 2:
         return {}
 
-    midpoint = (window.week_from + window.week_to) // 2
-    early = PlayerStats.week <= midpoint
-    late = PlayerStats.week > midpoint
+    # With an explicit selection the halves are the first and second half of the
+    # chosen weeks, not of the calendar between them — picking weeks 2, 4 and 15 should
+    # compare 2+4 against 15 rather than putting all three in "early".
+    if window.week_list:
+        half = len(window.week_list) // 2
+        early = PlayerStats.week.in_(window.week_list[:half] or window.week_list[:1])
+        late = PlayerStats.week.in_(window.week_list[half:])
+    else:
+        midpoint = (window.week_from + window.week_to) // 2
+        early = PlayerStats.week <= midpoint
+        late = PlayerStats.week > midpoint
 
     def split(column, condition):
         return func.avg(case((condition, column), else_=None))
@@ -302,7 +331,8 @@ def fetch_usage_trend(db: Session, window: Window) -> dict[str, dict[str, float 
             split(PlayerStats.attempts, late).label("late_attempts"),
         )
         .where(*window_filters(window.season, window.season_type,
-                              week_from=window.week_from, week_to=window.week_to))
+                              week_from=window.week_from, week_to=window.week_to,
+                              week_in=window.week_list))
         .group_by(PlayerStats.player_id)
     ).all()
 
@@ -328,6 +358,7 @@ def aggregate_window_select(window: Window, position: str | None = None) -> Sele
         position=position,
         week_from=window.week_from,
         week_to=window.week_to,
+        week_in=window.week_list,
         positions=POSITIONS,
     )
     return aggregate_select(filters, games_expr())

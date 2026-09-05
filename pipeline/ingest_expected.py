@@ -53,6 +53,12 @@ EXPECTED_COLUMNS: dict[str, str] = {
     "rec_yards_gained_exp": "receiving_yards_exp",
     "rec_touchdown_exp": "receiving_tds_exp",
     "receptions_exp": "receptions_exp",
+    # M12. First downs are a better read on whether a target mattered than yardage
+    # alone, and the model publishes an expectation for each phase.
+    "pass_first_down_exp": "passing_first_downs_exp",
+    "rush_first_down_exp": "rushing_first_downs_exp",
+    "rec_first_down_exp": "receiving_first_downs_exp",
+    "pass_completions_exp": "completions_exp",
 }
 
 # Two-point conversions arrive split by play type; we store one combined estimate.

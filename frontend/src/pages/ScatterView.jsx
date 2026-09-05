@@ -10,8 +10,7 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
-import { ScoringControl } from "../components/ScoringControl";
-import { LeagueControl } from "../components/LeagueControl";
+import { LeagueSettings } from "../components/LeagueSettings";
 import { ExportButton } from "../components/ExportButton";
 import { SaveViewButton } from "../components/SaveViewButton";
 import { MetricScatter } from "../components/charts/MetricScatter";
@@ -200,10 +199,13 @@ export function ScatterView({ board }) {
         </div>
       </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-2">
-        <ScoringControl scoring={scoring} onChange={setScoring} />
-        <LeagueControl league={league} onChange={setLeague} replacement={undefined} />
-      </div>
+        <LeagueSettings
+          scoring={scoring}
+          onScoringChange={setScoring}
+          league={league}
+          onLeagueChange={setLeague}
+          replacement={undefined}
+        />
 
       <div className="glass-card p-4">
         <div className="mb-1 text-sm font-semibold text-fg">{preset.label}</div>

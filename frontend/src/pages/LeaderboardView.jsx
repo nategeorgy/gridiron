@@ -6,8 +6,12 @@ import { useMemo, useState } from "react";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
+import { BoardTabs } from "../components/BoardTabs";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
+import { TeamFilter } from "../components/TeamFilter";
+import { PositionFilter } from "../components/PositionFilter";
+import { TimeframeFilter } from "../components/TimeframeFilter";
 import { SaveViewButton } from "../components/SaveViewButton";
 import { buildBoardExport } from "../utils/csv";
 import { useLeaderboard } from "../hooks/useLeaderboard";
@@ -21,7 +25,7 @@ import {
   isMetricAvailable,
   unavailableColumns,
 } from "../utils/availability";
-import { POSITIONS, SEASON_TYPES, weekOptions } from "../constants";
+import { SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
 
@@ -37,9 +41,14 @@ export function LeaderboardView({ board }) {
   // makes a saved view (M5) store something more than a bare path.
   const { seasonOptions, currentSeason } = useSeasons();
   const [season, setSeason] = useUrlState("season", String(currentSeason));
-  const [week, setWeek] = useUrlState("week", "");
-  const [position, setPosition] = useUrlState("position", board.defaultPosition ?? "");
+  const [weeks, setWeeks] = useUrlState("weeks", "");
+  const [urlPositions, setPositions] = useUrlState("positions", board.defaultPosition ?? "");
+  // A board declaring `fixedPosition` is *about* that position, so the filter is
+  // neither shown nor read from the URL — a stale ?position= from another board
+  // would otherwise render an empty passing table with no visible cause.
+  const positions = board.fixedPosition ?? urlPositions;
   const [seasonType, setSeasonType] = useUrlState("type", "REG");
+  const [team, setTeam] = useUrlState("team", "");
   const [metric, setMetric] = useUrlState("metric", board.defaultSort, board.columns);
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
@@ -59,33 +68,30 @@ export function LeaderboardView({ board }) {
   const sortMetric = firstAvailableColumn(columns, metrics, season, metric);
   const sortFellBack = sortMetric !== metric;
 
-  const sortOptions = columns.map((key) => {
-    const available = isMetricAvailable({ id: key, ...(metrics[key] ?? {}) }, season);
-    return {
-      value: key,
-      label: metrics[key]?.label ?? key,
-      disabled: !available,
-      hint: available ? undefined : `Not recorded in ${season}`,
-    };
-  });
   const params = useMemo(
     () => ({
       season: Number(season),
-      ...(week ? { week: Number(week) } : {}),
+      ...(weeks ? { weeks } : {}),
       season_type: seasonType,
-      ...(position ? { position } : {}),
+      ...(positions ? { positions } : {}),
       metric: toBackendMetric(sortMetric),
       ...(board.scoring ? { scoring } : {}),
+      ...(team ? { team } : {}),
       order: "desc",
       ...watchlist.params,
+      // Percentiles are computed over the whole position pool for the season, so this
+      // list only says which columns to rank — never who to rank them against.
+      ...(board.percentileColumns?.length
+        ? { percentiles: board.percentileColumns.join(",") }
+        : {}),
       limit: PAGE_SIZE,
       offset,
     }),
     // watchlist.params is derived from the favorites list, so its serialised form is
     // the dependency — the object identity changes on every render.
     [
-      season, week, position, seasonType, sortMetric, scoring, offset, supportsScoring,
-      board, watchlist.params.player_ids,
+      season, weeks, positions, seasonType, team, sortMetric, scoring, offset,
+      supportsScoring, board, watchlist.params.player_ids,
     ],
   );
 
@@ -124,22 +130,33 @@ export function LeaderboardView({ board }) {
         <p className="mt-1 text-sm text-muted">{board.description}</p>
       </div>
 
+      <BoardTabs />
+
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
-        <Select label="Timeframe" value={week} onChange={withReset(setWeek)} options={weekOptions(season)} />
-        <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
+        <TimeframeFilter
+          weeks={weeks}
+          season={season}
+          seasonType={seasonType}
+          onChange={withReset(setWeeks)}
+        />
+        {!board.fixedPosition && (
+          <PositionFilter value={positions} onChange={withReset(setPositions)} />
+        )}
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
-        <Select label="Sort by" value={sortMetric} onChange={withReset(setMetric)} options={sortOptions} />
+        <TeamFilter value={team} onChange={withReset(setTeam)} />
         <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
           <ExportButton
-            filename={`gridironiq-${board.id}-${season}${week ? `-wk${week}` : ""}`}
+            filename={`gridironiq-${board.id}-${season}${weeks ? `-wk${weeks.replace(/,/g, "-")}` : ""}`}
             rows={exportData.rows}
             columns={exportData.columns}
             context={[
               `GridironIQ — ${board.title}`,
-              `${season} ${seasonType}${week ? ` · week ${week}` : " · full season"}${position ? ` · ${position}` : ""}`,
+              `${season} ${seasonType}${
+                weeks ? ` · weeks ${weeks}` : " · full season"
+              }${positions ? ` · ${positions}` : ""}${team ? ` · ${team}` : ""}`,
               `sorted by ${metrics[sortMetric]?.label ?? sortMetric}${board.scoring ? ` · scoring: ${scoring}` : ""}`,
             ]}
           />
@@ -157,13 +174,14 @@ export function LeaderboardView({ board }) {
 
       <StatTable
         columns={columns}
+        sections={board.sections}
         rows={rows}
         metrics={metrics}
         sortMetric={sortMetric}
         onSort={sortByColumn}
         offset={offset}
         columnKey={toBackendMetric}
-        signedColumns={SIGNED_COLUMNS}
+        signedColumns={board.signed ?? SIGNED_COLUMNS}
         unavailableColumns={unavailableColumns(columns, metrics, season).map((m) => m.id)}
         isLoading={isLoading}
         isError={isError}

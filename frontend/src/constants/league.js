@@ -13,6 +13,11 @@ export const DEFAULT_LINEUP = {
   te: 1,
   flex: 1,
   superflex: 0,
+  // Not a starting slot, but it moves replacement level further than any of them:
+  // replacement level is the best player you could pick up instead, and a bench spot
+  // is one more player who is not on the waiver wire. Six bench spots in a 12-team
+  // league take receiver replacement from WR42 to WR74.
+  bench: 0,
 };
 
 export const DEFAULT_TEAMS = 12;
@@ -26,6 +31,7 @@ export const LINEUP_SLOTS = [
   { key: "te", label: "TE" },
   { key: "flex", label: "FLEX" },
   { key: "superflex", label: "SUPERFLEX" },
+  { key: "bench", label: "BENCH", max: 20 },
 ];
 
 export const TEAM_COUNT_OPTIONS = [8, 10, 12, 14, 16].map((count) => ({
@@ -34,6 +40,10 @@ export const TEAM_COUNT_OPTIONS = [8, 10, 12, 14, 16].map((count) => ({
 }));
 
 const MAX_SLOT = 6;
+const MAX_BENCH = 20;
+
+/** Per-slot ceiling — the bench runs deeper than any starting slot. */
+export const slotMax = (key) => (key === "bench" ? MAX_BENCH : MAX_SLOT);
 
 /** Parse a league spec into { teams, lineup }. Invalid parts fall back to defaults. */
 export function parseLeague(spec) {
@@ -46,7 +56,7 @@ export function parseLeague(spec) {
       const [key, value] = clause.split("=");
       if (key in lineup && value !== undefined) {
         const count = Number(value);
-        if (Number.isInteger(count) && count >= 0 && count <= MAX_SLOT) lineup[key] = count;
+        if (Number.isInteger(count) && count >= 0 && count <= slotMax(key)) lineup[key] = count;
       }
     }
   }
@@ -70,5 +80,6 @@ export function leagueLabel(spec) {
   const parts = ["qb", "rb", "wr", "te"].map((key) => `${lineup[key]}${key.toUpperCase()}`);
   if (lineup.flex) parts.push(`${lineup.flex}FLEX`);
   if (lineup.superflex) parts.push(`${lineup.superflex}SFLEX`);
-  return `${teams}-team · ${parts.join("/")}`;
+  const bench = lineup.bench ? ` · ${lineup.bench} bench` : "";
+  return `${teams}-team · ${parts.join("/")}${bench}`;
 }

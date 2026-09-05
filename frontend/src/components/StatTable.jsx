@@ -1,10 +1,49 @@
 // The ranked stat table shared by the leaderboard boards and the Insight boards.
-// Column headers are click-to-sort; the active sort column is accented. Signed
-// columns (gaps and trends) are tinted positive/negative because their sign is the
-// whole point — "+4.6 over expected" and "−4.6" mean opposite things.
+//
+// Three things it does that a plain table does not:
+//
+// **Sections.** A board's columns arrive grouped (see constants/boards.js) and render
+// under a spanning header row. A 35-column receiving board is unreadable as one flat
+// sweep of abbreviations; the same 35 columns under General / Expected / Advanced /
+// Next Gen / Other / Opportunity read as six short tables sharing a row.
+//
+// **Percentiles.** Each value can carry its rank within that player's own position for
+// that season, as a small tinted number beneath it. Every number on a leaderboard
+// answers "how much" and almost none answer "is that a lot" — 3.0 yards of separation
+// is meaningless to most readers until it says 56th percentile. The scale DIVERGES
+// around the median rather than ramping in one direction: on a 30-column row a
+// single-direction ramp turns everything green and distinguishes nothing, while
+// neutral-at-50 makes an unusual row visible at a glance.
+//
+// **Direction is the API's problem, not this component's.** The backend inverts
+// `higher_is_better` before reporting, so 95th percentile always means good — even for
+// drops and interceptions. Nothing here needs to know which way a metric points.
+//
+// Column headers are click-to-sort; the active sort column is accented. Signed columns
+// (gaps and trends) are tinted positive/negative because their sign is the whole point.
 import { Link } from "react-router-dom";
 import { FavoriteStar } from "./FavoriteStar";
+import { PositionTag } from "./PositionTag";
 import { formatStat } from "../utils/format";
+import { StatTooltip, useStatTooltip } from "./StatTooltip";
+
+/** Tailwind-free tint for a percentile, diverging around the median. */
+function percentileColor(percentile) {
+  if (percentile === null || percentile === undefined) return undefined;
+  const distance = Math.abs(percentile - 50) / 50; // 0 at the median, 1 at the extremes
+  const strength = Math.round(distance * 100);
+  const hue = percentile >= 50 ? "var(--pos)" : "var(--neg)";
+  return `color-mix(in srgb, ${hue} ${strength}%, var(--faint))`;
+}
+
+/** "2016 onwards", "1999-2025", or nothing when a metric spans the whole range. */
+function seasonWindow(metric) {
+  const window = metric?.availability;
+  if (!window || (window.first_season <= 1999 && !window.last_season)) return null;
+  const first = window.first_season >= 9999 ? null : window.first_season;
+  if (!first) return "No free source publishes this";
+  return window.last_season ? `${first}\u2013${window.last_season}` : `${first} onwards`;
+}
 
 export function StatTable({
   columns,
@@ -13,6 +52,9 @@ export function StatTable({
   sortMetric,
   onSort,
   offset = 0,
+  // Column groups. Optional: without them the table renders one flat header row, which
+  // is what the narrower boards (and the Insight boards) still want.
+  sections = null,
   // Maps a display column to the row field holding its value (used by the
   // leaderboard's fixed-PPR fallback). Identity by default.
   columnKey = (key) => key,
@@ -22,6 +64,7 @@ export function StatTable({
   // leaves the reader thinking the page is broken, while a greyed header with a
   // tooltip tells them something true about 2004.
   unavailableColumns = [],
+  showPercentiles = true,
   isLoading = false,
   isError = false,
   error = null,
@@ -30,74 +73,152 @@ export function StatTable({
 }) {
   const signed = new Set(signedColumns);
   const unavailable = new Set(unavailableColumns);
+  const tooltip = useStatTooltip();
 
+  // Which column starts each section, so a divider can mark the boundary.
+  const sectionStart = new Set((sections ?? []).map((section) => section.columns[0]));
+
+  // The sorted column is marked in its *header* only. Accenting every value in it
+  // spends the one colour that means "good" on something that means "you clicked
+  // here", and on a 30-column board that reads as a green stripe with no meaning.
   const valueClass = (key, value) => {
-    if (sortMetric === key) return "font-semibold text-accent";
     if (signed.has(key) && typeof value === "number" && value !== 0) {
       return value > 0 ? "text-pos" : "text-neg";
     }
     return "text-fg";
   };
 
+  const headerCell = (key) => {
+    const isUnavailable = unavailable.has(key);
+    return (
+      <th
+        key={key}
+        onClick={isUnavailable ? undefined : () => onSort(key)}
+        onMouseEnter={(event) =>
+          tooltip.show(event.currentTarget, {
+            label: metrics[key]?.label ?? key.replace(/_/g, " "),
+            short: metrics[key]?.short,
+            description: metrics[key]?.description,
+            seasons: seasonWindow(metrics[key]),
+            unavailable: isUnavailable,
+          })
+        }
+        onMouseLeave={tooltip.hide}
+        onFocus={(event) =>
+          tooltip.show(event.currentTarget, {
+            label: metrics[key]?.label ?? key.replace(/_/g, " "),
+            short: metrics[key]?.short,
+            description: metrics[key]?.description,
+            seasons: seasonWindow(metrics[key]),
+            unavailable: isUnavailable,
+          })
+        }
+        onBlur={tooltip.hide}
+        tabIndex={isUnavailable ? -1 : 0}
+        className={`whitespace-nowrap px-3 py-2.5 text-center align-bottom transition ${
+          sectionStart.has(key) ? "border-l border-line" : ""
+        } ${
+          isUnavailable
+            ? "cursor-default opacity-40"
+            : `cursor-pointer hover:text-fg ${sortMetric === key ? "text-accent" : ""}`
+        }`}
+      >
+        {/* The id is the last resort, and only reachable with a stale /metrics
+            cache — but underscores in a header look like a crash, so soften it. */}
+        {metrics[key]?.short ?? key.replace(/_/g, " ")}
+        {sortMetric === key && !isUnavailable ? " ↓" : ""}
+      </th>
+    );
+  };
+
   return (
     <div className="glass-card overflow-x-auto">
+      <StatTooltip tip={tooltip.tip} />
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead>
-          <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
-            <th className="px-3 py-3 text-right">#</th>
-            <th className="px-3 py-3">Player</th>
-            <th className="px-3 py-3">Team</th>
-            <th className="px-3 py-3 text-right">G</th>
-            {columns.map((key) => {
-              const isUnavailable = unavailable.has(key);
-              return (
+          {sections && (
+            <tr className="border-b border-line text-[10px] uppercase tracking-[0.11em] text-faint">
+              {/* Rank, player, team, games — the identity block the sections sit beside. */}
+              <th colSpan={4} className="px-3 py-1.5" />
+              {sections.map((section) => (
                 <th
-                  key={key}
-                  onClick={isUnavailable ? undefined : () => onSort(key)}
-                  className={`whitespace-nowrap px-3 py-3 text-right transition ${
-                    isUnavailable
-                      ? "cursor-default opacity-40"
-                      : `cursor-pointer hover:text-fg ${sortMetric === key ? "text-accent" : ""}`
-                  }`}
-                  title={
-                    isUnavailable
-                      ? `Not recorded in this season`
-                      : (metrics[key]?.description ?? metrics[key]?.label ?? key)
-                  }
+                  key={section.name}
+                  colSpan={section.columns.length}
+                  className="border-l border-line px-3 py-1.5 text-center"
                 >
-                  {metrics[key]?.short ?? key}
-                  {sortMetric === key && !isUnavailable ? " ↓" : ""}
+                  {/* Section headings read as structure, not as data — same weight and
+                      ink as a player name, so the accent stays reserved for meaning. */}
+                  <span className="font-bold text-fg">{section.name}</span>
                 </th>
-              );
-            })}
+              ))}
+            </tr>
+          )}
+          <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
+            <th className="px-3 py-2.5 text-right">#</th>
+            <th className="px-3 py-2.5">Player</th>
+            <th className="px-3 py-2.5">Team</th>
+            <th className="px-3 py-2.5 text-center">G</th>
+            {columns.map(headerCell)}
           </tr>
         </thead>
         <tbody className={dimmed ? "opacity-60 transition" : "transition"}>
           {rows.map((row, index) => (
             <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
-              <td className="stat-num px-3 py-2.5 text-right text-faint">{offset + index + 1}</td>
-              <td className="px-3 py-2.5 font-medium">
+              <td className="stat-num px-3 py-2 text-right text-faint">{offset + index + 1}</td>
+              <td className="px-3 py-2 font-medium">
                 <span className="flex items-center gap-1.5">
                   {/* Renders nothing when signed out, so the column keeps its
                       pre-M5 width for a signed-out visitor. */}
                   <FavoriteStar playerId={row.player_id} size="h-3.5 w-3.5" />
-                  <Link to={`/players/${row.player_id}`} className="text-fg hover:text-accent hover:underline">
+                  <Link
+                    to={`/players/${row.player_id}`}
+                    className="whitespace-nowrap text-fg hover:text-accent hover:underline"
+                  >
                     {row.name}
                   </Link>
                 </span>
               </td>
-              <td className="px-3 py-2.5">
-                <span className="stat-num text-xs text-muted">{row.team_abbreviation ?? "—"}</span>
-                <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-faint">
-                  {row.position}
+              {/* Position first, then team. The tag is a fixed width where the team
+                  abbreviation is two or three characters, so leading with it keeps
+                  every team code on the same left edge down the column — and the
+                  position colours (shared with the draft room) make a mixed-position
+                  board scannable by shape rather than by reading. */}
+              <td className="whitespace-nowrap px-3 py-2">
+                <span className="flex items-center gap-2">
+                  <PositionTag position={row.position} />
+                  <span className="stat-num text-xs text-muted">
+                    {row.team_abbreviation ?? "—"}
+                  </span>
                 </span>
               </td>
-              <td className="stat-num px-3 py-2.5 text-right text-muted">{row.games_played}</td>
+              <td className="stat-num px-3 py-2 text-center text-muted">{row.games_played}</td>
               {columns.map((key) => {
                 const value = row[columnKey(key)];
+                const percentile = showPercentiles ? row.percentiles?.[key] : undefined;
                 return (
-                  <td key={key} className={`stat-num px-3 py-2.5 text-right ${valueClass(key, value)}`}>
-                    {formatStat(value, metrics[key]?.format)}
+                  <td
+                    key={key}
+                    className={`stat-num px-3 py-2 text-center ${
+                      sectionStart.has(key) ? "border-l border-line" : ""
+                    } ${valueClass(key, value)}`}
+                  >
+                    <span className="flex flex-col items-center leading-tight">
+                      <span>{formatStat(value, metrics[key]?.format)}</span>
+                      {showPercentiles &&
+                        (percentile === undefined || percentile === null ? (
+                          <span className="text-[10px] font-semibold text-faint" aria-hidden="true">
+                            &ndash;
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[10px] font-semibold"
+                            style={{ color: percentileColor(percentile) }}
+                            title={`${percentile}th percentile among ${row.position}s this season`}
+                          >
+                            {percentile}
+                          </span>
+                        ))}
+                    </span>
                   </td>
                 );
               })}

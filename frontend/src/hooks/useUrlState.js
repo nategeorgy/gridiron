@@ -24,11 +24,18 @@ export function useUrlState(key, fallback, allowed = null) {
   const raw = searchParams.get(key);
   const value = raw !== null && (!allowed || allowed.includes(raw)) ? raw : fallback;
 
+  // Accepts a value or an updater function, like useState. The updater form matters
+  // for any control that derives its next state from its current one: a multi-select
+  // computing `next` from a captured prop loses every click that lands before the
+  // re-render, because each one starts from the same stale value.
   const setValue = useCallback(
-    (next) => {
+    (nextOrUpdater) => {
       setSearchParams(
         (prev) => {
           const params = new URLSearchParams(prev);
+          const current = params.get(key) ?? fallback;
+          const next =
+            typeof nextOrUpdater === "function" ? nextOrUpdater(current) : nextOrUpdater;
           if (next === fallback || next === "" || next === null || next === undefined) {
             params.delete(key);
           } else {

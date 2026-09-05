@@ -21,8 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
-import { ScoringControl } from "../components/ScoringControl";
-import { LeagueControl } from "../components/LeagueControl";
+import { LeagueSettings } from "../components/LeagueSettings";
 import { useDraftSources, useRankings } from "../hooks/useRankings";
 import { useAuth } from "../hooks/useAuth";
 import { useScoring } from "../hooks/useScoring";
@@ -649,10 +648,12 @@ export function MockDraftView({ board }) {
           </div>
         </div>
 
-        <div className="grid items-start gap-3 lg:grid-cols-2">
-          <ScoringControl scoring={scoring} onChange={setScoring} />
-          <LeagueControl league={league} onChange={setLeague} />
-        </div>
+          <LeagueSettings
+            scoring={scoring}
+            onScoringChange={setScoring}
+            league={league}
+            onLeagueChange={setLeague}
+          />
 
         <p className="max-w-3xl text-xs leading-relaxed text-muted">
           Bots pick near the top of their board, straying further on players the expert

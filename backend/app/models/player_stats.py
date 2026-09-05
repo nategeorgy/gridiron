@@ -91,6 +91,66 @@ class PlayerStats(Base):
     receiving_tds_exp: Mapped[float | None] = mapped_column(Float)
     receptions_exp: Mapped[float | None] = mapped_column(Float)
     two_point_conv_exp: Mapped[float | None] = mapped_column(Float)
+    passing_first_downs_exp: Mapped[float | None] = mapped_column(Float)
+    rushing_first_downs_exp: Mapped[float | None] = mapped_column(Float)
+    receiving_first_downs_exp: Mapped[float | None] = mapped_column(Float)
+    completions_exp: Mapped[float | None] = mapped_column(Float)
+
+    # --- First downs and sacks. In load_player_stats since 1999; never read until
+    # the M12 leaderboard rebuild. A first down is a better read on whether a target
+    # mattered than yardage alone, and a growing minority of leagues score them.
+    passing_first_downs: Mapped[int | None] = mapped_column(Integer)
+    rushing_first_downs: Mapped[int | None] = mapped_column(Integer)
+    receiving_first_downs: Mapped[int | None] = mapped_column(Integer)
+    sacks_suffered: Mapped[int | None] = mapped_column(Integer)
+    sack_fumbles_lost: Mapped[int | None] = mapped_column(Integer)
+
+    # --- Pro Football Reference advanced stats (2018+). The only source here for what
+    # the defense did to the play. Broader coverage than NGS, two seasons shallower.
+    # Percentages arrive as 0-1 fractions, matching every other share in this table.
+    pressure_rate: Mapped[float | None] = mapped_column(Float)
+    times_blitzed: Mapped[int | None] = mapped_column(Integer)
+    bad_throw_rate: Mapped[float | None] = mapped_column(Float)
+    drops_by_receivers: Mapped[int | None] = mapped_column(Integer)
+    rush_yards_before_contact: Mapped[int | None] = mapped_column(Integer)
+    rush_yards_after_contact: Mapped[int | None] = mapped_column(Integer)
+    rush_broken_tackles: Mapped[int | None] = mapped_column(Integer)
+    receiving_drops: Mapped[int | None] = mapped_column(Integer)
+    rec_broken_tackles: Mapped[int | None] = mapped_column(Integer)
+    passer_rating_when_targeted: Mapped[float | None] = mapped_column(Float)
+
+    # --- Next Gen Stats (M11) ---
+    # Player-tracking derivatives, scraped from nextgenstats.nfl.com by nflverse and
+    # read through load_nextgen_stats. 2016+, and only for players NGS qualifies, so
+    # these are NULL far more often than the columns above.
+    #
+    # ⚠️ The ``ngs_`` prefix is load-bearing. NGS publishes its own completion
+    # percentage over expected and its own depth of target; ``cpoe`` and ``adot``
+    # above are computed from nflverse play-by-play. They are different numbers from
+    # different models and must never be read as the same column.
+    ngs_pass_time_to_throw: Mapped[float | None] = mapped_column(Float)
+    ngs_pass_completed_air_yards: Mapped[float | None] = mapped_column(Float)
+    ngs_pass_intended_air_yards: Mapped[float | None] = mapped_column(Float)
+    ngs_pass_air_yards_differential: Mapped[float | None] = mapped_column(Float)
+    ngs_pass_aggressiveness: Mapped[float | None] = mapped_column(Float)
+    ngs_pass_air_yards_to_sticks: Mapped[float | None] = mapped_column(Float)
+    ngs_pass_expected_completion_pct: Mapped[float | None] = mapped_column(Float)
+    ngs_pass_completion_pct_above_expectation: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_cushion: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_separation: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_intended_air_yards: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_pct_share_intended_air_yards: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_catch_pct: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_yac: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_expected_yac: Mapped[float | None] = mapped_column(Float)
+    ngs_rec_yac_above_expectation: Mapped[float | None] = mapped_column(Float)
+    ngs_rush_efficiency: Mapped[float | None] = mapped_column(Float)
+    ngs_rush_time_to_los: Mapped[float | None] = mapped_column(Float)
+    ngs_rush_pct_attempts_eight_defenders: Mapped[float | None] = mapped_column(Float)
+    ngs_rush_expected_yards: Mapped[float | None] = mapped_column(Float)
+    ngs_rush_yards_over_expected: Mapped[float | None] = mapped_column(Float)
+    ngs_rush_yards_over_expected_per_att: Mapped[float | None] = mapped_column(Float)
+    ngs_rush_pct_over_expected: Mapped[float | None] = mapped_column(Float)
 
     # --- Fantasy stats ---
     fantasy_points_ppr: Mapped[float | None] = mapped_column(Float)

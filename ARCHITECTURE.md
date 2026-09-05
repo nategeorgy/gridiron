@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-08-31 (M10 shipped; CI on v7; stored per-game rates now volume-weighted)
+Last updated: 2026-09-05 (M12: 14 boards, in-page tabs, instant stat tooltips)
 
 ---
 
@@ -346,6 +346,8 @@ the first code in the project where a bug means one user reading another user's 
 | `test_player_list.py` | The `player_ids` filter (M10). Mostly there for the empty-list trap: an explicitly empty list must mean *none*, never "no filter" — the rule the watchlist depends on. |
 | `test_trending.py` | ⭐ **The relevance floors (M10)** — the feature, so the tests are about them. A fixture of four backs: a real riser, a garbage-time backup with the biggest swing on the board and no fantasy value, one whose snaps rose while opportunity fell (the blowout case), and a genuine faller. ⚠️ Its stat lines set `fantasy_points_std`, because `compute_points` starts from that stored total and adds only the *delta* from standard weights — a fixture without it scores as though the player gained no yards, and silently tests nothing but receptions. |
 | `test_rls.py` | ⭐ The row-level-security lockdown (`8f73b5b2b1a1`, `0fd5c30c9287`, `69b660509e58`), and the reason the suite migrates rather than using `create_all()`: this layer is a property of the *schema*, invisible to every request-level test. Asserts the mechanism, not the flag — a role standing in for PostgREST's `anon` is granted `SELECT`/`DELETE` and must still see nothing and destroy nothing. `test_no_public_table_is_left_unlocked` **enumerates the schema** rather than a hand-maintained list, so a table added without RLS fails the suite instead of shipping. |
+| `test_non_finite_scrub.py` | ⭐ **The NaN guard.** Postgres `FLOAT` accepts IEEE NaN and NaN *propagates* through aggregates rather than being skipped like NULL, so one bad value made `AVG(target_share)` return NaN for the whole table with nothing raising. Tests `pipeline.db.scrub_non_finite` directly (no database — the invariant is a pure function), including that a real `0.0` survives, which a `if not value` guard would erase. The last two tests parse **db.py's own AST** to find every function that mutates a table and assert it scrubs first, so a new write helper fails the suite the day it lands rather than the day a NaN reaches a leaderboard. |
+| `app/percentiles.py` | ⭐ **Percentile ranks for board columns (M12).** One pool per (position, season), mid-rank, built on `intelligence.Pool` rather than a second implementation. Direction comes from the registry's `higher_is_better` and is inverted *before* reporting, so 95th always reads as good even for drops. ⚠️ The pool is deliberately **unfiltered** by team, watchlist or the caller's `min_games` — narrowing a board must not change what a percentile means. |
 | `test_rankings.py` | ⭐ **The fail-closed source registry and the blend (M9).** Asserts the registry property directly — every listed source must be `public`, and a private source must 404 *identically* to one that never existed, so the endpoint is not an oracle for which paywalled boards we hold. Plus the arithmetic: each source densified before averaging, and a player listed by only one board still reaching the consensus (an earlier rule requiring two silently truncated the whole board to the depth of the shallowest source). |
 | `test_ranking_boards.py` | ⭐ **User boards and CSV import (M9).** The wholesale-replace semantics (a player dragged off a board must actually be gone — the upsert failure mode), rank densification, and an import that reports what it could not match instead of dropping it. |
 | `test_league_profiles.py` | CRUD, spec validation, the one-active-profile invariant (including the partial unique index itself), and successor promotion. |
@@ -408,6 +410,8 @@ so **the migrated schema is the single source of truth.** Every script is
 | `ingest_expert_boards.py` | ⭐ **Expert CSV boards (M9).** Reads `data/rankings/*.csv` and blends them **anonymously** into the GridironIQ Consensus — several are paywalled, so the script refuses to write a source id the API publishes and never writes a display name. A single expert's rank goes in `ecr` with `sd`/`best`/`worst` left NULL: one person is not a consensus and a zero spread would claim perfect agreement. |
 | `data/rankings/` | The drop folder for those boards, plus `TEMPLATE.csv` and a README stating the format — the same format the in-app upload accepts. Files are named `<source-id>_<YYYY-MM-DD>.csv`; the source id stays server-side and the date becomes `scraped_at`, which is in the key, so re-dropping the same board overwrites and a new date accrues history. |
 | `ingest_target_depth.py` | **Run 7th** (M4). Aggregates play-by-play targets into `player_target_depth` by air-yard bucket × pass direction. Writes its own table rather than columns on `player_stats` — the grain is different. |
+| `ingest_nextgen.py` | ⭐ **Run 10th** (M11, enrichment). NFL **Next Gen Stats** — 23 tracking-derived columns (`ngs_*`) across passing, receiving and rushing, from `load_nextgen_stats`. Joins on `player_gsis_id`, which *is* our `player_id`, so no crosswalk is needed; the game is resolved from `player_stats` because NGS carries no game id. Drops NGS's `week = 0` season-aggregate rows. ⚠️ **The weekly feed is a biased subset** — a row needs roughly 15 attempts / 5 targets / 10 carries, so a receiver's published weeks cover a median 79% of his targets. Documented in the script and in both availability tables rather than corrected. |
+| `ingest_pfr.py` | ⭐ **Run 11th** (M12, enrichment). **Pro Football Reference advanced stats** (`load_pfr_advstats`, 2018+) — QB pressure and blitz counts, rushing yards before/after contact, broken tackles, drops, and passer rating when targeted. Keys on `pfr_player_id`, so it rebuilds the same crosswalk `ingest_usage.py` uses for snaps. Its percentages arrive as **0-1 fractions**, unlike NGS. ⚠️ Charts every player on the field including linemen, so it filters on `load_stat_keys()` — without that the insert trips the `players` foreign key. |
 
 **Data scope:** positions **QB/RB/WR/TE**; seasons **2020 through the current
 season**, computed rather than hardcoded (see `seasons.py`). The two halves diverge for
@@ -661,6 +665,126 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-05** — **Trailing-window shortcuts, and the tiers are Area / Board.**
+  "Last 4" and "Last 8" live inside the weeks picker and resolve to the last four or
+  eight weeks *actually played*, read from `/games/weeks` — the one thing the removed
+  rolling preset did that a bare week grid cannot, since mid-season the reader would
+  otherwise have to know what week it is. The button reads "Last 4" when the selection
+  matches that window and the week count otherwise.
+- **2026-09-05** — **Two-tier board tabs, multi-select position, one timeframe control.**
+  `BoardTabs` becomes phase-then-board: the second row never holds more than four items,
+  nothing scrolls sideways, and the active phase is stated rather than inferred. The
+  position filter is now a multi-select popover (`components/PositionFilter.jsx`) backed
+  by a new `positions` parameter on both ranked endpoints — pools stay per position, so a
+  tight end shown beside receivers is still ranked among tight ends. The rolling
+  timeframe presets are gone: they were a second way to ask what the weeks picker already
+  answers, and two controls for one choice invited the meaningless combination of both.
+- **2026-09-05** — **In-page board tabs, instant tooltips, Insight boards aligned.**
+  New `components/BoardTabs.jsx` puts all fourteen boards one click from each other
+  without returning to the header — grouped by phase, the same map the nav menu teaches.
+  New `components/StatTooltip.jsx` replaces the native `title` attribute, which waited
+  about a second and rendered in OS chrome: the one place a stat is explained looked
+  like a system error and arrived after the reader had moved on. It now shows in 90ms
+  with the full label, the definition, the season window where a metric has one, and the
+  hint that the header sorts. The four Insight boards gain sections and percentiles and
+  drop their value tinting, so every ranked table in the product now behaves the same.
+- **2026-09-05** — **Rushing and Receiving boards built out.** Rushing gains a fourth
+  board (**Advanced** — Efficiency / Contact / Next Gen Stats), cut along the coverage
+  seam like Passing: yards before contact measures the offensive line, yards after
+  contact measures the back. Receiving goes the other way — **Advanced and Opportunity
+  merge into one 26-column board**, because for a receiver the usage columns and the
+  tracking columns answer the same question and splitting them meant flipping tabs to
+  read one row. Two new derived metrics, `yards_per_carry` and `catch_rate` (the plain
+  one, 1999+ and every player — NGS's catch % starts in 2016 and only ranks players it
+  qualifies). The `insight` flag is now derived from a board's columns rather than set
+  by hand. ⚠️ Fixed `epa_per_play`: `epa` totals all three phases but the denominator
+  was attempts + carries, so a receiver's season was divided by his jet sweeps — Justin
+  Jefferson's 2024 read 33.51 EPA per play. Targets added; the cost is inheriting the
+  2003-2008 target blackout.
+- **2026-09-04** — **Only percentiles carry colour on the player boards.** `signed` is
+  now empty on all 12: a tinted value competes with the percentile beneath it for the
+  same meaning and loses, since the percentile is the one calibrated to the position.
+  The three Insight boards keep it — there the sign *is* the finding. Also fixed
+  `useMetrics` caching the registry with `staleTime: Infinity`, which made every metric
+  added during a tab's lifetime render as its raw id with an unrounded value; and
+  `formatStat` now rounds when it has no format spec rather than printing the float.
+- **2026-09-04** — **Passing boards finished.** Production gains raw `completion_pct`
+  and drops sacks; Efficiency reordered and Y/A + Y/C cut to one decimal; NGS expected
+  completion % moved into the Expected section. Advanced repeats the Efficiency block
+  (the board exists to explain those numbers) and reorganises into Efficiency / Ball
+  Placement / Pressure. **Passing Opportunity deleted** — two columns, one of which
+  described a change in share the position barely has. Value tinting (`signed`) cleared
+  on both passing boards: only percentiles carry colour there.
+- **2026-09-04** — **Leaderboards menu, phase-first.** The three nav dropdowns
+  (Fantasy / NFL Production / Opportunity) become **one "Leaderboards" tab** opening a
+  Baseball-Savant-style mega menu: a column per phase (Passing / Rushing / Receiving /
+  All), listing the board types inside it — because people arrive wanting receivers and
+  *then* choose a lens. New `components/ui/MegaDropdown.jsx`; `LEADERBOARD_MENU` in
+  `constants/boards.js`. **Routes are deliberately unchanged** and still grouped by type
+  (`/nfl/receiving`): a route is what a saved view stores, and this is a presentation
+  change. Passing Production split in two — **Production** (19 cols, answers to 1999)
+  and a new **Passing Advanced** (13 cols, NGS 2016+ / PFR 2018+), cut along the
+  coverage seam so neither board is half-empty on an old season. New `yards_per_attempt`
+  and `yards_per_completion`. ⚠️ Also fixed a latent bug: `RATE_METRICS` was never in
+  `ALLOWED_METRICS`, so every `per`-based metric — `epa_per_play` since M10 — rendered
+  a column whose header 400'd when clicked.
+- **2026-09-04** — **M12 board tuning.** `/fantasy/all` and `/fantasy/passing` re-columned
+  to spec; new `dropbacks` composite (attempts + sacks, 1999+) now that sacks are stored.
+  `fixedPosition` hides the Position filter on boards that are about one position — the
+  three passing boards are QB-only and also ignore a stale `?position=`. Scoring and
+  league size merged into one **League Settings** card (`components/LeagueSettings.jsx`,
+  with `bare` variants of both controls) across all five pages that showed the pair.
+  Position tags moved ahead of the team and now use the draft room's `--position-*`
+  colours, so team codes align down the column. Value columns (VORP family, points over
+  expected) no longer tint positive/negative — `signed` is for metrics whose *sign* is
+  the finding, and VORP is negative for most of the league by construction.
+- **2026-09-03** — **M12 follow-up.** `LeagueConfig.bench` — bench spots now drive
+  replacement level, which moves WR replacement from WR42 to WR74 in a 12-team league
+  with six bench spots and reorders VORP rather than rescaling it. Multi-week selection
+  on both ranked endpoints (`weeks=3,7,12`), with a portalled week-picker popover
+  (`components/TimeframeFilter.jsx`) replacing the single-week `Select`; the "Sort by"
+  picker is gone, since headers sort. `PERCENTILE_POSITIONS` withholds a rank where the
+  ranking is meaningless (passing among non-QBs, rushing among receivers) and the UI
+  shows a dash. `useUrlState` now accepts an updater function.
+- **2026-09-03** — **M12: Player Leaderboards.** The 17 old boards are replaced by **12**,
+  in three nav groups (Fantasy / NFL Production / Opportunity × All / Passing / Rushing /
+  Receiving), generated from a stat taxonomy Nate categorized. Columns are grouped into
+  **sections** that render as a spanning header row, and every value carries its
+  **percentile within that player's own position for that season** as a sub-value —
+  new `app/percentiles.py`, served by both `/stats/leaderboard` and `/stats/intelligence`.
+  Six boards route through the intelligence endpoint because they carry a query-time
+  column (VORP, buy/sell, usage trend). Added a **team filter** to both endpoints, which
+  narrows output only. Nineteen new stored columns (migration `a91f3c5e7d02`): first downs
+  and sacks from `load_player_stats` (1999+, in the feed all along), expected first downs
+  and completions from `load_ff_opportunity` (2009+), and ten Pro Football Reference
+  advanced columns (2018+) via a new `pipeline/ingest_pfr.py`. `StatTable` gained sections,
+  percentile sub-values and centre alignment.
+- **2026-09-01** — **NaN guard at the write boundary.** `pipeline/db.py` gained
+  `scrub_non_finite()`, called by both `upsert()` and `replace_scoped()`, coercing every
+  NaN and ±Infinity to NULL before it reaches Postgres. `load_player_stats` publishes
+  ~305,000 NaNs (`target_share`, `air_yards_share`, `wopr`, all in 1999–2008) and six
+  infinities; the M8 availability mask had been catching all but one of them by
+  coincidence, and the survivor — Steve Bono, 1999 week 9 — made `AVG(target_share)`
+  return NaN for the entire table. Migration `b3f81a5c2d47` scrubs every float column on
+  `player_stats` as a one-off data fix so production gets it too. New test file
+  `tests/test_non_finite_scrub.py` (9 tests, 354 total) parses db.py's AST to find any
+  function that mutates a table without scrubbing first.
+- **2026-09-01** — **M11: Next Gen Stats.** Added 23 `ngs_*` columns to `player_stats`
+  (migration `e2b7d4a91c60`) fed by a new `pipeline/ingest_nextgen.py`, from nflverse's
+  scrape of nextgenstats.nfl.com (`load_nextgen_stats`, 2016+) — separation, cushion,
+  YAC over expected, time to throw, aggressiveness, stacked-box rate and rush yards over
+  expected among them. The official NGS API is a credentialed club portal, so this is the
+  free path and the only one; raw tracking data stays out of reach. 23 registry entries in
+  `app/metrics.py`, each carrying a `weight_by` so a stored per-week rate is never
+  averaged flat, and a `NEXTGEN` window in **both** availability tables. Added to
+  `.github/workflows/pipeline.yml` as the fourth enrichment pass. **Also corrected a
+  stale fact**: the participation feed routes are built from is *not* discontinued — it
+  lags one season because FTN delivers after the postseason, verified from data (45,184
+  rows for 2025, ~5,100 stat lines with routes in every season 2016–2025). The
+  `data_ceiling_column` mechanism had kept the app honest while the prose around it went
+  stale; `pipeline/seasons.py`, both `availability.py` files and
+  `docs/design/M8-historical-depth.md` are corrected. New reference:
+  `docs/GridironIQ-stat-inventory.xlsx`.
 - **2026-08-30** — **M10: games, trending usage, the Schedule tab, and the Command
   Center rebuild.** Four things that turned out to be one thing: the home page needed a
   scoreboard, which needed the `GET /api/v1/games` endpoint this document had listed as

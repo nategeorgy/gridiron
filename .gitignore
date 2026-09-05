@@ -22,6 +22,9 @@ dist-ssr/
 
 # --- Editors / OS ---
 .DS_Store
+
+# Excel lock files — created while a workbook in docs/ is open, removed on close
+~$*.xlsx
 .idea/
 .vscode/
 .obsidian/

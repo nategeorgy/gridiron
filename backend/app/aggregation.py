@@ -70,6 +70,8 @@ def window_filters(
     week_to: int | None = None,
     positions: tuple[str, ...] | None = None,
     player_ids: tuple[str, ...] | None = None,
+    team_id: int | None = None,
+    week_in: tuple[int, ...] | None = None,
 ) -> list[ColumnElement]:
     """WHERE clauses for a season, optionally narrowed to a week range and position.
 
@@ -82,16 +84,28 @@ def window_filters(
         PlayerStats.season == season,
         PlayerStats.season_type == season_type,
     ]
-    if week_from is not None:
-        filters.append(PlayerStats.week >= week_from)
-    if week_to is not None:
-        filters.append(PlayerStats.week <= week_to)
+    # An explicit set of weeks beats a range: "weeks 3, 7 and 11" is not expressible
+    # as week_from/week_to, and a user picking a bye-week-free stretch is asking for
+    # exactly that.
+    if week_in is not None:
+        filters.append(PlayerStats.week.in_(week_in))
+    else:
+        if week_from is not None:
+            filters.append(PlayerStats.week >= week_from)
+        if week_to is not None:
+            filters.append(PlayerStats.week <= week_to)
     if position:
         filters.append(Player.position == position.upper())
     elif positions:
         filters.append(Player.position.in_(positions))
     if player_ids is not None:
         filters.append(PlayerStats.player_id.in_(player_ids))
+    if team_id is not None:
+        # Filters the *stat lines*, so "played for this team in this window" — which
+        # is what a leaderboard means. Filtering on players.team_id would instead ask
+        # who is on the roster today, and put a traded player's whole season under
+        # his new club.
+        filters.append(PlayerStats.team_id == team_id)
     return filters
 
 
