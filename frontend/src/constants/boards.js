@@ -1479,15 +1479,36 @@ export const INSIGHT_BOARDS = [
     lede:
       "Replacement level moves with your league: deeper lineups push the baseline down " +
       "and make stars worth more. Set your lineup below to see it change.",
-    columns: [
-      "vorp", "vorp_ppg", "replacement_ppg", "fantasy_ppg", "fantasy_points",
-      "expected_fantasy_ppg", "fantasy_opportunity_rating",
-    ],
+    columns: ["vorp", "vorp_ppg", "replacement_ppg", "fantasy_points", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_opportunity_rating"],
     defaultSort: "vorp",
     defaultPosition: "",
     scoring: true,
     insight: true,
-    signed: ["vorp", "vorp_ppg"],
+          sections: [
+      {
+        "name": "Value",
+        "columns": [
+          "vorp",
+          "vorp_ppg",
+          "replacement_ppg"
+        ]
+      },
+      {
+        "name": "Production",
+        "columns": [
+          "fantasy_points",
+          "fantasy_ppg",
+          "expected_fantasy_ppg"
+        ]
+      },
+      {
+        "name": "Opportunity",
+        "columns": [
+          "fantasy_opportunity_rating"
+        ]
+      }
+    ],
+    percentileColumns: ["vorp", "vorp_ppg", "fantasy_points", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_opportunity_rating"],
   },
   {
     id: "insight-opportunity",
@@ -1502,15 +1523,40 @@ export const INSIGHT_BOARDS = [
     lede:
       "Opportunity is the most repeatable thing in fantasy — it predicts next week far " +
       "better than last week's points do.",
-    columns: [
-      "fantasy_opportunity_rating", "expected_fantasy_ppg", "fantasy_ppg",
-      "opportunity_share", "target_share", "route_participation", "air_yards_share",
-      "rush_attempt_share", "rush_att_inside_10", "red_zone_targets", "snap_share",
-    ],
+    columns: ["fantasy_opportunity_rating", "expected_fantasy_ppg", "fantasy_ppg", "opportunity_share", "target_share", "route_participation", "air_yards_share", "rush_attempt_share", "rush_att_inside_10", "red_zone_targets", "snap_share"],
     defaultSort: "fantasy_opportunity_rating",
     defaultPosition: "",
     scoring: true,
     insight: true,
+      sections: [
+      {
+        "name": "Score",
+        "columns": [
+          "fantasy_opportunity_rating"
+        ]
+      },
+      {
+        "name": "Production",
+        "columns": [
+          "expected_fantasy_ppg",
+          "fantasy_ppg"
+        ]
+      },
+      {
+        "name": "Usage",
+        "columns": [
+          "opportunity_share",
+          "target_share",
+          "route_participation",
+          "air_yards_share",
+          "rush_attempt_share",
+          "rush_att_inside_10",
+          "red_zone_targets",
+          "snap_share"
+        ]
+      }
+    ],
+    percentileColumns: ["fantasy_opportunity_rating", "expected_fantasy_ppg", "fantasy_ppg", "opportunity_share", "target_share", "route_participation", "air_yards_share", "rush_attempt_share", "rush_att_inside_10", "red_zone_targets", "snap_share"],
   },
   {
     id: "insight-buy-low",
@@ -1525,16 +1571,43 @@ export const INSIGHT_BOARDS = [
     lede:
       "A points-under-expected gap only matters when the usage behind it is real — " +
       "which is why opportunity rating carries 30% of this score.",
-    columns: [
-      "positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg",
-      "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected",
-      "opportunity_share", "target_share", "vorp_ppg",
-    ],
+    columns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share", "vorp_ppg"],
     defaultSort: "positive_regression_index",
     defaultPosition: "",
     scoring: true,
     insight: true,
-    signed: ["fantasy_points_over_expected", "tds_over_expected", "vorp_ppg"],
+          sections: [
+      {
+        "name": "Signal",
+        "columns": [
+          "positive_regression_index",
+          "fantasy_opportunity_rating"
+        ]
+      },
+      {
+        "name": "Production",
+        "columns": [
+          "fantasy_ppg",
+          "expected_fantasy_ppg",
+          "fantasy_points_over_expected",
+          "tds_over_expected"
+        ]
+      },
+      {
+        "name": "Usage",
+        "columns": [
+          "opportunity_share",
+          "target_share"
+        ]
+      },
+      {
+        "name": "Value",
+        "columns": [
+          "vorp_ppg"
+        ]
+      }
+    ],
+    percentileColumns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share", "vorp_ppg"],
   },
   {
     id: "insight-sell-high",
@@ -1549,19 +1622,43 @@ export const INSIGHT_BOARDS = [
     lede:
       "Touchdown rate and per-touch efficiency regress hardest. Usage trend is the " +
       "tiebreak: outproducing your opportunity while losing snaps is the clearest sell.",
-    columns: [
-      "sell_high_index", "fantasy_ppg", "expected_fantasy_ppg",
-      "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline",
-      "opportunity_trend", "fantasy_opportunity_rating", "vorp_ppg",
-    ],
+    columns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend", "vorp_ppg"],
     defaultSort: "sell_high_index",
     defaultPosition: "",
     scoring: true,
     insight: true,
-    signed: [
-      "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline",
-      "opportunity_trend", "vorp_ppg",
+          sections: [
+      {
+        "name": "Signal",
+        "columns": [
+          "sell_high_index",
+          "fantasy_opportunity_rating"
+        ]
+      },
+      {
+        "name": "Production",
+        "columns": [
+          "fantasy_ppg",
+          "expected_fantasy_ppg",
+          "fantasy_points_over_expected",
+          "tds_over_expected"
+        ]
+      },
+      {
+        "name": "Efficiency",
+        "columns": [
+          "efficiency_over_baseline",
+          "opportunity_trend"
+        ]
+      },
+      {
+        "name": "Value",
+        "columns": [
+          "vorp_ppg"
+        ]
+      }
     ],
+    percentileColumns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend", "vorp_ppg"],
   },
 ];
 

@@ -1195,6 +1195,12 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   assumption the flex allocation makes; the known weakness is QB in a one-QB league,
   where most managers stream rather than roster two, so QB replacement runs slightly
   deep. Documented in `replacement_ranks`, and it is a model rather than a measurement
+- **A stat's definition has to arrive before the reader moves on.** The native `title`
+  attribute waits roughly a second and renders in OS chrome, which made the one place a
+  metric is explained look like an error message. `components/StatTooltip.jsx` shows in
+  90ms — short enough to feel free, long enough not to strobe while sweeping a
+  35-column header row — and is portalled to `document.body` for the `backdrop-filter`
+  stacking reason that applies to every popover here
 - ⚠️ **The metric registry must not be cached forever client-side.** `useMetrics` used
   `staleTime: Infinity`, so a tab left open across a deploy kept the old registry — and
   every metric added since rendered as its **raw id with an unrounded value**, because

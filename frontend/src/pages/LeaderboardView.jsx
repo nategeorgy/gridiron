@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
+import { BoardTabs } from "../components/BoardTabs";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
 import { TeamFilter } from "../components/TeamFilter";
@@ -129,6 +130,8 @@ export function LeaderboardView({ board }) {
         <h1 className="text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
         <p className="mt-1 text-sm text-muted">{board.description}</p>
       </div>
+
+      <BoardTabs />
 
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />

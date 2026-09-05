@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-05 (M12: 13 boards under one Leaderboards menu, grouped by phase)
+Last updated: 2026-09-05 (M12: 14 boards, in-page tabs, instant stat tooltips)
 
 ---
 
@@ -665,6 +665,15 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-05** — **In-page board tabs, instant tooltips, Insight boards aligned.**
+  New `components/BoardTabs.jsx` puts all fourteen boards one click from each other
+  without returning to the header — grouped by phase, the same map the nav menu teaches.
+  New `components/StatTooltip.jsx` replaces the native `title` attribute, which waited
+  about a second and rendered in OS chrome: the one place a stat is explained looked
+  like a system error and arrived after the reader had moved on. It now shows in 90ms
+  with the full label, the definition, the season window where a metric has one, and the
+  hint that the header sorts. The four Insight boards gain sections and percentiles and
+  drop their value tinting, so every ranked table in the product now behaves the same.
 - **2026-09-05** — **Rushing and Receiving boards built out.** Rushing gains a fourth
   board (**Advanced** — Efficiency / Contact / Next Gen Stats), cut along the coverage
   seam like Passing: yards before contact measures the offensive line, yards after

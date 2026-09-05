@@ -25,6 +25,7 @@ import { Link } from "react-router-dom";
 import { FavoriteStar } from "./FavoriteStar";
 import { PositionTag } from "./PositionTag";
 import { formatStat } from "../utils/format";
+import { StatTooltip, useStatTooltip } from "./StatTooltip";
 
 /** Tailwind-free tint for a percentile, diverging around the median. */
 function percentileColor(percentile) {
@@ -33,6 +34,15 @@ function percentileColor(percentile) {
   const strength = Math.round(distance * 100);
   const hue = percentile >= 50 ? "var(--pos)" : "var(--neg)";
   return `color-mix(in srgb, ${hue} ${strength}%, var(--faint))`;
+}
+
+/** "2016 onwards", "1999-2025", or nothing when a metric spans the whole range. */
+function seasonWindow(metric) {
+  const window = metric?.availability;
+  if (!window || (window.first_season <= 1999 && !window.last_season)) return null;
+  const first = window.first_season >= 9999 ? null : window.first_season;
+  if (!first) return "No free source publishes this";
+  return window.last_season ? `${first}\u2013${window.last_season}` : `${first} onwards`;
 }
 
 export function StatTable({
@@ -63,6 +73,7 @@ export function StatTable({
 }) {
   const signed = new Set(signedColumns);
   const unavailable = new Set(unavailableColumns);
+  const tooltip = useStatTooltip();
 
   // Which column starts each section, so a divider can mark the boundary.
   const sectionStart = new Set((sections ?? []).map((section) => section.columns[0]));
@@ -83,6 +94,27 @@ export function StatTable({
       <th
         key={key}
         onClick={isUnavailable ? undefined : () => onSort(key)}
+        onMouseEnter={(event) =>
+          tooltip.show(event.currentTarget, {
+            label: metrics[key]?.label ?? key.replace(/_/g, " "),
+            short: metrics[key]?.short,
+            description: metrics[key]?.description,
+            seasons: seasonWindow(metrics[key]),
+            unavailable: isUnavailable,
+          })
+        }
+        onMouseLeave={tooltip.hide}
+        onFocus={(event) =>
+          tooltip.show(event.currentTarget, {
+            label: metrics[key]?.label ?? key.replace(/_/g, " "),
+            short: metrics[key]?.short,
+            description: metrics[key]?.description,
+            seasons: seasonWindow(metrics[key]),
+            unavailable: isUnavailable,
+          })
+        }
+        onBlur={tooltip.hide}
+        tabIndex={isUnavailable ? -1 : 0}
         className={`whitespace-nowrap px-3 py-2.5 text-center align-bottom transition ${
           sectionStart.has(key) ? "border-l border-line" : ""
         } ${
@@ -90,11 +122,6 @@ export function StatTable({
             ? "cursor-default opacity-40"
             : `cursor-pointer hover:text-fg ${sortMetric === key ? "text-accent" : ""}`
         }`}
-        title={
-          isUnavailable
-            ? "Not recorded in this season"
-            : (metrics[key]?.description ?? metrics[key]?.label ?? key)
-        }
       >
         {/* The id is the last resort, and only reachable with a stale /metrics
             cache — but underscores in a header look like a crash, so soften it. */}
@@ -106,6 +133,7 @@ export function StatTable({
 
   return (
     <div className="glass-card overflow-x-auto">
+      <StatTooltip tip={tooltip.tip} />
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead>
           {sections && (
