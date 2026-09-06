@@ -74,7 +74,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
-| `render.yaml` | config | "Blueprint" telling **Render** (the backend host) how to build and run the backend in production. ⚠️ **Still has no migration step.** `preDeployCommand` is paid-only on the free plan, and putting `alembic upgrade head` in the build command (5d111be) failed the build and was reverted. The file's comments record what was ruled out and what to try next, so the same guess is not repeated. Schema changes are applied to Supabase by hand before merging. |
+| `render.yaml` | config | "Blueprint" telling **Render** how to build and run the backend in production. ⭐ Its `buildCommand` runs **`scripts/migrate.sh`** after installing dependencies — `preDeployCommand` is paid-only on the free plan. See the file's comments: a bare `alembic upgrade head` failed there on a pooler **checkout timeout**, not connectivity, because a build competes with the still-running previous version for connections. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
 | `.gitignore` | config | Lists files git should ignore (`.env`, `.venv/`, `node_modules/`, etc.). |
 | `.github/` | tooling | GitHub Actions. `workflows/backend-tests.yml` runs `backend/tests/` on every pull request and on `main`, against a PostgreSQL 16 service container matching `docker-compose.yml`. Its `pytest` job is a **required status check** on `main` — a pull request cannot merge while it is red. Both workflows pin `actions/checkout@v7` and `actions/setup-python@v7`, which declare `using: node24`; GitHub deprecated Node 20 and was force-running the older majors on 24 anyway, warning on every job. |
@@ -287,7 +287,7 @@ API docs are auto-generated at **`http://localhost:8000/docs`**.
 | --- | --- |
 | `main.py` | **App entry point.** Creates the FastAPI app, configures CORS (which frontend origins may call it), and wires up all the routers under `/api/v1`. |
 | `config.py` | Loads settings from environment variables / `.env` (database URL, environment, allowed CORS origins, **Supabase auth**) via Pydantic. In **development** it also allows any `localhost` port, so a dev server on an auto-assigned port isn't blocked by CORS. `auth_enabled` is false until `SUPABASE_URL` is set, which is what lets the whole public API run on a fresh checkout with no Supabase project. |
-| `database.py` | Creates the SQLAlchemy engine + session factory, and the `get_db()` dependency every endpoint uses to get a database session. |
+| `database.py` | Creates the SQLAlchemy engine + session factory, and the `get_db()` dependency every endpoint uses to get a database session. ⚠️ **The pool is bounded** (3 + 2 overflow, not SQLAlchemy's 5 + 10): fifteen connections from one instance is a large share of a free-tier session-mode pooler, and it starved a migration during a build. |
 | `auth.py` | ⭐ **Supabase JWT verification (M5)** — the only place a token becomes an identity. Supports both **asymmetric** signing (public keys from the project's JWKS, the current Supabase default) and **legacy HS256**, chosen by the token header's `alg`, so a project can migrate without a code change. Checks signature, expiry, issuer, and audience, then **provisions the local `users` row just-in-time** — no webhook, no second source of truth. Deliberately knows **nothing about how the user signed in**: swapping Google OAuth for email auth changed one line here (a `display_name` fallback to the email's local part, since email sign-ups may carry no name). Exports `get_current_user` (401s) and `get_optional_user` (returns `None`). |
 | `scoring.py` | ⭐ **The scoring-aware fantasy engine (architecture "spine A").** Turns a league-scoring string like `"ppr:pass_td=6,te_rec=1.5"` into a `ScoringConfig`, and computes fantasy points from raw stat components — both as a SQL expression (for sorting/ranking in the DB) and in Python (for display). Fantasy points are **computed live, never stored per-scoring.** |
 | `league.py` | ⭐ **League context (M3).** Turns a league string like `"10:rb=2,flex=2"` into a `LeagueConfig` (teams + starting lineup) and derives the **replacement rank per position** — flex slots shared across RB/WR/TE in proportion to the lineup's flex-eligible starters, superflex credited to QB. The second per-request config alongside scoring; it's what makes *value* league-aware. |
@@ -672,6 +672,13 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-06** — **Migrations automated, on the second attempt.** The build log named
+  the real cause, and it was not the one guessed here: not egress, but
+  `ECHECKOUTTIMEOUT` — the build reached Supabase and could not check out a connection
+  from its session-mode pooler. A build runs while the previous version still serves,
+  and SQLAlchemy's default pool is fifteen connections. `app/database.py` is now capped
+  at five, and `backend/scripts/migrate.sh` retries the transient case while still
+  exiting non-zero on a genuine failure.
 - **2026-09-06** — **Migration automation attempted and reverted.** `alembic upgrade
   head` in Render's build command failed the build ("Exited with status 1") and was
   rolled back the same day — a broken deploy path is worse than the manual step it was

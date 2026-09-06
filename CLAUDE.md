@@ -1374,16 +1374,21 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   season months before anyone plays in it, so defaulting a board to the newest season
   outright opens the app on an empty table. `GET /api/v1/seasons` returns `has_stats`
   and `completed_games` so schedule-shaped surfaces can still offer the full list
-- ⚠️ **There is still no automated migration step — apply schema changes to Supabase
-  by hand BEFORE merging.** `preDeployCommand` is paid-only and this service is on the
-  free plan; putting `alembic upgrade head` in Render's *build* command was tried in
-  5d111be and the build failed, so it was reverted rather than leaving the deploy path
-  broken. Ruled out since: env vars *are* available during a Render build, `alembic` is
-  installed, `prepend_sys_path = .` makes `app` importable, and the command works
-  locally. The untested candidate is build-container egress to Supabase — runtime
-  connectivity demonstrably works, so `startCommand` is the promising next attempt.
-  See the comments in `render.yaml`. Adding **nullable** columns first is safe: the
-  running version cannot see them
+- ⚠️ **Migrations run in Render's *build* command, via `backend/scripts/migrate.sh`.**
+  `preDeployCommand` is paid-only on the free plan. The script exists because a bare
+  `alembic upgrade head` failed there once — and **not** on connectivity, which was the
+  obvious guess and was wrong. The build reached Supabase and could not check out a
+  connection: `ECHECKOUTTIMEOUT ... after 15000ms in Session mode`. A build runs while
+  the previous version is still serving, and SQLAlchemy's default pool is 5 + 10
+  overflow — **fifteen connections** against a free-tier session-mode pooler.
+  `app/database.py` now caps the app at five; the script retries because the contention
+  is transient. Two consequences to hold: a **destructive** migration would be briefly
+  live before the code that tolerates it, so split those across two deploys; and a
+  genuinely broken migration still fails the build, leaving the previous version serving
+- ⚠️ **Do not confirm a deploy by hitting an endpoint.** A failed Render build leaves
+  the *previous* version running, so `/health` returns 200 and `/metrics` serves the
+  expected shape either way — which is exactly how a failed deploy got reported here as
+  verified. Check the deploy's own status
 - ⚠️ **`.github/workflows/pipeline.yml` writes to production.** It holds
   `PIPELINE_DATABASE_URL`, the first credential in CI that can change real data. Keep it
   scoped to that workflow, keep the ingests idempotent, and remember that a new ingest

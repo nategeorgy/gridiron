@@ -5,6 +5,7 @@
 # earlier version of it. Render syncs a Blueprint on push, but a service whose settings
 # were changed in the dashboard keeps the dashboard's values — so after changing the
 # build command here, confirm it took in the service's Settings page.
+#
 # The database is hosted separately on Supabase; its connection string and the
 # allowed CORS origin are set as (secret) environment variables in the Render
 # dashboard — they are intentionally NOT committed here.
@@ -14,36 +15,35 @@ services:
     runtime: python
     rootDir: backend
     plan: free
-    # ⚠️ THERE IS STILL NO MIGRATION STEP HERE, and it is not for lack of trying.
-    # `preDeployCommand` — the hook designed for this — is paid-only and this service
-    # is on the free plan. Render's docs point at the build command instead, so
-    # 5d111be tried:
+
+    # Migrations run in the build. `preDeployCommand` is the hook designed for this and
+    # is paid-only, so on the free plan Render's docs point here instead.
     #
-    #     buildCommand: pip install -r requirements.txt && python -m alembic upgrade head
+    # ⚠️ It calls `scripts/migrate.sh` rather than a bare `alembic upgrade head`, and
+    # the reason is worth keeping. The bare version failed once (5d111be) — and not on
+    # connectivity, which was the obvious guess and was wrong. The build reached
+    # Supabase and then could not get a connection out of it:
     #
-    # The build failed ("Exited with status 1") and was reverted in the next commit,
-    # because a broken deploy path is worse than the manual step it replaced. What was
-    # ruled out afterwards, so the next attempt does not re-tread it:
+    #     FATAL: (ECHECKOUTTIMEOUT) unable to check out connection from the pool
+    #            after 15000ms in Session mode
     #
-    #   * Env vars ARE available during a Render build, so DATABASE_URL was present.
-    #   * `alembic` is in requirements.txt and `prepend_sys_path = .` is set in
-    #     alembic.ini, so `app` imports fine from rootDir either way.
-    #   * The exact command runs locally from `backend/`, is a no-op at head, and
-    #     exits 1 on an unreachable database.
+    # A build runs while the PREVIOUS version is still serving, so the app's own pool
+    # holds connections at exactly the moment the migration wants one — and SQLAlchemy
+    # defaults to pool_size=5 with max_overflow=10, i.e. **fifteen**, against a
+    # free-tier session-mode pooler. `app/database.py` now caps the app at five, which
+    # is the real fix; the script retries, because this contention is transient by
+    # nature (a scheduled pipeline run produces it just as easily).
     #
-    # The untested candidate is **network egress from the build container to
-    # Supabase**. Runtime connectivity demonstrably works (`/api/v1/health` reports
-    # "database":"connected"), so the promising next attempt is the **startCommand**:
+    # Failure modes preserved: a genuinely broken migration exits non-zero after its
+    # retries, the build fails, and the previous version keeps serving.
     #
-    #     startCommand: python -m alembic upgrade head && uvicorn app.main:app ...
-    #
-    # which migrates where the database is known to be reachable. Read the failed
-    # build's log first — this note exists so nobody repeats the same guess.
-    #
-    # Until then: apply migrations to Supabase by hand BEFORE merging a schema change.
-    # Adding nullable columns first is safe — the running version cannot see them.
-    buildCommand: pip install -r requirements.txt
+    # ⚠️ A DESTRUCTIVE migration would be briefly live before the code that tolerates
+    # it. Split those across two deploys — ship the tolerant code first, drop the column
+    # later. Every migration in this repo so far only adds nullable columns, which the
+    # running version cannot see.
+    buildCommand: pip install -r requirements.txt && ./scripts/migrate.sh
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
     healthCheckPath: /api/v1/health
     envVars:
       - key: PYTHON_VERSION
