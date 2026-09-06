@@ -14,28 +14,35 @@ services:
     runtime: python
     rootDir: backend
     plan: free
-    # ⚠️ Migrations run HERE, in the build, and that is a constraint rather than a
-    # preference: `preDeployCommand` — the hook actually designed for this — is only
-    # available on paid instance types, and this service is on the free one. Render's
-    # own docs point at the build command as the free-plan alternative.
+    # ⚠️ THERE IS STILL NO MIGRATION STEP HERE, and it is not for lack of trying.
+    # `preDeployCommand` — the hook designed for this — is paid-only and this service
+    # is on the free plan. Render's docs point at the build command instead, so
+    # 5d111be tried:
     #
-    # Until 2026-09-06 there was no migration step at all, so every schema change had
-    # to be applied to Supabase by hand before merging, and nothing failed loudly if
-    # someone forgot — the deploy simply went out against a schema missing its columns
-    # and every query 500'd.
+    #     buildCommand: pip install -r requirements.txt && python -m alembic upgrade head
     #
-    # What running them in the build means:
-    #   * The build happens while the OLD version is still serving, so a migration is
-    #     live for a short window before the code that uses it. Additive, nullable
-    #     columns (every migration in this repo so far) are invisible to the old code.
-    #     A DESTRUCTIVE migration would break the running version during that window —
-    #     if one is ever needed, split it: deploy code that tolerates both shapes
-    #     first, drop the column in a later deploy.
-    #   * A failed migration fails the build, so the deploy aborts and the old version
-    #     keeps serving. That is the right failure mode.
-    #   * `upgrade head` is a no-op once the database is at head, so repeated builds
-    #     are harmless.
-    buildCommand: pip install -r requirements.txt && python -m alembic upgrade head
+    # The build failed ("Exited with status 1") and was reverted in the next commit,
+    # because a broken deploy path is worse than the manual step it replaced. What was
+    # ruled out afterwards, so the next attempt does not re-tread it:
+    #
+    #   * Env vars ARE available during a Render build, so DATABASE_URL was present.
+    #   * `alembic` is in requirements.txt and `prepend_sys_path = .` is set in
+    #     alembic.ini, so `app` imports fine from rootDir either way.
+    #   * The exact command runs locally from `backend/`, is a no-op at head, and
+    #     exits 1 on an unreachable database.
+    #
+    # The untested candidate is **network egress from the build container to
+    # Supabase**. Runtime connectivity demonstrably works (`/api/v1/health` reports
+    # "database":"connected"), so the promising next attempt is the **startCommand**:
+    #
+    #     startCommand: python -m alembic upgrade head && uvicorn app.main:app ...
+    #
+    # which migrates where the database is known to be reachable. Read the failed
+    # build's log first — this note exists so nobody repeats the same guess.
+    #
+    # Until then: apply migrations to Supabase by hand BEFORE merging a schema change.
+    # Adding nullable columns first is safe — the running version cannot see them.
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     envVars:
