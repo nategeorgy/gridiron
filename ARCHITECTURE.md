@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-06 (M11 + M12 live; docs current; migration automation still open)
+Last updated: 2026-09-06 (M11 + M12 live; docs current; migrations now run on deploy)
 
 ---
 
@@ -672,10 +672,10 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
-- **2026-09-06** — **Migrations automated, on the second attempt.** The build log named
-  the real cause, and it was not the one guessed here: not egress, but
-  `ECHECKOUTTIMEOUT` — the build reached Supabase and could not check out a connection
-  from its session-mode pooler. A build runs while the previous version still serves,
+- **2026-09-06** — **Migrations automated, on the second attempt — confirmed live in
+  aa60162.** The build log named the real cause, and it was not the one guessed here:
+  not egress, but `ECHECKOUTTIMEOUT` — the build reached Supabase and could not check
+  out a connection from its session-mode pooler. A build runs while the previous version still serves,
   and SQLAlchemy's default pool is fifteen connections. `app/database.py` is now capped
   at five, and `backend/scripts/migrate.sh` retries the transient case while still
   exiting non-zero on a genuine failure.

@@ -1374,7 +1374,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   season months before anyone plays in it, so defaulting a board to the newest season
   outright opens the app on an empty table. `GET /api/v1/seasons` returns `has_stats`
   and `completed_games` so schedule-shaped surfaces can still offer the full list
-- ⚠️ **Migrations run in Render's *build* command, via `backend/scripts/migrate.sh`.**
+- ⚠️ **Migrations run in Render's *build* command, via `backend/scripts/migrate.sh`**
+  (confirmed working in aa60162 — schema changes no longer need applying by hand).
   `preDeployCommand` is paid-only on the free plan. The script exists because a bare
   `alembic upgrade head` failed there once — and **not** on connectivity, which was the
   obvious guess and was wrong. The build reached Supabase and could not check out a

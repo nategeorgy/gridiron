@@ -19,6 +19,8 @@ services:
     # Migrations run in the build. `preDeployCommand` is the hook designed for this and
     # is paid-only, so on the free plan Render's docs point here instead.
     #
+    # ✅ Confirmed working: aa60162 built and deployed successfully with this command.
+    #
     # ⚠️ It calls `scripts/migrate.sh` rather than a bare `alembic upgrade head`, and
     # the reason is worth keeping. The bare version failed once (5d111be) — and not on
     # connectivity, which was the obvious guess and was wrong. The build reached
