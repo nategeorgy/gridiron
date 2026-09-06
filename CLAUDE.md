@@ -638,8 +638,17 @@ GET /api/v1/players/{player_id}              ← player profile
 GET /api/v1/players/{player_id}/stats        ← player game log
 GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdown
 GET /api/v1/players/{player_id}/target-depth ← M4 targets by pass depth
-GET /api/v1/stats/leaderboard                ← filterable leaderboard
-GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / buy / sell)
+GET /api/v1/stats/leaderboard                ← filterable leaderboard. M12 adds
+                                               percentiles= (comma-separated metric
+                                               ids to rank, each within that player's
+                                               own position for the season), team=,
+                                               positions= (multi), weeks= (an explicit
+                                               set, e.g. '3,7,12')
+GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / buy /
+                                               sell). Also serves any leaderboard board
+                                               carrying a query-time column. Takes the
+                                               same M12 percentiles=/team=/positions=/
+                                               weeks= params
 GET /api/v1/stats/vegas                      ← M6 one week's market: players ranked by
                                                implied team total, or the slate.
                                                view=players|games
@@ -728,17 +737,25 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   usage, last week's scoring, opportunity leaders, quarterbacks, a featured head-to-head —
   beside a **sticky rail** of reference (scoreboard, watchlist, the two signal cards).
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
-  in the code and in these docs. Boards live in **six** nav dropdowns: **Insight**
+  in the code and in these docs. The nav holds **four dropdowns** — **Insight**
   (`/insight/*` — VORP / Opportunity Rating / Buy Low / Sell High, the M3 derived
-  signals, with both the scoring and league editors), **Draft** (`/draft/*` — Rankings,
-  Mock Draft, Value Board), **Explore** (`/explore/*` — the M4 Scatter and Compare
-  builders, tools rather than ranked tables), **Schedule** (`/schedule/*` — Games, By
-  Team, Vegas Board), **Fantasy Leaderboards** (`/fantasy/*` — Leaders / Expected Points
-  / Passing / Receiving / Rushing, with the league-scoring editor) and **NFL
-  Leaderboards** (`/nfl/*` — All / Passing / Receiving / Rushing, each General &
-  Advanced, raw stats). All 17 boards plus the 9 tool pages are configured in
-  `frontend/src/constants/boards.js`; Insight is listed first — it is the reason to come
-  back.
+  signals), **Draft** (`/draft/*` — Rankings, Mock Draft, Value Board), **Explore**
+  (`/explore/*` — the M4 Scatter and Compare builders) and **Schedule** (`/schedule/*` —
+  Games, By Team, Vegas Board) — plus a single **Leaderboards** mega menu (M12) holding
+  all **14 player boards**, arranged in a column per *area*:
+
+  | | Fantasy | Production | Advanced | Opportunity |
+  |---|:-:|:-:|:-:|:-:|
+  | **Passing** | 16 | 20 | 18 | — |
+  | **Rushing** | 14 | 13 | 15 | 12 |
+  | **Receiving** | 15 | 20 | 26 | *merged into Advanced* |
+  | **All** | 16 | 35 | 36 | 30 |
+
+  Area first because that is how someone arrives — they want receivers, then choose a
+  lens. ⚠️ **Routes stay grouped by type** (`/fantasy/*`, `/nfl/*`, `/opportunity/*`)
+  even though the menu groups by area: a route is what a saved view (M5) and a shared
+  link store. All 18 boards (14 + the 4 Insight) and the tool pages are configured in
+  `frontend/src/constants/boards.js`, which also carries `LEADERBOARD_MENU`.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -946,8 +963,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `weight_by` in the registry. Also corrected a stale claim across four files: the
       participation feed is **not** discontinued, it lags a season
       (see `docs/GridironIQ-stat-inventory.xlsx` for the full stat inventory)
-- [x] M12 — Player Leaderboards: the 17 boards become **12**, in three nav groups
-      (Fantasy / NFL Production / Opportunity × All / Passing / Rushing / Receiving),
+- [x] M12 — Player Leaderboards: the 17 boards become **14** under one Leaderboards
+      mega menu grouped by area (Passing / Rushing / Receiving / All),
       generated from a categorized stat taxonomy. Columns are grouped into **sections**
       with a spanning header, and every value shows its **percentile within its own
       position for that season** beneath it (`app/percentiles.py`, served by both

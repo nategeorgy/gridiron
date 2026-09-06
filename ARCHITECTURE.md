@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-05 (M12: 14 boards, in-page tabs, instant stat tooltips)
+Last updated: 2026-09-06 (M11 + M12 live in production; file map and roadmap brought current)
 
 ---
 
@@ -190,7 +190,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `components/WatchlistToggle.jsx` | UI | ⭐ **The "watchlist only" board filter (M5)** + its `useWatchlistFilter` hook. Disabled (not hidden) when nothing is starred, so the feature is discoverable from the boards. Emits `player_ids` for a **server-side** filter. |
 | `components/SaveViewButton.jsx` | UI | ⭐ **"Save view" (M5)** on every board and both Explore tools — names the current route + query string. Saving under an existing name updates it. Validates the path against the board registry (the catalog check the backend deliberately leaves to the client). |
 | `components/ui/NavDropdown.jsx` | UI (base) | The **Insight ▾ / Draft ▾ / Explore ▾ / Fantasy Leaderboards ▾ / NFL Leaderboards ▾** nav menus — open on hover (desktop) and click/tap (touch), keyboard/Escape accessible. Items come from `constants/boards.js`. |
-| `components/StatTable.jsx` | UI | The ranked stat table + pager **shared by the leaderboard and Insight boards**: click-to-sort headers, accented active column, and positive/negative tinting for columns whose sign carries the meaning. |
+| `components/StatTable.jsx` | UI | The ranked table behind every board. Renders **sections** (a spanning header row over named column groups), a **percentile** beneath each value tinted on a scale that *diverges around the median* (a single-direction ramp turns a 30-column row uniformly green and distinguishes nothing), a dash where a rank is deliberately withheld, and centre-aligned columns. Headers sort on click and carry `StatTooltip`. ⚠️ `signed` (positive/negative value tinting) is empty on all 14 player boards — only percentiles carry colour there; the Insight boards keep it, because there the sign *is* the finding. |
 | `components/TokenPanel.jsx` | UI (dev only) | ⭐ **The editor half of the token studio** — one control per token (colour + alpha, slider, or raw text), a live WCAG contrast readout that composites the translucent surface over the background before scoring, and the copyable CSS. Re-declares every token at its *baseline* value on its own root, so setting `--fg` to the surface colour blanks the gallery but never the controls that would undo it. |
 | `components/ScoringControl.jsx` | UI | The league-scoring editor: preset picker (PPR/Half/Std/TE-Premium) + an expandable custom-weights panel. Emits a scoring spec string. |
 | `components/LeagueControl.jsx` | UI | ⭐ **The league-context editor (M3)**: team count + starting lineup (QB/RB/WR/TE/FLEX/SUPERFLEX), showing the **replacement level it produces per position** so the link between lineup and value is visible. Emits a league spec string. |
@@ -199,6 +199,13 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `components/ExportButton.jsx` | UI | **CSV export of the current view**, on every board and both Explore views. Writes the active filters/scoring/league into a header comment so a download is self-describing. |
 | `components/SearchBox.jsx` | UI | Header player search — type a name, pick a result, jump to that player's profile. |
 | `components/ui/Select.jsx` | UI (base) | A styled labeled `<select>` dropdown used all over the filter bars. |
+| `components/BoardTabs.jsx` | UI | ⭐ **In-page board switcher (M12)** — two tiers, **Area** (Passing / Rushing / Receiving / All) then **Board**. Every one of the 14 is one click from every other without returning to the header: the nav menu is for arriving, this is for comparing. The active area is derived from the route, so a direct link opens on the right tier with no second piece of state to sync. |
+| `components/StatTooltip.jsx` | UI | ⭐ **Column-header tooltip (M12).** Replaces the native `title`, which waited ~1s and rendered in OS chrome — the one place a stat is explained looked like a system error and arrived after the reader had moved on. Shows in **90ms** (short enough to feel free, long enough not to strobe across a 35-column header row) with the full label, definition, the season window where a metric has one, and "Click to sort". Portalled to `document.body`. Exposes `useStatTooltip()`; `StatTable` owns the single instance. |
+| `components/TeamFilter.jsx` | UI | ⭐ **Team filter (M12).** Filters the *stat lines*, so it means "played for this team in this window" — a traded player appears under both clubs for the weeks he actually played there, where `players.team_id` would put his whole season under his current club. ⚠️ Does **not** narrow the percentile pool. |
+| `components/PositionFilter.jsx` | UI | ⭐ **Multi-select position filter (M12).** A single-choice dropdown could not answer "receivers and tight ends", which is what a flex decision asks. Each position lit in its own `--position-*` colour. ⚠️ Narrows the board, never the pool: filtered to WR+TE, two players with identical receiving yards read different percentiles because each is ranked among his own position. |
+| `components/TimeframeFilter.jsx` | UI | ⭐ **The weeks picker (M12).** One control: an explicit set of weeks, or none for the full season. **Last 4 / Last 8** resolve to the last weeks *actually played*, read from `/games/weeks` — the one thing a bare week grid cannot express, since mid-season the reader would otherwise need to know what week it is. Portalled, for the `backdrop-filter` stacking reason. |
+| `components/LeagueSettings.jsx` | UI | ⭐ **Scoring + league size in one card (M12).** They were two adjacent cards reading as two unrelated decisions, but they are one — how *your* league scores and how deep it runs — and the replacement level shown inside depends on both. Renders `ScoringControl` and `LeagueControl` with their `bare` prop, which drops their own card wrapper. |
+| `components/ui/MegaDropdown.jsx` | UI (base) | ⭐ **The Leaderboards mega menu (M12)** — a column per area, modelled on Baseball Savant. Replaced three separate dropdowns that asked the reader to pick a *lens* before a subject. Placement is **measured and clamped** into the viewport rather than anchored `right-0`, which ran the panel off the left edge on anything narrower than a laptop. |
 | `components/charts/FantasyTrendChart.jsx` | UI (chart) | Recharts bar chart of fantasy points by week on the player profile, with expected points overlaid as a dashed line. |
 | `components/charts/MetricScatter.jsx` | UI (chart) | The scatter itself: **players drawn as circular headshots** (with an initialled disc fallback), median reference lines, an optional x=y diagonal for same-unit presets, optional bubble sizing, and faint quadrant captions. The photo carries identity, so no colour encoding is needed — which also sidesteps the colour-vision problem four position hues would create (see the M4 design note §6). |
 | `components/charts/TargetDepthChart.jsx` | UI (chart) | Targets vs catches per air-yard bucket (behind LOS / 0–9 / 10–19 / 20+) on the player page — where a receiver's opportunity actually lives. |
@@ -665,6 +672,13 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-06** — **M11 + M12 deployed, and the docs caught up.** Merged as #23; the
+  three migrations were applied to Supabase by hand *before* the merge, because
+  `render.yaml` has no `alembic upgrade head` and never has — worth fixing, since every
+  future schema change carries the same manual step. Production backfilled in four
+  chunks. Documentation pass: the file map still described the pre-M12 world (17 boards,
+  five dropdowns) and seven M12 components existed only in this changelog, never in the
+  map a newcomer reads; `docs/ROADMAP.md` had no M11 or M12 entry at all.
 - **2026-09-05** — **Trailing-window shortcuts, and the tiers are Area / Board.**
   "Last 4" and "Last 8" live inside the weeks picker and resolve to the last four or
   eight weeks *actually played*, read from `/games/weeks` — the one thing the removed

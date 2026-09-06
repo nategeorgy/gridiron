@@ -363,6 +363,67 @@ the shared engine, and the data behind each mode. Read it before building any of
   render today.
 - Full design note: [`docs/design/M10-command-center-schedule.md`](design/M10-command-center-schedule.md).
 
+### ✅ M11 — Next Gen Stats (shipped 2026-09-05)
+
+- **Shipped:** 23 `ngs_*` columns on `player_stats` (2016+) from nflverse's scrape of
+  nextgenstats.nfl.com via `pipeline/ingest_nextgen.py` — separation, cushion, YAC over
+  expected, time to throw, aggressiveness, stacked-box rate, rush yards over expected.
+- **There is no other route in.** The official NGS API (`docs.ngs.nfl.com`) is a
+  credentialed club/partner portal with no open signup; the licensed resale path is
+  enterprise-priced. Raw tracking data (player x/y at 10Hz) is not public at all — only
+  the annual Big Data Bowl releases slices of it. This free nflverse path is the whole
+  of what is available, which is also why **route trees remain cut** (see below).
+- ⚠️ **The weekly feed is a biased subset, not a sample.** A row needs roughly 15
+  attempts, 5 targets or 10 carries, so a player's quiet games are simply absent.
+  Measured on 2024: a receiver's published weeks cover a median **79%** of his targets,
+  a back's 86%, a quarterback's 100%. A season aggregate weighted from these rows
+  therefore describes a player's *busier games*. Documented rather than corrected —
+  correcting it means storing NGS's season row as a second grain, and `player_stats` is
+  per game.
+- **NGS publishes its own CPOE and its own depth of target, and they are not ours.**
+  Hence the `ngs_` prefix and separate registry entries. Measured against the
+  play-by-play versions they disagree meaningfully: on 2024 quarterbacks the two CPOEs
+  correlate 0.873 and swing Lamar Jackson from 6th to 24th. We kept ours as the headline
+  because it reaches 2006 rather than 2016.
+- **Also:** a NaN guard at the pipeline write boundary. `load_player_stats` publishes
+  ~305,000 non-finite values in 1999-2008; one reached production and made
+  `AVG(target_share)` return NaN for the whole table. See the Decision Log.
+
+### ✅ M12 — Player Leaderboards (shipped 2026-09-05)
+
+- **Shipped:** the 17 boards rebuilt as **14** under a single **Leaderboards** mega
+  menu grouped by area (Passing / Rushing / Receiving / All × Fantasy / Production /
+  Advanced / Opportunity), each board's columns grouped into **sections**, and a
+  **percentile beneath every value**.
+- **19 new stored columns** from three feeds (migration `a91f3c5e7d02`): first downs and
+  sacks from `load_player_stats` — **in the file since 1999 and never read**, which
+  retires the claim that no free feed publishes sacks per player — expected first downs
+  and completions from `load_ff_opportunity`, and ten Pro Football Reference charting
+  columns (2018+) via a new `pipeline/ingest_pfr.py`: pressure, blitz, bad throws,
+  drops, yards before/after contact, broken tackles.
+- **Percentiles are the feature.** `backend/app/percentiles.py`, mid-rank within one
+  position and one season, built on `intelligence.Pool` rather than a second
+  implementation. ⚠️ **The pool is never narrowed by a filter** — team, watchlist,
+  position selection and the caller's `min_games` are all ignored when building it.
+  Filtered to WR+TE, CeeDee Lamb and Brock Bowers both show 1,194 receiving yards and
+  read 96th and 99th percentile. That property is why a percentile is worth printing.
+- **Bench-aware replacement level.** `LeagueConfig.bench` — replacement level is the
+  last *rostered* player, not the last *startable* one. Six bench spots in a 12-team
+  league move WR replacement from WR42 to **WR74** and RB replacement PPG from 11.4 to
+  6.1, reordering VORP rather than rescaling it.
+- **Boards split along the coverage seam, not the column count.** Passing and Rushing
+  each gained an **Advanced** board because their charting and tracking columns start in
+  2016/2018 while the rest reach 1999 — one board would have had a third of its columns
+  dimmed for two-thirds of the seasons. Receiving went the other way: its usage and
+  tracking columns answer the same question, so Advanced and Opportunity merged.
+- **Deliberately not done:** routes still group by *type* (`/nfl/receiving`) while the
+  menu groups by *area*. A route is what a saved view (M5) and a shared link store, and
+  re-cutting all 14 to echo a menu reorganisation would break them to gain nothing a
+  reader can see.
+- **Next:** the **player pages** are the last surface still on the pre-M12 metric set.
+  They have no percentiles and none of the new columns; the machinery they need already
+  exists (`app/percentiles.py`, the registry's `availability` windows, `StatTooltip`).
+
 ### 💭 Dream tail (only when the base is proven)
 - **Fantasy trade calculator** — on VORP / rest-of-season value.
 - **GridironIQ projection model** — own weekly/season model (see Decision Log).
