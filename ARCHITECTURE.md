@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-06 (M11 + M12 live in production; file map and roadmap brought current)
+Last updated: 2026-09-06 (M11 + M12 live; docs current; migrations now run on deploy)
 
 ---
 
@@ -74,7 +74,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
-| `render.yaml` | config | "Blueprint" telling **Render** (the backend host) how to build and run the backend in production. |
+| `render.yaml` | config | "Blueprint" telling **Render** (the backend host) how to build and run the backend in production. ⭐ Its `buildCommand` now runs **`python -m alembic upgrade head`** after installing dependencies — `preDeployCommand`, the hook designed for this, is paid-only and the service is on the free plan. See the file's own comments for the two consequences (a migration is briefly live before its code; a failed migration aborts the deploy). |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
 | `.gitignore` | config | Lists files git should ignore (`.env`, `.venv/`, `node_modules/`, etc.). |
 | `.github/` | tooling | GitHub Actions. `workflows/backend-tests.yml` runs `backend/tests/` on every pull request and on `main`, against a PostgreSQL 16 service container matching `docker-compose.yml`. Its `pytest` job is a **required status check** on `main` — a pull request cannot merge while it is red. Both workflows pin `actions/checkout@v7` and `actions/setup-python@v7`, which declare `using: node24`; GitHub deprecated Node 20 and was force-running the older majors on 24 anyway, warning on every job. |
@@ -672,6 +672,14 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-06** — **Migrations run on deploy.** `render.yaml`'s build command gained
+  `python -m alembic upgrade head`. There had never been a migration step, so every
+  schema change was applied to Supabase by hand and nothing failed loudly if someone
+  forgot — the deploy went out against a schema missing its columns and every query
+  500'd. `preDeployCommand` would be the right hook but is paid-only, so the build
+  command is the free-plan alternative Render's own docs point to. Verified locally:
+  the command runs from `rootDir`, is a no-op at head, and exits non-zero on a bad
+  connection so a failed migration aborts the deploy.
 - **2026-09-06** — **M11 + M12 deployed, and the docs caught up.** Merged as #23; the
   three migrations were applied to Supabase by hand *before* the merge, because
   `render.yaml` has no `alembic upgrade head` and never has — worth fixing, since every

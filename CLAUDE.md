@@ -1374,6 +1374,16 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   season months before anyone plays in it, so defaulting a board to the newest season
   outright opens the app on an empty table. `GET /api/v1/seasons` returns `has_stats`
   and `completed_games` so schedule-shaped surfaces can still offer the full list
+- ⚠️ **Migrations run in Render's *build* command, not a pre-deploy hook.**
+  `preDeployCommand` is paid-only and this service is on the free plan, so
+  `render.yaml` runs `pip install ... && python -m alembic upgrade head`. Two
+  consequences worth holding: the migration is live for a short window *before* the
+  code that uses it, which is invisible for additive nullable columns and would break
+  the running version for a **destructive** one — split those across two deploys (ship
+  code that tolerates both shapes, drop the column later). And a failed migration fails
+  the build, so the deploy aborts and the old version keeps serving, which is the right
+  failure mode. Before 2026-09-06 there was no migration step at all and every schema
+  change was applied to Supabase by hand
 - ⚠️ **`.github/workflows/pipeline.yml` writes to production.** It holds
   `PIPELINE_DATABASE_URL`, the first credential in CI that can change real data. Keep it
   scoped to that workflow, keep the ingests idempotent, and remember that a new ingest

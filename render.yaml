@@ -1,5 +1,10 @@
 # Render Blueprint for the GridironIQ backend API.
 # Render reads this file when you create a "Blueprint" from the repo.
+#
+# NOTE: editing this file does not reconfigure a service that was created from an
+# earlier version of it. Render syncs a Blueprint on push, but a service whose settings
+# were changed in the dashboard keeps the dashboard's values — so after changing the
+# build command here, confirm it took in the service's Settings page.
 # The database is hosted separately on Supabase; its connection string and the
 # allowed CORS origin are set as (secret) environment variables in the Render
 # dashboard — they are intentionally NOT committed here.
@@ -9,7 +14,28 @@ services:
     runtime: python
     rootDir: backend
     plan: free
-    buildCommand: pip install -r requirements.txt
+    # ⚠️ Migrations run HERE, in the build, and that is a constraint rather than a
+    # preference: `preDeployCommand` — the hook actually designed for this — is only
+    # available on paid instance types, and this service is on the free one. Render's
+    # own docs point at the build command as the free-plan alternative.
+    #
+    # Until 2026-09-06 there was no migration step at all, so every schema change had
+    # to be applied to Supabase by hand before merging, and nothing failed loudly if
+    # someone forgot — the deploy simply went out against a schema missing its columns
+    # and every query 500'd.
+    #
+    # What running them in the build means:
+    #   * The build happens while the OLD version is still serving, so a migration is
+    #     live for a short window before the code that uses it. Additive, nullable
+    #     columns (every migration in this repo so far) are invisible to the old code.
+    #     A DESTRUCTIVE migration would break the running version during that window —
+    #     if one is ever needed, split it: deploy code that tolerates both shapes
+    #     first, drop the column in a later deploy.
+    #   * A failed migration fails the build, so the deploy aborts and the old version
+    #     keeps serving. That is the right failure mode.
+    #   * `upgrade head` is a no-op once the database is at head, so repeated builds
+    #     are harmless.
+    buildCommand: pip install -r requirements.txt && python -m alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     envVars:
