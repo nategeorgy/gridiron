@@ -40,6 +40,8 @@ just does not shape it.
 
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
+
 from sqlalchemy.orm import Session
 
 from app.aggregation import (
@@ -116,6 +118,40 @@ class PercentileIndex:
             )
             for position in POSITIONS
         }
+
+    def ranks_for_row(self, row: dict, metric_ids: tuple[str, ...]) -> dict[str, int]:
+        """Positional rank for one row's metrics — 1 is always the best (M13).
+
+        Read from the same pool as the percentile, so the "WR4" in a player page's
+        headline and the percentile on the board beneath it can never describe two
+        different sets of players. Competition ranking: a player ranks one place below
+        everyone strictly better, so ties share a rank and the next one skips — two
+        receivers tied for WR3 are both WR3, and the next is WR5, which is how a finish
+        is quoted.
+
+        Direction comes from the registry exactly as the percentile's does, so "QB1" in
+        interceptions means the fewest. An unqualified player is ranked against the pool
+        he did not make, the same stance the percentile takes.
+        """
+        position = row.get("position")
+        result: dict[str, int] = {}
+        for metric_id in metric_ids:
+            value = row.get(metric_id)
+            if value is None:
+                continue
+            allowed = ranked_positions(metric_id)
+            if allowed is not None and position not in allowed:
+                continue
+            pool = self._pools.get((position, metric_id))
+            if pool is None:
+                continue
+            definition = REGISTRY_BY_ID.get(metric_id)
+            if definition is not None and not definition.higher_is_better:
+                better = bisect_left(pool.values, value)
+            else:
+                better = len(pool.values) - bisect_right(pool.values, value)
+            result[metric_id] = better + 1
+        return result
 
     def for_row(self, row: dict) -> dict[str, int]:
         """Percentiles (0-100, rounded) for one row's metrics, direction-corrected."""

@@ -133,6 +133,8 @@ export const METRICS = {
   market_share: { label: "Market Share", short: "MKT%", format: FORMATS.pct },
   // Composite usage metrics (M4) — registry formulas over the metrics above.
   high_value_touches_per_game: { label: "High-Value Touches / Game", short: "HVT/G", format: FORMATS.two },
+  fantasy_points_per_route_run: { label: "Fantasy Points Per Route Run", short: "FP/RR", format: FORMATS.two },
+  fantasy_points_per_carry: { label: "Fantasy Points Per Carry", short: "FP/CAR", format: FORMATS.two },
   touches_per_snap: { label: "Touches Per Snap", short: "TCH/SNAP", format: FORMATS.three },
   // Snap and route usage (M2 — populated by pipeline/ingest_usage.py).
   snap_count: { label: "Snap Count", short: "SNAP", format: FORMATS.int },

@@ -19,6 +19,11 @@
       "port": 5173,
       "autoPort": true,
       "cwd": "frontend"
+    },
+    {
+      "name": "frontend-attach",
+      "url": "http://localhost:5173",
+      "port": 5173
     }
   ]
 }

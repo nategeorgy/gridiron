@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.career import career_seasons
 from app.database import get_db
 from app.intelligence import breakdown, build_intelligence, resolve_window
 from app.league import parse_league
@@ -15,9 +16,11 @@ from app.schemas.stats import StatLineOut
 from app.scoring import (
     EXPECTED_COMPONENTS,
     POINTS_COMPONENTS,
+    ScoringConfig,
     compute_expected_points,
     compute_points,
     parse_scoring,
+    points_expr,
 )
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -132,6 +135,43 @@ def get_player(player_id: str, db: Session = Depends(get_db)) -> PlayerDetailOut
     out = _to_player_out(player, abbr, PlayerDetailOut)
     out.depth_chart = _depth_chart_slot(db, player_id)
     return out
+
+
+@router.get("/{player_id}/career")
+def get_player_career(
+    player_id: str,
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    scoring: str = Query(
+        "ppr",
+        description="League scoring as preset[:overrides] — the finishes are re-ranked "
+                    "in it, so a superflex or TE-premium league sees its own career",
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Season-by-season career with each season's finish among the player's position.
+
+    Total-points finish ranks everyone who played; the per-game finish ranks only
+    players who cleared the qualification bar, so a two-game cameo cannot post the
+    league's best PPG season (see ``app/career.py``).
+    """
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    seasons = career_seasons(db, player_id, player.position, config, season_type)
+    return {
+        "player_id": player_id,
+        "name": player.name,
+        "position": player.position,
+        "season_type": season_type,
+        "scoring": config.model_dump(),
+        "data": seasons,
+        "total": len(seasons),
+    }
 
 
 @router.get("/{player_id}/intelligence")
@@ -270,6 +310,51 @@ def get_player_target_depth(
     }
 
 
+def _weekly_finishes(
+    db: Session,
+    player_id: str,
+    position: str,
+    config: ScoringConfig,
+    seasons: set[int],
+) -> dict[str, tuple[int, int]]:
+    """Each of this player's games, ranked among his position that week (M13).
+
+    Returns ``{game_id: (rank, pool_size)}``. One window-function query over every week
+    of every season the player appears in, rather than a query per week — a 23-season
+    quarterback would otherwise be ~400 round trips.
+
+    **The pool is everyone at the position with a stat line that week**, deliberately
+    unqualified: a week is one game, so there is no sample to qualify on, and "WR40 that
+    week" is how a weekly finish is quoted. ``RANK()`` is competition ranking, so ties
+    share a place and the next one skips — the same rule as every other rank here.
+
+    Scored with ``points_expr``, the SQL twin of the engine that fills
+    ``fantasy_points`` on each line, so the finish and the points beside it cannot be
+    computed two different ways (TE premium included, which is why ``Player`` is
+    joined).
+    """
+    if not seasons:
+        return {}
+    points = points_expr(config, sum_mode=False)
+    week = (PlayerStats.season, PlayerStats.week, PlayerStats.season_type)
+    ranked = (
+        select(
+            PlayerStats.player_id.label("player_id"),
+            PlayerStats.game_id.label("game_id"),
+            func.rank().over(partition_by=week, order_by=points.desc()).label("position_rank"),
+            func.count().over(partition_by=week).label("pool_size"),
+        )
+        .join(Player, PlayerStats.player_id == Player.player_id)
+        .where(Player.position == position, PlayerStats.season.in_(seasons))
+        .subquery()
+    )
+    rows = db.execute(
+        select(ranked.c.game_id, ranked.c.position_rank, ranked.c.pool_size)
+        .where(ranked.c.player_id == player_id)
+    ).all()
+    return {row.game_id: (row.position_rank, row.pool_size) for row in rows}
+
+
 @router.get("/{player_id}/stats", response_model=PaginatedResponse[StatLineOut])
 def get_player_game_log(
     player_id: str,
@@ -306,6 +391,10 @@ def get_player_game_log(
         .order_by(PlayerStats.season.desc(), PlayerStats.week)
     ).all()
 
+    finishes = _weekly_finishes(
+        db, player_id, player.position, config, {stat_line.season for stat_line, *_ in rows}
+    )
+
     items: list[StatLineOut] = []
     for stat_line, game_date, home_team_id, away_team_id in rows:
         opponent_id = (
@@ -322,6 +411,7 @@ def get_player_game_log(
         expected_components = {name: getattr(stat_line, name) for name in EXPECTED_COMPONENTS}
         expected = compute_expected_points(config, expected_components, player.position)
         line.expected_fantasy_points = round(expected, 3) if expected is not None else None
+        line.position_rank, line.pool_size = finishes.get(stat_line.game_id, (None, None))
         items.append(line)
 
     return paginated(items, len(items), limit=len(items) or 1, offset=0)

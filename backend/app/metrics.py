@@ -362,6 +362,26 @@ REGISTRY: list[MetricDef] = [
                    "role converts playing time into opportunity. A back who touches "
                    "the ball on a third of his snaps is used very differently from "
                    "one who blocks on most of them."),
+    # M13. In the caller's league scoring, like every fantasy number here — so under the
+    # default PPR scoring this *is* PPR points per route run, and in a half-PPR league it
+    # quietly becomes half-PPR rather than reporting a scoring nobody asked for.
+    _m("fantasy_points_per_route_run", "Fantasy Points Per Route Run", "FP/RR", 2,
+       "receiving", "composite", formula="fantasy_points/routes_run",
+       applies_to=["WR", "TE", "RB"],
+       description="Fantasy points divided by routes run, in your league scoring. "
+                   "Yards per route run for fantasy: it folds touchdowns and receptions "
+                   "back in, so it rewards what actually scores rather than yardage "
+                   "alone. Only as available as routes run (2016 onwards)."),
+    # M13. All of a back's fantasy points over his carries — receiving included, the same
+    # way points per route run keeps a receiver's rushing. A rushing-only version would
+    # need the scoring engine to split points by phase, which no composite can express.
+    _m("fantasy_points_per_carry", "Fantasy Points Per Carry", "FP/CAR", 2,
+       "rushing", "composite", formula="fantasy_points/carries",
+       applies_to=["RB"],
+       description="A back's fantasy points divided by his carries, in your league scoring. "
+                   "Includes receiving points, so a back who catches the ball reads higher "
+                   "than one with the same rushing line — which is the fantasy truth about "
+                   "those two players."),
     _m("epa", "EPA", "EPA", 1, "usage", "sum",
        description="Total expected points added — passing, rushing and receiving "
                    "combined, which is why a quarterback's rushing shows up here."),

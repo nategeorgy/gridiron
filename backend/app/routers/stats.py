@@ -976,6 +976,12 @@ def intelligence(
         description="Comma-separated metric ids to return percentile ranks for, each "
                     "within that player's own position for this season.",
     ),
+    ranks: str = Query(
+        "",
+        description="Comma-separated metric ids to return a positional rank for (1 = "
+                    "best, direction-corrected), from the same pool as the percentiles. "
+                    "What a player page's headline shows as 'WR4'.",
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -1050,10 +1056,20 @@ def intelligence(
     # whichever board it appears on.
     percentile_context: dict = {}
     metric_ids = percentile_metric_ids(percentiles)
-    if metric_ids and page_rows:
-        index = PercentileIndex(scored_league, metric_ids, qualify_games(window.weeks))
+    rank_ids = percentile_metric_ids(ranks)
+    if (metric_ids or rank_ids) and page_rows:
+        # One index over both lists, so a rank and a percentile for the same metric are
+        # read from the identical pool rather than two that could drift apart.
+        pooled = tuple(dict.fromkeys(metric_ids + rank_ids))
+        index = PercentileIndex(scored_league, pooled, qualify_games(window.weeks))
         for row in page_rows:
-            row["percentiles"] = index.for_row(row)
+            if metric_ids:
+                row["percentiles"] = {
+                    key: value for key, value in index.for_row(row).items()
+                    if key in metric_ids
+                }
+            if rank_ids:
+                row["ranks"] = index.ranks_for_row(row, rank_ids)
         percentile_context = {
             "metrics": list(metric_ids),
             "pool_sizes": index.pool_sizes,

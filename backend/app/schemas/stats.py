@@ -72,6 +72,21 @@ class StatLineOut(BaseModel):
     yards_per_target: float | None = None
     yards_per_reception: float | None = None
 
+    # Contact, pressure and tracking columns a player page's game log reads (M13). All
+    # coverage-limited: PFR's from 2018, NGS's from 2016 and only for the games NGS
+    # qualified the player in — so a null here is routinely "not measured", never zero.
+    rush_yards_before_contact: int | None = None
+    rush_yards_after_contact: int | None = None
+    bad_throw_rate: float | None = None
+    drops_by_receivers: int | None = None
+    ngs_rush_yards_over_expected: float | None = None
+    ngs_pass_intended_air_yards: float | None = None
+
+    # Where this game finished among the player's position that week, in the request's
+    # scoring (M13). Computed, never stored: it depends on the scoring config.
+    position_rank: int | None = None
+    pool_size: int | None = None
+
     # Expected components (M2 — ffopportunity model estimates)
     passing_yards_exp: float | None = None
     passing_tds_exp: float | None = None
