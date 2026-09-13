@@ -635,7 +635,9 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
 GET /api/v1/players                          ← list/search players. ?player_ids= (M10)
                                                resolves a known list in one call
 GET /api/v1/players/{player_id}              ← player profile
-GET /api/v1/players/{player_id}/stats        ← player game log
+GET /api/v1/players/{player_id}/stats        ← player game log. Each line carries its
+                                               weekly finish (position_rank /
+                                               pool_size), in the request's scoring
 GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdown
 GET /api/v1/players/{player_id}/target-depth ← M4 targets by pass depth
 GET /api/v1/stats/leaderboard                ← filterable leaderboard. M12 adds
@@ -648,7 +650,9 @@ GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / 
                                                sell). Also serves any leaderboard board
                                                carrying a query-time column. Takes the
                                                same M12 percentiles=/team=/positions=/
-                                               weeks= params
+                                               weeks= params, plus ranks= (M13): a
+                                               positional rank per metric (1 = best),
+                                               from the same pool as the percentile
 GET /api/v1/stats/vegas                      ← M6 one week's market: players ranked by
                                                implied team total, or the slate.
                                                view=players|games
@@ -971,7 +975,15 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `/stats/leaderboard` and `/stats/intelligence`). Added a **team filter**. Nineteen
       new columns (migration `a91f3c5e7d02`) from three feeds, including a new
       `pipeline/ingest_pfr.py` for Pro Football Reference advanced stats
-- [x] Backend test suite (`backend/tests/`, 354 tests) — the repo's first automated
+- [x] M13 — Player page rebuild: the profile becomes the position-shaped page it should
+      always have been. `GET /players/{id}/career` (`app/career.py`) returns season by
+      season with each season's **finish among the position**, re-ranked in your scoring;
+      the season row, the radar and the percentile panel are three views of **one**
+      `/stats/intelligence` request; and a **head-to-head** compares any two players at the
+      position with the margin badged on the winner's side. Every column list is
+      position-specific and lives in `frontend/src/constants/playerPage.js`; the surfaces
+      are `components/player/*`. **No migration and no new stored column**
+- [x] Backend test suite (`backend/tests/`, 363 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -1454,6 +1466,71 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - **`--series-4` (gold) cannot take white text.** It measures 2.17:1 in the light theme,
   nowhere near the 4.5:1 floor. Any badge or fill built on a series hue needs its ink
   chosen per hue rather than inheriting one white — see `components/home/HeadToHeadCard.jsx`
+- **A career finish needs two pools, not one** (M13). Total-points rank includes everyone
+  who played — a season cut short still produced what it produced, and hiding it
+  misrepresents the career — while the per-game rank includes only players who cleared
+  `QUALIFY_FRACTION`, or a two-game cameo at 28 PPG posts the league's best season. Brady's
+  one-game 2000 is the test case: 71st in total points, no PPG rank at all
+- **Rank a whole career in one query, not one query per season.** `app/career.py` groups by
+  `(player_id, season)` across every season the player appears in and ranks in Python; the
+  obvious alternative is N leaderboard-sized aggregations, and a 23-season quarterback makes
+  that obvious immediately
+- **A player page's season row comes from `/stats/intelligence`, not the leaderboard**
+  (M13) — the same reason six boards do. VORP and the query-time columns exist only on the
+  scored rows, and that endpoint also returns percentiles, so one request feeds the stat
+  grid, the radar and the percentile panel. Putting the *comparison* player in the same
+  request is what guarantees both halves of a matchup were ranked against identical pools
+- **A comparison picker on a player page is restricted to that player's position** (M13).
+  Every axis beside it is a percentile within a position pool, so a receiver's target share
+  against a quarterback's is two questions sharing an axis. `/explore/compare` deliberately
+  allows mixed positions and handles it by intersecting metrics — that is the *builder*;
+  this is the *matchup*, and they answer different questions
+- **A per-game rate is not the season rate — and check whether it is stored before
+  deriving it.** A season's rate is `Σnumerator / Σdenominator` (aggregate first), so the
+  season row keeps coming from the API. A single game's rate divides that game's own
+  numbers. ⚠️ `yards_per_reception`, `yards_per_target` and `yards_per_route_run` **are
+  stored per game** (and match their own division exactly) — an earlier M13 note here
+  claimed otherwise and was wrong. What `gameValue()` in `constants/playerPage.js` derives
+  is only what no column holds: the registry's `derived` rates (`yards_per_carry`,
+  `completion_pct`, `yards_per_attempt`, `yards_per_completion`), the
+  `fantasy_points_per_route_run` composite, and `high_value_touches_per_game` as a plain
+  sum on one game
+- **A weekly finish ranks everyone at the position with a stat line that week, unqualified**
+  (M13, `_weekly_finishes` in `routers/players.py`). A week is one game, so there is no
+  sample to qualify on, and "WR40 that week" is how a weekly finish is quoted — the
+  opposite of a season rank, which uses the qualified pool. It is one `RANK()` window query
+  over every week of every season the player appears in, scored with `points_expr` (the SQL
+  twin of the engine filling `fantasy_points` on the same line), so it re-ranks in the
+  caller's scoring: Trey McBride's 2025 week 1 is TE12 in PPR, TE17 in standard and TE8
+  with a TE premium
+- **A finish is coloured by how deep the league starts that position, never by a
+  percentile of its pool** (`components/player/FinishChip.jsx`). A weekly pool holds ~150
+  receivers, so a pool percentile paints WR40 as upper-half when every manager reads it as a
+  bad week. And one tier size for every position was also wrong: a 12-team league starts 12
+  quarterbacks and 36+ receivers, so QB22 is unstartable where WR22 is ordinary.
+  `startingDepth` mirrors `replacement_ranks` in `app/league.py` **without the bench** (the
+  question is "startable", not "rostered") — and must stay in step with it, **rounding
+  included**: flex shares land on .5 (a 14-team 1RB/2WR/1TE/3FLEX league gives backs 24.5),
+  and `Math.round` disagreed with Python's half-to-even `round` by one until it was
+  mirrored. Five steps: dark green / light green / yellow / light red (one league's worth
+  of ranks past the starting line) / dark red. ⚠️ **The tint values were searched, not
+  picked** — a hand-picked set passed contrast yet put three middle steps within 3.5 of each
+  other in the light theme (pale tints on white converge), and the unconstrained optimum
+  made yellow as loud as the extremes. Re-run the measurement before changing a number The chip is a tint with text mixed toward `--fg`, not a solid fill: a solid
+  `--pos` fill cannot carry legible small text in the light theme (the first version
+  measured 4.23:1)
+- **A positional rank comes from the percentile's pool, never from a leaderboard's
+  row order** (M13). `PercentileIndex.ranks_for_row` counts the qualified players strictly
+  better than this one, direction-corrected, so ties share a rank and "QB1" in
+  interceptions means the fewest. The leaderboard's order breaks ties by row position and
+  includes every one-game backup — against that pool Josh Allen's 2025 reads QB70 in
+  interceptions; against the 43 who played a season he is QB29, which is also what his
+  percentile says. A page showing a rank and a percentile for the same stat must read both
+  from one pool, or the two disagree on screen
+- **A quarterback's aDOT is `ngs_pass_intended_air_yards`, not `adot`.** `adot` is the
+  receiving column and is null for quarterbacks (a stray value there is a gadget catch), so
+  anything quarterback-facing that wants depth of throw reads the NGS column and inherits
+  its 2016 floor
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

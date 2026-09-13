@@ -19,6 +19,15 @@ export async function getPlayers(params) {
   return data;
 }
 
+/**
+ * Fetch a player's season-by-season career with each season's position finish (M13).
+ * Params: scoring, season_type. The finishes are re-ranked in the requested scoring.
+ */
+export async function getPlayerCareer(playerId, params = {}) {
+  const { data } = await api.get(`/players/${playerId}/career`, { params });
+  return data;
+}
+
 /** Fetch a player's targets bucketed by pass depth (M4). */
 export async function getPlayerTargetDepth(playerId, params) {
   const { data } = await api.get(`/players/${playerId}/target-depth`, { params });

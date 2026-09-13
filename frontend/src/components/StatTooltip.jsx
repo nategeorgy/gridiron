@@ -54,6 +54,12 @@ export function StatTooltip({ tip }) {
 
   if (!tip || !box) return null;
 
+  const hint = tip.unavailable
+    ? "Not recorded this season"
+    : tip.hint === undefined
+      ? "Click to sort"
+      : tip.hint;
+
   return createPortal(
     <div
       role="tooltip"
@@ -76,9 +82,14 @@ export function StatTooltip({ tip }) {
           {tip.seasons}
         </p>
       )}
-      <p className="mt-2 border-t border-line pt-1.5 text-[11px] font-semibold italic text-accent">
-        {tip.unavailable ? "Not recorded this season" : "Click to sort"}
-      </p>
+      {/* The footer states what the header *does*, so a surface where it does nothing
+          passes `hint: null` rather than inheriting a promise it cannot keep — the
+          player page shows these same tooltips on cells that do not sort. */}
+      {hint && (
+        <p className="mt-2 border-t border-line pt-1.5 text-[11px] font-semibold italic text-accent">
+          {hint}
+        </p>
+      )}
     </div>,
     document.body,
   );
