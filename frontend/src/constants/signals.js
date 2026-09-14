@@ -16,6 +16,13 @@
 // highest in the NFL. That is what `note` is for, and his row is the standing evidence
 // that **rate over baseline** is the signal a computed version of this card still
 // needs.
+//
+// **The picks describe 2025, so the cards read 2025.** Every number is live, but live
+// for the season the picks were chosen from: once the app moved to 2026, pointing these
+// cards at the current season showed Stafford's Week 1 beside a note about his 46
+// touchdowns. They follow the new season when the picks do — re-picked or computed —
+// and not before.
+export const SIGNALS_SEASON = 2025;
 
 /** Scoring below what the opportunity was worth — the usage is already there. */
 export const UNDERPERFORMERS = [
@@ -38,7 +45,7 @@ export const REGRESSION_CANDIDATES = [
 /** The featured head-to-head. A committee, so the two profiles actually differ. */
 export const FEATURED_MATCHUP = {
   players: ["00-0037248", "00-0039040"], // James Cook, De'Von Achane
-  caption: "2025",
+  caption: String(SIGNALS_SEASON),
 };
 
 /** The eight axes the radar draws. Volume, share and output, in that order. */

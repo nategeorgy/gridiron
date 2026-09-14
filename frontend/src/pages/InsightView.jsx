@@ -141,7 +141,9 @@ export function InsightView({ board }) {
             columns={exportData.columns}
             context={[
               `GridironIQ — ${board.title}`,
-              `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} played weeks` : " · full season"}${positions ? ` · ${positions}` : ""}`,
+              `${season} ${seasonType}${
+                weeks ? ` · weeks ${weeks}` : " · full season"
+              }${positions ? ` · ${positions}` : ""}${team ? ` · ${team}` : ""}`,
               `sorted by ${metrics[sortMetric]?.label ?? sortMetric} · scoring: ${scoring} · league: ${league}`,
               "Scores are percentiles within each player's position pool, not absolute values.",
             ]}

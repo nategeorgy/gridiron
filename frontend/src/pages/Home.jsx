@@ -29,8 +29,10 @@ import {
   FEATURED_MATCHUP,
   OPPORTUNITY_OUTLOOK,
   REGRESSION_CANDIDATES,
+  SIGNALS_SEASON,
   UNDERPERFORMERS,
 } from "../constants/signals";
+import { scaledMinGames, weeksPlayed } from "../utils/qualify";
 
 import { ScoreboardCard } from "../components/home/ScoreboardCard";
 import { TrendingCard } from "../components/home/TrendingCard";
@@ -69,6 +71,12 @@ export function Home() {
   // --- The rail's scoreboard. Which two weeks it shows is the server's call. ---
   const scoreboard = useScoreboard();
   const lastPlayed = scoreboard.data?.last;
+
+  // The season boards' game floors are written for a full season and scaled to the
+  // weeks played, or both cards sit empty until October. They wait for the scoreboard
+  // to say how far in we are rather than asking twice; an error falls back to the floor.
+  const weeks = weeksPlayed(season, lastPlayed);
+  const seasonBoardsReady = !scoreboard.isLoading;
 
   // --- Trending usage, in the reader's own scoring. ---
   const trending = useTrending({ season, season_type: "REG", direction: "up", scoring, limit: 6 });
@@ -124,11 +132,12 @@ export function Home() {
         metric: oppPosition === "RB" ? "carries" : "targets",
         scoring,
         order: "desc",
-        min_games: 4,
+        min_games: scaledMinGames(4, weeks),
         limit: 10,
       }),
-      [season, oppPosition, scoring],
+      [season, oppPosition, scoring, weeks],
     ),
+    { enabled: seasonBoardsReady },
   );
 
   // --- Quarterbacks by EPA, with the per-play rate beside it. ---
@@ -141,11 +150,12 @@ export function Home() {
         metric: "epa",
         scoring,
         order: "desc",
-        min_games: 8,
+        min_games: scaledMinGames(8, weeks),
         limit: 10,
       }),
-      [season, scoring],
+      [season, scoring, weeks],
     ),
+    { enabled: seasonBoardsReady },
   );
 
   // --- Watchlist. Rendered only once signed in *and* something is starred: an empty
@@ -162,12 +172,13 @@ export function Home() {
   );
 
   // --- The two signal cards. The *picks* are hardcoded (see constants/signals.js);
-  //     every number below is live, and in the reader's own scoring. ---
+  //     every number below is live, and in the reader's own scoring — for the season
+  //     the picks describe, not the current one. ---
   const signalIds = [...UNDERPERFORMERS, ...REGRESSION_CANDIDATES].map((pick) => pick.playerId).join(",");
   const signals = useLeaderboard(
     useMemo(
       () => ({
-        season,
+        season: SIGNALS_SEASON,
         season_type: "REG",
         metric: "fantasy_points_over_expected",
         scoring,
@@ -176,7 +187,7 @@ export function Home() {
         limit: 20,
         player_ids: signalIds,
       }),
-      [season, scoring, signalIds],
+      [scoring, signalIds],
     ),
   );
   const underRows = withStats(UNDERPERFORMERS, signals.data?.data);
@@ -185,8 +196,8 @@ export function Home() {
   // --- The featured matchup. ---
   const matchup = useCompare(
     useMemo(
-      () => ({ players: FEATURED_MATCHUP.players.join(","), season, season_type: "REG", scoring }),
-      [season, scoring],
+      () => ({ players: FEATURED_MATCHUP.players.join(","), season: SIGNALS_SEASON, season_type: "REG", scoring }),
+      [scoring],
     ),
   );
 
@@ -195,7 +206,7 @@ export function Home() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-fg">Highlighted Data</h1>
         <Link
-          to="/fantasy/leaders"
+          to="/fantasy/all"
           className="glass-pill inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition hover:!text-accent"
           title="Adjust your league scoring on the leaderboard"
         >
@@ -229,13 +240,13 @@ export function Home() {
             position={oppPosition}
             onPositionChange={setOppPosition}
             result={opportunity.data}
-            isLoading={opportunity.isLoading}
+            isLoading={scoreboard.isLoading || opportunity.isLoading}
             isError={opportunity.isError}
           />
           <QuarterbackCard
             season={season}
             result={quarterbacks.data}
-            isLoading={quarterbacks.isLoading}
+            isLoading={scoreboard.isLoading || quarterbacks.isLoading}
             isError={quarterbacks.isError}
           />
           <HeadToHeadCard
@@ -264,14 +275,14 @@ export function Home() {
           )}
           <SignalCard
             kind="under"
-            season={season}
+            season={SIGNALS_SEASON}
             rows={underRows}
             isLoading={signals.isLoading}
             isError={signals.isError}
           />
           <SignalCard
             kind="over"
-            season={season}
+            season={SIGNALS_SEASON}
             rows={overRows}
             isLoading={signals.isLoading}
             isError={signals.isError}

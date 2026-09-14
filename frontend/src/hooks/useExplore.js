@@ -2,11 +2,12 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { getCompare, getScatter } from "../services/stats";
 
-export function useScatter(params) {
+export function useScatter(params, options = {}) {
   return useQuery({
     queryKey: ["scatter", params],
     queryFn: () => getScatter(params),
     placeholderData: keepPreviousData,
+    ...options,
   });
 }
 

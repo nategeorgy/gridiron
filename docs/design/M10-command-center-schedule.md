@@ -46,7 +46,10 @@ an explicit "ET" so it is never ambiguous. Present from 2000; the feed carries n
 kickoff for 1999, which renders as no time rather than as midnight.
 
 **"Which two weeks" is a server decision.** `/games/scoreboard` returns the newest
-regular-season week with a final score and the earliest without one. The rule depends on
+regular-season week in which **most** games are final, and the first week after it with a
+game still to play. (The first build took *any* final and the earliest unplayed week, which
+put one week in both tabs from its Thursday opener until Monday night's result — found on
+the 2026 rollover.) The rule depends on
 the season clock, so a client reimplementing it would drift — and from January to
 September the two windows **straddle different seasons**, which is why each names its
 own rather than the response naming one.

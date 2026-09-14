@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-12 (M13 season headline, board rows + game log; M11 + M12 live; migrations run on deploy)
+Last updated: 2026-09-14 (2026 season rollover: scoreboard rule, scaled game floors, retired board redirects)
 
 ---
 
@@ -98,7 +98,7 @@ Following one real interaction makes the whole architecture click. **"User opens
 leaderboard and sorts by fantasy points in their custom PPR scoring":**
 
 1. Browser loads the React app (`frontend/`). The router (`App.jsx`) shows
-   `LeaderboardView` at `/fantasy/leaders` (the home route `/` is the Command Center;
+   `LeaderboardView` at `/fantasy/all` (the home route `/` is the Command Center;
    the old `/leaderboard` URL redirects here).
 2. The page reads the user's chosen filters (season, position, scoring) and calls a
    **hook** (`useLeaderboard`), which calls a **service** (`services/stats.js`),
@@ -146,7 +146,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | Path | Layer | What it does |
 | --- | --- | --- |
 | `main.jsx` | entry | Boots React. Wraps the app in `QueryClientProvider` (React Query), **`AuthProvider`** (M5 — inside the query client, since it clears cached account queries on sign-out), and `BrowserRouter`. Imports global CSS. |
-| `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/insight/*` → `InsightView`; **`/explore/*` → the M4 tools** (`ScatterView`, `CompareView`, mapped from `EXPLORE_ITEMS`); **`/draft/*` → the M9 draft surface** (`RankingsView`, `MockDraftView`, `DraftBoardView`, plus `/draft/boards/:boardId` → `BoardEditor`), with `/insight/draft` redirecting to `/draft/value`; **`/schedule/*` → the M10 schedule surface** (`GamesView`, `ScheduleGridView`, and the Vegas board moved from `/insight/vegas`, which redirects); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/leaders`; and **`/styleguide` → the design-token studio, registered only when `import.meta.env.DEV`** so it never ships. All wrapped in `Layout`. |
+| `App.jsx` | routing | The route table. `/` → **Home** (Command Center); a route **per leaderboard board** generated from `constants/boards.js` (`/fantasy/*` and `/nfl/*`, all rendered by `LeaderboardView`); `/insight/*` → `InsightView`; **`/explore/*` → the M4 tools** (`ScatterView`, `CompareView`, mapped from `EXPLORE_ITEMS`); **`/draft/*` → the M9 draft surface** (`RankingsView`, `MockDraftView`, `DraftBoardView`, plus `/draft/boards/:boardId` → `BoardEditor`), with `/insight/draft` redirecting to `/draft/value`; **`/schedule/*` → the M10 schedule surface** (`GamesView`, `ScheduleGridView`, and the Vegas board moved from `/insight/vegas`, which redirects); `/players/:playerId` → PlayerProfile; `/teams` → Teams; legacy `/leaderboard` → redirect to `/fantasy/all`, and the six board paths M12 retired (`RETIRED_BOARDS`: `/fantasy/leaders`, `/fantasy/expected`, `/nfl/*-general`) → the board that absorbed each, query string kept (there is no catch-all, so an unmatched path renders nothing at all); and **`/styleguide` → the design-token studio, registered only when `import.meta.env.DEV`** so it never ships. All wrapped in `Layout`. |
 | `index.css` | styling | Global styles + Tailwind directives + **the Liquid Glass theme system**: light/dark CSS-variable palettes (swapped via `data-theme`), the `body` environment gradient, and the shared `.glass-*` component classes. Plus the `.stat-num` mono-font helper. **The single source of truth for every theme value** — `/styleguide` reads these at runtime rather than copying them. See [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md). |
 | **`pages/`** | pages | Top-level screens, one per route. |
 | `pages/Home.jsx` | page | ⭐ **The home screen (`/`) — the Command Center**, rebuilt in M10 as the "Fantasy Desk" layout. The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name in the code and the docs, not on screen. Two columns rather than a bento: the wide column is the reading order a manager follows (trending usage → last week's scoring → opportunity leaders → quarterbacks → the featured head-to-head), and a **sticky rail** holds reference they glance at (the scoreboard, their watchlist, and the two signal cards). Composes `components/home/*` and owns only the data fetching. **Two seasons are in play from January to September** — the fantasy cards describe the last season *played*, the scoreboard describes the schedule, which runs a year ahead — so every card names its own season rather than the page claiming one. |
@@ -269,6 +269,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | **`utils/`** | util | Pure helpers. |
 | `utils/format.js` | util | `formatStat(value, format)` — renders a number as int / N-decimals / percent, with an em-dash for nulls so columns stay aligned. Plus `ordinal` (21 → "21st"), `formatPercentile` (0.92 → "92nd", built on it) and `formatSigned` (explicit `+` on gaps). |
 | `utils/availability.js` | util | ⭐ **Reading a metric's season window in the UI (M8).** `isMetricAvailable`, `describeAvailability` ("1999–2002, 2009–present"), and `firstAvailableColumn` — the sort fallback, because ranking by a stat the season has no data for orders the table arbitrarily. The windows come from the registry, never from constants here. |
+| `utils/qualify.js` | util | **Minimum-games floors scaled to the season so far.** `weeksPlayed(season, scoreboard.last)` and `scaledMinGames(threshold, weeks, outOf)`. A floor is written for a full season (or a full window) and scaled proportionally — the client twin of `qualify_games` in `app/percentiles.py` — or the home page's opportunity and quarterback cards and the scatter builder sit empty for the first month of a season. Used by `Home` and `ScatterView`, both of which wait for the scoreboard rather than querying twice. |
 | `utils/draftBots.js` | util | ⭐ **The mock-draft engine (M9)** — snake order, roster targets, the bot pick, and the lineup-slot assignment the roster panel and the position filters both read (`lineupSlots` / `assignToSlots`, mirroring `lineup_slots()` in `app/mock_draft.py`). Slots are filled in **draft order** here and by **expected points** in the grade, deliberately: this panel answers "what am I missing", and a lineup that rearranges itself every pick cannot. **Bots have no ADP** (no free source publishes one), so reach and fall are drawn from the consensus's *own disagreement*: a player two boards place 3rd and 14th moves a lot in the room, one they all place 2nd barely moves. Plus positional need against the league's starting lineup, a light positional-run effect, and the user's randomness dial. Pure functions, so the room can call them from an effect. |
 | `utils/csv.js` | util | CSV export (M4): `toCsv` (with quote escaping), `buildBoardExport` (rows/columns for any ranked board), `downloadCsv`, `slugify`. |
 | `utils/color.js` | util | Colour maths for the token studio: parse hex/`rgba()` into channels + alpha, format back the way `index.css` authors it, alpha-composite a layer stack, and score WCAG contrast. Used only by `/styleguide` — components consume tokens, they never reason about what one resolves to. |
@@ -684,6 +685,15 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-14** — **2026 season rollover.** `/games/scoreboard` now calls a week "last" once
+  *most* of its games are final and "next" the first week after it, so Monday of Week 1 reads
+  Week 1 / Week 2 instead of Week 1 twice. New `utils/qualify.js` scales the home page's and
+  the scatter builder's minimum-games floors to the weeks played. The signal cards and the
+  featured head-to-head pin to `SIGNALS_SEASON` (2025), the season their hand-picked players
+  describe. Two M12 regressions fixed on the way: `InsightView` referenced an undefined
+  `lastWeeks` and crashed every board it serves, and six retired board paths — still linked
+  from the home page and player page — rendered a blank app; they redirect via
+  `RETIRED_BOARDS` in `App.jsx`. No migration.
 - **2026-09-12** — **M13: five-step finish colours.** `FinishChip` goes dark green → light green →
   yellow → light red → dark red; the old single "outside" tier splits at one league's worth of
   ranks past the starting line. Frontend only.

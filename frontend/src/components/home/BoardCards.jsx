@@ -62,7 +62,7 @@ export function WeeklyScoringCard({ week, position, onPositionChange, result, is
           </tbody>
         </ScrollTable>
       )}
-      <CardLink to="/fantasy/leaders">Full weekly board</CardLink>
+      <CardLink to="/fantasy/all">Full weekly board</CardLink>
     </Card>
   );
 }
@@ -240,7 +240,7 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
           </tbody>
         </ScrollTable>
       )}
-      <CardLink to="/fantasy/leaders?watchlist=1">Manage watchlist</CardLink>
+      <CardLink to="/fantasy/all?watchlist=1">Manage watchlist</CardLink>
     </Card>
   );
 }

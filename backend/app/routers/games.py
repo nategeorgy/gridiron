@@ -12,7 +12,7 @@ tab on a season that finished eight months ago.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.database import get_db
@@ -139,24 +139,40 @@ def game_weeks(
 
 
 def _newest_played_week(db: Session) -> tuple[int, int] | None:
-    """The most recent regular-season week with a final score in it."""
+    """The newest regular-season week in which most of the games are final.
+
+    *Most*, not any. A week reads as "just played" once its Sunday slate is in, with
+    Monday night still to come — and not when only its Thursday opener is. The first
+    rule here took any final, which made a week "last" from Thursday night while its
+    earliest unplayed game also made it "next", so both tabs showed the same week
+    until Monday night's result arrived.
+    """
     row = db.execute(
         select(Game.season, Game.week)
-        .where(Game.season_type == "REG", Game.home_score.is_not(None), Game.week.is_not(None))
+        .where(Game.season_type == "REG", Game.week.is_not(None))
+        .group_by(Game.season, Game.week)
+        .having(func.count(Game.home_score) * 2 > func.count())
         .order_by(Game.season.desc(), Game.week.desc())
         .limit(1)
     ).first()
     return (row.season, row.week) if row else None
 
 
-def _next_unplayed_week(db: Session) -> tuple[int, int] | None:
-    """The earliest regular-season week that has not been played."""
-    row = db.execute(
-        select(Game.season, Game.week)
-        .where(Game.season_type == "REG", Game.home_score.is_(None), Game.week.is_not(None))
-        .order_by(Game.season, Game.week)
-        .limit(1)
-    ).first()
+def _next_unplayed_week(db: Session, after: tuple[int, int] | None) -> tuple[int, int] | None:
+    """The earliest regular-season week after ``after`` that still has a game to play.
+
+    Strictly after, so the two windows are never the same week — which also means a
+    game postponed out of an earlier week cannot pin "next" to the past.
+    """
+    query = select(Game.season, Game.week).where(
+        Game.season_type == "REG", Game.home_score.is_(None), Game.week.is_not(None)
+    )
+    if after is not None:
+        season, week = after
+        query = query.where(
+            or_(Game.season > season, and_(Game.season == season, Game.week > week))
+        )
+    row = db.execute(query.order_by(Game.season, Game.week).limit(1)).first()
     return (row.season, row.week) if row else None
 
 
@@ -165,10 +181,12 @@ def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
     """The week just played and the week coming up.
 
     The rule lives here rather than in the client because it depends on the season
-    clock, and a client reimplementing it would drift. In season the two windows are
-    consecutive weeks; from January to September they straddle two seasons — Week 18 of
-    the season that finished beside Week 1 of the one that has not started — which is
-    why each window names its own season.
+    clock, and a client reimplementing it would drift. "Last" is the newest week that is
+    mostly final and "next" is the first week after it with a game to play, so from the
+    Monday of a week to the Sunday of the next they read Week N and Week N+1. In season
+    the two windows are consecutive weeks; from January to September they straddle two
+    seasons — Week 18 of the season that finished beside Week 1 of the one that has not
+    started — which is why each window names its own season.
 
     **Regular season only.** Fantasy ends at Week 17 or 18, so the playoffs are not
     "last week" to anyone this page is for; they would also sit between the two windows
@@ -186,4 +204,5 @@ def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
             games=[_to_game(dict(row)) for row in rows],
         )
 
-    return ScoreboardOut(last=window(_newest_played_week(db)), next=window(_next_unplayed_week(db)))
+    last = _newest_played_week(db)
+    return ScoreboardOut(last=window(last), next=window(_next_unplayed_week(db, after=last)))

@@ -1386,6 +1386,18 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   season months before anyone plays in it, so defaulting a board to the newest season
   outright opens the app on an empty table. `GET /api/v1/seasons` returns `has_stats`
   and `completed_games` so schedule-shaped surfaces can still offer the full list
+- ⚠️ **A full-season `min_games` floor empties its card for the first month.** The app
+  moves to a new season the moment it has *any* stats, and on the 2026 rollover the home
+  page's 4-game and 8-game floors and the scatter's 4-game floor all returned nothing in
+  Week 1. A floor is stated for a full season and scaled to the weeks played
+  (`utils/qualify.js`, the client twin of `qualify_games`) — proportionally, because from
+  Week 5 byes mean a starter has played one game fewer than the week number
+- ⚠️ **An unmatched route renders nothing — header included.** There is no catch-all, so
+  retiring a path without a redirect blanks the app for every saved view (M5) and shared
+  link that stored it. M12 retired six board paths and the home page and player page kept
+  linking to one of them; `RETIRED_BOARDS` in `App.jsx` now redirects each to the board
+  that absorbed it, **keeping the query string**, since the filters are what a saved view
+  saved
 - ⚠️ **Migrations run in Render's *build* command, via `backend/scripts/migrate.sh`**
   (confirmed working in aa60162 — schema changes no longer need applying by hand).
   `preDeployCommand` is paid-only on the free plan. The script exists because a bare

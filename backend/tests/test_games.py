@@ -7,10 +7,10 @@ positive number favours the home side and a negative one favours the away side. 
 that sign wrong labels every underdog a favourite while the page looks completely
 normal — the same trap `test_vegas.py` pins for implied totals, one layer up.
 
-**The scoreboard's two windows.** "Last" is the newest week with a final score and
-"next" is the earliest week without one. In season they are consecutive; from January to
-September they straddle two seasons, and a client that assumed one season would show
-last year's Week 1 as "coming up".
+**The scoreboard's two windows.** "Last" is the newest week in which most games are
+final and "next" is the first week after it with a game still to play. In season they are
+consecutive; from January to September they straddle two seasons, and a client that
+assumed one season would show last year's Week 1 as "coming up".
 """
 
 from datetime import date, time
@@ -145,6 +145,49 @@ def test_scoreboard_windows_may_straddle_two_seasons(client: TestClient, schedul
     body = client.get(SCOREBOARD).json()
 
     assert body["last"]["season"] != body["next"]["season"]
+
+
+def _add_week_one_games(
+    db: Session, team: Team, opponent: Team, *, played: int, unplayed: int
+) -> None:
+    """Add games to 2026 week 1, beside the fixture's own unplayed game."""
+    for index in range(played + unplayed):
+        final = index < played
+        db.add(Game(
+            game_id=f"2026_01_EXTRA_{index}", season=2026, week=1, season_type="REG",
+            home_team_id=team.team_id, away_team_id=opponent.team_id,
+            home_score=21 if final else None, away_score=17 if final else None,
+            game_date=date(2026, 9, 13),
+        ))
+    db.flush()
+
+
+def test_a_week_is_last_once_most_of_it_is_final(
+    client: TestClient, db: Session, schedule: None, team: Team, opponent: Team
+):
+    """Monday of Week 1: Sunday is in, Monday night is not. That reads Week 1 / Week 2.
+
+    The first rule showed Week 1 in *both* tabs here — "last" because a game in it was
+    final, "next" because a game in it was not.
+    """
+    _add_week_one_games(db, team, opponent, played=2, unplayed=0)
+
+    body = client.get(SCOREBOARD).json()
+
+    assert (body["last"]["season"], body["last"]["week"]) == (2026, 1)
+    assert (body["next"]["season"], body["next"]["week"]) == (2026, 2)
+
+
+def test_a_thursday_opener_alone_does_not_make_its_week_last(
+    client: TestClient, db: Session, schedule: None, team: Team, opponent: Team
+):
+    """One final out of three is the opener, not the week — its Sunday is still ahead."""
+    _add_week_one_games(db, team, opponent, played=1, unplayed=1)
+
+    body = client.get(SCOREBOARD).json()
+
+    assert (body["last"]["season"], body["last"]["week"]) == (2025, 18)
+    assert (body["next"]["season"], body["next"]["week"]) == (2026, 1)
 
 
 def test_scoreboard_is_empty_rather_than_erroring_with_no_schedule(client: TestClient):
