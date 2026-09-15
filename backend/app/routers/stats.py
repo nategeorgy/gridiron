@@ -62,7 +62,7 @@ from app.intelligence import build_intelligence, resolve_window
 from app.league import FLEX_ELIGIBLE, parse_league
 from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
-from app.seasons import current_season, latest_scheduled_season
+from app.seasons import current_season, latest_scheduled_season, week_bounds
 from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
 from app.trending import (
     DEFAULT_WINDOW as TREND_WINDOW,
@@ -384,12 +384,7 @@ def _resolve_team_id(db: Session, abbreviation: str) -> int | None:
 
 def _window_weeks(db: Session, season: int, season_type: str) -> int:
     """How many weeks the season actually holds — the percentile pool's denominator."""
-    bounds = db.execute(
-        select(func.min(PlayerStats.week), func.max(PlayerStats.week)).where(
-            PlayerStats.season == season, PlayerStats.season_type == season_type
-        )
-    ).one()
-    first, last = bounds[0] or 1, bounds[1] or 1
+    first, last = week_bounds(db, season, season_type) or (1, 1)
     return max(last - first + 1, 1)
 
 
