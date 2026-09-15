@@ -5,7 +5,7 @@ routes_run_per_game) are intentionally NOT columns here. They are computed in
 the API by aggregating these per-game rows. See CLAUDE.md.
 """
 
-from sqlalchemy import Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -15,7 +15,15 @@ class PlayerStats(Base):
     """A player's statistical line for a single game."""
 
     __tablename__ = "player_stats"
-    __table_args__ = (UniqueConstraint("player_id", "game_id", name="uq_player_game"),)
+    __table_args__ = (
+        UniqueConstraint("player_id", "game_id", name="uq_player_game"),
+        # ⚠️ Not a general-purpose "season" index — `ix_player_stats_season` already is
+        # one. This exists for `MIN(week)/MAX(week) WHERE season = … AND season_type = …`
+        # (`app/seasons.py`'s `week_bounds()`), which Postgres otherwise answers by
+        # walking the `week` index across every season: ~110 MB of random reads for a
+        # season one week old. See migration 1dbc965aa956.
+        Index("ix_player_stats_season_type_week", "season", "season_type", "week"),
+    )
 
     stat_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     player_id: Mapped[str] = mapped_column(

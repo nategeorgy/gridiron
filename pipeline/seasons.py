@@ -42,9 +42,18 @@ logger = logging.getLogger("pipeline.seasons")
 # The first season in project scope. The only hardcoded year left in the pipeline:
 # it is a scope decision (how far back we backfill), not a fact about today.
 #
-# 1999 is not arbitrary — it is the first season nflverse publishes play-by-play for,
-# so it is the floor of the whole ecosystem rather than a preference.
-FIRST_SEASON = 1999
+# **2009, not 1999** (September 2026). 1999 is where nflverse play-by-play begins, and
+# M8 took scope there for that reason — but a season is only worth holding if it can
+# answer the questions this app asks. Play-by-play names a receiver only on completions
+# from 2003 to 2008, so targets are unrecoverable, and the ffopportunity model has no
+# usable receiving side until 2009. Target share, WOPR, depth of target, expected points
+# and every Insight score built on them are blank before then, so 1999-2008 was a third
+# of the stat lines carrying a box score and nothing fantasy-first. See migration
+# 85d024666c8f and docs/design/M8-historical-depth.md.
+#
+# Moving it *back* is a decision, not an accident: every ingest clamps to it, so lowering
+# this and re-running the backfill is what re-admits older seasons.
+FIRST_SEASON = 2009
 
 
 @dataclass(frozen=True)

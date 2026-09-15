@@ -1,6 +1,6 @@
 """Metric availability (M8) — the windows, and the mirror that must not drift.
 
-Project scope reaches back to 1999, but the data does not arrive all at once. Two
+Project scope reaches back to 2009, but the data does not arrive all at once. Two
 tables describe that: ``pipeline/availability.py`` decides what gets *stored*, and
 ``app/availability.py`` decides what the UI *offers*. They are separate because the
 pipeline and the API are separate deployables, which is exactly the arrangement that
@@ -122,14 +122,17 @@ class TestWindows:
             ("cpoe", 2006, True),
             ("air_yards", 2006, False),
             ("air_yards", 2009, True),
-            # Complete for the whole range: rusher ids never broke, and a completion
-            # always names its receiver.
-            ("rushing_yards", 1999, True),
-            ("receiving_yards", 2004, True),
-            ("receptions", 2004, True),
-            ("fantasy_points", 1999, True),
-            ("epa", 1999, True),
-            ("vorp", 1999, True),
+            # Complete for the whole range *in scope*: rusher ids never broke, and a
+            # completion always names its receiver. The floor is the scope decision
+            # (FIRST_SEASON, 2009 since the pre-2009 seasons were dropped), not a fact
+            # about these feeds — which do reach 1999, and would again if scope widened.
+            ("rushing_yards", 2009, True),
+            ("rushing_yards", 2008, False),
+            ("receiving_yards", 2009, True),
+            ("receptions", 2009, True),
+            ("fantasy_points", 2009, True),
+            ("epa", 2009, True),
+            ("vorp", 2009, True),
             # Later feeds.
             ("snap_count", 2012, False),
             ("snap_count", 2013, True),
@@ -145,9 +148,10 @@ class TestWindows:
     def test_derived_metrics_inherit_their_inputs(self):
         """A composite may never claim a season one of its inputs does not have."""
         composite = REGISTRY_BY_ID["high_value_touches_per_game"]
-        # red_zone_targets carries the receiver blackout; the composite must too.
-        assert composite.availability.covers(2002)
+        # red_zone_targets carries the receiver blackout, so the composite carries it
+        # too — inside a floor that is now the scope decision, 2009.
         assert not composite.availability.covers(2005)
+        assert not composite.availability.covers(2008)
         assert composite.availability.covers(2009)
 
         per_game = REGISTRY_BY_ID["routes_run_per_game"]

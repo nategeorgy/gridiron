@@ -25,14 +25,21 @@ argue with than either, and this feature's whole value is being arguable.
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, aliased
 
+from app.cache import VersionedCache
 from app.intelligence import Pool
 from app.models import Game, Player, PlayerStats, Team
 from app.scoring import ScoringConfig, points_expr
 
 POSITIONS = ("QB", "RB", "WR", "TE")
+
+# The team summary is small (32 teams x 4 positions x a few windows) and read on every
+# draft page and team page, where it costs ~20 MB of stat lines to build.
+_TEAM_SUMMARIES: VersionedCache[tuple[dict, dict]] = VersionedCache(max_entries=16)
 
 # Weeks of the current season needed before its defensive numbers replace last
 # season's. Four is about where a rate stops being one bad Sunday.
@@ -228,7 +235,22 @@ def team_summary(
 
     What the team page's strip reads. Shares the two queries with :func:`build_sos`
     rather than running them once per position.
+
+    Cached per data version (``app/cache.py``) and handed out as a deep copy, which at
+    this size costs about a millisecond.
     """
+    key = (schedule_season, config.model_dump_json(), windows)
+    return deepcopy(
+        _TEAM_SUMMARIES.get_or_compute(
+            db, key, lambda: _team_summary(db, schedule_season, config, windows)
+        )
+    )
+
+
+def _team_summary(
+    db: Session, schedule_season: int, config: ScoringConfig, windows: tuple[str, ...]
+) -> tuple[dict[int, dict[str, dict[str, dict]]], dict]:
+    """The uncached half of :func:`team_summary`."""
     basis_season, basis_kind, basis_weeks = resolve_basis(db, schedule_season)
     allowed = points_allowed(db, basis_season, config) if basis_season else {}
     games, weeks, first_unplayed = _load_schedule(db, schedule_season)

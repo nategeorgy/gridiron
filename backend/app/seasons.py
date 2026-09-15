@@ -15,7 +15,16 @@ from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.models import Game
+from app.cache import VersionedCache
+from app.models import Game, PlayerStats
+
+# One entry: the summary takes no arguments. Nearly every page asks for it (the frontend
+# fetches /seasons on load, and a dozen endpoints resolve their default season through
+# it), and its DISTINCT over player_stats reads ~11 MB of index per call.
+_SUMMARY: VersionedCache[list] = VersionedCache(max_entries=1)
+
+# One entry per (season, season_type); a couple of dozen covers every season held.
+_WEEK_BOUNDS: VersionedCache[tuple[int, int]] = VersionedCache(max_entries=64)
 
 
 class SeasonInfo(BaseModel):
@@ -28,7 +37,16 @@ class SeasonInfo(BaseModel):
 
 
 def season_summary(db: Session) -> list[SeasonInfo]:
-    """Every season in `games`, newest first, with whether it has been played."""
+    """Every season in `games`, newest first, with whether it has been played.
+
+    Cached per data version (``app/cache.py``). The list is copied on the way out; the
+    ``SeasonInfo`` entries in it are shared, and every caller only reads them.
+    """
+    return list(_SUMMARY.get_or_compute(db, None, lambda: _season_summary(db)))
+
+
+def _season_summary(db: Session) -> list[SeasonInfo]:
+    """The uncached half of :func:`season_summary`."""
     # A game counts as completed once it has a score — what separates "the schedule
     # knows about this season" from "this season has happened".
     game_rows = db.execute(
@@ -52,6 +70,41 @@ def season_summary(db: Session) -> list[SeasonInfo]:
         )
         for season, games, completed in game_rows
     ]
+
+
+def week_bounds(db: Session, season: int, season_type: str) -> tuple[int, int] | None:
+    """The first and last week of ``season`` that have stat lines, or None if it has none.
+
+    None rather than a default pair, because the callers disagree about what an empty
+    season means: a window falls back to (1, 1) and scores nobody, while the trending
+    board returns an empty result that says why. Deciding here would make one of them
+    wrong.
+
+    ⚠️ **The cheapest-looking query in the app, and one of the most expensive.** With
+    accurate table statistics Postgres answers `MIN(week)/MAX(week)` by walking the
+    `week` index from each end and discarding rows from other seasons — and the season
+    in progress has only low week numbers, so the MAX scan walks nearly the whole table
+    before it finds one. Measured at ~110 MB of random reads for 2026 in week 1, against
+    ~6 pages for the same answer from an index led by `season`.
+
+    Three surfaces asked this question separately (the Insight windows, the trending
+    card, and the percentile pool's denominator), so it lives here once, cached per data
+    version. The cold read is handled too, by the `(season, season_type, week)` index in
+    migration 1dbc965aa956 — the cache alone would have left the trap live for the first
+    request after every write.
+    """
+
+    def query() -> tuple[int, int] | None:
+        bounds = db.execute(
+            select(func.min(PlayerStats.week), func.max(PlayerStats.week)).where(
+                PlayerStats.season == season, PlayerStats.season_type == season_type
+            )
+        ).one()
+        if bounds[0] is None or bounds[1] is None:
+            return None
+        return bounds[0], bounds[1]
+
+    return _WEEK_BOUNDS.get_or_compute(db, (season, season_type), query)
 
 
 def newest_played_week(db: Session) -> tuple[int, int] | None:

@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.aggregation import aggregate_select, finalize_row, games_expr, window_filters
 from app.models import Player, PlayerStats
 from app.scoring import ScoringConfig
+from app.seasons import week_bounds
 
 DIRECTIONS = ("up", "down")
 
@@ -98,12 +99,7 @@ def build_trending(
     Returns the movers plus the context needed to caption them honestly: which weeks
     each side of the comparison covers, and what floors were applied.
     """
-    bounds = db.execute(
-        select(func.min(PlayerStats.week), func.max(PlayerStats.week)).where(
-            PlayerStats.season == season, PlayerStats.season_type == season_type
-        )
-    ).one()
-    first_week, last_week = bounds[0], bounds[1]
+    bounds = week_bounds(db, season, season_type)
 
     context = {
         "season": season,
@@ -115,8 +111,9 @@ def build_trending(
         "min_recent_ppg": RISER_MIN_RECENT_PPG if direction == "up" else None,
         "min_prior_ppg": FALLER_MIN_PRIOR_PPG if direction == "down" else None,
     }
-    if first_week is None or last_week is None:
+    if bounds is None:
         return {"data": [], "context": context}
+    first_week, last_week = bounds
 
     recent_from = max(first_week, last_week - window + 1)
     prior_to = recent_from - 1

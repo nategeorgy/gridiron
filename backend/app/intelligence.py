@@ -55,10 +55,12 @@ from app.aggregation import (
     round_value,
     window_filters,
 )
+from app.cache import VersionedCache
 from app.custom_metrics import CustomMetric
 from app.league import LeagueConfig, replacement_ranks
 from app.models import Player, PlayerStats
-from app.scoring import ScoringConfig, points_expr
+from app.scoring import POINTS_COMPONENTS, ScoringConfig, compute_points
+from app.seasons import week_bounds
 
 # --- Tuning constants (all in one place, all documented in the M3 design doc) ---
 
@@ -76,6 +78,13 @@ MIN_BASELINE_OPPORTUNITIES = 50
 # Weight of expected fantasy points per game in the opportunity rating. The remaining
 # weight is spent on the position's usage shares below.
 FOR_EXPECTED_WEIGHT = 0.50
+
+# --- Caches (see app/cache.py) ---
+# Sized by what one entry holds. A scored window is ~4 MB (a season's 600-odd rows with
+# their inputs and percentiles), so eight is roughly 35 MB on a 512 MB instance. Career
+# totals are ~1 MB and serve every scoring config, so a few seasons is plenty.
+_CAREER_TOTALS: VersionedCache[dict[str, dict]] = VersionedCache(max_entries=4)
+_SCORED_WINDOWS: VersionedCache[tuple[list[dict], dict]] = VersionedCache(max_entries=8)
 
 
 @dataclass(frozen=True)
@@ -242,12 +251,7 @@ def resolve_window(
     more specific than a rolling one, and offering both at once is the caller's bug
     rather than something to resolve silently.
     """
-    bounds = db.execute(
-        select(func.min(PlayerStats.week), func.max(PlayerStats.week)).where(
-            PlayerStats.season == season, PlayerStats.season_type == season_type
-        )
-    ).one()
-    first_week, last_week = bounds[0] or 1, bounds[1] or 1
+    first_week, last_week = week_bounds(db, season, season_type) or (1, 1)
 
     if week_list:
         selected = tuple(sorted(set(week_list)))
@@ -270,30 +274,58 @@ def _opportunities_expr() -> object:
     )
 
 
-def fetch_career_efficiency(
-    db: Session, season: int, config: ScoringConfig
-) -> dict[str, float]:
-    """Each player's fantasy points per opportunity across all *earlier* seasons.
+def fetch_career_totals(db: Session, season: int) -> dict[str, dict]:
+    """Each player's summed scoring components across all *earlier* seasons.
 
-    The baseline the Sell-High Index compares against. Regular season only, and only
-    for players with enough prior volume for the rate to mean something — a rookie
-    simply has no baseline, which the composite handles by renormalising.
+    Deliberately **scoring-independent**: raw component sums rather than points, so one
+    read serves every league's scoring and ``compute_points`` prices it per request.
+    This is the most expensive read in the engine. "Every earlier season" is most of
+    ``player_stats``, and restricting it to the players being scored does not help,
+    because their older lines are spread across ~60% of the table's pages (measured
+    September 2026). What does help is doing it once per data version instead of once
+    per request per scoring config.
+
+    Regular season only, and only players with enough prior volume for a rate to mean
+    something (``MIN_BASELINE_OPPORTUNITIES``). Opportunities do not depend on scoring,
+    so that filter stays in SQL.
     """
     opportunities = _opportunities_expr()
     rows = db.execute(
         select(
             PlayerStats.player_id,
-            points_expr(config, sum_mode=True).label("points"),
+            # Position travels with the totals because a TE-premium config prices a
+            # tight end's receptions differently.
+            Player.position,
+            *(
+                func.sum(getattr(PlayerStats, column)).label(column)
+                for column in POINTS_COMPONENTS
+            ),
             opportunities.label("opportunities"),
         )
         .join(Player, PlayerStats.player_id == Player.player_id)
         .where(PlayerStats.season < season, PlayerStats.season_type == "REG")
-        # Position is grouped as well as player because a TE-premium scoring config
-        # makes the points expression depend on it.
         .group_by(PlayerStats.player_id, Player.position)
         .having(opportunities >= MIN_BASELINE_OPPORTUNITIES)
-    ).all()
-    return {row.player_id: row.points / row.opportunities for row in rows}
+    ).mappings().all()
+    return {row["player_id"]: dict(row) for row in rows}
+
+
+def fetch_career_efficiency(
+    db: Session, season: int, config: ScoringConfig
+) -> dict[str, float]:
+    """Each player's fantasy points per opportunity across all *earlier* seasons.
+
+    The baseline the Sell-High Index compares against. A rookie simply has no baseline,
+    which the composite handles by renormalising. Priced in ``config`` from the cached
+    career totals, with the same formula ``points_expr`` applies in SQL.
+    """
+    totals = _CAREER_TOTALS.get_or_compute(
+        db, season, lambda: fetch_career_totals(db, season)
+    )
+    return {
+        player_id: compute_points(config, row, row["position"]) / row["opportunities"]
+        for player_id, row in totals.items()
+    }
 
 
 def fetch_usage_trend(db: Session, window: Window) -> dict[str, dict[str, float | None]]:
@@ -585,7 +617,40 @@ def build_intelligence(
     The ranking pools are always built from *all* covered positions, even when
     ``position`` filters the output — a receiver's percentile must not change because
     the caller asked only about receivers.
+
+    The scored window is cached (``app/cache.py``), and every argument that shapes it
+    is in the key. Rows come back as copies, because the cached ones are shared and the
+    Insight endpoint writes percentiles onto the rows it returns and sorts the list in
+    place. ``context``'s nested ``inputs`` and ``percentiles`` are shared and read-only.
     """
+    key = (
+        window,
+        config.model_dump_json(),
+        league.model_dump_json(),
+        min_games,
+        tuple(metric.model_dump_json() for metric in custom or ()),
+    )
+    cached_rows, cached_context = _SCORED_WINDOWS.get_or_compute(
+        db, key, lambda: _score_window(db, window, config, league, min_games, custom)
+    )
+    rows = [dict(record) for record in cached_rows]
+
+    if position:
+        wanted = position.upper()
+        rows = [record for record in rows if record.get("position") == wanted]
+
+    return rows, dict(cached_context)
+
+
+def _score_window(
+    db: Session,
+    window: Window,
+    config: ScoringConfig,
+    league: LeagueConfig,
+    min_games: int | None,
+    custom: list[CustomMetric] | None,
+) -> tuple[list[dict], dict]:
+    """Build every row and pool for one window. The uncached half of build_intelligence."""
     qualify = min_games if min_games is not None else window.default_min_games
     ranks = replacement_ranks(league)
 
@@ -662,10 +727,6 @@ def build_intelligence(
             for pos, pool in pools.items()
         },
     }
-
-    if position:
-        wanted = position.upper()
-        rows = [record for record in rows if record.get("position") == wanted]
 
     return rows, {**context, "inputs": inputs, "percentiles": percentile_cache}
 
