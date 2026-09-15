@@ -137,6 +137,25 @@ def test_the_board_opens_on_the_next_week_not_yet_played(client, slate):
     assert _board(client)["week"] == 1
 
 
+def test_the_board_moves_on_once_most_of_a_week_is_final(client, slate, db: Session):
+    """Monday of Week 1 — Sunday final, Monday night still to come — opens on Week 2.
+
+    The first rule took the earliest week with any unplayed game, which parked the board
+    on Monday night's single line while the whole of Week 2 was already priced.
+    """
+    for game_id in ("2026_01_HIGH", "2026_01_LOW"):
+        game = db.get(Game, game_id)
+        game.home_score, game.away_score = 24, 17
+    db.add(Game(
+        game_id="2026_01_MNF", season=SCHEDULE_SEASON, week=1, season_type="REG",
+        home_team_id=slate["opponent"].team_id, away_team_id=slate["other"].team_id,
+        game_date=date(2026, 9, 14), spread_line=-2.0, total_line=45.0,
+    ))
+    db.flush()
+
+    assert _board(client)["week"] == 2
+
+
 def test_the_games_view_carries_both_implied_totals(client, slate):
     board = _board(client, view="games")
     high = next(game for game in board["data"] if game["game_id"] == "2026_01_HIGH")

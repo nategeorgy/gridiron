@@ -241,7 +241,9 @@ player_stats (
   market_share              FLOAT,   -- Share of team yards from scrimmage
   targets_per_route_run     FLOAT,   -- Targets divided by routes run
   slot_snaps                INT,     -- Snaps from slot alignment (always NULL — no free source)
-  routes_run                INT,     -- Pass-play participation (see M2 design doc)
+  routes_run                INT,     -- Pass-play participation (see M2 design doc); the
+                                     -- season in progress is CHARTED routes, hand-loaded
+                                     -- by ingest_routes.py
   route_participation       FLOAT,   -- % of team pass plays player ran a route
   unrealized_air_yards      FLOAT,   -- Air yards on incompletions (lost opportunity)
   yards_per_route_run       FLOAT,   -- Receiving yards divided by routes run
@@ -469,7 +471,8 @@ player_target_depth (
 - ⚠️ **Depth of coverage varies by season, and the feeds don't say so** (M8). The box
   score, fantasy points, EPA and all rushing detail reach 1999; charted passing starts
   2006, snaps 2013, routes 2016–2025 (the participation feed lags a season, it is not
-  discontinued), Next Gen Stats 2016, expected points 2009, and **targets are
+  discontinued — the season in progress is hand-loaded weekly, see `ingest_routes.py`),
+  Next Gen Stats 2016, expected points 2009, and **targets are
   unrecoverable 2003–2008**. Every window is measured and lives in `availability.py`
   (pipeline *and* backend — mirrored). See
   [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md)
@@ -1386,6 +1389,18 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   season months before anyone plays in it, so defaulting a board to the newest season
   outright opens the app on an empty table. `GET /api/v1/seasons` returns `has_stats`
   and `completed_games` so schedule-shaped surfaces can still offer the full list
+- ⚠️ **In-season routes are hand-loaded from a licensed export — never commit it.** No
+  free feed has routes during a season (FTN's participation file arrives after the Super
+  Bowl), so a weekly charting spreadsheet goes in `pipeline/data/routes/` (gitignored — the
+  repo is public) and `ingest_routes.py` attaches it to existing stat lines. Production is
+  loaded by running that script locally against the production database; CI never sees
+  the file, which is why `ingest_usage.py` now re-derives TPRR/YPRR for every season with
+  route counts. Two things differ from 2016–2025 and both were measured on 2026 Week 1:
+  the counts are **charted** routes, so tight ends and backs read ~9 points lower in
+  route participation than the same players' 2025 (receivers +0.6); and participation
+  divides by **dropbacks including scrambles**, because against pass plays alone 10 of 282
+  players exceeded 100%. The export's snaps/targets/carries are cross-checked, never
+  written — they disagree with nflverse by one on a few percent of lines
 - ⚠️ **A full-season `min_games` floor empties its card for the first month.** The app
   moves to a new season the moment it has *any* stats, and on the 2026 rollover the home
   page's 4-game and 8-game floors and the scatter's 4-game floor all returned nothing in

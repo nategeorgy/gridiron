@@ -12,14 +12,14 @@ tab on a season that finished eight months ago.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.database import get_db
 from app.models import Game, Team
 from app.schemas.common import PaginatedResponse, paginated
 from app.schemas.game import GameOut, ScoreboardOut, ScoreboardWindow
-from app.seasons import latest_scheduled_season
+from app.seasons import latest_scheduled_season, newest_played_week, next_unplayed_week
 from app.vegas import implied_totals
 
 router = APIRouter(prefix="/games", tags=["games"])
@@ -138,44 +138,6 @@ def game_weeks(
     return {"season": target, "season_type": season_type, "weeks": [dict(row) for row in rows]}
 
 
-def _newest_played_week(db: Session) -> tuple[int, int] | None:
-    """The newest regular-season week in which most of the games are final.
-
-    *Most*, not any. A week reads as "just played" once its Sunday slate is in, with
-    Monday night still to come — and not when only its Thursday opener is. The first
-    rule here took any final, which made a week "last" from Thursday night while its
-    earliest unplayed game also made it "next", so both tabs showed the same week
-    until Monday night's result arrived.
-    """
-    row = db.execute(
-        select(Game.season, Game.week)
-        .where(Game.season_type == "REG", Game.week.is_not(None))
-        .group_by(Game.season, Game.week)
-        .having(func.count(Game.home_score) * 2 > func.count())
-        .order_by(Game.season.desc(), Game.week.desc())
-        .limit(1)
-    ).first()
-    return (row.season, row.week) if row else None
-
-
-def _next_unplayed_week(db: Session, after: tuple[int, int] | None) -> tuple[int, int] | None:
-    """The earliest regular-season week after ``after`` that still has a game to play.
-
-    Strictly after, so the two windows are never the same week — which also means a
-    game postponed out of an earlier week cannot pin "next" to the past.
-    """
-    query = select(Game.season, Game.week).where(
-        Game.season_type == "REG", Game.home_score.is_(None), Game.week.is_not(None)
-    )
-    if after is not None:
-        season, week = after
-        query = query.where(
-            or_(Game.season > season, and_(Game.season == season, Game.week > week))
-        )
-    row = db.execute(query.order_by(Game.season, Game.week).limit(1)).first()
-    return (row.season, row.week) if row else None
-
-
 @router.get("/scoreboard", response_model=ScoreboardOut)
 def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
     """The week just played and the week coming up.
@@ -204,5 +166,5 @@ def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
             games=[_to_game(dict(row)) for row in rows],
         )
 
-    last = _newest_played_week(db)
-    return ScoreboardOut(last=window(last), next=window(_next_unplayed_week(db, after=last)))
+    last = newest_played_week(db)
+    return ScoreboardOut(last=window(last), next=window(next_unplayed_week(db, after=last)))

@@ -30,6 +30,7 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_target_depth.py --seasons 2024 # 7. target depth (M4)
 .venv/bin/python ingest_nextgen.py --seasons 2024      # 7b. Next Gen Stats (M11)
 .venv/bin/python ingest_pfr.py --seasons 2024          # 7c. PFR advanced (M12)
+.venv/bin/python ingest_routes.py                      # 7d. in-season routes (hand-loaded)
 .venv/bin/python ingest_rankings.py                    # 8. consensus rankings (M6)
 .venv/bin/python ingest_rankings.py --weekly           # 8b. weekly rankings (M9, in season)
 .venv/bin/python ingest_expert_boards.py               # 8c. expert CSV boards (M9)
@@ -61,8 +62,15 @@ carries no week number, so the week is derived from when each week's games finis
 Note that a feed serving a season is not the same as that season having usable data —
 see **Column coverage** below and `availability.py`.
 
-Steps 5–7c are **enrichment passes**: they only touch player-games step 4 already
+Steps 5–7d are **enrichment passes**: they only touch player-games step 4 already
 created, so they must run after it (in any order among themselves).
+
+Step 7d is the exception to "the pipeline fetches everything": **in-season routes are
+hand-supplied**. No free feed publishes routes during a season, so a weekly charting
+export goes in `data/routes/` — gitignored, because it is licensed and the repo is
+public — and production is loaded by running `ingest_routes.py` locally against it. The
+format, naming, and how the numbers differ from 2016–2025 are in
+[`data/routes/README.md`](data/routes/README.md).
 
 Full backfill (project scope starts at **1999** and runs to the current season). Each
 script clamps to its own feed's window, so the same range can be passed to all of them:

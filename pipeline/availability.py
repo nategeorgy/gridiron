@@ -219,12 +219,17 @@ COLUMN_AVAILABILITY: dict[str, Availability] = {
     },
 
     # --- Routes: the participation feed, 2016 until it stopped ---
+    #
+    # `last` bounds what *this feed* can serve. The season in progress is loaded by hand
+    # (ingest_routes.py), which never masks, so the ceiling here does not hide it — and
+    # the backend's window reads its ceiling from the data for exactly that reason.
     **{
         column: Availability(
             first=2016, last=PARTICIPATION.latest(),
             note="Derived from the nflverse participation feed, which publishes on "
                  "a one-season lag: FTN delivers a season only after its post-season "
-                 "is complete, so routes always stop a year short of the roster year.",
+                 "is complete. The season in progress is loaded week by week from a "
+                 "charting export instead (ingest_routes.py).",
         )
         for column in (
             "routes_run", "route_participation",

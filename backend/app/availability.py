@@ -119,9 +119,10 @@ SNAPS = Availability(
 )
 ROUTES = Availability(
     first_season=2016, data_ceiling_column="routes_run",
-    note="Built from the nflverse participation feed, which publishes on a one-season "
-         "lag — FTN delivers a season only after its post-season is complete, so "
-         "routes always stop a year short of the roster year.",
+    note="Completed seasons come from the nflverse participation feed, which FTN "
+         "delivers only after a season's post-season. The season in progress is loaded "
+         "week by week from a charting export — charted routes, so a blocking tight end "
+         "or back reads lower than the same role did in a participation season.",
 )
 NEXTGEN = Availability(
     first_season=2016,

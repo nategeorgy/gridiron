@@ -147,11 +147,12 @@ def collect_routes(season: int, positions: dict[str, str]) -> dict[tuple, dict]:
     return collected
 
 
-def _derive_route_rates(seasons: list[int]) -> int:
+def derive_route_rates(seasons: list[int]) -> int:
     """Set targets/yards per route run from each row's own targets and yards.
 
     Derived in SQL after the route counts land, so the numerator and denominator
-    always come from the same stat line.
+    always come from the same stat line. Shared with ``ingest_routes.py``, which loads
+    the in-season route counts this script cannot.
     """
     statement = text(
         """
@@ -230,8 +231,13 @@ def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
         "player_stats", list(merged.values()),
         conflict_columns=["player_id", "game_id"],
     )
-    if route_seasons:
-        _derive_route_rates(route_seasons)
+    # Re-derived for the snap seasons too. In season those carry routes loaded by hand
+    # (ingest_routes.py) rather than from participation, and the export is never in CI —
+    # so this weekly run is what keeps TPRR and YPRR in step with a stat correction to
+    # targets or yards. Only rows that already have a route count are touched.
+    rate_seasons = sorted(set(route_seasons) | set(snap_seasons))
+    if rate_seasons:
+        derive_route_rates(rate_seasons)
     logger.info(
         "usage: updated %d stat lines (snaps %s, routes %s; skipped %d with no "
         "matching stat line)",
