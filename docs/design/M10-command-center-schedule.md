@@ -83,6 +83,17 @@ the M6.2 chart already reports.
 
 ## 4. The preseason problem, and the outlook mode
 
+> **Update, 2026-09-14 — retired.** Once Week 1 produced real snaps, a hand-picked
+> **Week standouts** card (`components/home/StandoutsCard.jsx`, `WEEKLY_STANDOUTS` in
+> `constants/signals.js`) took the top slot: one week of usage — Snap%, Routes, Route%,
+> Targets, Tgt%, Air yds, YPRR, TPRR, FP/RR — with each value's positional rank as a
+> `FinishChip`. `TrendingCard` is now live-only and renders once the endpoint has rows;
+> the outlook mode and its data were removed (they remain in git history). The same
+> change redrew the scoreboard as one line per game — away, then the date above the score
+> or kickoff, then home, with team logos from `teams.logo_url` — because a score at the
+> card's far edge with only the winner bold made every result a left-right-left read.
+> What follows is the original design, kept as the record of why the mode existed.
+
 Before roughly Week 5 there is no trailing window to rank, so the Trending card would be
 empty for the two months of the year when draft interest peaks. It therefore has **two
 modes and picks between them itself**: the live board once the newest scheduled season

@@ -988,7 +988,18 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       position with the margin badged on the winner's side. Every column list is
       position-specific and lives in `frontend/src/constants/playerPage.js`; the surfaces
       are `components/player/*`. **No migration and no new stored column**
-- [x] Backend test suite (`backend/tests/`, 363 tests) — the repo's first automated
+- [x] 2026 season rollover (#25, merged 2026-09-14) — Week 1 loaded, and the surfaces that
+      assumed a full season fixed: `min_games` floors scale to the weeks played
+      (`utils/qualify.js`); the scoreboard's "last" is the newest week *mostly* final and
+      the Vegas board opens on the week after it (`app/seasons.py` week clock). **In-season
+      routes are hand-loaded** from a licensed charting export (`pipeline/ingest_routes.py`,
+      files gitignored, production loaded locally), with route participation over dropbacks.
+      The Command Center gained a **Week standouts** card (replacing the preseason outlook),
+      a one-line-per-game scoreboard with team logos (migration `d4c8e1f07a3b`,
+      `teams.logo_url`), the player page's head-to-head table (`MarginTable`), a FLEX tab
+      and touchdowns in Last Week's Scoring. Also fixed two M12 production regressions:
+      blank Insight boards and six retired board paths that blanked the app (now redirected)
+- [x] Backend test suite (`backend/tests/`, 367 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own

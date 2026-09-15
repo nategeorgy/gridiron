@@ -40,7 +40,7 @@ player with a reception must have had a target).
 | Insight scores built on expected points | **2009** | FOR, buy-low, sell-high, expected VORP |
 | VORP, replacement level | **1999** | measured on actual points |
 | Snap count, snap share | **2013** | see §5 |
-| Routes run, route participation, TPRR, YPRR | **2016–2025** | participation feed, discontinued |
+| Routes run, route participation, TPRR, YPRR | **2016–2025** | participation feed, which lags a season rather than having stopped (corrected in M11); the season in progress is hand-loaded weekly (`ingest_routes.py`, 2026-09) |
 | Slot snaps | never | no free source has ever published alignment |
 
 ## 3. The receiver blackout, 2003–2008

@@ -116,7 +116,8 @@ carrying `targets = 0`. `availability.py` holds the measured window for every
 restricted column and `mask_unavailable()` NULLs the rest at ingest, so the database
 never stores a zero that means "never recorded". The short version: the box score,
 fantasy points, EPA and all rushing detail reach 1999; charted passing starts 2006,
-snaps 2013, routes 2016–2025, expected points 2009, and **targets are unrecoverable
+snaps 2013, routes 2016–2025 from the participation feed (the season in progress is
+hand-loaded by step 7d), expected points 2009, and **targets are unrecoverable
 2003–2008**. Full audit in
 [`docs/design/M8-historical-depth.md`](../docs/design/M8-historical-depth.md).
 

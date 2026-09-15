@@ -353,7 +353,9 @@ the shared engine, and the data behind each mode. Read it before building any of
 - **A preseason mode, because a trailing window does not exist in August.** The card
   switches to a hand-picked 2026 opportunity outlook and back again on its own. Three
   kinds of evidence, each used only where valid: on/off splits, season trajectories, and
-  **vacated share** for when there is no on/off sample at all.
+  **vacated share** for when there is no on/off sample at all. *(Retired 2026-09-14: the
+  Week standouts card took the top slot once real snaps existed, and Trending now appears
+  only when it has rows.)*
 - **Also found:** an on/off split must exclude games the *subject* did not play in full
   (averaging Smith's two Brown-less games described neither), and `derived` metrics had
   *games* hardcoded as their denominator, so a rate per opportunity could not exist until
@@ -420,9 +422,44 @@ the shared engine, and the data behind each mode. Read it before building any of
   menu groups by *area*. A route is what a saved view (M5) and a shared link store, and
   re-cutting all 14 to echo a menu reorganisation would break them to gain nothing a
   reader can see.
-- **Next:** the **player pages** are the last surface still on the pre-M12 metric set.
-  They have no percentiles and none of the new columns; the machinery they need already
-  exists (`app/percentiles.py`, the registry's `availability` windows, `StatTooltip`).
+- **Next (done in M13):** the **player pages** were the last surface still on the pre-M12
+  metric set.
+
+### ✅ M13 — Player page rebuild (shipped 2026-09-12)
+
+- **The profile became position-shaped.** Every column list is position-specific
+  (`frontend/src/constants/playerPage.js`), and the surfaces are `components/player/*`.
+- **A career, re-ranked in your scoring.** `GET /players/{id}/career` (`app/career.py`)
+  returns each season with its **finish among the position**, from two pools: total points
+  over everyone who played, PPG over qualified players only.
+- **One request, three views.** The season row, the radar and the percentile panel all read
+  one `/stats/intelligence` call, which also guarantees both halves of a head-to-head were
+  ranked against the same pools.
+- **Weekly finishes on the game log**, coloured by how deep the reader's league starts the
+  position (`FinishChip`) rather than by a percentile of the pool. No migration.
+
+### ✅ 2026 season rollover (shipped 2026-09-14)
+
+Week 1 was played and the app had to become a 2026 app — which turned out to be more than
+loading the data, because several surfaces had quietly assumed a full season.
+
+- **Loading Week 1 flips every board on its own** (current season = newest with stats).
+  What broke under it: full-season `min_games` floors emptied the home cards and the
+  scatter builder (now scaled to the weeks played, `utils/qualify.js`), and the scoreboard
+  showed one week in both tabs from Thursday to Monday. "Last" is now the newest week
+  *mostly* final and "next" the week after it, and the Vegas board opens on the same week.
+- **In-season routes are hand-loaded.** No free feed has them until FTN delivers
+  participation after the Super Bowl, and a snap-count estimate was measured and declined.
+  A weekly licensed charting export attaches to existing stat lines (`ingest_routes.py`),
+  kept out of the public repo and loaded into production from a local machine. Route
+  participation divides by dropbacks including scrambles — against pass plays alone 10 of
+  282 players read over 100%.
+- **The Command Center, Week 1.** A standouts card (usage with each value's positional
+  rank as a `FinishChip`) replaced the preseason outlook; the scoreboard became one line per
+  game with team logos (`teams.logo_url`); the head-to-head table is the player page's.
+- **Two M12 production regressions found on the way:** every Insight board rendered blank
+  (an undefined variable), and six retired board paths blanked the whole app. Fixed, with
+  redirects that keep a saved view's query string.
 
 ### 💭 Dream tail (only when the base is proven)
 - **Fantasy trade calculator** — on VORP / rest-of-season value.
@@ -448,7 +485,7 @@ the shared engine, and the data behind each mode. Read it before building any of
 | **Seasons 1999–2019** | `load_pbp`, `load_player_stats`, `load_schedules` | 🟢 **Shipped M8** — all three reach 1999. Coverage is layered, not uniform: see the M8 design note |
 | Targets, 2003–2008 | `load_pbp` | 🔴 **Unrecoverable** — a receiver is named only on completions, so incompletions cannot be attributed. `load_ff_opportunity` looks like it has them and is reporting receptions (measured 2026-08-23) |
 | Snap counts | `load_snap_counts` | 🟡 **2013+**, not the documented 2012 — nflreadpy accepts 2012 but the file is empty upstream |
-| Participation / routes | `load_participation` | 🟡 **2016–2025 and ended** — FTN stopped publishing. The registry reads the real ceiling from the data rather than hardcoding a year |
+| Participation / routes | `load_participation` | 🟡 **2016 onward, one season behind** — FTN delivers a season only after its post-season (2025's file landed 2026-02-10), so the feed never has the season in progress. Earlier notes here called it ended; it is not. In season, routes are hand-loaded from a licensed charting export (`ingest_routes.py`). The registry reads the real ceiling from the data rather than hardcoding a year |
 | Replacement level / VORP | derived from the position-pool distribution + league config | 🟢 Shipped M3 |
 | Buy-low / sell-high signals | derived (expected-points gap + usage + career baseline) | 🟢 Shipped M3 |
 | Snap share / NGS / PFR adv | `load_snap_counts` / `load_nextgen_stats` / `load_pfr_advstats` | 🟢 (NGS 2016+, PFR 2018+) |
@@ -555,6 +592,17 @@ site that's genuinely better than the alternatives. The tool is the moat; social
 tells people it exists.
 
 ## Decision Log
+
+- **2026-09-14 — In-season routes are hand-supplied, not estimated.** No free feed has
+  routes during a season, so the choice was an estimate or an import. The estimate was
+  measured before it was declined: snap share × team pass plays tracked real 2025 routes
+  within 7.5% for receivers (3.9% calibrated on each player's prior season), but missed by
+  role — slot receivers and passing-down backs under-counted, blocking tight ends and
+  early-down backs over by up to 38%. A weekly licensed charting export is loaded instead
+  (`ingest_routes.py`), never committed to the public repo, and loaded into production
+  from a local machine. **Its routes are charted, not pass-play participation**, so a
+  tight end's 2026 route participation reads ~9 points below the same role in 2025
+  (receivers +0.6); percentiles are per season, so boards still rank fairly.
 
 - **2026-08-20 — M6 shipped without the third-party dependency it was scoped around.**
   The milestone was planned with an odds API as its one new integration and a
