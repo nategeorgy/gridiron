@@ -30,6 +30,12 @@ dist-ssr/
 .obsidian/
 *.swp
 
+# --- Hand-supplied data ---
+# Weekly routes exports are licensed charting data and this repo is public. The folder
+# holds its README only; the files are loaded from a local copy and never committed.
+pipeline/data/routes/*
+!pipeline/data/routes/README.md
+
 # --- Docker ---
 # Postgres data lives in a named volume, not the tree, but ignore any local dumps
 *.dump

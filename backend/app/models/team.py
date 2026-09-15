@@ -16,5 +16,7 @@ class Team(Base):
     abbreviation: Mapped[str | None] = mapped_column(String(5), unique=True, index=True)
     conference: Mapped[str | None] = mapped_column(String(10))
     division: Mapped[str | None] = mapped_column(String(20))
+    # nflverse's ESPN logo, hotlinked like players.headshot_url.
+    logo_url: Mapped[str | None] = mapped_column(String(255))
 
     players: Mapped[list["Player"]] = relationship(back_populates="team")  # noqa: F821

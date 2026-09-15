@@ -31,44 +31,61 @@ function formatKickoff(time) {
   return `${hour12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"} ET`;
 }
 
-function FinalRow({ game }) {
-  const awayWon = game.winner === "away";
-  const homeWon = game.winner === "home";
-  return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-2 border-t border-line py-2 first:border-t-0">
-      <div className="min-w-0">
-        <div className="text-[12.5px] font-semibold text-fg">
-          {game.away_abbreviation} <span className="text-faint">@</span> {game.home_abbreviation}
-        </div>
-        <div className="mt-0.5 text-[10.5px] text-faint">Final · {formatDate(game.game_date)}</div>
-      </div>
-      <div className="stat-num text-right text-[12px]">
-        <span className={awayWon ? "font-semibold text-fg" : "text-faint"}>{game.away_score}</span>
-        <span className="mx-1 text-faint">–</span>
-        <span className={homeWon ? "font-semibold text-fg" : "text-faint"}>{game.home_score}</span>
-      </div>
-    </div>
+/** A team's logo, or an empty box of the same size so every row keeps its columns. */
+function TeamLogo({ url }) {
+  return url ? (
+    <img src={url} alt="" loading="lazy" className="h-[18px] w-[18px] object-contain" />
+  ) : (
+    <span className="h-[18px] w-[18px]" />
   );
 }
 
-function FixtureRow({ game }) {
+/**
+ * One game on one line: away on the left, home on the right, and the middle column holds
+ * the date above either the score or the kickoff.
+ *
+ * **Each score sits beside its own team.** The first version put the matchup on the left
+ * and the score at the card's far edge with only the winning number bold, so reading a
+ * result meant left, right, left again. Here the losing side's abbreviation *and* score
+ * dim together, which says who won without a second lookup. The middle column is a fixed
+ * width so logos and scores line up down the whole list.
+ */
+function GameRow({ game }) {
+  const awayLost = game.played && game.winner === "home";
+  const homeLost = game.played && game.winner === "away";
+  const side = (lost) => (lost ? "font-medium text-faint" : "font-semibold text-fg");
+
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-2 border-t border-line py-2 first:border-t-0">
-      <div className="min-w-0">
-        <div className="text-[12.5px] font-semibold text-fg">
-          {game.away_abbreviation} <span className="text-faint">@</span> {game.home_abbreviation}
-        </div>
-        <div className="mt-0.5 text-[10.5px] text-faint">
-          {formatDate(game.game_date)}
-          {game.kickoff_time ? ` · ${formatKickoff(game.kickoff_time)}` : ""}
-        </div>
+    <div className="border-t border-line py-2 first:border-t-0">
+      <div className="grid grid-cols-[1fr_18px_84px_18px_1fr] items-center gap-2">
+        <span className={`justify-self-end text-[12.5px] ${side(awayLost)}`}>{game.away_abbreviation}</span>
+        <TeamLogo url={game.away_logo_url} />
+        <span className="flex flex-col items-center leading-tight">
+          <span className="text-[10px] text-faint">{formatDate(game.game_date)}</span>
+          {game.played ? (
+            <span className="stat-num text-[13px]">
+              <span className={side(awayLost)}>{game.away_score}</span>
+              <span className="mx-1 text-faint">–</span>
+              <span className={side(homeLost)}>{game.home_score}</span>
+            </span>
+          ) : (
+            <span className="stat-num text-[11px] text-muted">{formatKickoff(game.kickoff_time) || "TBD"}</span>
+          )}
+        </span>
+        <TeamLogo url={game.home_logo_url} />
+        <span className={`justify-self-start text-[12.5px] ${side(homeLost)}`}>{game.home_abbreviation}</span>
       </div>
-      <div className="stat-num text-right text-[11.5px] leading-tight text-muted">
-        {/* An unpriced game is a state, not a zero — it says so rather than showing a
-            blank that reads as a pick'em. */}
-        {game.favorite ? `${game.favorite} ${game.favorite_spread}` : <span className="text-faint">no line</span>}
-        <br />
-        <span className="text-faint">{game.total_line != null ? `O/U ${game.total_line}` : "—"}</span>
+      <div className="stat-num mt-0.5 text-center text-[10.5px] text-faint">
+        {game.played ? (
+          "Final"
+        ) : (
+          <>
+            {/* An unpriced game is a state, not a zero — it says so rather than showing a
+                blank that reads as a pick'em. */}
+            {game.favorite ? `${game.favorite} ${game.favorite_spread}` : "no line"}
+            {game.total_line != null && ` · O/U ${game.total_line}`}
+          </>
+        )}
       </div>
     </div>
   );
@@ -107,13 +124,9 @@ export function ScoreboardCard({ scoreboard, isLoading, isError }) {
         // Capped and scrolling: a full week is 16 games, and a rail that grows to fit
         // them pushes everything below it off the screen.
         <div className="max-h-[322px] overflow-y-auto pr-1.5">
-          {games.map((game) =>
-            game.played ? (
-              <FinalRow key={game.game_id} game={game} />
-            ) : (
-              <FixtureRow key={game.game_id} game={game} />
-            ),
-          )}
+          {games.map((game) => (
+            <GameRow key={game.game_id} game={game} />
+          ))}
         </div>
       )}
       <CardLink to="/schedule/games">Full schedule</CardLink>

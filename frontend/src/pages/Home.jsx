@@ -16,23 +16,29 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useTrending } from "../hooks/useTrending";
-import { useScoreboard } from "../hooks/useGames";
+import { useGames, useScoreboard } from "../hooks/useGames";
+import { useIntelligence } from "../hooks/useInsight";
 import { useCompare } from "../hooks/useExplore";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
 import { useScoring } from "../hooks/useScoring";
+import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
 import { getPlayers } from "../services/players";
 import { scoringLabel } from "../constants/scoring";
+import { parseLeague } from "../constants/league";
 import {
   FEATURED_MATCHUP,
-  OPPORTUNITY_OUTLOOK,
   REGRESSION_CANDIDATES,
+  SIGNALS_SEASON,
   UNDERPERFORMERS,
+  WEEKLY_STANDOUTS,
 } from "../constants/signals";
+import { scaledMinGames, weeksPlayed } from "../utils/qualify";
 
 import { ScoreboardCard } from "../components/home/ScoreboardCard";
+import { StandoutsCard, STANDOUT_METRICS } from "../components/home/StandoutsCard";
 import { TrendingCard } from "../components/home/TrendingCard";
 import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
 import { SignalCard } from "../components/home/SignalCard";
@@ -40,6 +46,7 @@ import {
   MyPlayersCard,
   OpportunityCard,
   QuarterbackCard,
+  WEEKLY_TAB_POSITIONS,
   WeeklyScoringCard,
 } from "../components/home/BoardCards";
 
@@ -59,6 +66,8 @@ function withStats(picks, rows) {
 
 export function Home() {
   const [scoring] = useScoring();
+  const [league] = useLeague();
+  const leagueConfig = useMemo(() => parseLeague(league), [league]);
   const { currentSeason: season } = useSeasons();
   const { supportsScoring } = useMetrics();
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
@@ -70,33 +79,64 @@ export function Home() {
   const scoreboard = useScoreboard();
   const lastPlayed = scoreboard.data?.last;
 
+  // The season boards' game floors are written for a full season and scaled to the
+  // weeks played, or both cards sit empty until October. They wait for the scoreboard
+  // to say how far in we are rather than asking twice; an error falls back to the floor.
+  const weeks = weeksPlayed(season, lastPlayed);
+  const seasonBoardsReady = !scoreboard.isLoading;
+
   // --- Trending usage, in the reader's own scoring. ---
   const trending = useTrending({ season, season_type: "REG", direction: "up", scoring, limit: 6 });
 
-  // The card shows the live board only once the season has produced something to
-  // measure. Two ways it has not: the newest scheduled season has not kicked off at
-  // all (so `season` is still last year's, and last year's "last three weeks" is
-  // history, not news), or it has kicked off but there is no trailing window yet —
-  // which the endpoint reports for itself rather than making the client guess.
+  // The card renders only once the season has produced something to measure. Two ways
+  // it has not: the newest scheduled season has not kicked off at all (so `season` is
+  // still last year's, and last year's "last three weeks" is history, not news), or it
+  // has kicked off but there is no trailing window yet — which the endpoint reports for
+  // itself rather than making the client guess.
   const { seasons: scheduled } = useSeasons({ statsOnly: false });
   const seasonUnderway = scheduled[0] === season;
-  const trendingHasSomethingToSay = (trending.data?.data?.length ?? 0) > 0;
-  const trendingMode = seasonUnderway && trendingHasSomethingToSay ? "live" : "outlook";
+  const trendingLive = seasonUnderway && (trending.data?.data?.length ?? 0) > 0;
 
-  // Identities for the hand-picked outlook set. One request rather than six, and
-  // deliberately not the leaderboard — that aggregates stat lines, so a player who
-  // barely featured last season would come back thin or not at all.
-  const outlookIds = OPPORTUNITY_OUTLOOK.map((pick) => pick.playerId).join(",");
-  const { data: outlookPlayers } = useQuery({
-    queryKey: ["players", outlookIds],
-    queryFn: () => getPlayers({ player_ids: outlookIds, limit: 50 }),
-    enabled: trendingMode === "outlook",
+  // --- Week standouts: one week's usage for a hand-picked few, ranked at the position.
+  //     Scoped to that week alone (`weeks=`), and in the reader's scoring for FP/RR. ---
+  const standoutIds = WEEKLY_STANDOUTS.players.join(",");
+  const standouts = useIntelligence(
+    useMemo(
+      () => ({
+        season: WEEKLY_STANDOUTS.season,
+        weeks: String(WEEKLY_STANDOUTS.week),
+        season_type: "REG",
+        player_ids: standoutIds,
+        metric: "fantasy_points",
+        ranks: STANDOUT_METRICS.join(","),
+        scoring,
+        league,
+        limit: WEEKLY_STANDOUTS.players.length,
+      }),
+      [standoutIds, scoring, league],
+    ),
+  );
+  // In the order they were picked, not the order the endpoint sorts them.
+  const standoutRows = useMemo(() => {
+    const byId = new Map((standouts.data?.data ?? []).map((row) => [row.player_id, row]));
+    return WEEKLY_STANDOUTS.players.map((id) => byId.get(id)).filter(Boolean);
+  }, [standouts.data]);
+  // Headshots live on the profile, not on an aggregated stat row. One request for all.
+  const { data: standoutPlayers } = useQuery({
+    queryKey: ["players", standoutIds],
+    queryFn: () => getPlayers({ player_ids: standoutIds, limit: 10 }),
     staleTime: Infinity,
   });
-  const outlookHeadshots = useMemo(
-    () => Object.fromEntries((outlookPlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
-    [outlookPlayers],
+  const standoutHeadshots = useMemo(
+    () => Object.fromEntries((standoutPlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
+    [standoutPlayers],
   );
+  const standoutGames = useGames({
+    season: WEEKLY_STANDOUTS.season,
+    week: WEEKLY_STANDOUTS.week,
+    season_type: "REG",
+    limit: 32,
+  });
 
   // --- Last week's scoring. Waits for the scoreboard to say which week that was. ---
   const weeklyParams = useMemo(
@@ -105,7 +145,7 @@ export function Home() {
       week: lastPlayed?.week,
       season_type: "REG",
       metric: pointsKey,
-      position: weekPosition === "ALL" ? undefined : weekPosition,
+      positions: WEEKLY_TAB_POSITIONS[weekPosition],
       scoring,
       order: "desc",
       limit: 10,
@@ -124,11 +164,12 @@ export function Home() {
         metric: oppPosition === "RB" ? "carries" : "targets",
         scoring,
         order: "desc",
-        min_games: 4,
+        min_games: scaledMinGames(4, weeks),
         limit: 10,
       }),
-      [season, oppPosition, scoring],
+      [season, oppPosition, scoring, weeks],
     ),
+    { enabled: seasonBoardsReady },
   );
 
   // --- Quarterbacks by EPA, with the per-play rate beside it. ---
@@ -141,11 +182,12 @@ export function Home() {
         metric: "epa",
         scoring,
         order: "desc",
-        min_games: 8,
+        min_games: scaledMinGames(8, weeks),
         limit: 10,
       }),
-      [season, scoring],
+      [season, scoring, weeks],
     ),
+    { enabled: seasonBoardsReady },
   );
 
   // --- Watchlist. Rendered only once signed in *and* something is starred: an empty
@@ -162,12 +204,13 @@ export function Home() {
   );
 
   // --- The two signal cards. The *picks* are hardcoded (see constants/signals.js);
-  //     every number below is live, and in the reader's own scoring. ---
+  //     every number below is live, and in the reader's own scoring — for the season
+  //     the picks describe, not the current one. ---
   const signalIds = [...UNDERPERFORMERS, ...REGRESSION_CANDIDATES].map((pick) => pick.playerId).join(",");
   const signals = useLeaderboard(
     useMemo(
       () => ({
-        season,
+        season: SIGNALS_SEASON,
         season_type: "REG",
         metric: "fantasy_points_over_expected",
         scoring,
@@ -176,7 +219,7 @@ export function Home() {
         limit: 20,
         player_ids: signalIds,
       }),
-      [season, scoring, signalIds],
+      [scoring, signalIds],
     ),
   );
   const underRows = withStats(UNDERPERFORMERS, signals.data?.data);
@@ -185,8 +228,8 @@ export function Home() {
   // --- The featured matchup. ---
   const matchup = useCompare(
     useMemo(
-      () => ({ players: FEATURED_MATCHUP.players.join(","), season, season_type: "REG", scoring }),
-      [season, scoring],
+      () => ({ players: FEATURED_MATCHUP.players.join(","), season: SIGNALS_SEASON, season_type: "REG", scoring }),
+      [scoring],
     ),
   );
 
@@ -195,7 +238,7 @@ export function Home() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-fg">Highlighted Data</h1>
         <Link
-          to="/fantasy/leaders"
+          to="/fantasy/all"
           className="glass-pill inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition hover:!text-accent"
           title="Adjust your league scoring on the leaderboard"
         >
@@ -208,14 +251,18 @@ export function Home() {
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2.15fr)_minmax(300px,1fr)]">
         <div className="grid min-w-0 gap-4">
-          <TrendingCard
-            mode={trendingMode}
-            outlook={OPPORTUNITY_OUTLOOK}
-            headshots={outlookHeadshots}
-            result={trending.data}
-            isLoading={trending.isLoading}
-            isError={trending.isError}
+          <StandoutsCard
+            week={WEEKLY_STANDOUTS.week}
+            rows={standoutRows}
+            headshots={standoutHeadshots}
+            games={standoutGames.data?.data}
+            league={leagueConfig}
+            isLoading={standouts.isLoading}
+            isError={standouts.isError}
           />
+          {trendingLive && (
+            <TrendingCard result={trending.data} isLoading={trending.isLoading} isError={trending.isError} />
+          )}
           <WeeklyScoringCard
             week={lastPlayed?.week}
             position={weekPosition}
@@ -229,13 +276,13 @@ export function Home() {
             position={oppPosition}
             onPositionChange={setOppPosition}
             result={opportunity.data}
-            isLoading={opportunity.isLoading}
+            isLoading={scoreboard.isLoading || opportunity.isLoading}
             isError={opportunity.isError}
           />
           <QuarterbackCard
             season={season}
             result={quarterbacks.data}
-            isLoading={quarterbacks.isLoading}
+            isLoading={scoreboard.isLoading || quarterbacks.isLoading}
             isError={quarterbacks.isError}
           />
           <HeadToHeadCard
@@ -264,14 +311,14 @@ export function Home() {
           )}
           <SignalCard
             kind="under"
-            season={season}
+            season={SIGNALS_SEASON}
             rows={underRows}
             isLoading={signals.isLoading}
             isError={signals.isError}
           />
           <SignalCard
             kind="over"
-            season={season}
+            season={SIGNALS_SEASON}
             rows={overRows}
             isLoading={signals.isLoading}
             isError={signals.isError}

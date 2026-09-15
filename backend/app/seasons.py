@@ -12,8 +12,10 @@ of the pipeline running rather than of anyone editing a literal.
 """
 
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session
+
+from app.models import Game
 
 
 class SeasonInfo(BaseModel):
@@ -50,6 +52,53 @@ def season_summary(db: Session) -> list[SeasonInfo]:
         )
         for season, games, completed in game_rows
     ]
+
+
+def newest_played_week(db: Session) -> tuple[int, int] | None:
+    """The newest regular-season week in which most of the games are final.
+
+    *Most*, not any. A week reads as "just played" once its Sunday slate is in, with
+    Monday night still to come — and not when only its Thursday opener is. The first
+    rule took any final, which made a week "last" from Thursday night while its
+    earliest unplayed game also made it "next", so the home scoreboard showed the same
+    week in both tabs until Monday night's result arrived.
+    """
+    row = db.execute(
+        select(Game.season, Game.week)
+        .where(Game.season_type == "REG", Game.week.is_not(None))
+        .group_by(Game.season, Game.week)
+        .having(func.count(Game.home_score) * 2 > func.count())
+        .order_by(Game.season.desc(), Game.week.desc())
+        .limit(1)
+    ).first()
+    return (row.season, row.week) if row else None
+
+
+def next_unplayed_week(
+    db: Session, after: tuple[int, int] | None, season: int | None = None
+) -> tuple[int, int] | None:
+    """The earliest regular-season week after ``after`` that still has a game to play.
+
+    Strictly after, so "last" and "next" are never the same week — which also means a
+    game postponed out of an earlier week cannot pin "next" to the past. ``season``
+    narrows the answer to one season, for a surface showing a season of the user's
+    choosing (the Vegas board) rather than whatever comes next on the calendar.
+    """
+    query = select(Game.season, Game.week).where(
+        Game.season_type == "REG", Game.home_score.is_(None), Game.week.is_not(None)
+    )
+    if after is not None:
+        after_season, after_week = after
+        query = query.where(
+            or_(
+                Game.season > after_season,
+                and_(Game.season == after_season, Game.week > after_week),
+            )
+        )
+    if season is not None:
+        query = query.where(Game.season == season)
+    row = db.execute(query.order_by(Game.season, Game.week).limit(1)).first()
+    return (row.season, row.week) if row else None
 
 
 def current_season(db: Session, summary: list[SeasonInfo] | None = None) -> int | None:

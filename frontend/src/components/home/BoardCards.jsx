@@ -8,20 +8,35 @@ import { useState } from "react";
 import { Card, CardHead, CardLink, CardState, PlayerCell, ScrollTable, Tabs, Th } from "./primitives";
 import { formatStat, formatSigned } from "../../utils/format";
 
-const POSITION_TABS = ["ALL", "QB", "RB", "WR", "TE"].map((value) => ({
+const POSITION_TABS = ["ALL", "QB", "RB", "WR", "TE", "FLEX"].map((value) => ({
   value,
   label: value,
 }));
 
+/** The positions each tab asks for. FLEX is every position a flex slot can start. */
+export const WEEKLY_TAB_POSITIONS = { QB: "QB", RB: "RB", WR: "WR", TE: "TE", FLEX: "RB,WR,TE" };
+
+/** " · 2 TD", or nothing — a zero would be noise on every line that scored none. */
+function touchdowns(count, label = "TD") {
+  return count > 0 ? ` · ${count} ${label}` : "";
+}
+
 /** The stat line under a weekly score, shaped for the position that earned it. */
 function statLine(row) {
   if (row.position === "QB") {
-    return `${formatStat(row.passing_yards, "int")} pass · ${formatStat(row.rushing_yards, "int")} rush`;
+    // Passing touchdowns sit beside the passing yards; a rushing score says so, since
+    // "2 TD" after a rushing total would read as passing ones.
+    return (
+      `${formatStat(row.passing_yards, "int")} pass${touchdowns(row.passing_tds)}` +
+      ` · ${formatStat(row.rushing_yards, "int")} rush${touchdowns(row.rushing_tds, "rush TD")}`
+    );
   }
+  // For a back or a pass catcher the scores are one number, however they came.
+  const scores = touchdowns((row.rushing_tds ?? 0) + (row.receiving_tds ?? 0));
   if (row.position === "RB") {
-    return `${formatStat(row.carries, "int")} car · ${formatStat(row.rushing_yards, "int")} yd · ${formatStat(row.receptions, "int")} rec`;
+    return `${formatStat(row.carries, "int")} car · ${formatStat(row.rushing_yards, "int")} yd · ${formatStat(row.receptions, "int")} rec${scores}`;
   }
-  return `${formatStat(row.receptions, "int")}/${formatStat(row.targets, "int")} · ${formatStat(row.receiving_yards, "int")} yd`;
+  return `${formatStat(row.receptions, "int")}/${formatStat(row.targets, "int")} · ${formatStat(row.receiving_yards, "int")} yd${scores}`;
 }
 
 export function WeeklyScoringCard({ week, position, onPositionChange, result, isLoading, isError }) {
@@ -62,7 +77,7 @@ export function WeeklyScoringCard({ week, position, onPositionChange, result, is
           </tbody>
         </ScrollTable>
       )}
-      <CardLink to="/fantasy/leaders">Full weekly board</CardLink>
+      <CardLink to="/fantasy/all">Full weekly board</CardLink>
     </Card>
   );
 }
@@ -240,7 +255,7 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
           </tbody>
         </ScrollTable>
       )}
-      <CardLink to="/fantasy/leaders?watchlist=1">Manage watchlist</CardLink>
+      <CardLink to="/fantasy/all?watchlist=1">Manage watchlist</CardLink>
     </Card>
   );
 }

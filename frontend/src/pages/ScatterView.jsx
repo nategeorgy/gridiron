@@ -15,6 +15,8 @@ import { ExportButton } from "../components/ExportButton";
 import { SaveViewButton } from "../components/SaveViewButton";
 import { MetricScatter } from "../components/charts/MetricScatter";
 import { useScatter } from "../hooks/useExplore";
+import { useScoreboard } from "../hooks/useGames";
+import { scaledMinGames, weeksPlayed } from "../utils/qualify";
 import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
@@ -36,6 +38,8 @@ const DENSITY_VALUES = DENSITY_OPTIONS.map((option) => option.value);
 
 // Games needed to appear. Deliberately not a user control — each preset is a ranked
 // top-N, and a 1-game sample in a rate-stat plot is noise dressed as an outlier.
+// Stated for a full season and a full window, and scaled to the weeks actually played
+// (utils/qualify), or every chart is empty for the first month of a season.
 const MIN_GAMES_FULL_SEASON = 4;
 const MIN_GAMES_WINDOW = 2;
 
@@ -56,6 +60,8 @@ export function ScatterView({ board }) {
   const [scoring, setScoring] = useScoring();
   const [league, setLeague] = useLeague();
   const { metrics } = useMetrics();
+  const scoreboard = useScoreboard();
+  const weeks = weeksPlayed(Number(season), scoreboard.data?.last);
 
   // Group + preset live in the URL so a chart is shareable.
   const groupId = searchParams.get("group") ?? SCATTER_GROUPS[0].id;
@@ -96,13 +102,18 @@ export function ScatterView({ board }) {
       ...(group.position ? { position: group.position } : {}),
       scoring,
       league,
-      min_games: preset.minGames ?? (lastWeeks ? MIN_GAMES_WINDOW : MIN_GAMES_FULL_SEASON),
+      min_games: lastWeeks
+        ? scaledMinGames(preset.minGames ?? MIN_GAMES_WINDOW, weeks, Number(lastWeeks))
+        : scaledMinGames(preset.minGames ?? MIN_GAMES_FULL_SEASON, weeks),
       limit: Number(density),
     }),
-    [season, preset, group, lastWeeks, seasonType, scoring, league, density],
+    [season, preset, group, lastWeeks, seasonType, scoring, league, density, weeks],
   );
 
-  const { data, isLoading, isError, error } = useScatter(params);
+  // Waits for the scoreboard, which says how many weeks the floor is scaled to.
+  const scatter = useScatter(params, { enabled: !scoreboard.isLoading });
+  const { data, isError, error } = scatter;
+  const isLoading = scoreboard.isLoading || scatter.isLoading;
 
   const points = data?.data ?? [];
   const axes = data?.axes;

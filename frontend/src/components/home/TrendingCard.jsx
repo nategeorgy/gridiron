@@ -1,10 +1,10 @@
-// Opportunity (M10) — who is about to see more work.
+// Trending Up (M10) — who is about to see more work.
 //
-// **The card has two modes, and it picks between them itself.** In season it shows the
-// live trending board: a *change* measured over a trailing window. Before the season
-// has produced a trailing window there is nothing to measure, so it shows a hand-picked
-// **2026 outlook** instead (`constants/signals.js`) — players whose opportunity should
-// be bigger this year, each with the measured reason from a closed season.
+// The live trending board: a *change* measured over a trailing window. It needs about
+// seven weeks of a season before it has anything to rank, so the page renders it only
+// once the endpoint returns rows; until then the Week standouts card holds the top slot.
+// (It used to fall back to a hand-picked preseason outlook here; the standouts replaced
+// that once the season produced real snaps.)
 //
 // There is deliberately no up/down toggle. In August nobody is trending anywhere, and
 // in season a card this size answers one question well rather than two badly.
@@ -26,12 +26,6 @@ const METRIC_LABEL = {
   opportunity_share: "Opportunity share",
   route_participation: "Route participation",
   target_share: "Target share",
-};
-
-const KIND_LABEL = {
-  split: "On / off split",
-  trajectory: "Season trajectory",
-  vacated: "Vacated opportunity",
 };
 
 /** One before → after row. `format` is a registry-style format spec. */
@@ -143,29 +137,23 @@ function Pager({ count, index, onChange, tint, names }) {
   );
 }
 
-export function TrendingCard({ mode, outlook = [], headshots, result, isLoading, isError }) {
+export function TrendingCard({ result, isLoading, isError }) {
   const [index, setIndex] = useState(0);
 
-  const live = mode === "live";
-  const rows = live ? (result?.data ?? []) : outlook;
+  const rows = result?.data ?? [];
   const item = rows[Math.min(index, Math.max(rows.length - 1, 0))];
   const context = result?.context;
-  // A card may declare itself a warning rather than a promotion, in which case it
-  // borrows the Regression Candidates amber instead of the growth green.
-  const tint = item?.tone === "warn" ? "var(--warn)" : "var(--pos)";
+  const tint = "var(--pos)";
 
-  // The live board says which weeks it compared; the outlook set has no single window
-  // to name, so it carries no subtitle at all.
-  const sub = live
-    ? context?.prior_from != null
+  // The board says which weeks it compared.
+  const sub =
+    context?.prior_from != null
       ? `weeks ${context.recent_from}–${context.recent_to} vs ${context.prior_from}–${context.prior_to}`
-      : "last 3 weeks vs season pace"
-    : undefined;
-
+      : "last 3 weeks vs season pace";
 
   return (
     <Card>
-      <CardHead title={live ? "Trending Up · Usage" : "2026 Outlook · Opportunity"} sub={sub} />
+      <CardHead title="Trending Up · Usage" sub={sub} />
 
       <CardState
         isLoading={isLoading}
@@ -175,7 +163,7 @@ export function TrendingCard({ mode, outlook = [], headshots, result, isLoading,
         rows={5}
       />
 
-      {item && live && (
+      {item && (
         <>
           <PlayerHead
             playerId={item.player_id}
@@ -212,63 +200,6 @@ export function TrendingCard({ mode, outlook = [], headshots, result, isLoading,
         </>
       )}
 
-      {item && !live && (
-        <>
-          <PlayerHead
-            playerId={item.playerId}
-            name={item.name}
-            position={item.position}
-            team={item.team}
-            headshot={headshots?.[item.playerId]}
-          >
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className="rounded border border-edge px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.07em] text-accent">
-                {KIND_LABEL[item.kind]}
-              </span>
-              <span className="text-xs text-muted">{item.headline}</span>
-            </div>
-          </PlayerHead>
-
-          {/* Vacated share has no before-and-after — it is share that left the building,
-              not a number this player moved. Stating it as facts is what keeps the card
-              from implying a projection nobody made. */}
-          {item.kind === "vacated" ? (
-            <div className="mt-3.5 flex flex-col gap-1.5">
-              {item.facts.map((fact) => (
-                <div
-                  key={fact.label}
-                  className="flex items-baseline justify-between gap-3 border-t border-line py-1.5 first:border-t-0"
-                >
-                  <span className="text-[11.5px] text-muted">{fact.label}</span>
-                  <span
-                    className={`stat-num text-[13px] ${fact.strong ? "font-bold" : "text-muted"}`}
-                    style={fact.strong ? { color: tint } : undefined}
-                  >
-                    {fact.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <>
-              <div className="mt-3 flex items-center justify-between text-[9.5px] font-bold uppercase tracking-[0.06em] text-faint">
-                <span>{item.labels.before}</span>
-                <span>{item.labels.after}</span>
-              </div>
-              <div className="mt-2 flex flex-col gap-2.5">
-                {item.rows.map((row) => (
-                  <DumbbellRow key={row.label} {...row} tint={tint} />
-                ))}
-              </div>
-            </>
-          )}
-
-          {item.note && (
-            <p className="mt-3 text-[10.5px] leading-relaxed text-faint">{item.note}</p>
-          )}
-        </>
-      )}
-
       {item && (
         // The pager is centred against the card, not against the space left over by the
         // link — hence absolute positioning for the link rather than a three-column row.
@@ -283,7 +214,7 @@ export function TrendingCard({ mode, outlook = [], headshots, result, isLoading,
             />
           )}
           <Link
-            to={`/players/${live ? item.player_id : item.playerId}`}
+            to={`/players/${item.player_id}`}
             className="absolute right-0 py-1.5 text-[11.5px] font-semibold text-muted transition hover:text-accent"
           >
             Full player page →

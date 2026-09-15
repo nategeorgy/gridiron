@@ -27,11 +27,13 @@ class GameOut(BaseModel):
     home_abbreviation: str | None = None
     home_name: str | None = None
     home_score: int | None = None
+    home_logo_url: str | None = None
 
     away_team_id: int | None = None
     away_abbreviation: str | None = None
     away_name: str | None = None
     away_score: int | None = None
+    away_logo_url: str | None = None
 
     # None until both scores are in. "played" is not the same as "has a score":
     # a postponed game keeps its fixture row and never gets one.

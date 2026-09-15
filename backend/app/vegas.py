@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, aliased
 from app.aggregation import aggregate_select, finalize_row, games_expr, window_filters
 from app.models import DepthChartEntry, Game, Player, PlayerStats, Team
 from app.scoring import ScoringConfig
+from app.seasons import newest_played_week, next_unplayed_week
 
 VIEWS = ("players", "games")
 
@@ -58,16 +59,15 @@ def default_week(db: Session, season: int) -> int | None:
     Answers "what does this show in July": the **coming** season's first week, not last
     season's closing lines. A line's whole value is that it is about a game nobody has
     played, so a board defaulting to a settled week would be a history exhibit.
+
+    "Next" is the home scoreboard's rule (``app/seasons.py``): the first week after the
+    newest mostly-final one. The first rule took the earliest week with *any* unplayed
+    game, which on a Monday opened the board on Monday night's one line while every
+    line for the coming week was already posted.
     """
-    upcoming = db.scalar(
-        select(func.min(Game.week)).where(
-            Game.season == season,
-            Game.season_type == "REG",
-            Game.home_score.is_(None),
-        )
-    )
+    upcoming = next_unplayed_week(db, after=newest_played_week(db), season=season)
     if upcoming is not None:
-        return upcoming
+        return upcoming[1]
     # The season is over: fall back to its last week rather than showing nothing.
     return db.scalar(
         select(func.max(Game.week)).where(

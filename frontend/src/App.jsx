@@ -1,5 +1,5 @@
 // Route table for the app.
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { BoardEditor } from "./pages/BoardEditor";
 import { CompareView } from "./pages/CompareView";
@@ -50,6 +50,24 @@ const DRAFT_VIEWS = {
   "draft-mock": MockDraftView,
   "draft-value": DraftBoardView,
 };
+
+// Board paths the M12 reorganisation retired, and the board that absorbed each. A saved
+// view (M5) and a shared link both store a route, and with no route matching, the app
+// renders nothing at all — header included — so a retired path has to go somewhere.
+const RETIRED_BOARDS = {
+  "fantasy/leaders": "/fantasy/all",
+  "fantasy/expected": "/fantasy/all",
+  "nfl/all-general": "/nfl/all",
+  "nfl/passing-general": "/nfl/passing",
+  "nfl/receiving-general": "/nfl/receiving",
+  "nfl/rushing-general": "/nfl/rushing",
+};
+
+/** Redirect keeping the query string: the filters are what a saved view saved. */
+function MovedTo({ path }) {
+  const { search } = useLocation();
+  return <Navigate to={`${path}${search}`} replace />;
+}
 
 export function App() {
   return (
@@ -133,7 +151,10 @@ export function App() {
         })}
 
         {/* Legacy leaderboard URL → the default fantasy board. */}
-        <Route path="leaderboard" element={<Navigate to="/fantasy/leaders" replace />} />
+        <Route path="leaderboard" element={<Navigate to="/fantasy/all" replace />} />
+        {Object.entries(RETIRED_BOARDS).map(([retired, current]) => (
+          <Route key={retired} path={retired} element={<MovedTo path={current} />} />
+        ))}
 
         <Route path="players/:playerId" element={<PlayerProfile />} />
         <Route path="teams" element={<Teams />} />

@@ -19,7 +19,7 @@ from app.database import get_db
 from app.models import Game, Team
 from app.schemas.common import PaginatedResponse, paginated
 from app.schemas.game import GameOut, ScoreboardOut, ScoreboardWindow
-from app.seasons import latest_scheduled_season
+from app.seasons import latest_scheduled_season, newest_played_week, next_unplayed_week
 from app.vegas import implied_totals
 
 router = APIRouter(prefix="/games", tags=["games"])
@@ -37,7 +37,9 @@ def _game_rows(db: Session, *filters, order_desc: bool = False):
             Game.home_team_id, Game.away_team_id, Game.home_score, Game.away_score,
             Game.spread_line, Game.total_line, Game.roof, Game.surface, Game.div_game,
             home.abbreviation.label("home_abbreviation"), home.name.label("home_name"),
+            home.logo_url.label("home_logo_url"),
             away.abbreviation.label("away_abbreviation"), away.name.label("away_name"),
+            away.logo_url.label("away_logo_url"),
         )
         .join(home, home.team_id == Game.home_team_id, isouter=True)
         .join(away, away.team_id == Game.away_team_id, isouter=True)
@@ -71,7 +73,8 @@ def _to_game(row: dict) -> GameOut:
         **{key: row[key] for key in (
             "game_id", "season", "week", "season_type", "game_date", "kickoff_time",
             "home_team_id", "away_team_id", "home_score", "away_score",
-            "home_abbreviation", "home_name", "away_abbreviation", "away_name",
+            "home_abbreviation", "home_name", "home_logo_url",
+            "away_abbreviation", "away_name", "away_logo_url",
             "spread_line", "total_line", "roof", "surface", "div_game",
         )},
         played=played, winner=winner,
@@ -138,37 +141,17 @@ def game_weeks(
     return {"season": target, "season_type": season_type, "weeks": [dict(row) for row in rows]}
 
 
-def _newest_played_week(db: Session) -> tuple[int, int] | None:
-    """The most recent regular-season week with a final score in it."""
-    row = db.execute(
-        select(Game.season, Game.week)
-        .where(Game.season_type == "REG", Game.home_score.is_not(None), Game.week.is_not(None))
-        .order_by(Game.season.desc(), Game.week.desc())
-        .limit(1)
-    ).first()
-    return (row.season, row.week) if row else None
-
-
-def _next_unplayed_week(db: Session) -> tuple[int, int] | None:
-    """The earliest regular-season week that has not been played."""
-    row = db.execute(
-        select(Game.season, Game.week)
-        .where(Game.season_type == "REG", Game.home_score.is_(None), Game.week.is_not(None))
-        .order_by(Game.season, Game.week)
-        .limit(1)
-    ).first()
-    return (row.season, row.week) if row else None
-
-
 @router.get("/scoreboard", response_model=ScoreboardOut)
 def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
     """The week just played and the week coming up.
 
     The rule lives here rather than in the client because it depends on the season
-    clock, and a client reimplementing it would drift. In season the two windows are
-    consecutive weeks; from January to September they straddle two seasons — Week 18 of
-    the season that finished beside Week 1 of the one that has not started — which is
-    why each window names its own season.
+    clock, and a client reimplementing it would drift. "Last" is the newest week that is
+    mostly final and "next" is the first week after it with a game to play, so from the
+    Monday of a week to the Sunday of the next they read Week N and Week N+1. In season
+    the two windows are consecutive weeks; from January to September they straddle two
+    seasons — Week 18 of the season that finished beside Week 1 of the one that has not
+    started — which is why each window names its own season.
 
     **Regular season only.** Fantasy ends at Week 17 or 18, so the playoffs are not
     "last week" to anyone this page is for; they would also sit between the two windows
@@ -186,4 +169,5 @@ def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
             games=[_to_game(dict(row)) for row in rows],
         )
 
-    return ScoreboardOut(last=window(_newest_played_week(db)), next=window(_next_unplayed_week(db)))
+    last = newest_played_week(db)
+    return ScoreboardOut(last=window(last), next=window(next_unplayed_week(db, after=last)))
