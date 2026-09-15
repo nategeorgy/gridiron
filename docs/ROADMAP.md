@@ -247,9 +247,13 @@ any of this.
   points and no ADP. Stored in a `player_rankings` table (multi-source from day one);
   the `projections` table stays unbuilt until there is a projection to put in it.
 
-### 🕰️ M8 — Historical Depth (1999–present) — M — **✅ SHIPPED**
+### 🕰️ M8 — Historical Depth (1999–present) — M — **✅ SHIPPED, then narrowed to 2009**
 **Design note: [`docs/design/M8-historical-depth.md`](design/M8-historical-depth.md)** —
 the measured audit behind every window. Read it before touching `availability.py`.
+> ⚠️ **September 2026: the floor moved to 2009** (migration `85d024666c8f`). The audit
+> below is why — 1999–2008 carries a box score and little else, since targets are
+> unrecoverable 2003–2008 and expected points have no usable receiving side until 2009.
+> The availability machinery is unchanged and still the point of this milestone.
 - **Scope back to 1999**, the floor of nflverse play-by-play: 27 seasons instead of six,
   ~150k stat lines instead of 36k. Betting lines came along for free — 7,388 of 7,548
   games are priced back to 1999, so the Vegas board gained a quarter-century of history

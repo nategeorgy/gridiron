@@ -1,5 +1,14 @@
 # M8 — Historical Depth (1999–present)
 
+> ⚠️ **Scope was narrowed to 2009 in September 2026** (migration `85d024666c8f`), so the
+> 1999–2008 seasons this note describes are no longer in the database. Everything below
+> still stands and is why: the audit found that those seasons carry a box score and
+> little else — targets are unrecoverable 2003–2008 and the expected-points model has no
+> usable receiving side until 2009 — so a third of the stat lines could not answer a
+> fantasy question. The availability machinery, and the windows for those seasons, are
+> deliberately kept in both `availability.py` files: widening scope again is one constant
+> and a backfill, and the masks are what would make it safe.
+
 **Status: shipped.** Project scope moves from 2020 back to **1999**, the first season
 nflverse publishes anything for. That is 27 seasons of stats instead of six, and about
 150,000 stat lines instead of 36,000.

@@ -26,9 +26,15 @@ the entire rushing side (``rusher_player_id`` is complete back to 1999).
 
 from pydantic import BaseModel
 
-# The first season nflverse publishes anything for. A metric with no entry below is
-# available from here.
-FIRST_SEASON = 1999
+# The first season in project scope — mirrors `pipeline/seasons.py`. A metric with no
+# entry below is available from here.
+#
+# **2009 since September 2026** (migration 85d024666c8f). The windows below still
+# describe the *feeds*, which is why several of them name seasons the database no longer
+# holds: targets really were unrecoverable in 2003-2008, and that fact is why scope now
+# starts where it does. Those entries are kept rather than trimmed — they are measured
+# facts, and they are what would make a wider scope safe again.
+FIRST_SEASON = 2009
 
 
 class Availability(BaseModel):

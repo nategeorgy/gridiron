@@ -464,18 +464,26 @@ player_target_depth (
 
 ## Data Scope
 
-- **Seasons:** **1999** through the current season (regular season + playoffs) — the
-  floor of nflverse play-by-play, not a preference.
+- **Seasons:** **2009** through the current season (regular season + playoffs).
   **Computed, never hardcoded** (`pipeline/seasons.py`, `GET /api/v1/seasons`). The
   schedule runs a season ahead of the stats for most of the year — 2026 fixtures and
   betting lines are loaded while 2025 is still the newest season with stats
-- ⚠️ **Depth of coverage varies by season, and the feeds don't say so** (M8). The box
-  score, fantasy points, EPA and all rushing detail reach 1999; charted passing starts
-  2006, snaps 2013, routes 2016–2025 (the participation feed lags a season, it is not
+- ⚠️ **The floor is 2009 because that is where the *fantasy* questions become
+  answerable**, not because a feed starts there (M8 went back to 1999, which is where
+  play-by-play starts; migration `85d024666c8f` dropped 1999–2008 in September 2026).
+  Targets are unrecoverable 2003–2008 — play-by-play names a receiver only on
+  completions — and the expected-points model has no usable receiving side until 2009.
+  So target share, WOPR, depth of target, expected points and every Insight score built
+  on them were blank in a third of the stat lines we stored. **Widening scope again is
+  one constant plus a backfill** (`FIRST_SEASON`, mirrored in `backend/app/availability.py`
+  and `frontend/src/constants/index.js`), and the availability windows for those seasons
+  are deliberately still in both `availability.py` files so it would be safe
+- ⚠️ **Depth of coverage still varies above the floor, and the feeds don't say so** (M8).
+  The box score, fantasy points, EPA, expected points and all rushing detail reach 2009;
+  snaps start 2013, routes 2016–2025 (the participation feed lags a season, it is not
   discontinued — the season in progress is hand-loaded weekly, see `ingest_routes.py`),
-  Next Gen Stats 2016, expected points 2009, and **targets are
-  unrecoverable 2003–2008**. Every window is measured and lives in `availability.py`
-  (pipeline *and* backend — mirrored). See
+  Next Gen Stats 2016, Pro Football Reference 2018. Every window is measured and lives
+  in `availability.py` (pipeline *and* backend — mirrored). See
   [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md)
 - **Positions:** QB, RB, WR, TE
 - **Source:** `nfl_data_py` (wraps nflverse data)
@@ -940,7 +948,9 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       fixed two bugs the range exposed: season rows took the team from `players.team_id`,
       and the schedule/stats feeds disagree about historical franchise codes
       (`pipeline/franchises.py`). `teams` now holds 35 rows
-      (see [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md))
+      (see [`docs/design/M8-historical-depth.md`](docs/design/M8-historical-depth.md)).
+      ⚠️ **The 1999 floor was later narrowed to 2009** — see the Disk IO entry below.
+      Everything else here still stands, the availability machinery included
 - [x] M9 — Draft: a fifth nav dropdown, **Draft ▾** — **Rankings** (`/draft/rankings`),
       **Mock Draft** (`/draft/mock`), and the M6.1 **Value Board**, moved here from
       `/insight/draft` (which redirects). Rankings defaults to the *market* with our
@@ -999,7 +1009,19 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `teams.logo_url`), the player page's head-to-head table (`MarginTable`), a FLEX tab
       and touchdowns in Last Week's Scoring. Also fixed two M12 production regressions:
       blank Insight boards and six retired board paths that blanked the app (now redirected)
-- [x] Backend test suite (`backend/tests/`, 367 tests) — the repo's first automated
+- [x] Disk IO: the engine cache + the 2009 floor (September 2026) — Supabase warned that
+      the project was exhausting its Disk IO Budget. Measured per request on a full copy:
+      `/stats/intelligence` read ~165 MB of pages and draft rankings ~206 MB, because
+      nothing query-time was cached and the career baseline scanned every earlier season
+      for every request and every scoring config. `app/cache.py` (version-keyed, see the
+      note below) now fronts the scored windows, career totals, week bounds, season
+      summary and SOS; the career baseline sums raw components once and is priced per
+      request. Repeat requests: Insight board 165 → 0.1 MB, draft rankings 206 → 21 MB,
+      trending 117 → 0.1 MB. Separately, migration `85d024666c8f` dropped the 1999–2008
+      seasons (52,146 stat lines, 2,646 games) and the tables were rewritten with
+      `VACUUM FULL`, which together took the database from 238 MB to 121 MB — 57% of
+      `player_stats` was space freed by past backfills and never returned
+- [x] Backend test suite (`backend/tests/`, 379 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -1054,6 +1076,37 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   league config, so a stored score would need a row per context — the same reason M2
   stores expected *components* rather than expected points. All weights and thresholds
   live as documented constants at the top of `app/intelligence.py`
+- ⚠️ **Never stored does not mean recomputed on every request.** It did, and in September
+  2026 it exhausted Supabase's Disk IO budget: `player_stats` does not fit in the free
+  instance's memory, and the career baseline scanned every earlier season on every
+  Insight, player and draft request (~165 MB a request, measured). `app/cache.py` holds
+  query-time results in process, keyed on a **data version** from Postgres's own
+  insert/update/delete counters, so any write forces a miss. Before caching something
+  new, three rules: **nothing with user data in it** (a watchlist or a private board is
+  applied *after* the cached read), **callers get copies** if they modify what they read,
+  and remember the cache is **off under `ENVIRONMENT=test`** (a rolled-back test
+  transaction never moves the counters), so a cached path needs its own test with the
+  cache switched on, as `tests/test_engine_cache.py` does. And measure **pages, not
+  rows**: narrowing a query to fewer rows saved nothing here, because those rows were
+  spread across most of the table
+- ⚠️ **`MIN(week)/MAX(week) WHERE season = …` is the most expensive cheap-looking query
+  in the app.** With accurate statistics Postgres answers it by walking the `week` index
+  from each end and discarding other seasons' rows — and the season in progress holds
+  only low week numbers, so the MAX scan walks nearly the whole table first: ~110 MB of
+  random reads for 2026 in week 1, against ~6 pages from an index led by `season`. Three
+  surfaces asked it separately (Insight windows, the trending card, the percentile pool's
+  denominator); it is now `week_bounds()` in `app/seasons.py`, cached per data version.
+  Production had not flipped to that plan yet (its statistics were stale enough to keep
+  the season-index plan) — **which is the point: a plan can change under you when
+  autovacuum next analyses the table**, which is why the cache was not treated as the
+  fix. Migration `1dbc965aa956` adds a `(season, season_type, week)` index (712 kB, B-tree
+  dedup on the repeated leading columns) and the query is 6 pages in any season
+- **Deleting rows does not shrink a table.** Postgres keeps the freed pages for reuse, so
+  a delete or a rewritten column shows up as free space rather than as a smaller file —
+  `player_stats` was 140 MB holding 60 MB of rows after the M8/M11/M12 backfills. Only
+  `VACUUM FULL` (or `CLUSTER`) returns it, both of which lock the table for the rewrite
+  and cannot run inside a migration. A weekly enrichment pass re-bloats slowly and
+  bounded; a full-history backfill does it all at once
 - The scoring grammar (`app/scoring.py`) and league grammar (`app/league.py`) each have
   a frontend mirror (`constants/scoring.js`, `constants/league.js`) — change both
   together, or a spec the editor builds will 400 on request. The custom-metric grammar

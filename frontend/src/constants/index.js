@@ -2,11 +2,13 @@
 // for the team leaderboard and the player-profile game log. Leaderboard columns live
 // in constants/boards.js, one set per board.
 
-// The first season in project scope — a scope decision, not a fact about today.
-// 1999 is where nflverse's play-by-play begins, so it is the floor of the whole
-// ecosystem rather than a preference. Note that the *depth* of coverage varies by
-// season: see utils/availability.js and the registry's per-metric windows.
-export const FIRST_SEASON = 1999;
+// The first season in project scope — a scope decision, not a fact about today, and a
+// mirror of pipeline/seasons.py. 2009 is the first season every fantasy-first metric can
+// be answered in: targets are unrecoverable from 2003 to 2008 and expected points have
+// no usable receiving side until 2009, so earlier seasons carried a box score and little
+// else (they were dropped in September 2026). The *depth* of coverage still varies above
+// this floor: see utils/availability.js and the registry's per-metric windows.
+export const FIRST_SEASON = 2009;
 
 /**
  * The season a date falls in, for use *before* /seasons answers.

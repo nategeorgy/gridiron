@@ -50,8 +50,9 @@ carries no week number, so the week is derived from when each week's games finis
   stat script for a season that hasn't kicked off and it skips it with a warning
   rather than failing the run — which is what lets the scheduled refresh below run all
   summer without erroring.
-- **Where the feed starts.** Project scope reaches back to 1999, but each feed has its
-  own floor and several **raise** below it rather than returning empty:
+- **Where the feed starts.** Project scope reaches back to 2009 (`FIRST_SEASON` — it was
+  1999 until September 2026), but each feed has its own floor and several **raise** below
+  it rather than returning empty:
   play-by-play 1999, depth charts 2001, ffopportunity 2006, snap counts 2013,
   participation and Next Gen Stats 2016, Pro Football Reference advanced stats 2018. Participation additionally *ends* a season
   early — not because it stopped, but because FTN delivers a season only once its
@@ -72,17 +73,17 @@ public — and production is loaded by running `ingest_routes.py` locally agains
 format, naming, and how the numbers differ from 2016–2025 are in
 [`data/routes/README.md`](data/routes/README.md).
 
-Full backfill (project scope starts at **1999** and runs to the current season). Each
+Full backfill (project scope starts at **2009** and runs to the current season). Each
 script clamps to its own feed's window, so the same range can be passed to all of them:
 
 ```bash
 .venv/bin/python ingest_schedules.py    # all seasons in one file; no --seasons needed
-.venv/bin/python ingest_stats.py        --seasons $(seq 1999 2025)
-.venv/bin/python ingest_expected.py     --seasons $(seq 1999 2025)
-.venv/bin/python ingest_usage.py        --seasons $(seq 1999 2025)
-.venv/bin/python ingest_target_depth.py --seasons $(seq 1999 2025)
-.venv/bin/python ingest_nextgen.py      --seasons $(seq 1999 2025)
-.venv/bin/python ingest_pfr.py          --seasons $(seq 1999 2025)
+.venv/bin/python ingest_stats.py        --seasons $(seq 2009 2025)
+.venv/bin/python ingest_expected.py     --seasons $(seq 2009 2025)
+.venv/bin/python ingest_usage.py        --seasons $(seq 2009 2025)
+.venv/bin/python ingest_target_depth.py --seasons $(seq 2009 2025)
+.venv/bin/python ingest_nextgen.py      --seasons $(seq 2009 2025)
+.venv/bin/python ingest_pfr.py          --seasons $(seq 2009 2025)
 ```
 
 `ingest_stats.py` downloads a season of play-by-play at a time, so a full backfill is
@@ -114,11 +115,13 @@ participation + play-by-play download.
 stat nobody measured as `0`, not as missing — a 2004 receiver with 90 catches arrives
 carrying `targets = 0`. `availability.py` holds the measured window for every
 restricted column and `mask_unavailable()` NULLs the rest at ingest, so the database
-never stores a zero that means "never recorded". The short version: the box score,
-fantasy points, EPA and all rushing detail reach 1999; charted passing starts 2006,
-snaps 2013, routes 2016–2025 from the participation feed (the season in progress is
-hand-loaded by step 7d), expected points 2009, and **targets are unrecoverable
-2003–2008**. Full audit in
+never stores a zero that means "never recorded". The short version, within the 2009
+floor: the box score, fantasy points, EPA, expected points and all rushing detail reach
+2009; snaps start 2013, routes 2016–2025 from the participation feed (the season in
+progress is hand-loaded by step 7d), Next Gen Stats 2016, Pro Football Reference 2018.
+The windows below the floor are kept in `availability.py` rather than trimmed — they are
+measured facts, and **they are the reason the floor is 2009**: targets are unrecoverable
+2003–2008 and expected points have no usable receiving side before 2009. Full audit in
 [`docs/design/M8-historical-depth.md`](../docs/design/M8-historical-depth.md).
 
 `ingest_stats.py` populates:
