@@ -127,7 +127,8 @@ teams (
   name          VARCHAR(100),        -- e.g. "Kansas City Chiefs"
   abbreviation  VARCHAR(5),          -- e.g. "KC"
   conference    VARCHAR(10),         -- "AFC" / "NFC"
-  division      VARCHAR(20)          -- e.g. "AFC West"
+  division      VARCHAR(20),         -- e.g. "AFC West"
+  logo_url      VARCHAR(255)         -- nflverse's ESPN logo, hotlinked like headshots
 )
 
 -- Players
@@ -740,8 +741,9 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   [`docs/design/ui-theme-liquid-glass.md`](docs/design/ui-theme-liquid-glass.md).
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**,
   *not* the leaderboard. Rebuilt in M10 as a two-column **Fantasy Desk** (it was a Bento
-  grid through M9): a wide column carrying the reading order a manager follows — trending
-  usage, last week's scoring, opportunity leaders, quarterbacks, a featured head-to-head —
+  grid through M9): a wide column carrying the reading order a manager follows — the
+  week's standouts (then trending usage, once a season has a trailing window), last week's
+  scoring, opportunity leaders, quarterbacks, a featured head-to-head —
   beside a **sticky rail** of reference (scoreboard, watchlist, the two signal cards).
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
   in the code and in these docs. The nav holds **four dropdowns** — **Insight**

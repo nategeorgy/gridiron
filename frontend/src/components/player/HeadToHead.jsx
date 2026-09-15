@@ -11,15 +11,8 @@
 // Blue and gold are the Command Center head-to-head card's identity pair, reused here
 // so the same two players read the same way on both surfaces.
 import { Link } from "react-router-dom";
-import { formatStat } from "../../utils/format";
+import { MarginTable } from "./MarginTable";
 import { SIDES } from "./sides";
-
-/** The gap in the metric's own units — "+11.2%" for a share, "+44" for a count. */
-function gapText(format, gap) {
-  if (format === "pct") return `+${(gap * 100).toFixed(1)}%`;
-  if (format === "int") return `+${Math.round(gap)}`;
-  return `+${gap.toFixed(1)}`;
-}
 
 function Face({ player, side, align }) {
   const right = align === "right";
@@ -71,62 +64,26 @@ export function HeadToHead({ rows, players, metrics, season }) {
       </div>
 
       <div className="mt-3">
-        {rows.map((spec) => {
-          const metric = metrics[spec.id] ?? {};
-          const read = (player) => {
-            const value = player[spec.id];
-            if (value === null || value === undefined) return null;
-            // A per-game row divides by games played, so two players with different
-            // games missed are compared on rate rather than on availability.
-            return spec.perGame ? value / (player.games_played || 1) : value;
-          };
-          const values = [read(left), read(right)];
-          const format = spec.perGame ? 1 : metric.format;
-
-          let leader = null;
-          if (values[0] !== null && values[1] !== null && values[0] !== values[1]) {
-            const higherWins = metric.higherIsBetter !== false;
-            leader = higherWins === values[0] > values[1] ? 0 : 1;
-          }
-          const gap = leader === null ? null : Math.abs(values[0] - values[1]);
-
-          return (
-            <div
-              key={spec.id}
-              className="grid grid-cols-[3.4rem_1fr_7.5rem_1fr_3.4rem] items-center border-b border-dashed border-line py-1.5 last:border-0"
-            >
-              <span>
-                {leader === 0 && (
-                  <span
-                    className="stat-num inline-block rounded-md px-1.5 py-0.5 text-[11px] font-bold"
-                    style={{ background: SIDES[0].badge, color: SIDES[0].ink }}
-                  >
-                    {gapText(format, gap)}
-                  </span>
-                )}
-              </span>
-              <span className="stat-num text-center text-[15px] font-semibold text-fg">
-                {formatStat(values[0], format)}
-              </span>
-              <span className="truncate text-center text-[12px] text-muted" title={metric.description}>
-                {spec.label}
-              </span>
-              <span className="stat-num text-center text-[15px] font-semibold text-fg">
-                {formatStat(values[1], format)}
-              </span>
-              <span className="text-right">
-                {leader === 1 && (
-                  <span
-                    className="stat-num inline-block rounded-md px-1.5 py-0.5 text-[11px] font-bold"
-                    style={{ background: SIDES[1].badge, color: SIDES[1].ink }}
-                  >
-                    {gapText(format, gap)}
-                  </span>
-                )}
-              </span>
-            </div>
-          );
-        })}
+        <MarginTable
+          rows={rows.map((spec) => {
+            const metric = metrics[spec.id] ?? {};
+            const read = (player) => {
+              const value = player[spec.id];
+              if (value === null || value === undefined) return null;
+              // A per-game row divides by games played, so two players with different
+              // games missed are compared on rate rather than on availability.
+              return spec.perGame ? value / (player.games_played || 1) : value;
+            };
+            return {
+              id: spec.id,
+              label: spec.label,
+              format: spec.perGame ? 1 : metric.format,
+              values: [read(left), read(right)],
+              higherIsBetter: metric.higherIsBetter,
+              description: metric.description,
+            };
+          })}
+        />
       </div>
 
       <p className="mt-2.5 text-[10.5px] leading-relaxed text-faint">

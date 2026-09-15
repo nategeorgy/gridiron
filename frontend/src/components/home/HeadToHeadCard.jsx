@@ -6,36 +6,22 @@
 // both real values, and the leader's is badged in his own colour — which is what
 // removes the need for a legend.
 //
-// **Table is the fallback for exact numbers.** Bar length is the percentile, so a full
-// bar means leading the position rather than merely winning this matchup. That reading
-// is deliberate: two mid-tier backs can both fill their bars against each other and
-// look like studs, which is the thing a head-to-head is most likely to mislead about.
+// **Table is the fallback for exact numbers**, and it is the player page's table
+// (`MarginTable`): both values either side of the metric, with the margin pill on the
+// leader's side in his colour. It replaced a tug-of-war of percentile bars, which made
+// the reader compare two bar lengths to find who led a row.
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
+import { MarginTable } from "../player/MarginTable";
+import { SIDES } from "../player/sides";
 import { MATCHUP_METRICS } from "../../constants/signals";
 import { formatStat } from "../../utils/format";
-
-// Blue and gold: two of the validated `--series-*` hues, far enough apart to separate
-// under every colour-vision deficiency the token set was checked against.
-const SIDES = [
-  { color: "var(--series-1)", badge: "color-mix(in srgb, var(--series-1) 84%, #000)", ink: "#ffffff" },
-  // White on this gold measures 2.17:1 in the light theme — nowhere near readable — so
-  // the gold badge takes dark ink instead of sharing one inherited white.
-  { color: "var(--series-4)", badge: "var(--series-4)", ink: "#160f00" },
-];
 
 const VIEWS = [
   { value: "radar", label: "Radar" },
   { value: "table", label: "Table" },
 ];
-
-/** The gap, in the metric's own units — "+11.2%" for a share, "+44" for a count. */
-function gapText(format, gap) {
-  if (format === "pct") return `+${(gap * 100).toFixed(1)}%`;
-  if (format === "int") return `+${Math.round(gap)}`;
-  return `+${gap.toFixed(1)}`;
-}
 
 function Face({ player, side, align }) {
   const right = align === "right";
@@ -191,54 +177,16 @@ function Radar({ players }) {
   );
 }
 
-function TugOfWar({ players }) {
+function Table({ players }) {
   return (
-    <div className="flex flex-col">
-      {MATCHUP_METRICS.map((metric) => {
-        const values = players.map((player) => player.stats?.[metric.id] ?? 0);
-        const percentiles = players.map((player) => player.percentiles?.[metric.id] ?? 0);
-        const leader = values[0] >= values[1] ? 0 : 1;
-        const gap = Math.abs(values[0] - values[1]);
-        const surname = players[leader].name?.split(" ").slice(-1)[0]?.replace(/[.,]$/, "");
-
-        return (
-          <div
-            key={metric.id}
-            className="grid grid-cols-[46px_1fr_92px_1fr_46px] items-center gap-1.5 py-1.5 sm:grid-cols-[52px_1fr_104px_1fr_52px]"
-          >
-            <span className={`text-[11.5px] ${leader === 0 ? "font-semibold text-fg" : "text-muted"}`}>
-              {formatStat(values[0], metric.format)}
-            </span>
-            <span className="relative h-1.5 overflow-hidden rounded-full bg-surface-2">
-              <i
-                className="absolute inset-y-0 right-0 rounded-full"
-                style={{ width: `${percentiles[0]}%`, background: SIDES[0].color }}
-              />
-            </span>
-            <span className="flex flex-col items-center gap-px">
-              <span className="text-[9.5px] font-bold uppercase tracking-[0.05em] text-faint">
-                {metric.label}
-              </span>
-              <span
-                className="stat-num truncate text-[9.5px] font-bold"
-                style={{ color: SIDES[leader].color }}
-              >
-                {surname} {gapText(metric.format, gap)}
-              </span>
-            </span>
-            <span className="relative h-1.5 overflow-hidden rounded-full bg-surface-2">
-              <i
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{ width: `${percentiles[1]}%`, background: SIDES[1].color }}
-              />
-            </span>
-            <span className={`text-right text-[11.5px] ${leader === 1 ? "font-semibold text-fg" : "text-muted"}`}>
-              {formatStat(values[1], metric.format)}
-            </span>
-          </div>
-        );
-      })}
-    </div>
+    <MarginTable
+      rows={MATCHUP_METRICS.map((metric) => ({
+        id: metric.id,
+        label: metric.label,
+        format: metric.format,
+        values: players.map((player) => player.stats?.[metric.id] ?? null),
+      }))}
+    />
   );
 }
 
@@ -263,12 +211,12 @@ export function HeadToHeadCard({ caption, result, isLoading, isError }) {
             <Face player={players[1]} side={SIDES[1]} align="right" />
           </div>
 
-          {view === "radar" ? <Radar players={players} /> : <TugOfWar players={players} />}
+          {view === "radar" ? <Radar players={players} /> : <Table players={players} />}
 
           <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
             {view === "radar"
               ? "Shape is percentile within qualified players at the position; the numbers beside each axis are the real values. The badged one leads that category."
-              : "Bar length is percentile within the position."}
+              : "The badge marks who leads each row, and by how much."}
           </p>
           <CardLink to={`/explore/compare?players=${players.map((p) => p.player_id).join(",")}`}>
             Open in Compare

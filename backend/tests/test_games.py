@@ -190,6 +190,19 @@ def test_a_thursday_opener_alone_does_not_make_its_week_last(
     assert (body["next"]["season"], body["next"]["week"]) == (2026, 1)
 
 
+def test_a_game_carries_both_teams_logos(
+    client: TestClient, db: Session, schedule: None, team: Team, opponent: Team
+):
+    """The scoreboard draws logos beside the abbreviations; a team without one is None."""
+    team.logo_url = "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png"
+    db.flush()
+
+    game = client.get(GAMES, params={"season": 2026, "week": 1}).json()["data"][0]
+
+    assert game["home_logo_url"] == team.logo_url   # KC is at home in this fixture
+    assert game["away_logo_url"] is None             # Denver has no logo stored
+
+
 def test_scoreboard_is_empty_rather_than_erroring_with_no_schedule(client: TestClient):
     body = client.get(SCOREBOARD).json()
 

@@ -37,7 +37,9 @@ def _game_rows(db: Session, *filters, order_desc: bool = False):
             Game.home_team_id, Game.away_team_id, Game.home_score, Game.away_score,
             Game.spread_line, Game.total_line, Game.roof, Game.surface, Game.div_game,
             home.abbreviation.label("home_abbreviation"), home.name.label("home_name"),
+            home.logo_url.label("home_logo_url"),
             away.abbreviation.label("away_abbreviation"), away.name.label("away_name"),
+            away.logo_url.label("away_logo_url"),
         )
         .join(home, home.team_id == Game.home_team_id, isouter=True)
         .join(away, away.team_id == Game.away_team_id, isouter=True)
@@ -71,7 +73,8 @@ def _to_game(row: dict) -> GameOut:
         **{key: row[key] for key in (
             "game_id", "season", "week", "season_type", "game_date", "kickoff_time",
             "home_team_id", "away_team_id", "home_score", "away_score",
-            "home_abbreviation", "home_name", "away_abbreviation", "away_name",
+            "home_abbreviation", "home_name", "home_logo_url",
+            "away_abbreviation", "away_name", "away_logo_url",
             "spread_line", "total_line", "roof", "surface", "div_game",
         )},
         played=played, winner=winner,
