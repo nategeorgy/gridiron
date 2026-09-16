@@ -11,7 +11,6 @@
 // Every card names its own season rather than the page claiming one, for the same
 // reason the M6.2 team page does.
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { useLeaderboard } from "../hooks/useLeaderboard";
@@ -22,11 +21,11 @@ import { useCompare } from "../hooks/useExplore";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
 import { useScoring } from "../hooks/useScoring";
+import { ScoringPill } from "../components/ScoringPill";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
 import { getPlayers } from "../services/players";
-import { scoringLabel } from "../constants/scoring";
 import { parseLeague } from "../constants/league";
 import {
   FEATURED_MATCHUP,
@@ -65,7 +64,7 @@ function withStats(picks, rows) {
 }
 
 export function Home() {
-  const [scoring] = useScoring();
+  const [scoring, setScoring] = useScoring();
   const [league] = useLeague();
   const leagueConfig = useMemo(() => parseLeague(league), [league]);
   const { currentSeason: season } = useSeasons();
@@ -195,10 +194,23 @@ export function Home() {
   const { isSignedIn } = useAuth();
   const { favorites } = useFavorites();
   const favoriteIds = favorites.map((favorite) => favorite.player.player_id).join(",");
-  const watchlist = useLeaderboard(
+  // Served by /stats/intelligence rather than the leaderboard: the card shows FOR,
+  // which is a query-time score with no stored column. `include_unqualified` keeps a
+  // starred player who has missed games on his owner's own card.
+  const watchlist = useIntelligence(
     useMemo(
-      () => ({ season, season_type: "REG", metric: pointsKey, scoring, order: "desc", limit: 6, player_ids: favoriteIds }),
-      [season, pointsKey, scoring, favoriteIds],
+      () => ({
+        season,
+        season_type: "REG",
+        metric: pointsKey,
+        scoring,
+        league,
+        order: "desc",
+        limit: 6,
+        include_unqualified: true,
+        player_ids: favoriteIds,
+      }),
+      [season, pointsKey, scoring, league, favoriteIds],
     ),
     { enabled: isSignedIn && favoriteIds.length > 0 },
   );
@@ -237,16 +249,7 @@ export function Home() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-fg">Highlighted Data</h1>
-        <Link
-          to="/fantasy/all"
-          className="glass-pill inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition hover:!text-accent"
-          title="Adjust your league scoring on the leaderboard"
-        >
-          <span className="text-muted">Scored in</span>
-          <span className="text-accent">{scoringLabel(scoring)}</span>
-          <span className="text-faint">·</span>
-          <span className="text-muted">Edit →</span>
-        </Link>
+        <ScoringPill scoring={scoring} onChange={setScoring} />
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2.15fr)_minmax(300px,1fr)]">
@@ -260,6 +263,18 @@ export function Home() {
             isLoading={standouts.isLoading}
             isError={standouts.isError}
           />
+          {/* Moved out of the sticky rail when it grew to seven stat columns: the
+              rail is 300px of reference, and a board this wide could only have
+              scrolled sideways in it. */}
+          {isSignedIn && favorites.length > 0 && (
+            <MyPlayersCard
+              season={season}
+              count={favorites.length}
+              result={watchlist.data}
+              isLoading={watchlist.isLoading}
+              isError={watchlist.isError}
+            />
+          )}
           {trendingLive && (
             <TrendingCard result={trending.data} isLoading={trending.isLoading} isError={trending.isError} />
           )}
@@ -300,15 +315,6 @@ export function Home() {
             isLoading={scoreboard.isLoading}
             isError={scoreboard.isError}
           />
-          {isSignedIn && favorites.length > 0 && (
-            <MyPlayersCard
-              season={season}
-              count={favorites.length}
-              result={watchlist.data}
-              isLoading={watchlist.isLoading}
-              isError={watchlist.isError}
-            />
-          )}
           <SignalCard
             kind="under"
             season={SIGNALS_SEASON}

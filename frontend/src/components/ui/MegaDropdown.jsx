@@ -6,10 +6,12 @@
 // production view, or the usage behind both — so the columns are phases and the rows
 // inside them are the views. Modelled on Baseball Savant's leaderboard menu.
 //
-// Same open/close behaviour as NavDropdown: hover on devices that hover, click
-// everywhere, closes on outside click, Escape, or a route change.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+// Open/close behaviour is useHoverMenu, shared with NavDropdown: hover on devices that
+// hover, click everywhere, a grace period so the pointer can travel to the panel, and
+// closes on outside click, Escape, or a route change.
+import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useHoverMenu } from "../../hooks/useHoverMenu";
 
 function Caret({ open }) {
   return (
@@ -31,18 +33,17 @@ function Caret({ open }) {
 const MAX_WIDTH = 896;
 /** Breathing room kept between the panel and the viewport edges. */
 const GUTTER = 16;
+/** Visual gap between trigger and panel. Carried as PADDING on the positioned
+ *  wrapper, never as a margin — see useHoverMenu on why a gap is a hover hole. */
+const OFFSET = 6;
 
 export function MegaDropdown({ label, columns, matches }) {
-  const [open, setOpen] = useState(false);
+  const { open, ref, hoverProps, closeNow, toggle } = useHoverMenu();
   const [box, setBox] = useState(null);
-  const ref = useRef(null);
   const trigger = useRef(null);
-  const location = useLocation();
-  const [canHover] = useState(
-    () => typeof window !== "undefined" && window.matchMedia?.("(hover: hover)").matches,
-  );
+  const { pathname } = useLocation();
 
-  const active = matches.some((prefix) => location.pathname.startsWith(prefix));
+  const active = matches.some((prefix) => pathname.startsWith(prefix));
 
   // Measured rather than anchored with `right-0`. The trigger sits mid-header, and a
   // panel this wide right-anchored to it runs off the LEFT edge on anything narrower
@@ -60,46 +61,23 @@ export function MegaDropdown({ label, columns, matches }) {
       const width = Math.max(240, Math.min(MAX_WIDTH, viewport - GUTTER * 2));
       const preferred = rect.right - width;
       const left = Math.min(Math.max(GUTTER, preferred), Math.max(GUTTER, viewport - width - GUTTER));
-      setBox({ top: rect.bottom + 6, left, width });
+      // `top` is the trigger's own bottom edge; the gap below it is the wrapper's
+      // padding, so travelling down into the panel never crosses dead space.
+      setBox({ top: rect.bottom, left, width });
     };
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
   }, [open]);
 
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-    };
-    const onKey = (event) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   return (
-    <div
-      ref={ref}
-      className="relative"
-      onMouseEnter={canHover ? () => setOpen(true) : undefined}
-      onMouseLeave={canHover ? () => setOpen(false) : undefined}
-    >
+    <div ref={ref} className="relative" {...hoverProps}>
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         ref={trigger}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggle}
         className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
           active ? "glass-pill !text-accent" : "text-muted hover:text-fg"
         }`}
@@ -110,46 +88,47 @@ export function MegaDropdown({ label, columns, matches }) {
 
       {open && box && (
         <div
-          role="menu"
-          className="glass-popover fixed z-30 p-4"
-          style={{ top: box.top, left: box.left, width: box.width }}
+          className="fixed z-30"
+          style={{ top: box.top, left: box.left, width: box.width, paddingTop: OFFSET }}
         >
-          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-            {columns.map((column) => (
-              <div key={column.label}>
-                <div className="mb-1.5 border-b border-line pb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">
-                  {column.label}
+          <div role="menu" className="glass-popover p-4">
+            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+              {columns.map((column) => (
+                <div key={column.label}>
+                  <div className="mb-1.5 border-b border-line pb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">
+                    {column.label}
+                  </div>
+                  <div className="flex flex-col">
+                    {column.items.filter(Boolean).map((item) => (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        role="menuitem"
+                        onClick={closeNow}
+                        className={({ isActive }) =>
+                          `rounded-lg px-2 py-1.5 transition ${
+                            isActive ? "bg-surface-2" : "hover:bg-surface-2"
+                          }`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <div
+                              className={`text-sm font-semibold ${isActive ? "text-accent" : "text-fg"}`}
+                            >
+                              {item.label}
+                            </div>
+                            {item.menuDesc && (
+                              <div className="text-xs leading-snug text-muted">{item.menuDesc}</div>
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  {column.items.filter(Boolean).map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      role="menuitem"
-                      onClick={() => setOpen(false)}
-                      className={({ isActive }) =>
-                        `rounded-lg px-2 py-1.5 transition ${
-                          isActive ? "bg-surface-2" : "hover:bg-surface-2"
-                        }`
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <div
-                            className={`text-sm font-semibold ${isActive ? "text-accent" : "text-fg"}`}
-                          >
-                            {item.label}
-                          </div>
-                          {item.menuDesc && (
-                            <div className="text-xs leading-snug text-muted">{item.menuDesc}</div>
-                          )}
-                        </>
-                      )}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}

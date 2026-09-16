@@ -6,7 +6,7 @@
 // games threshold, replacement level) rather than presenting a bare number.
 import { useMemo, useState } from "react";
 import { Select } from "../components/ui/Select";
-import { LeagueSettings } from "../components/LeagueSettings";
+import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
 import { BoardTabs } from "../components/BoardTabs";
 import { TeamFilter } from "../components/TeamFilter";
@@ -48,7 +48,7 @@ export function InsightView({ board }) {
   const [metric, setMetric] = useUrlState("metric", board.defaultSort, board.columns);
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
-  const [league, setLeague] = useLeague();
+  const [league] = useLeague();
   const { metrics } = useMetrics();
   const watchlist = useWatchlistFilter();
 
@@ -156,13 +156,7 @@ export function InsightView({ board }) {
           only for TDs-over-expected — a number no scoring config changes — so showing
           a league editor there would offer a control that does nothing. */}
       {board.scoring && (
-        <LeagueSettings
-          scoring={scoring}
-          onScoringChange={withReset(setScoring)}
-          league={league}
-          onLeagueChange={withReset(setLeague)}
-          replacement={data?.replacement}
-        />
+        <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />
       )}
 
       {board.lede && (

@@ -218,8 +218,12 @@ export function HeadToHeadCard({ caption, result, isLoading, isError }) {
               ? "Shape is percentile within qualified players at the position; the numbers beside each axis are the real values. The badged one leads that category."
               : "The badge marks who leads each row, and by how much."}
           </p>
-          <CardLink to={`/explore/compare?players=${players.map((p) => p.player_id).join(",")}`}>
-            Open in Compare
+          {/* This was "Open in Compare" until Explore was hidden for launch. It
+              points at a player page rather than carrying the matchup in a query
+              param: the player page's own head-to-head picker is component state,
+              not URL state, so a ?compare= here would be silently ignored. */}
+          <CardLink to={`/players/${players[0].player_id}`}>
+            Open {players[0].name ?? "player"}&apos;s page
           </CardLink>
         </>
       )}

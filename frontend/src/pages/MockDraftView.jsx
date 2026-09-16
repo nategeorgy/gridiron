@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
-import { LeagueSettings } from "../components/LeagueSettings";
+import { ScoringControl } from "../components/ScoringControl";
 import { useDraftSources, useRankings } from "../hooks/useRankings";
 import { useAuth } from "../hooks/useAuth";
 import { useScoring } from "../hooks/useScoring";
@@ -267,7 +267,7 @@ function RosterPanel({ slots, title, isUser, onSelectPlayer }) {
 export function MockDraftView({ board }) {
   const { isSignedIn } = useAuth();
   const [scoring, setScoring] = useScoring();
-  const [league, setLeague] = useLeague();
+  const [league] = useLeague();
   const { teams: leagueTeams, lineup } = parseLeague(league);
 
   const saved = useMemo(readSaved, []);
@@ -648,12 +648,7 @@ export function MockDraftView({ board }) {
           </div>
         </div>
 
-          <LeagueSettings
-            scoring={scoring}
-            onScoringChange={setScoring}
-            league={league}
-            onLeagueChange={setLeague}
-          />
+          <ScoringControl scoring={scoring} onChange={setScoring} />
 
         <p className="max-w-3xl text-xs leading-relaxed text-muted">
           Bots pick near the top of their board, straying further on players the expert

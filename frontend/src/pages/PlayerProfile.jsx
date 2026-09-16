@@ -10,13 +10,13 @@
 //
 // **One request serves the season.** The stat grid, the radar and the percentile panel
 // are three views of a single row from `/stats/intelligence`, which carries both the
-// stored columns and the query-time ones (VORP and friends) plus a percentile for every
+// stored columns and the query-time ones (the buy/sell indices and friends) plus a percentile for every
 // metric the position's page can show. Adding the comparison player to that same request
 // is what keeps the two halves of a matchup on identical pools.
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
-import { LeagueSettings } from "../components/LeagueSettings";
+import { ScoringControl } from "../components/ScoringControl";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { PositionTag } from "../components/PositionTag";
 import { CareerTable } from "../components/player/CareerTable";
@@ -111,7 +111,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
   const embedded = Boolean(playerIdProp);
 
   const [scoring, setScoring] = useScoring();
-  const [league, setLeague] = useLeague();
+  const [league] = useLeague();
   const { metrics } = useMetrics();
   // Finish chips are tiered by how deep this league starts each position, so a QB22 week
   // reads as unstartable in a one-quarterback league and fine in a superflex one.
@@ -214,13 +214,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
         </span>
       </div>
 
-      <LeagueSettings
-        scoring={scoring}
-        onScoringChange={setScoring}
-        league={league}
-        onLeagueChange={setLeague}
-        replacement={seasonQuery.data?.replacement}
-      />
+      <ScoringControl scoring={scoring} onChange={setScoring} />
 
       {season == null ? (
         <section className="glass-card p-8 text-center text-sm text-muted">

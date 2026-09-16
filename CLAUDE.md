@@ -540,8 +540,12 @@ that builder UI is deferred. See
 
 **Insight** (M3 — derived at query time from a scoring config *and* a league config;
 no stored columns. See [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3-fantasy-intelligence.md))
-- VORP + VORP per game (value over the last startable player at the position)
-- Replacement level (that player's PPG, in your scoring and league)
+- ⚠️ **VORP, VORP per game, expected VORP and replacement level are computed but NOT
+  SURFACED.** They were pulled from every board, the player page and the nav before
+  launch (September 2026). The engine in `app/intelligence.py` still produces them and
+  `/stats/intelligence` still returns them — the draft board, hidden for the same
+  launch, is built on expected VORP — so bringing them back is a frontend change. Do
+  not add a `vorp*` column to a board without asking
 - Fantasy Opportunity Rating (0–100)
 - Positive-Regression Index (0–100, buy-low)
 - Sell-High Index (0–100)
@@ -587,10 +591,12 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
 
 - **M5 — Accounts & Saved State** (✅ SHIPPED): email sign-in — **password *or* magic
   link**, no third-party account needed — via Supabase Auth, with
-  FastAPI verifying the token and owning all account data. Ships **multiple named
-  league profiles** (each a bundle of a scoring spec + a league spec), a **favorites
-  watchlist** (star, filter, "My Players" tile), and **saved views** (any board,
-  scatter, or comparison, stored as its route + query string). **Nothing is gated** —
+  FastAPI verifying the token and owning all account data. Ships a **favorites
+  watchlist** (star, filter, "My Players" tile) and **saved views** (any board,
+  scatter, or comparison, stored as its route + query string). It also shipped
+  **multiple named league profiles**, ⚠️ **cut from the UI before launch** along with
+  custom scoring — the `/me/league-profiles` endpoints and their table survive,
+  uncalled. **Nothing is gated** —
   accounts are a sync/naming layer over the existing URL + `localStorage` state, and
   the URL still outranks the account so shared links never lie.
 
@@ -728,7 +734,9 @@ GET /api/v1/health/auth                      ← is token verification wired? (i
 ```
 
 Three per-request configs shape fantasy output, all parsed from compact spec strings:
-- `scoring=preset[:overrides]` — e.g. `ppr`, `ppr:pass_td=6,te_rec=1.5` (see `app/scoring.py`)
+- `scoring=preset[:overrides]` — e.g. `ppr`, `ppr:pass_td=6,te_rec=1.5` (see `app/scoring.py`).
+  ⚠️ The backend still accepts the override half; **the UI no longer produces it** —
+  see the scoring note under "Notes for Claude Code"
 - `league=teams[:slot=value]` — e.g. `12`, `10:rb=2,flex=2`, `12:superflex=1` (see `app/league.py`)
 - `custom=name=formula[;…]` — e.g. `hvt=red_zone_targets+rush_att_inside_5/games`
   (see `app/custom_metrics.py`). A weighted sum over an optional divisor — **structured,
@@ -754,12 +762,11 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   scoring, opportunity leaders, quarterbacks, a featured head-to-head —
   beside a **sticky rail** of reference (scoreboard, watchlist, the two signal cards).
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
-  in the code and in these docs. The nav holds **four dropdowns** — **Insight**
-  (`/insight/*` — VORP / Opportunity Rating / Buy Low / Sell High, the M3 derived
-  signals), **Draft** (`/draft/*` — Rankings, Mock Draft, Value Board), **Explore**
-  (`/explore/*` — the M4 Scatter and Compare builders) and **Schedule** (`/schedule/*` —
-  Games, By Team, Vegas Board) — plus a single **Leaderboards** mega menu (M12) holding
-  all **14 player boards**, arranged in a column per *area*:
+  in the code and in these docs. The nav holds **two dropdowns** — **Insight**
+  (`/insight/*` — Strength of Schedule / Opportunity Rating / Buy Low / Sell High) and
+  **Schedule** (`/schedule/*` — Games, By Team, Vegas Board) — plus a single
+  **Leaderboards** mega menu (M12) holding all **14 player boards**, arranged in a
+  column per *area*:
 
   | | Fantasy | Production | Advanced | Opportunity |
   |---|:-:|:-:|:-:|:-:|
@@ -771,8 +778,15 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   Area first because that is how someone arrives — they want receivers, then choose a
   lens. ⚠️ **Routes stay grouped by type** (`/fantasy/*`, `/nfl/*`, `/opportunity/*`)
   even though the menu groups by area: a route is what a saved view (M5) and a shared
-  link store. All 18 boards (14 + the 4 Insight) and the tool pages are configured in
+  link store. All 17 boards (14 + the 3 Insight) and the tool pages are configured in
   `frontend/src/constants/boards.js`, which also carries `LEADERBOARD_MENU`.
+- ⚠️ **Draft ▾ and Explore ▾ are built but HIDDEN for launch.** `DRAFT_ITEMS` and
+  `EXPLORE_ITEMS` are still exported from `boards.js` and their pages still compile;
+  they are simply absent from `NAV_GROUPS`, and `HIDDEN_SECTIONS` in `App.jsx`
+  redirects both subtrees to `/` — un-linking alone is not enough, because a hidden
+  section still has bookmarks, saved views and search results pointing into it.
+  Un-hiding one is two edits: its group back in `NAV_GROUPS`, its prefix out of
+  `HIDDEN_SECTIONS`.
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -1028,6 +1042,52 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `gridiron_test` database, so it never touches dev data. Runs on every pull
       request via `.github/workflows/backend-tests.yml`
       (see [`backend/tests/README.md`](backend/tests/README.md))
+- [x] Launch trim (September 2026) — four cuts and one fix ahead of going public, all
+      frontend, no migration and no API change. **Scoring is presets only**: PPR /
+      Half / Standard / TE-Premium, with the "Customize" weights panel and the saved
+      **league profiles** that wrapped it removed (`LeagueProfileBar`, `useProfileSync`,
+      `useLeagueProfiles`); `parseScoring` normalises an old custom spec down to its
+      preset rather than displaying a lie. **VORP is retired from every surface** — the
+      `/insight/vorp` board (redirected to `/insight/opportunity`), the four `vorp*`
+      columns on the fantasy boards, the player page's Value group and Insight tile, and
+      two scatter presets — which left the **league-size / starting-lineup editor**
+      driving nothing visible, so that went too and `useLeague()` is now a constant.
+      **Draft ▾ and Explore ▾ are hidden**: out of `NAV_GROUPS` *and* redirected to `/`
+      by `HIDDEN_SECTIONS` in `App.jsx`, since an un-linked section still has bookmarks
+      and saved views pointing into it (bundle 1,217 kB → 684 kB, those pages no longer
+      being imported). And **the nav dropdowns no longer close on you**: new
+      `hooks/useHoverMenu.js` gives both `NavDropdown` and `MegaDropdown` a ~260ms
+      cancellable grace period, moves the 6px trigger-to-panel offset from a margin into
+      a hoverable wrapper's padding (the gap belonged to neither element, so crossing it
+      fired a `mouseleave`), and closes sibling menus on open so the delay never leaves
+      two panels up
+- [x] Schedule tab redesign (September 2026) — **Games** becomes a slate of cards
+      grouped by kickoff slot (Thursday Night / Sunday Early / Sunday Late / Sunday
+      Night / Monday Night), each with team logos, the spread on the favourite, and an
+      **implied-total split bar**; the week `<select>` is replaced by a **rail** that
+      shows how much of every week is played and priced before you click it, and the
+      page opens on the first unfinished week rather than on all 272 fixtures (the
+      resolved week stays out of the URL, so a link carries one only when the sender
+      picked it). Across several weeks it groups by week instead, which is what makes
+      `?week=all&team=12` a readable season. **Vegas** drops its Players/Games toggle
+      for one scroll, summary then detail: a rail of every offence ranked by implied
+      total, then the same offences expanded with their players as chips. That toggle
+      was the bug — the players view ranked ~300 players on 32 distinct values, so it
+      opened with twelve San Francisco players in a row. New `components/schedule/`
+      (`GameCard`, `OffenseCard`, `TeamEnvironmentRail`, `WeekRail`, `ImpliedSplit`,
+      `kickoff.js`). No API change: `/games` already carried logos and implied totals
+- [x] Command Center: scoring pill + My Players rebuild (September 2026) — the
+      "Scored in PPR" readout is now a **control** (`components/ScoringPill.jsx`)
+      rather than a link to the leaderboard; it writes through `useScoring`, so the
+      URL still carries a non-default spec and the default still stays out of it.
+      **My Players** keeps its seven requested columns — FPTS, FPPG, FOR, OPP%, TGT%,
+      RTE%, RUSH% — which moved the card from `/stats/leaderboard` to
+      `/stats/intelligence`, because **FOR is a query-time score with no stored
+      column**. The watchlist is applied there as an output filter *after* scoring, so
+      a starred player's FOR still means "against every back in the league"; the
+      request also passes `include_unqualified` so a starred player who has missed
+      games never vanishes from his own card. At seven stat columns the card no longer
+      fits the 300px rail, so it moved to the wide column under Week standouts
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -1112,6 +1172,18 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   together, or a spec the editor builds will 400 on request. The custom-metric grammar
   (`app/custom_metrics.py`) has **no** mirror today: its builder UI was deferred, and
   the engine's only current job is evaluating the registry's `composite` metrics
+- ⚠️ **The UI offers four scoring presets and nothing else** (September 2026). The
+  per-stat "Customize" panel and the saved league profiles that wrapped it were cut
+  before launch: a scoring editor invites a manager to reproduce their exact league,
+  and a *half*-reproduced league is worse than an honest approximation, because every
+  number on the page is then quoted in a scoring nobody plays. The backend grammar is
+  unchanged and still parses overrides, so this is reversible — but note
+  `constants/scoring.js`'s `parseScoring` now **normalises**: an override clause
+  surviving in an old shared link or in `localStorage` resolves to its bare preset,
+  because showing "PPR" in the picker over a table priced as something else is the one
+  failure worse than dropping the customisation. The same cut took the league-size and
+  starting-lineup editor, since replacement level was its only visible consumer and
+  VORP is retired; `useLeague()` is now a constant returning `DEFAULT_LEAGUE`
 - The **Scatter builder is curated, not open-ended** — users pick a position group and
   a question, never raw axes (`frontend/src/constants/scatters.js`). Two metrics chosen
   at random usually make a meaningless cloud; the curation *is* the feature. Adding a
@@ -1299,6 +1371,22 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   receiving yards in 2024 and read 96th and 99th percentile respectively, which is the
   behaviour working rather than an inconsistency. Same rule as the team filter and the
   watchlist
+- ⚠️ **Tailwind's `/opacity` modifier does not work on this project's colour tokens.**
+  `tailwind.config.js` defines them as `accent: "var(--accent)"` and so on, and those
+  variables hold *hex* colours — so `bg-accent/45` compiles to
+  `rgb(var(--accent) / .45)`, which is invalid CSS and renders **fully transparent**,
+  silently. It fails with no warning at build or run time: the element is simply not
+  there. Every translucent token fill in the codebase uses
+  `color-mix(in srgb, var(--token) 45%, transparent)` instead — see `PositionTag`,
+  `FinishChip`, `StatTable`. This bit the M10 schedule redesign, where half of every
+  implied-total split bar was invisible. Either write the `color-mix` inline, or give
+  the token space-separated channels; do not reach for `/NN`
+- ⚠️ **A solid `--accent` fill cannot carry small text in the light theme.** White on
+  `--accent` (`#00b06a`) measures **2.83:1** — the same finding `FinishChip` already
+  records for `--pos`, and the same reason `--series-4` cannot take white ink. The
+  Vegas board's offence bars print their numbers *beside* the bar rather than on it.
+  When a value has to sit on a token fill, tint the fill and mix the text toward
+  `--fg`; when it does not, put it on the card surface and the question disappears
 - **A stat's definition has to arrive before the reader moves on.** The native `title`
   attribute waits roughly a second and renders in OS chrome, which made the one place a
   metric is explained look like an error message. `components/StatTooltip.jsx` shows in

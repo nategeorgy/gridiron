@@ -1,4 +1,5 @@
-// The Vegas board (M6.4) — game environment as a fantasy input.
+// The Vegas board (M6.4, redesigned September 2026) — game environment as a fantasy
+// input.
 //
 // The market prices every game twice: a spread (who wins, by how much) and a total
 // (how many points). Split them and you get each team's **implied total** — the points
@@ -6,330 +7,262 @@
 // many fantasy points are going to exist. A back in a 27-point offense has a different
 // job from the same back in a 17-point one.
 //
-// Two views on one toggle, players first: this board sits beside VORP and Buy Low, and
-// those rank players. The games view is the same week read as a slate.
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+// ⚠️ **The old Players/Games toggle is gone, and that was the fix, not a simplification.**
+// The players view ranked *players* by their team's implied total — but implied total
+// is a fact about the offense, so every player on a team shared one number and the
+// board opened with twelve San Francisco players in a row before it reached another
+// team. It was sorting 300 rows on 32 distinct values. So the page is now one scroll,
+// summary then detail, both ordered the same way:
+//
+//   1. a rail of every offense this week, one bar each — where the points are;
+//   2. the same offenses expanded with their players — who is in line for them.
+//
+// Structure comes from `/games` rather than `/stats/vegas?view=games`, because that
+// endpoint carries team logos and the same implied totals. `/stats/vegas?view=players`
+// still supplies the player chips.
+import { useMemo } from "react";
+
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
-import { FavoriteStar } from "../components/FavoriteStar";
-import { TablePager } from "../components/StatTable";
 import { ExportButton } from "../components/ExportButton";
 import { SaveViewButton } from "../components/SaveViewButton";
+import { OffenseCard } from "../components/schedule/OffenseCard";
+import { TeamEnvironmentRail } from "../components/schedule/TeamEnvironmentRail";
+import { WeekRail, defaultWeek } from "../components/schedule/WeekRail";
+import { useGames, useGameWeeks } from "../hooks/useGames";
 import { useVegas } from "../hooks/useDraftBoard";
 import { useScoring } from "../hooks/useScoring";
 import { useUrlState } from "../hooks/useUrlState";
 import { useSeasons } from "../hooks/useSeasons";
-import { formatStat } from "../utils/format";
 import { POSITIONS } from "../constants";
 
-const PAGE_SIZE = 50;
-const VIEWS = [
-  { value: "players", label: "Players" },
-  { value: "games", label: "Games" },
-];
+/** How many players to show per offense. Enough for a lineup decision, not a roster. */
+const CHIPS_PER_TEAM = 6;
+/** The endpoint's ceiling; a full week of charted players runs to roughly 370. */
+const PLAYER_LIMIT = 400;
 
-// Implied totals live roughly between 15 and 30 points. Tinting across that range
-// rather than from zero is what makes the difference between a 21 and a 27 visible;
-// `--pos` is the right token because more points is unambiguously better here.
-const LOW_TOTAL = 17;
-const HIGH_TOTAL = 28;
-
-function impliedTint(implied) {
-  if (implied === null || implied === undefined) return undefined;
-  const scaled = Math.max(0, Math.min(1, (implied - LOW_TOTAL) / (HIGH_TOTAL - LOW_TOTAL)));
-  return `color-mix(in srgb, var(--pos) ${Math.round(scaled * 55)}%, transparent)`;
-}
-
-/** "−3.5" when favoured, "+3.5" when not. */
-function spreadLabel(spread) {
-  if (spread === null || spread === undefined) return "—";
-  if (spread === 0) return "PK";
-  return spread > 0 ? `−${formatStat(spread, 1)}` : `+${formatStat(Math.abs(spread), 1)}`;
-}
-
-function NotPriced() {
-  return (
-    <span
-      className="text-[11px] text-faint"
-      title="The market has not posted a line for this game yet. Lines appear a few weeks out, with look-ahead numbers on a handful of games beyond that."
-    >
-      no line
-    </span>
-  );
+/**
+ * One row per offense, from the week's fixtures.
+ *
+ * Unpriced games are kept rather than dropped — a team with no line is still playing,
+ * and hiding it would make the board quietly incomplete — but they sort last, because
+ * "no line" is not "a low total".
+ */
+function offensesFrom(games) {
+  const rows = [];
+  for (const game of games) {
+    const shared = {
+      gameId: game.game_id,
+      total: game.total_line,
+      divGame: game.div_game,
+    };
+    rows.push({
+      ...shared,
+      abbreviation: game.away_abbreviation,
+      teamId: game.away_team_id,
+      logoUrl: game.away_logo_url,
+      opponent: game.home_abbreviation,
+      isHome: false,
+      implied: game.away_implied,
+    });
+    rows.push({
+      ...shared,
+      abbreviation: game.home_abbreviation,
+      teamId: game.home_team_id,
+      logoUrl: game.home_logo_url,
+      opponent: game.away_abbreviation,
+      isHome: true,
+      implied: game.home_implied,
+    });
+  }
+  return rows.sort((a, b) => {
+    if (a.implied == null && b.implied == null) return 0;
+    if (a.implied == null) return 1;
+    if (b.implied == null) return -1;
+    return b.implied - a.implied;
+  });
 }
 
 export function VegasView({ board }) {
-  const { seasonOptions, currentSeason } = useSeasons({ statsOnly: false });
-  const [seasonChoice, setSeason] = useUrlState("season", "");
-  const [view, setView] = useUrlState("view", "players", ["players", "games"]);
-  const [week, setWeek] = useUrlState("week", "");
+  const { seasons, currentSeason } = useSeasons({ statsOnly: false });
+  const [season, setSeason] = useUrlState("season", String(seasons[0] ?? currentSeason));
+  const [weekChoice, setWeek] = useUrlState("week", "");
   const [position, setPosition] = useUrlState("position", "");
-  const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
 
-  const season = seasonChoice || String(seasonOptions[0]?.value ?? currentSeason);
+  const { data: weekData } = useGameWeeks({ season: Number(season), season_type: "REG" });
+  const weeks = weekData?.weeks ?? [];
+  const week = weekChoice || defaultWeek(weeks) || "";
 
-  const params = useMemo(
-    () => ({
+  // Structure + logos. Skipped until a week resolves, so the first paint is not a
+  // whole season of fixtures.
+  const gamesQuery = useGames(
+    { season: Number(season), season_type: "REG", week: Number(week), limit: 400 },
+    { enabled: Boolean(week) },
+  );
+  // The players inside those offenses, in the reader's scoring.
+  const playersQuery = useVegas(
+    {
       season: Number(season),
-      ...(week ? { week: Number(week) } : {}),
-      view,
-      ...(view === "players" && position ? { position } : {}),
+      week: Number(week),
+      view: "players",
+      ...(position ? { position } : {}),
       scoring,
-      limit: PAGE_SIZE,
-      offset,
-    }),
-    [season, week, view, position, scoring, offset],
+      limit: PLAYER_LIMIT,
+    },
+    { enabled: Boolean(week) },
   );
 
-  const { data, isLoading, isError, error, isPlaceholderData } = useVegas(params);
-  const rows = data?.data ?? [];
-  const total = data?.total ?? 0;
+  const games = gamesQuery.data?.data ?? [];
+  const offenses = useMemo(() => offensesFrom(games), [games]);
 
-  const withReset = (setter) => (value) => {
-    setter(value);
-    setOffset(0);
-  };
+  const priced = offenses.filter((team) => team.implied != null);
+  const max = priced.length ? priced[0].implied : 0;
+  const median = priced.length ? priced[Math.floor(priced.length / 2)].implied : 0;
 
-  // Weeks the season actually has, labelled with whether the market has priced them —
-  // otherwise picking week 12 looks like a broken page rather than an honest one.
-  const weekOptions = useMemo(() => {
-    const summary = data?.weeks ?? [];
-    if (summary.length === 0) return [{ value: "", label: "Next week" }];
-    return [
-      { value: "", label: "Next week" },
-      ...summary.map((entry) => ({
-        value: String(entry.week),
-        label:
-          entry.priced === 0
-            ? `Week ${entry.week} · no lines`
-            : entry.priced < entry.games
-              ? `Week ${entry.week} · ${entry.priced}/${entry.games} priced`
-              : `Week ${entry.week}`,
-      })),
-    ];
-  }, [data?.weeks]);
+  // The API already ranks players; keep that order inside each team so the chips lead
+  // with the names that matter.
+  const playersByTeam = useMemo(() => {
+    const grouped = new Map();
+    for (const player of playersQuery.data?.data ?? []) {
+      const key = player.team_abbreviation;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(player);
+    }
+    return grouped;
+  }, [playersQuery.data]);
 
   const exportRows = useMemo(
     () =>
-      view === "players"
-        ? rows.map((row) => ({
-            name: row.name, position: row.position, team: row.team_abbreviation,
-            matchup: `${row.is_home ? "vs " : "@ "}${row.opponent ?? ""}`,
-            implied_total: row.implied_total, team_spread: row.team_spread,
-            total_line: row.total_line, fantasy_ppg: row.fantasy_ppg,
-          }))
-        : rows.map((row) => ({
-            matchup: `${row.away} @ ${row.home}`, game_date: row.game_date,
-            spread_line: row.spread_line, total_line: row.total_line,
-            away_implied: row.away_implied, home_implied: row.home_implied,
-          })),
-    [rows, view],
+      offenses.map((team) => ({
+        team: team.abbreviation,
+        matchup: `${team.isHome ? "vs " : "@ "}${team.opponent}`,
+        implied_total: team.implied,
+        total_line: team.total,
+        players: (playersByTeam.get(team.abbreviation) ?? [])
+          .slice(0, CHIPS_PER_TEAM)
+          .map((player) => player.name)
+          .join(", "),
+      })),
+    [offenses, playersByTeam],
   );
 
-  const exportColumns =
-    view === "players"
-      ? [
-          { key: "name", label: "Player" }, { key: "position", label: "Pos" },
-          { key: "team", label: "Team" }, { key: "matchup", label: "Matchup" },
-          { key: "implied_total", label: "Implied total" },
-          { key: "team_spread", label: "Spread" }, { key: "total_line", label: "Game total" },
-          { key: "fantasy_ppg", label: "PPG" },
-        ]
-      : [
-          { key: "matchup", label: "Game" }, { key: "game_date", label: "Date" },
-          { key: "spread_line", label: "Spread (home)" }, { key: "total_line", label: "Total" },
-          { key: "away_implied", label: "Away implied" }, { key: "home_implied", label: "Home implied" },
-        ];
+  const isLoading = gamesQuery.isLoading || !week;
+  const isError = gamesQuery.isError;
 
   return (
     <div className="space-y-5">
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Insight</div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Schedule</div>
         <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
       </div>
 
-      <div className="glass-card flex flex-wrap gap-3 p-4">
-        <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
-        <Select label="Week" value={week} onChange={withReset(setWeek)} options={weekOptions} />
-        <Select label="View" value={view} onChange={withReset(setView)} options={VIEWS} />
-        {view === "players" && (
-          <Select label="Position" value={position} onChange={withReset(setPosition)} options={POSITIONS} />
-        )}
-        <div className="ml-auto flex items-end gap-2">
-          <SaveViewButton defaultName={board.title} />
-          <ExportButton
-            filename={`gridironiq-vegas-${season}-wk${data?.week ?? ""}`}
-            rows={exportRows}
-            columns={exportColumns}
-            context={[
-              "GridironIQ — Vegas Board",
-              `${data?.season ?? season} week ${data?.week ?? ""} · ${view} view · scoring: ${scoring}`,
-              "Implied total = game total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
-            ]}
+      <div className="glass-card space-y-4 p-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <Select
+            label="Season"
+            value={season}
+            onChange={setSeason}
+            options={seasons.map((year) => ({ value: String(year), label: String(year) }))}
           />
+          <Select label="Position" value={position} onChange={setPosition} options={POSITIONS} />
+          <div className="ml-auto flex items-end gap-2">
+            <SaveViewButton defaultName={board.title} />
+            <ExportButton
+              filename={`gridironiq-vegas-${season}-wk${week}`}
+              rows={exportRows}
+              columns={[
+                { key: "team", label: "Team" },
+                { key: "matchup", label: "Matchup" },
+                { key: "implied_total", label: "Implied total" },
+                { key: "total_line", label: "Game total" },
+                { key: "players", label: "Players" },
+              ]}
+              context={[
+                "GridironIQ — Vegas Board",
+                `${season} week ${week} · scoring: ${scoring}`,
+                "Implied total = game total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
+              ]}
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-line pt-3">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Week</div>
+          {/* No "All weeks": an implied total is a fact about one fixture, so a
+              season-wide view of them would be a list with no question behind it. */}
+          <WeekRail weeks={weeks} value={week} onChange={setWeek} allowAll={false} />
         </div>
       </div>
 
-      {view === "players" && <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />}
+      <ScoringControl scoring={scoring} onChange={setScoring} />
 
       <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
 
-      <div className="glass-card overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
-              {view === "players" ? (
-                <>
-                  <th className="px-3 py-3 text-right">#</th>
-                  <th className="px-3 py-3">Player</th>
-                  <th className="px-3 py-3">Matchup</th>
-                  <th className="px-3 py-3 text-right" title="Points the market expects this offense to score: the game total split by the spread">Implied</th>
-                  <th className="px-3 py-3 text-right" title="The spread from this team's point of view">Line</th>
-                  <th className="px-3 py-3 text-right">Total</th>
-                  <th className="px-3 py-3 text-right" title="Fantasy points per game in the production season, in your scoring">PPG</th>
-                </>
+      {isError ? (
+        <div className="glass-card p-10 text-center text-sm text-muted">
+          Could not load the Vegas board.
+        </div>
+      ) : isLoading ? (
+        <div className="glass-card p-10 text-center text-sm text-muted">Loading…</div>
+      ) : offenses.length === 0 ? (
+        <div className="glass-card p-10 text-center text-sm text-muted">No games this week.</div>
+      ) : (
+        <>
+          <section className="glass-card p-4">
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-base font-bold tracking-tight text-fg">
+                Where the points are
+              </h2>
+              <span className="text-[11px] text-faint">
+                {offenses.length} offenses · week {week}
+              </span>
+            </div>
+            <p className="mb-3.5 text-xs text-muted">
+              Implied team total — the game total split by the spread.{" "}
+              {/* With nothing priced there is no median to be below, and "median of
+                  0.0" would read as a real number rather than an absent one. */}
+              {priced.length > 0 ? (
+                <>Faint bars are below this week&apos;s median of {median.toFixed(1)}.</>
               ) : (
-                <>
-                  <th className="px-3 py-3">Game</th>
-                  <th className="px-3 py-3">Date</th>
-                  <th className="px-3 py-3 text-right">Spread</th>
-                  <th className="px-3 py-3 text-right">Total</th>
-                  <th className="px-3 py-3 text-right">Away implied</th>
-                  <th className="px-3 py-3 text-right">Home implied</th>
-                </>
+                <>The market has not priced this week yet, so there is nothing to rank.</>
               )}
-            </tr>
-          </thead>
-          <tbody className={isPlaceholderData ? "opacity-60 transition" : "transition"}>
-            {isLoading && (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">Loading…</td></tr>
-            )}
-            {isError && (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted">
-                  {error?.response?.data?.detail ?? "Could not load the Vegas board."}
-                </td>
-              </tr>
-            )}
-            {!isLoading && !isError && rows.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">No games this week.</td></tr>
-            )}
+            </p>
+            <TeamEnvironmentRail teams={offenses} median={median} max={max} />
+          </section>
 
-            {view === "players" &&
-              rows.map((row, index) => (
-                <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
-                  <td className="stat-num px-3 py-2.5 text-right text-faint">{offset + index + 1}</td>
-                  <td className="px-3 py-2.5">
-                    <span className="flex items-center gap-1.5">
-                      <FavoriteStar playerId={row.player_id} size="h-3.5 w-3.5" />
-                      <Link to={`/players/${row.player_id}`} className="font-medium text-fg hover:text-accent hover:underline">
-                        {row.name}
-                      </Link>
-                      <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-faint">
-                        {row.position}
-                        {row.pos_rank ?? ""}
-                      </span>
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Link to={`/teams/${row.team_id}`} className="stat-num text-xs text-fg hover:text-accent">
-                      {row.team_abbreviation}
-                    </Link>
-                    <span className="stat-num ml-1.5 text-xs text-muted">
-                      {row.is_home ? "vs" : "@"} {row.opponent ?? "—"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {row.priced ? (
-                      <span
-                        className="stat-num rounded px-1.5 py-0.5 text-xs font-semibold text-fg"
-                        style={{ backgroundColor: impliedTint(row.implied_total) }}
-                      >
-                        {formatStat(row.implied_total, 1)}
-                      </span>
-                    ) : (
-                      <NotPriced />
-                    )}
-                  </td>
-                  <td className="stat-num px-3 py-2.5 text-right text-muted">
-                    {row.priced ? spreadLabel(row.team_spread) : "—"}
-                  </td>
-                  <td className="stat-num px-3 py-2.5 text-right text-muted">
-                    {formatStat(row.total_line, 1)}
-                  </td>
-                  <td className="stat-num px-3 py-2.5 text-right text-muted">
-                    {formatStat(row.fantasy_ppg, 1)}
-                  </td>
-                </tr>
-              ))}
-
-            {view === "games" &&
-              rows.map((row) => (
-                <tr key={row.game_id} className="border-b border-line last:border-0 hover:bg-surface-2">
-                  <td className="px-3 py-2.5">
-                    <Link to={`/teams/${row.away_team_id}`} className="stat-num text-fg hover:text-accent">
-                      {row.away}
-                    </Link>
-                    <span className="mx-1.5 text-muted">@</span>
-                    <Link to={`/teams/${row.home_team_id}`} className="stat-num text-fg hover:text-accent">
-                      {row.home}
-                    </Link>
-                    {row.div_game && (
-                      <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-faint">DIV</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-muted">{row.game_date ?? "—"}</td>
-                  <td className="stat-num px-3 py-2.5 text-right text-muted">
-                    {row.priced ? formatStat(row.spread_line, 1) : <NotPriced />}
-                  </td>
-                  <td className="stat-num px-3 py-2.5 text-right text-fg">
-                    {formatStat(row.total_line, 1)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span
-                      className="stat-num rounded px-1.5 py-0.5 text-xs text-fg"
-                      style={{ backgroundColor: impliedTint(row.away_implied) }}
-                    >
-                      {formatStat(row.away_implied, 1)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span
-                      className="stat-num rounded px-1.5 py-0.5 text-xs text-fg"
-                      style={{ backgroundColor: impliedTint(row.home_implied) }}
-                    >
-                      {formatStat(row.home_implied, 1)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
-
-      {data && (
-        <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
-          Implied total is the game total split by the spread — what the market expects
-          each offense to score. Lines come from the nflverse schedule feed, the same one
-          the fixtures do, so there is no odds provider behind this and no intraday
-          movement: they update when the feed does.{" "}
-          {view === "players" && (
-            <>
-              The player list is each team's depth chart to third at a position, with
-              points per game from the{" "}
-              <span className="text-muted">{data.production_season}</span> season in your
-              scoring.{" "}
-            </>
-          )}
-          Games the market has not priced show <span className="text-muted">no line</span>{" "}
-          and sort last, because no line is not a low total.
-        </p>
+          <section className="space-y-2.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-base font-bold tracking-tight text-fg">
+                Who&apos;s in those games
+              </h2>
+              <span className="text-[11px] text-faint">
+                {position ? `${position}s only · ` : ""}top {CHIPS_PER_TEAM} by points per game
+              </span>
+            </div>
+            {offenses.map((team) => (
+              <OffenseCard
+                key={`${team.gameId}-${team.abbreviation}`}
+                team={team}
+                players={(playersByTeam.get(team.abbreviation) ?? []).slice(0, CHIPS_PER_TEAM)}
+              />
+            ))}
+          </section>
+        </>
       )}
 
-      <TablePager offset={offset} pageSize={PAGE_SIZE} total={total} onOffsetChange={setOffset} />
+      <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
+        Implied total is the game total split by the spread — what the market expects
+        each offense to score. Lines come from the nflverse schedule feed, the same one
+        the fixtures do, so there is no odds provider behind this and no intraday
+        movement: they update when the feed does. The player list is each team&apos;s
+        depth chart to third at a position, with points per game from the{" "}
+        <span className="text-muted">{playersQuery.data?.production_season ?? "current"}</span>{" "}
+        season in your scoring. Games the market has not priced show{" "}
+        <span className="text-muted">no line</span> and sort last, because no line is not
+        a low total.
+      </p>
     </div>
   );
 }

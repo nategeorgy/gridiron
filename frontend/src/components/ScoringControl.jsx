@@ -1,83 +1,27 @@
-// League-scoring editor: a preset picker plus an expandable custom-weights panel.
-// Emits a scoring spec string (e.g. "ppr" or "ppr:pass_td=6") via onChange.
-import { useState } from "react";
-import { LeagueProfileBar } from "./LeagueProfileBar";
+// The scoring picker: one dropdown over the four supported presets.
+//
+// It used to carry a "Customize" panel of per-stat weights and, beneath it, the
+// league-profile bar. Both were cut before launch — see constants/scoring.js for why
+// the weights went, and note what is left is deliberately not a *setting*: it is a
+// lens, switched as freely as a column sort, and it lives in the URL so a link carries
+// it (see hooks/useScoring).
 import { Select } from "./ui/Select";
-import {
-  EDITABLE_WEIGHTS,
-  SCORING_PRESET_OPTIONS,
-  diffFromPreset,
-  parseScoring,
-  scoringLabel,
-  serializeScoring,
-} from "../constants/scoring";
+import { SCORING_PRESET_OPTIONS, normalizeScoring } from "../constants/scoring";
 
 export function ScoringControl({ scoring, onChange, bare = false }) {
-  const [open, setOpen] = useState(false);
-  const { preset, config } = parseScoring(scoring);
-  const isCustom = scoring.includes(":");
-
-  const setWeight = (key, raw) => {
-    const value = raw === "" ? null : Number(raw);
-    if (raw !== "" && Number.isNaN(value)) return;
-    const nextConfig = { ...config, [key]: value };
-    onChange(serializeScoring(preset, diffFromPreset(nextConfig, preset)));
-  };
-
   return (
     <div className={bare ? "" : "glass-card p-4"}>
       <div className="flex flex-wrap items-end gap-3">
         <Select
           label="League Scoring"
-          value={preset}
-          onChange={(value) => onChange(value)}
+          value={normalizeScoring(scoring)}
+          onChange={onChange}
           options={SCORING_PRESET_OPTIONS}
         />
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          className="btn-ghost px-3 py-2 text-sm transition hover:!text-accent"
-        >
-          {open ? "Hide custom scoring" : "Customize"}
-        </button>
         <span className="pb-2 text-xs text-muted">
-          Active: <span className="font-semibold text-accent">{scoringLabel(scoring)}</span>
-          {isCustom && (
-            <button
-              type="button"
-              onClick={() => onChange(preset)}
-              className="ml-2 text-faint underline transition hover:text-muted"
-            >
-              reset
-            </button>
-          )}
+          Every fantasy number on this page is priced in this scoring.
         </span>
       </div>
-
-      {open && (
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-4 sm:grid-cols-3 lg:grid-cols-5">
-          {EDITABLE_WEIGHTS.map(({ key, label, step, optional }) => (
-            <label key={key} className="flex flex-col gap-1">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                {label}
-              </span>
-              <input
-                type="number"
-                step={step}
-                value={config[key] ?? ""}
-                placeholder={optional ? "= reception" : undefined}
-                onChange={(event) => setWeight(key, event.target.value)}
-                className="glass-input w-full px-2 py-1.5 text-sm"
-              />
-            </label>
-          ))}
-        </div>
-      )}
-
-      {/* Mounted here because this card is the one surface present on every page
-          that has either the scoring or the league editor. Renders nothing when
-          signed out. */}
-      <LeagueProfileBar />
     </div>
   );
 }

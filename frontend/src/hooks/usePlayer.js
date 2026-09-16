@@ -42,7 +42,7 @@ export function usePlayerCareer(playerId, scoring, seasonType = "REG") {
  * One or two players' season rows, with a percentile for every requested metric (M13).
  *
  * Served by `/stats/intelligence` rather than the leaderboard because the Fantasy board
- * carries VORP and the other query-time columns, which only exist on the scored rows —
+ * carries the query-time columns, which only exist on the scored rows —
  * re-aggregating raw stat lines cannot see them. That endpoint already scores the whole
  * league and then narrows, so the percentile pools stay the league at each position no
  * matter how few players are asked for.
