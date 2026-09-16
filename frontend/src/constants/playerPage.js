@@ -228,10 +228,6 @@ const FANTASY_SECTIONS = {
     "expected_fantasy_points",
     "expected_fantasy_ppg",
     "fantasy_points_over_expected",
-    "vorp",
-    "vorp_ppg",
-    "expected_vorp",
-    "expected_vorp_ppg",
   ],
 };
 FANTASY_SECTIONS.general.TE = FANTASY_SECTIONS.general.WR;
@@ -239,8 +235,9 @@ FANTASY_SECTIONS.general.TE = FANTASY_SECTIONS.general.WR;
 const fantasyBoard = (position) => ({
   id: "fantasy",
   label: "Fantasy",
-  // Only this board carries query-time Insight columns (VORP and friends), which is
-  // why the whole page is served by /stats/intelligence rather than the leaderboard.
+  // The page is served by /stats/intelligence rather than the leaderboard: it is the
+  // endpoint that also returns percentiles, so the stat grid, the radar and the
+  // percentile panel all come out of one request ranked against one pool.
   sections: [
     { name: "General", columns: FANTASY_SECTIONS.general[position] },
     { name: "Advanced", columns: FANTASY_SECTIONS.advanced },
@@ -419,21 +416,21 @@ RADAR_GROUPS.TE = RADAR_GROUPS.WR;
 // ---------------------------------------------------------------------------
 export const PERCENTILE_GROUPS = {
   QB: [
-    { name: "Value", columns: ["fantasy_ppg", "vorp", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
+    { name: "Value", columns: ["fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
     { name: "Volume", columns: ["attempts", "dropbacks", "completions", "carries"] },
     { name: "Production", columns: ["passing_yards", "passing_tds", "passing_first_downs", "rushing_yards", "rushing_tds"] },
     { name: "Efficiency", columns: ["passer_rating", "cpoe", "epa_per_play", "yards_per_attempt", "completion_pct", "interceptions", "sacks_suffered"] },
     { name: "Next Gen Stats", columns: ["ngs_pass_time_to_throw", "ngs_pass_aggressiveness", "ngs_pass_air_yards_to_sticks", "ngs_pass_completion_pct_above_expectation", "pressure_rate"] },
   ],
   RB: [
-    { name: "Value", columns: ["fantasy_ppg", "vorp", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
+    { name: "Value", columns: ["fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
     { name: "Opportunity", columns: ["carries", "rush_attempt_share", "opportunity_share", "target_share", "snap_share", "red_zone_rush_share", "rush_att_inside_5"] },
     { name: "Production", columns: ["rushing_yards", "rushing_tds", "rushing_first_downs", "receptions", "receiving_yards"] },
     { name: "Efficiency", columns: ["yards_per_carry", "rushing_epa", "epa_per_play", "market_share"] },
     { name: "Next Gen Stats", columns: ["ngs_rush_efficiency", "ngs_rush_yards_over_expected_per_att", "ngs_rush_pct_attempts_eight_defenders", "rush_yards_after_contact", "rush_broken_tackles"] },
   ],
   WR: [
-    { name: "Value", columns: ["fantasy_ppg", "vorp", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
+    { name: "Value", columns: ["fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
     { name: "Opportunity", columns: ["target_share", "targets", "air_yards_share", "red_zone_targets", "routes_run", "route_participation", "wopr", "snap_share"] },
     { name: "Production", columns: ["receiving_yards", "receptions", "receiving_tds", "receiving_first_downs", "yards_after_catch"] },
     { name: "Efficiency", columns: ["yards_per_route_run", "targets_per_route_run", "yards_per_target", "catch_rate", "racr", "adot", "receiving_drops"] },

@@ -65,13 +65,6 @@ export const SCATTER_GROUPS = [
         },
       },
       {
-        id: "all-value",
-        label: "Opportunity vs Value",
-        question: "Whose role is actually producing startable value?",
-        x: "fantasy_opportunity_rating",
-        y: "vorp_ppg",
-      },
-      {
         id: "all-td-luck",
         label: "Touchdown Luck",
         question: "How much of this production is touchdown variance?",
@@ -247,13 +240,6 @@ export const SCATTER_GROUPS = [
       "RB, WR, and TE on one chart — the actual flex decision. Only metrics defined " +
       "for all three appear here.",
     presets: [
-      {
-        id: "flex-value",
-        label: "Flex Value",
-        question: "Which flex option is genuinely worth the start?",
-        x: "fantasy_opportunity_rating",
-        y: "vorp_ppg",
-      },
       {
         id: "flex-opportunity",
         label: "Opportunity vs Points",

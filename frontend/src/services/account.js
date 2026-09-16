@@ -1,4 +1,8 @@
-// Account API calls (M5): league profiles, favorites, and saved views.
+// Account API calls (M5): favorites and saved views.
+//
+// The /me/league-profiles endpoints still exist on the backend but have no caller:
+// profiles were cut from the product before launch. They are left standing rather
+// than removed so reinstating them is a frontend change alone.
 // Every one of these requires a signed-in user; the bearer token is attached by
 // the interceptor in api.js.
 import { api } from "./api";
@@ -12,31 +16,6 @@ export async function getAccount() {
 /** Delete the account and everything it owns. */
 export async function deleteAccount() {
   await api.delete("/me");
-}
-
-// --- League profiles ---
-
-/** List the user's league profiles, active first. */
-export async function getLeagueProfiles() {
-  const { data } = await api.get("/me/league-profiles");
-  return data;
-}
-
-/** Create a profile. `payload` is { name, scoring_spec, league_spec, activate }. */
-export async function createLeagueProfile(payload) {
-  const { data } = await api.post("/me/league-profiles", payload);
-  return data;
-}
-
-/** Patch a profile — rename, edit either spec, and/or activate it. */
-export async function updateLeagueProfile(profileId, payload) {
-  const { data } = await api.patch(`/me/league-profiles/${profileId}`, payload);
-  return data;
-}
-
-/** Delete a profile. Another is promoted if the active one was removed. */
-export async function deleteLeagueProfile(profileId) {
-  await api.delete(`/me/league-profiles/${profileId}`);
 }
 
 // --- Favorites ---

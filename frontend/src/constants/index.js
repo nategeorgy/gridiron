@@ -149,9 +149,6 @@ export const METRICS = {
   unrealized_air_yards: { label: "Unrealized Air Yards", short: "UAY", format: FORMATS.int },
   // Fantasy intelligence (M3) — scoring-aware *and* league-aware, served by
   // /stats/intelligence rather than the leaderboard.
-  vorp: { label: "Value Over Replacement", short: "VORP", format: FORMATS.one },
-  vorp_ppg: { label: "VORP Per Game", short: "VORP/G", format: FORMATS.two },
-  replacement_ppg: { label: "Replacement Level", short: "REPL", format: FORMATS.two },
   fantasy_opportunity_rating: { label: "Fantasy Opportunity Rating", short: "FOR", format: FORMATS.one },
   positive_regression_index: { label: "Positive-Regression Index", short: "BUY", format: FORMATS.one },
   sell_high_index: { label: "Sell-High Index", short: "SELL", format: FORMATS.one },

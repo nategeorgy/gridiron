@@ -16,7 +16,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
-import { LeagueSettings } from "../components/LeagueSettings";
+import { ScoringControl } from "../components/ScoringControl";
 import { TablePager } from "../components/StatTable";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { ExportButton } from "../components/ExportButton";
@@ -76,7 +76,7 @@ export function RankingsView({ board }) {
   const [sort, setSort] = useUrlState("sort", "board", Object.keys(SORT_ORDER));
   const [offset, setOffset] = useState(0);
   const [scoring, setScoring] = useScoring();
-  const [league, setLeague] = useLeague();
+  const [league] = useLeague();
   const [newBoardOpen, setNewBoardOpen] = useState(false);
   const watchlist = useWatchlistFilter();
 
@@ -209,13 +209,7 @@ export function RankingsView({ board }) {
         </div>
       </div>
 
-        <LeagueSettings
-          scoring={scoring}
-          onScoringChange={withReset(setScoring)}
-          league={league}
-          onLeagueChange={withReset(setLeague)}
-          replacement={data?.replacement}
-        />
+        <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />
 
       <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
 

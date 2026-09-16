@@ -41,7 +41,7 @@
  * @property {boolean} scoring        true = league-scoring editor + scoring-aware columns
  * @property {boolean} [insight]      true = served by /stats/intelligence rather than
  *                                    /stats/leaderboard, because it carries a column
- *                                    that only exists at query time (VORP, the buy/sell
+ *                                    that only exists at query time (the buy/sell
  *                                    indices, usage trend)
  * @property {string[]} [signed]      columns tinted positive/negative. Empty on every
  *                                    player board: only percentiles carry colour here,
@@ -168,11 +168,7 @@ export const FANTASY_BOARDS = [
         "columns": [
           "expected_fantasy_points",
           "expected_fantasy_ppg",
-          "fantasy_points_over_expected",
-          "vorp",
-          "vorp_ppg",
-          "expected_vorp",
-          "expected_vorp_ppg"
+          "fantasy_points_over_expected"
         ]
       }
     ],
@@ -188,11 +184,7 @@ export const FANTASY_BOARDS = [
       "snap_share",
       "expected_fantasy_points",
       "expected_fantasy_ppg",
-      "fantasy_points_over_expected",
-      "vorp",
-      "vorp_ppg",
-      "expected_vorp",
-      "expected_vorp_ppg"
+      "fantasy_points_over_expected"
     ],
     "defaultSort": "fantasy_points",
     "scoring": true,
@@ -209,11 +201,7 @@ export const FANTASY_BOARDS = [
       "snap_share",
       "expected_fantasy_points",
       "expected_fantasy_ppg",
-      "fantasy_points_over_expected",
-      "vorp",
-      "vorp_ppg",
-      "expected_vorp",
-      "expected_vorp_ppg"
+      "fantasy_points_over_expected"
     ],
     "insight": true,
     "fixedPosition": "QB",
@@ -245,11 +233,7 @@ export const FANTASY_BOARDS = [
         "columns": [
           "expected_fantasy_points",
           "expected_fantasy_ppg",
-          "fantasy_points_over_expected",
-          "vorp",
-          "vorp_ppg",
-          "expected_vorp",
-          "expected_vorp_ppg"
+          "fantasy_points_over_expected"
         ]
       }
     ],
@@ -263,11 +247,7 @@ export const FANTASY_BOARDS = [
       "snap_share",
       "expected_fantasy_points",
       "expected_fantasy_ppg",
-      "fantasy_points_over_expected",
-      "vorp",
-      "vorp_ppg",
-      "expected_vorp",
-      "expected_vorp_ppg"
+      "fantasy_points_over_expected"
     ],
     "defaultSort": "fantasy_points",
     "defaultPosition": "RB",
@@ -283,11 +263,7 @@ export const FANTASY_BOARDS = [
       "snap_share",
       "expected_fantasy_points",
       "expected_fantasy_ppg",
-      "fantasy_points_over_expected",
-      "vorp",
-      "vorp_ppg",
-      "expected_vorp",
-      "expected_vorp_ppg"
+      "fantasy_points_over_expected"
     ],
     "phase": "rushing",
     "insight": true
@@ -318,11 +294,7 @@ export const FANTASY_BOARDS = [
         "columns": [
           "expected_fantasy_points",
           "expected_fantasy_ppg",
-          "fantasy_points_over_expected",
-          "vorp",
-          "vorp_ppg",
-          "expected_vorp",
-          "expected_vorp_ppg"
+          "fantasy_points_over_expected"
         ]
       }
     ],
@@ -337,11 +309,7 @@ export const FANTASY_BOARDS = [
       "snap_share",
       "expected_fantasy_points",
       "expected_fantasy_ppg",
-      "fantasy_points_over_expected",
-      "vorp",
-      "vorp_ppg",
-      "expected_vorp",
-      "expected_vorp_ppg"
+      "fantasy_points_over_expected"
     ],
     "defaultSort": "fantasy_points",
     "defaultPosition": "WR",
@@ -358,11 +326,7 @@ export const FANTASY_BOARDS = [
       "snap_share",
       "expected_fantasy_points",
       "expected_fantasy_ppg",
-      "fantasy_points_over_expected",
-      "vorp",
-      "vorp_ppg",
-      "expected_vorp",
-      "expected_vorp_ppg"
+      "fantasy_points_over_expected"
     ],
     "phase": "receiving",
     "insight": true
@@ -1428,88 +1392,26 @@ export const OPPORTUNITY_BOARDS = [
 export const LEADERBOARD_MENU = [
   {
     label: "Passing",
-    items: [
-      FANTASY_BOARDS.find((board) => board.phase === "passing"),
-      NFL_BOARDS.find((board) => board.id === "nfl-passing"),
-      NFL_BOARDS.find((board) => board.id === "nfl-passing-advanced"),
-    ],
+    items: [FANTASY_BOARDS.find((board) => board.phase === "passing"), NFL_BOARDS.find((board) => board.id === "nfl-passing"), NFL_BOARDS.find((board) => board.id === "nfl-passing-advanced")],
   },
   {
     label: "Rushing",
-    items: [
-      FANTASY_BOARDS.find((board) => board.phase === "rushing"),
-      NFL_BOARDS.find((board) => board.id === "nfl-rushing"),
-      NFL_BOARDS.find((board) => board.id === "nfl-rushing-advanced"),
-      OPPORTUNITY_BOARDS.find((board) => board.phase === "rushing"),
-    ],
+    items: [FANTASY_BOARDS.find((board) => board.phase === "rushing"), NFL_BOARDS.find((board) => board.id === "nfl-rushing"), NFL_BOARDS.find((board) => board.id === "nfl-rushing-advanced"), OPPORTUNITY_BOARDS.find((board) => board.phase === "rushing")],
   },
   {
     label: "Receiving",
-    items: [
-      FANTASY_BOARDS.find((board) => board.phase === "receiving"),
-      NFL_BOARDS.find((board) => board.id === "nfl-receiving"),
-      NFL_BOARDS.find((board) => board.id === "nfl-receiving-advanced"),
-    ],
+    items: [FANTASY_BOARDS.find((board) => board.phase === "receiving"), NFL_BOARDS.find((board) => board.id === "nfl-receiving"), NFL_BOARDS.find((board) => board.id === "nfl-receiving-advanced")],
   },
   {
     label: "All",
-    items: [
-      FANTASY_BOARDS.find((board) => board.phase === "all"),
-      NFL_BOARDS.find((board) => board.id === "nfl-all"),
-      NFL_BOARDS.find((board) => board.id === "nfl-all-advanced"),
-      OPPORTUNITY_BOARDS.find((board) => board.phase === "all"),
-    ],
-  },
+    items: [FANTASY_BOARDS.find((board) => board.phase === "all"), NFL_BOARDS.find((board) => board.id === "nfl-all"), NFL_BOARDS.find((board) => board.id === "nfl-all-advanced"), OPPORTUNITY_BOARDS.find((board) => board.phase === "all")],
+  }
 ];
 
 /** Every player board, flattened — routing, and resolving a path back to a board. */
 export const ALL_PLAYER_BOARDS = LEADERBOARD_MENU.flatMap((group) => group.items);
 
 export const INSIGHT_BOARDS = [
-  {
-    id: "insight-vorp",
-    label: "VORP",
-    path: "/insight/vorp",
-    menuDesc: "Value over a startable replacement",
-    title: "Value Over Replacement",
-    description:
-      "What each player was worth above the last startable player at their position — " +
-      "in your scoring and your league size. The honest way to compare a tight end " +
-      "with a running back.",
-    lede:
-      "Replacement level moves with your league: deeper lineups push the baseline down " +
-      "and make stars worth more. Set your lineup below to see it change.",
-    columns: ["vorp", "vorp_ppg", "replacement_ppg", "fantasy_points", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_opportunity_rating"],
-    defaultSort: "vorp",
-    defaultPosition: "",
-    scoring: true,
-    insight: true,
-          sections: [
-      {
-        "name": "Value",
-        "columns": [
-          "vorp",
-          "vorp_ppg",
-          "replacement_ppg"
-        ]
-      },
-      {
-        "name": "Production",
-        "columns": [
-          "fantasy_points",
-          "fantasy_ppg",
-          "expected_fantasy_ppg"
-        ]
-      },
-      {
-        "name": "Opportunity",
-        "columns": [
-          "fantasy_opportunity_rating"
-        ]
-      }
-    ],
-    percentileColumns: ["vorp", "vorp_ppg", "fantasy_points", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_opportunity_rating"],
-  },
   {
     id: "insight-opportunity",
     label: "Opportunity Rating",
@@ -1571,7 +1473,7 @@ export const INSIGHT_BOARDS = [
     lede:
       "A points-under-expected gap only matters when the usage behind it is real — " +
       "which is why opportunity rating carries 30% of this score.",
-    columns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share", "vorp_ppg"],
+    columns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share"],
     defaultSort: "positive_regression_index",
     defaultPosition: "",
     scoring: true,
@@ -1599,15 +1501,9 @@ export const INSIGHT_BOARDS = [
           "opportunity_share",
           "target_share"
         ]
-      },
-      {
-        "name": "Value",
-        "columns": [
-          "vorp_ppg"
-        ]
       }
     ],
-    percentileColumns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share", "vorp_ppg"],
+    percentileColumns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share"],
   },
   {
     id: "insight-sell-high",
@@ -1622,7 +1518,7 @@ export const INSIGHT_BOARDS = [
     lede:
       "Touchdown rate and per-touch efficiency regress hardest. Usage trend is the " +
       "tiebreak: outproducing your opportunity while losing snaps is the clearest sell.",
-    columns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend", "vorp_ppg"],
+    columns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend"],
     defaultSort: "sell_high_index",
     defaultPosition: "",
     scoring: true,
@@ -1650,16 +1546,10 @@ export const INSIGHT_BOARDS = [
           "efficiency_over_baseline",
           "opportunity_trend"
         ]
-      },
-      {
-        "name": "Value",
-        "columns": [
-          "vorp_ppg"
-        ]
       }
     ],
-    percentileColumns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend", "vorp_ppg"],
-  },
+    percentileColumns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend"],
+  }
 ];
 
 /** @type {Board[]} */
@@ -1677,7 +1567,7 @@ export const INSIGHT_TOOLS = [
       "Difficulty is fantasy points allowed to this position, on a 0-100 scale where " +
       "higher is harder. Position matters more than most sites admit: a defense that " +
       "smothers receivers is often the one running backs feast on.",
-  },
+  }
 ];
 
 // --- Schedule (M10) ---
@@ -1721,7 +1611,7 @@ export const SCHEDULE_ITEMS = [
       "expects one offense to put up. It is the sharpest forward-looking read we have " +
       "on how many fantasy points there are to go around, and it needs no projection " +
       "of our own to say so.",
-  },
+  }
 ];
 
 
@@ -1771,7 +1661,7 @@ export const DRAFT_ITEMS = [
       "twelve touchdowns on six touchdowns' worth of usage is valued at six here. " +
       "That is the point — it prices the opportunity, which tends to repeat, rather " +
       "than the finish, which often does not.",
-  },
+  }
 ];
 
 // --- Explore (M4) ---
@@ -1800,19 +1690,24 @@ export const EXPLORE_ITEMS = [
       "Line up to five players side by side. Every stat shows who leads it and by how " +
       "much, and only stats that apply to all of them are shown — so a quarterback and " +
       "a receiver get compared on common ground.",
-  },
+  }
 ];
 
 
-// Nav dropdown groups. Insight leads — it is the reason to come back — and Draft sits
-// next to it, because from July to September it is the reason to come back. The three
-// player leaderboards are no longer here: they are one "Leaderboards" tab rendered
-// from LEADERBOARD_MENU above.
+// Nav dropdown groups. Insight leads — it is the reason to come back. The player
+// leaderboards are not here: they are one "Leaderboards" tab rendered from
+// LEADERBOARD_MENU above.
+//
+// ⚠️ **Draft and Explore are built but hidden for launch**, which is why DRAFT_ITEMS
+// and EXPLORE_ITEMS are still exported above and absent here. Draft has nothing left
+// to say now the season has started (it returns as a rookie-draft surface); Explore's
+// two builders want another pass before strangers see them. Their routes redirect to
+// the home page — see HIDDEN_SECTIONS in App.jsx — so an old link cannot reach them
+// either. Un-hiding one is two edits: add its group back to this list, and drop its
+// prefix from HIDDEN_SECTIONS.
 export const NAV_GROUPS = [
   { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
-  { label: "Draft", items: DRAFT_ITEMS, match: "/draft" },
-  { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" },
-  { label: "Schedule", items: SCHEDULE_ITEMS, match: "/schedule" },
+  { label: "Schedule", items: SCHEDULE_ITEMS, match: "/schedule" }
 ];
 
 /** Every ranked board, for routing and for saved-view path validation. */
