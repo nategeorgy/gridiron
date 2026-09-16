@@ -10,7 +10,7 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
-import { LeagueSettings } from "../components/LeagueSettings";
+import { ScoringControl } from "../components/ScoringControl";
 import { ExportButton } from "../components/ExportButton";
 import { SaveViewButton } from "../components/SaveViewButton";
 import { MetricScatter } from "../components/charts/MetricScatter";
@@ -58,7 +58,7 @@ export function ScatterView({ board }) {
   const [seasonType, setSeasonType] = useUrlState("type", "REG", SEASON_TYPE_VALUES);
   const [density, setDensity] = useUrlState("density", "50", DENSITY_VALUES);
   const [scoring, setScoring] = useScoring();
-  const [league, setLeague] = useLeague();
+  const [league] = useLeague();
   const { metrics } = useMetrics();
   const scoreboard = useScoreboard();
   const weeks = weeksPlayed(Number(season), scoreboard.data?.last);
@@ -210,13 +210,7 @@ export function ScatterView({ board }) {
         </div>
       </div>
 
-        <LeagueSettings
-          scoring={scoring}
-          onScoringChange={setScoring}
-          league={league}
-          onLeagueChange={setLeague}
-          replacement={undefined}
-        />
+        <ScoringControl scoring={scoring} onChange={setScoring} />
 
       <div className="glass-card p-4">
         <div className="mb-1 text-sm font-semibold text-fg">{preset.label}</div>

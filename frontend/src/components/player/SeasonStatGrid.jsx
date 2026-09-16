@@ -22,10 +22,6 @@ import { percentileColor } from "./percentile";
 // Columns whose sign is the whole point, so they carry an explicit "+".
 const SIGNED = new Set([
   "fantasy_points_over_expected",
-  "vorp",
-  "vorp_ppg",
-  "expected_vorp",
-  "expected_vorp_ppg",
   "epa",
   "receiving_epa",
   "rushing_epa",

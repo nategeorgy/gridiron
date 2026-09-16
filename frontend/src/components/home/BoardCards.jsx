@@ -214,6 +214,20 @@ export function QuarterbackCard({ season, result, isLoading, isError }) {
   );
 }
 
+// The starred players, with the usage behind their scoring.
+//
+// ⚠️ Served by `/stats/intelligence`, not the leaderboard: **FOR** is a query-time
+// Insight score with no stored column, which is the same reason six of the boards set
+// `insight: true`. The watchlist is applied there as an output filter *after* scoring,
+// so a starred player's FOR still means "against every back in the league" rather than
+// "against the six players you happened to star" — narrowing the pool would quietly
+// redefine the number.
+//
+// A player's own card should never hide him, so the request passes
+// `include_unqualified`: a starred player who has missed games is exactly the one you
+// are checking on, and dropping him below a games threshold would look like a bug.
+// Columns that do not apply to a position render as a dash rather than a zero — a
+// quarterback has no route participation, and 0% would be a claim.
 export function MyPlayersCard({ season, count, result, isLoading, isError }) {
   const rows = result?.data ?? [];
   return (
@@ -221,15 +235,17 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
       <CardHead title="My Players" sub={`${count} starred · ${season}`} />
       <CardState isLoading={isLoading} isError={isError} isEmpty={rows.length === 0} empty={`No ${season} stats yet for your watchlist.`} rows={5} />
       {rows.length > 0 && (
-        <ScrollTable minWidth={430}>
+        <ScrollTable minWidth={620}>
           <thead>
             <tr>
               <Th align="left">Player</Th>
-              <Th>G</Th>
               <Th>FPTS</Th>
-              <Th>PPG</Th>
-              <Th>Snap%</Th>
-              <Th>Opp%</Th>
+              <Th>FPPG</Th>
+              <Th>FOR</Th>
+              <Th>OPP%</Th>
+              <Th>TGT%</Th>
+              <Th>RTE%</Th>
+              <Th>RUSH%</Th>
             </tr>
           </thead>
           <tbody>
@@ -243,18 +259,27 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
                     team={row.team_abbreviation}
                   />
                 </td>
-                <td className="stat-num py-2 text-right text-muted">{row.games_played}</td>
                 <td className="stat-num py-2 text-right font-semibold text-accent">
                   {formatStat(row.fantasy_points, 1)}
                 </td>
-                <td className="stat-num py-2 text-right text-muted">{formatStat(row.fantasy_ppg, 1)}</td>
-                <td className="stat-num py-2 text-right text-muted">{formatStat(row.snap_share, "pct")}</td>
+                <td className="stat-num py-2 text-right text-fg">{formatStat(row.fantasy_ppg, 1)}</td>
+                <td className="stat-num py-2 text-right text-fg">
+                  {formatStat(row.fantasy_opportunity_rating, 1)}
+                </td>
                 <td className="stat-num py-2 text-right text-muted">{formatStat(row.opportunity_share, "pct")}</td>
+                <td className="stat-num py-2 text-right text-muted">{formatStat(row.target_share, "pct")}</td>
+                <td className="stat-num py-2 text-right text-muted">{formatStat(row.route_participation, "pct")}</td>
+                <td className="stat-num py-2 text-right text-muted">{formatStat(row.rush_attempt_share, "pct")}</td>
               </tr>
             ))}
           </tbody>
         </ScrollTable>
       )}
+      <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
+        <b className="font-semibold text-muted">FOR</b> is Fantasy Opportunity Rating —
+        0-100 on how much of an offense runs through a player, ranked against everyone
+        at their position. The shares beneath it are what it is built from.
+      </p>
       <CardLink to="/fantasy/all?watchlist=1">Manage watchlist</CardLink>
     </Card>
   );

@@ -1,16 +1,17 @@
-// Fantasy-intelligence panel for a player page (M3): the four scores, the badges they
+// Fantasy-intelligence panel for a player page (M3): the three scores, the badges they
 // imply, and the component breakdown behind each one.
+//
+// A fourth tile held Value Over Replacement, with the league-size editor beneath it.
+// Both were pulled before launch along with VORP everywhere else.
 //
 // The breakdown is the point. A rule-based signal is only better than a black-box
 // projection if the user can see the rules, so every weighted input is shown with its
 // value and its percentile in the player's position pool.
 import { useState } from "react";
-import { LeagueControl } from "./LeagueControl";
 import { usePlayerIntelligence } from "../hooks/useInsight";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { formatPercentile, formatSigned, formatStat } from "../utils/format";
-import { leagueLabel } from "../constants/league";
 
 // Score at or above which a signal is worth calling out on the page.
 const STRONG_SIGNAL = 70;
@@ -129,7 +130,7 @@ function Breakdown({ block }) {
 }
 
 export function InsightPanel({ playerId, season, scoring }) {
-  const [league, setLeague] = useLeague();
+  const [league] = useLeague();
   const { metrics } = useMetrics();
   const { data, isLoading, isError, error } = usePlayerIntelligence(playerId, {
     season,
@@ -153,7 +154,7 @@ export function InsightPanel({ playerId, season, scoring }) {
   }
   if (!data) return null;
 
-  const { scores, supporting, breakdown, replacement } = data;
+  const { scores, supporting, breakdown } = data;
   const badges = [];
   if (scores.positive_regression_index >= STRONG_SIGNAL) {
     badges.push(
@@ -176,13 +177,6 @@ export function InsightPanel({ playerId, season, scoring }) {
       </Badge>,
     );
   }
-  if (scores.vorp_ppg !== null && scores.vorp_ppg < 0) {
-    badges.push(
-      <Badge key="repl" tone="caution" title="Scored below the last startable player at this position in your league">
-        Below Replacement
-      </Badge>,
-    );
-  }
   if (!data.qualified) {
     badges.push(
       <Badge key="sample" tone="caution" title={`Played ${data.games_played} games; ${data.min_games} needed to be ranked`}>
@@ -196,27 +190,12 @@ export function InsightPanel({ playerId, season, scoring }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-muted">Fantasy Intelligence</span>
-          <span className="text-xs text-faint">· {season} · {leagueLabel(league)}</span>
+          <span className="text-xs text-faint">· {season}</span>
         </div>
         <div className="flex flex-wrap gap-1.5">{badges}</div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-xl bg-surface-2/60 p-3" title={metrics.vorp?.description}>
-          <div className="text-[11px] uppercase tracking-wide text-faint">Value Over Replacement</div>
-          <div
-            className={`stat-num mt-1 text-2xl font-semibold leading-none ${
-              (scores.vorp ?? 0) >= 0 ? "text-pos" : "text-neg"
-            }`}
-          >
-            {formatSigned(scores.vorp, 1)}
-          </div>
-          <div className="mt-2 text-[11px] leading-snug text-muted">
-            {formatSigned(scores.vorp_ppg, 2)} / game vs a{" "}
-            {formatStat(supporting.replacement_ppg, 2)} PPG replacement
-            {replacement?.rank ? ` (${data.position}${replacement.rank})` : ""}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <ScoreTile
           label="Opportunity Rating"
           score={scores.fantasy_opportunity_rating}
@@ -245,12 +224,10 @@ export function InsightPanel({ playerId, season, scoring }) {
         ))}
       </div>
 
-      <LeagueControl league={league} onChange={setLeague} replacement={{ [data.position]: replacement }} />
-
       <p className="text-[11px] leading-relaxed text-faint">
         Scores are percentiles within this player's position pool
         {data.pool_size ? ` (${data.pool_size} qualified ${data.position}s)` : ""} over the{" "}
-        {season} regular season, in your league scoring and lineup. The ones built on
+        {season} regular season, in your league scoring. The ones built on
         expected points use nflverse ffopportunity model estimates — descriptive, not a
         projection.
       </p>

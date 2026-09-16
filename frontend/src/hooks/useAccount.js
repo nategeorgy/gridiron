@@ -6,16 +6,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addFavorite,
-  createLeagueProfile,
   createSavedView,
-  deleteLeagueProfile,
   deleteSavedView,
   getAccount,
   getFavorites,
-  getLeagueProfiles,
   getSavedViews,
   removeFavorite,
-  updateLeagueProfile,
   updateSavedView,
 } from "../services/account";
 import { useAuth } from "./useAuth";
@@ -28,41 +24,6 @@ export function useAccount() {
     queryFn: getAccount,
     enabled: isSignedIn,
   });
-}
-
-// --- League profiles ---
-
-/** The user's league profiles and the mutations that change them. */
-export function useLeagueProfiles() {
-  const { isSignedIn } = useAuth();
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["account"] });
-
-  const query = useQuery({
-    queryKey: ["account", "league-profiles"],
-    queryFn: getLeagueProfiles,
-    enabled: isSignedIn,
-  });
-
-  const create = useMutation({ mutationFn: createLeagueProfile, onSuccess: invalidate });
-  const update = useMutation({
-    mutationFn: ({ profileId, ...payload }) => updateLeagueProfile(profileId, payload),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({ mutationFn: deleteLeagueProfile, onSuccess: invalidate });
-
-  const profiles = query.data ?? [];
-  return {
-    profiles,
-    activeProfile: profiles.find((profile) => profile.is_active) ?? null,
-    isLoading: query.isLoading,
-    createProfile: create.mutateAsync,
-    updateProfile: update.mutateAsync,
-    deleteProfile: remove.mutateAsync,
-    // Surfaced so the editor can show a duplicate-name or invalid-spec message
-    // rather than failing silently.
-    error: create.error || update.error || remove.error || null,
-  };
 }
 
 // --- Favorites ---

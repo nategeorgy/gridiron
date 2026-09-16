@@ -1,46 +1,16 @@
-// League-context state — the same layering as useScoring:
+// League context (size + starting lineup) — now a constant.
 //
-//     URL query param  >  active league profile  >  localStorage  >  12-team
+// It existed to drive replacement level, and replacement level existed to drive VORP.
+// VORP was pulled from every surface before launch, so nothing on screen responds to
+// this any more and the editor that set it is gone. Rather than thread a dead value
+// through a dozen call sites, the hook keeps its shape and hands back the default:
+// the API still wants a league spec, and a 12-team standard lineup is the honest
+// assumption behind every fantasy number the app shows.
 //
-// See useScoring for why the URL outranks the account.
-import { useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+// Kept as a hook rather than inlining DEFAULT_LEAGUE so that reinstating a league
+// editor — when VORP comes back — is a change here and nowhere else.
 import { DEFAULT_LEAGUE } from "../constants/league";
-import { LEAGUE_STORAGE_KEY, readStored, writeStored } from "../constants/storage";
-import { useLeagueProfiles } from "./useAccount";
 
 export function useLeague() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { activeProfile } = useLeagueProfiles();
-
-  const fromUrl = searchParams.get("league");
-  const league =
-    fromUrl ||
-    activeProfile?.league_spec ||
-    readStored(LEAGUE_STORAGE_KEY) ||
-    DEFAULT_LEAGUE;
-
-  const setLeague = useCallback(
-    (spec) => {
-      const next = spec || DEFAULT_LEAGUE;
-      writeStored(LEAGUE_STORAGE_KEY, next);
-      setSearchParams(
-        (prev) => {
-          const params = new URLSearchParams(prev);
-          // Keep the default out of the URL to stay clean; it still resolves to 12-team.
-          if (next === DEFAULT_LEAGUE) params.delete("league");
-          else params.set("league", next);
-          return params;
-        },
-        { replace: true },
-      );
-    },
-    [setSearchParams],
-  );
-
-  const isOverridingProfile = Boolean(
-    fromUrl && activeProfile && fromUrl !== activeProfile.league_spec,
-  );
-
-  return [league, setLeague, { isOverridingProfile, activeProfile }];
+  return [DEFAULT_LEAGUE];
 }

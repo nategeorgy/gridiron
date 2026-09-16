@@ -1,5 +1,5 @@
-// App shell: frosted sticky header with brand + primary nav (Home, the two
-// leaderboard dropdowns, Teams), search, and the light/dark theme toggle.
+// App shell: frosted sticky header with brand + primary nav (Home, Insight,
+// Leaderboards, Schedule, Teams), search, and the light/dark theme toggle.
 // The page background (the Liquid Glass "environment") is painted on <body>.
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { AccountMenu } from "./AccountMenu";
@@ -8,13 +8,11 @@ import { ThemeToggle } from "./ThemeToggle";
 import { MegaDropdown } from "./ui/MegaDropdown";
 import { NavDropdown } from "./ui/NavDropdown";
 import { LEADERBOARD_MENU, NAV_GROUPS } from "../constants/boards";
-import { useProfileSync } from "../hooks/useProfileSync";
 
-// Routes that opt out of the 1280px shell. The draft room is a *board* — twelve
-// columns of picks plus a player pool plus a roster — and the whole argument for a
-// board is seeing it at once. Capped rather than full-bleed so it does not stretch to
-// absurd cell sizes on an ultrawide display.
-const WIDE_ROUTES = ["/draft/mock"];
+// Routes that opt out of the 1280px shell, capped rather than full-bleed so nothing
+// stretches to absurd cell sizes on an ultrawide display. Empty while the draft room
+// — the only page that ever needed it — is hidden for launch.
+const WIDE_ROUTES = [];
 
 const navLinkClass = ({ isActive }) =>
   `whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
@@ -37,10 +35,6 @@ function BrandMark() {
 }
 
 export function Layout() {
-  // Mounted once, here: migrates pre-account localStorage into a profile on first
-  // sign-in, and mirrors the active profile back into localStorage after that.
-  useProfileSync();
-
   const { pathname } = useLocation();
   const wide = WIDE_ROUTES.some((route) => pathname.startsWith(route));
 
@@ -62,7 +56,7 @@ export function Layout() {
                   match={group.match}
                 />
               ))}
-              {/* One tab for all thirteen player boards. Its routes are still grouped
+              {/* One tab for all fourteen player boards. Its routes are still grouped
                   by type, so the active check takes all three prefixes. */}
               <MegaDropdown
                 label="Leaderboards"

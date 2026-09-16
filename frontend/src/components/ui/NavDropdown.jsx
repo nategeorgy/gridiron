@@ -1,8 +1,14 @@
 // A nav dropdown menu. Opens on hover on devices that support hover (desktop),
 // and on click/tap everywhere (so it works on touch). Closes on outside click,
 // Escape, or a route change. The trigger highlights when a child route is active.
-import { useEffect, useRef, useState } from "react";
+//
+// The open/close behaviour — including the grace period that stops the menu closing
+// while the pointer travels toward it — lives in useHoverMenu, shared with
+// MegaDropdown. Note the panel's offset is PADDING on a hoverable wrapper rather than
+// a margin: a margin would put 6px of dead space between the trigger and the panel,
+// and crossing dead space is a mouseleave.
 import { NavLink, useLocation } from "react-router-dom";
+import { useHoverMenu } from "../../hooks/useHoverMenu";
 
 function Caret({ open }) {
   return (
@@ -21,51 +27,17 @@ function Caret({ open }) {
 }
 
 export function NavDropdown({ label, items, match }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const location = useLocation();
-  // Only wire hover on devices that actually hover (avoids the tap→open→close
-  // double-fire on touchscreens, where we rely on click instead).
-  const [canHover] = useState(
-    () => typeof window !== "undefined" && window.matchMedia?.("(hover: hover)").matches,
-  );
-
-  const active = location.pathname.startsWith(match);
-
-  // Close when the route changes (e.g. after picking an item).
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
-
-  // Close on outside click / Escape while open.
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-    };
-    const onKey = (event) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  const { open, ref, hoverProps, closeNow, toggle } = useHoverMenu();
+  const { pathname } = useLocation();
+  const active = pathname.startsWith(match);
 
   return (
-    <div
-      ref={ref}
-      className="relative"
-      onMouseEnter={canHover ? () => setOpen(true) : undefined}
-      onMouseLeave={canHover ? () => setOpen(false) : undefined}
-    >
+    <div ref={ref} className="relative" {...hoverProps}>
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggle}
         className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
           active ? "glass-pill !text-accent" : "text-muted hover:text-fg"
         }`}
@@ -75,30 +47,30 @@ export function NavDropdown({ label, items, match }) {
       </button>
 
       {open && (
-        <div
-          role="menu"
-          className="glass-popover absolute left-0 top-full z-30 mt-1.5 w-64 p-1.5"
-        >
-          {items.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `block rounded-lg px-3 py-2 transition ${isActive ? "bg-surface-2" : "hover:bg-surface-2"}`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <div className={`text-sm font-semibold ${isActive ? "text-accent" : "text-fg"}`}>
-                    {item.label}
-                  </div>
-                  {item.menuDesc && <div className="text-xs text-muted">{item.menuDesc}</div>}
-                </>
-              )}
-            </NavLink>
-          ))}
+        // The wrapper carries the gap as padding, so the gap is hoverable.
+        <div className="absolute left-0 top-full z-30 w-64 pt-1.5">
+          <div role="menu" className="glass-popover p-1.5">
+            {items.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                role="menuitem"
+                onClick={closeNow}
+                className={({ isActive }) =>
+                  `block rounded-lg px-3 py-2 transition ${isActive ? "bg-surface-2" : "hover:bg-surface-2"}`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <div className={`text-sm font-semibold ${isActive ? "text-accent" : "text-fg"}`}>
+                      {item.label}
+                    </div>
+                    {item.menuDesc && <div className="text-xs text-muted">{item.menuDesc}</div>}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
         </div>
       )}
     </div>

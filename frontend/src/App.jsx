@@ -1,16 +1,10 @@
 // Route table for the app.
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { BoardEditor } from "./pages/BoardEditor";
-import { CompareView } from "./pages/CompareView";
-import { DraftBoardView } from "./pages/DraftBoardView";
-import { MockDraftView } from "./pages/MockDraftView";
-import { RankingsView } from "./pages/RankingsView";
 import { Home } from "./pages/Home";
 import { InsightView } from "./pages/InsightView";
 import { LeaderboardView } from "./pages/LeaderboardView";
 import { PlayerProfile } from "./pages/PlayerProfile";
-import { ScatterView } from "./pages/ScatterView";
 import { SosView } from "./pages/SosView";
 import { VegasView } from "./pages/VegasView";
 import { GamesView } from "./pages/GamesView";
@@ -18,21 +12,25 @@ import { ScheduleGridView } from "./pages/ScheduleGridView";
 import { StyleGuide } from "./pages/StyleGuide";
 import { TeamProfile } from "./pages/TeamProfile";
 import { Teams } from "./pages/Teams";
-import {
-  ALL_BOARDS,
-  DRAFT_ITEMS,
-  EXPLORE_ITEMS,
-  INSIGHT_TOOLS,
-  SCHEDULE_ITEMS,
-} from "./constants/boards";
+import { ALL_BOARDS, INSIGHT_TOOLS, SCHEDULE_ITEMS } from "./constants/boards";
 
-// Explore tools are pages rather than boards, so they map to their own components.
-const EXPLORE_VIEWS = {
-  "explore-scatter": ScatterView,
-  "explore-compare": CompareView,
-};
+// Route prefixes that are built but hidden for launch. Everything beneath one
+// redirects to the home page.
+//
+//   draft   — M9's Rankings, Mock Draft and Value Board. The season has started, so a
+//             redraft board has nothing left to say; it returns as a rookie-draft
+//             surface while the college season runs.
+//   explore — M4's Scatter and Compare builders, pending another pass.
+//
+// The pages still live in pages/ and still compile; nothing here deletes them. But
+// redirecting is deliberate rather than merely un-linking from the nav: a hidden
+// section still has bookmarks, saved views (M5), and — once the site is public —
+// search results pointing into it, and finding an unfinished page that way is worse
+// than finding no page. Un-hiding a section is two edits: drop its prefix here, and
+// restore its group in NAV_GROUPS (constants/boards.js).
+const HIDDEN_SECTIONS = ["draft", "explore"];
 
-// Insight tools (M6) — same idea, under /insight.
+// Insight tools (M6) — pages rather than boards, so they map to their own components.
 const INSIGHT_TOOL_VIEWS = {
   "insight-sos": SosView,
 };
@@ -44,16 +42,13 @@ const SCHEDULE_VIEWS = {
   "schedule-vegas": VegasView,
 };
 
-// Draft (M9) — under /draft. The Value Board is the M6.1 page, moved here.
-const DRAFT_VIEWS = {
-  "draft-rankings": RankingsView,
-  "draft-mock": MockDraftView,
-  "draft-value": DraftBoardView,
-};
-
-// Board paths the M12 reorganisation retired, and the board that absorbed each. A saved
-// view (M5) and a shared link both store a route, and with no route matching, the app
+// Board paths that have been retired, and the board that absorbed each. A saved view
+// (M5) and a shared link both store a route, and with no route matching, the app
 // renders nothing at all — header included — so a retired path has to go somewhere.
+//
+// `insight/vorp` is the newest entry: VORP was pulled from the product before launch,
+// and Opportunity Rating is the nearest surviving board — it answers the question
+// people were mostly asking VORP, which is who is actually worth starting.
 const RETIRED_BOARDS = {
   "fantasy/leaders": "/fantasy/all",
   "fantasy/expected": "/fantasy/all",
@@ -61,6 +56,7 @@ const RETIRED_BOARDS = {
   "nfl/passing-general": "/nfl/passing",
   "nfl/receiving-general": "/nfl/receiving",
   "nfl/rushing-general": "/nfl/rushing",
+  "insight/vorp": "/insight/opportunity",
 };
 
 /** Redirect keeping the query string: the filters are what a saved view saved. */
@@ -89,8 +85,8 @@ export function App() {
           );
         })}
 
-        {/* Insight tools (M6): the Draft Value Board, which compares two rankings
-            rather than ranking one metric, so it is a page not a board config. */}
+        {/* Insight tools (M6): Strength of Schedule, which is a grid rather than a
+            ranked table, so it is a page not a board config. */}
         {INSIGHT_TOOLS.map((item) => {
           const View = INSIGHT_TOOL_VIEWS[item.id];
           return (
@@ -114,41 +110,19 @@ export function App() {
           );
         })}
 
-        {/* Draft (M9): rankings, the mock draft room, and the value board. */}
-        {DRAFT_ITEMS.map((item) => {
-          const View = DRAFT_VIEWS[item.id];
-          return (
-            <Route
-              key={item.id}
-              path={item.path.replace(/^\//, "")}
-              element={<View key={item.id} board={item} />}
-            />
-          );
-        })}
+        {/* Hidden for launch — the whole subtree, board editor included. */}
+        {HIDDEN_SECTIONS.map((prefix) => (
+          <Route key={prefix} path={`${prefix}/*`} element={<Navigate to="/" replace />} />
+        ))}
 
-        {/* The board editor is its own route so a board being built is a URL you can
-            come back to, rather than a modal that dies with the page. */}
-        <Route path="draft/boards/:boardId" element={<BoardEditor />} />
+        {/* The Value Board moved to /draft/value in M9, and Draft is now hidden — so
+            its old Insight path goes home directly rather than bouncing through a
+            redirect into a redirect. */}
+        <Route path="insight/draft" element={<Navigate to="/" replace />} />
 
-        {/* The Value Board moved out of Insight ▾ in M9. Redirected rather than
-            renamed, so shared links and saved views keep working. */}
-        <Route path="insight/draft" element={<Navigate to="/draft/value" replace />} />
-
-        {/* The Vegas board moved out of Insight ▾ in M10, for the same reason and with
-            the same treatment: redirected, so shared links and saved views survive. */}
+        {/* The Vegas board moved out of Insight ▾ in M10: redirected, not renamed, so
+            shared links and saved views survive. */}
         <Route path="insight/vegas" element={<Navigate to="/schedule/vegas" replace />} />
-
-        {/* Explore tools (M4): scatter + comparison builders. */}
-        {EXPLORE_ITEMS.map((item) => {
-          const View = EXPLORE_VIEWS[item.id];
-          return (
-            <Route
-              key={item.id}
-              path={item.path.replace(/^\//, "")}
-              element={<View key={item.id} board={item} />}
-            />
-          );
-        })}
 
         {/* Legacy leaderboard URL → the default fantasy board. */}
         <Route path="leaderboard" element={<Navigate to="/fantasy/all" replace />} />
