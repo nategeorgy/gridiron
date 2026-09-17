@@ -42,8 +42,8 @@ export function AvailabilityNotice({ columns, metrics, season, sortFallback = nu
       ))}
       {sortFallback && (
         <p className="mt-1 text-xs text-faint">
-          Sorted by {sortFallback} instead — ranking by a stat this season has no data
-          for would order the table arbitrarily.
+          Sorted by {sortFallback} instead, because a stat with no data this season would
+          order the table arbitrarily.
         </p>
       )}
     </div>

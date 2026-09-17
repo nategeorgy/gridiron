@@ -172,7 +172,7 @@ export function RankingsView({ board }) {
             title={
               isSignedIn
                 ? "Upload a CSV, or start from this board"
-                : "Sign in to keep boards of your own — everything else on this page works signed out"
+                : "Sign in to keep boards of your own. Everything else on this page works signed out"
             }
             className="glass-pill px-3 py-1.5 text-sm disabled:opacity-50"
           >
@@ -200,7 +200,7 @@ export function RankingsView({ board }) {
               { key: "fantasy_ppg", label: "FPPG" },
             ]}
             context={[
-              `GridironIQ — ${data?.board_label ?? "Rankings"}`,
+              `GridironIQ: ${data?.board_label ?? "Rankings"}`,
               data?.attribution ?? "A blend of every expert board held, each re-ranked before averaging.",
               `${data?.ranking_type ?? ""} for the ${data?.ranking_season ?? ""} season · valued from ${data?.valuation_season ?? season}`,
               `scoring: ${scoring} · league: ${league}`,
@@ -235,7 +235,7 @@ export function RankingsView({ board }) {
               <th className="px-3 py-3 text-right" title="Their team's schedule difficulty at this position for the season ahead, 0-100. Higher is harder.">SOS</th>
               <th className="px-3 py-3 text-right" title="Our rank by expected VORP per game, over the players on this board we can value">Ours</th>
               <th className="px-3 py-3 text-right" title="Expected value over replacement per game, in your scoring and league">xVORP/G</th>
-              <th className="px-3 py-3 text-right" title="Expected fantasy points per game — what last season's usage was worth in your scoring">xFPPG</th>
+              <th className="px-3 py-3 text-right" title="Expected fantasy points per game: what last season's usage was worth in your scoring">xFPPG</th>
             </tr>
           </thead>
           <tbody className={isPlaceholderData ? "opacity-60 transition" : "transition"}>
@@ -254,7 +254,7 @@ export function RankingsView({ board }) {
                 <td colSpan={11} className="px-3 py-8 text-center text-muted">
                   {isUserBoard
                     ? "This board has no players yet."
-                    : <>No rankings loaded yet — run <span className="stat-num">ingest_rankings.py</span>.</>}
+                    : <>No rankings loaded yet. Run <span className="stat-num">ingest_rankings.py</span>.</>}
                 </td>
               </tr>
             )}
@@ -332,7 +332,7 @@ export function RankingsView({ board }) {
             <>
               Your board, in the order you saved it. Our valuation columns read the{" "}
               <span className="text-muted">{data.valuation_season}</span> season in your
-              scoring and league — {data.valued_players} of {data.ranked_players} players
+              scoring and league: {data.valued_players} of {data.ranked_players} players
               here could be valued.
             </>
           ) : data.board === "consensus" ? (
@@ -343,7 +343,7 @@ export function RankingsView({ board }) {
               is re-ranked over the players it lists before averaging, so a deep board does
               not outvote a short one, and a player a board leaves off is placed below its
               last name rather than ignored. Rankings are opinions in someone else&apos;s
-              scoring and are never rescored into yours — our own valuation is the column
+              scoring and are never rescored into yours. Our own valuation is the column
               next to them, built on expected points from the{" "}
               <span className="text-muted">{data.valuation_season}</span> season.
             </>

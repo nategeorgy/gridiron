@@ -84,7 +84,7 @@ export function BoardResizer({ height, onChange, min, max }) {
           onChange(max);
         }
       }}
-      title="Drag to resize the board — double-click to centre it"
+      title="Drag to resize the board, or double-click to centre it"
       className="group flex h-2 shrink-0 cursor-row-resize touch-none select-none items-center justify-center rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
     >
       {/* A grip rather than a hairline: an invisible drag target is one nobody finds.

@@ -90,7 +90,7 @@ REGISTRY: list[MetricDef] = [
     # Fantasy — scoring-aware (computed from the active ScoringConfig)
     _m("fantasy_points", "Fantasy Points", "FPTS", 1, "fantasy", "scoring",
        description="Total fantasy points in the active league scoring."),
-    _m("fantasy_ppg", "Fantasy PPG", "FPPG", 2, "fantasy", "scoring",
+    _m("fantasy_ppg", "Fantasy PPG", "FPPG", 1, "fantasy", "scoring",
        description="Fantasy points per game in the active league scoring."),
     # Fantasy — fixed preset columns (kept for reference / back-compat)
     _m("fantasy_points_ppr", "Fantasy Points (PPR)", "PPR", 1, "fantasy", "sum",
@@ -99,20 +99,20 @@ REGISTRY: list[MetricDef] = [
        description="Total fantasy points, half-PPR scoring.", rankable=False),
     _m("fantasy_points_std", "Fantasy Points (Std)", "STD", 1, "fantasy", "sum",
        description="Total fantasy points, standard (non-PPR) scoring.", rankable=False),
-    _m("fantasy_ppg_ppr", "Fantasy PPG (PPR)", "PPG", 2, "fantasy", "derived", base="fantasy_points_ppr",
+    _m("fantasy_ppg_ppr", "Fantasy PPG (PPR)", "PPG", 1, "fantasy", "derived", base="fantasy_points_ppr",
        description="Full-PPR fantasy points per game.", rankable=False),
-    _m("fantasy_ppg_half", "Fantasy PPG (Half)", "PPG½", 2, "fantasy", "derived", base="fantasy_points_half",
+    _m("fantasy_ppg_half", "Fantasy PPG (Half)", "PPG½", 1, "fantasy", "derived", base="fantasy_points_half",
        description="Half-PPR fantasy points per game.", rankable=False),
-    _m("fantasy_ppg_std", "Fantasy PPG (Std)", "PPGs", 2, "fantasy", "derived", base="fantasy_points_std",
+    _m("fantasy_ppg_std", "Fantasy PPG (Std)", "PPGs", 1, "fantasy", "derived", base="fantasy_points_std",
        description="Standard fantasy points per game.", rankable=False),
 
     # Fantasy — expected points (M2), scored in the active league scoring
     _m("expected_fantasy_points", "Expected Fantasy Points", "xFPTS", 1, "fantasy", "expected",
        modelled=True,
        description="Fantasy points a player's opportunity was worth, in the active "
-                   "league scoring — modelled from where and how they were used, not "
+                   "league scoring, modelled from where and how they were used, not "
                    "from what they actually produced."),
-    _m("expected_fantasy_ppg", "Expected Fantasy PPG", "xFPPG", 2, "fantasy", "expected",
+    _m("expected_fantasy_ppg", "Expected Fantasy PPG", "xFPPG", 1, "fantasy", "expected",
        modelled=True,
        description="Expected fantasy points per game in the active league scoring."),
     _m("fantasy_points_over_expected", "Points Over Expected", "FP±", 1, "fantasy", "expected",
@@ -125,7 +125,7 @@ REGISTRY: list[MetricDef] = [
     # /stats/intelligence. See docs/design/M3-fantasy-intelligence.md for the formulas.
     _m("vorp", "Value Over Replacement", "VORP", 1, "insight", "intelligence",
        description="Fantasy points this player produced above what the last startable "
-                   "player at their position would have — in your scoring and your "
+                   "player at their position would have, in your scoring and your "
                    "league size. The honest way to compare a tight end to a running back."),
     _m("vorp_ppg", "VORP Per Game", "VORP/G", 2, "insight", "intelligence",
        description="Value over replacement on a per-game basis, so an injured star "
@@ -133,11 +133,11 @@ REGISTRY: list[MetricDef] = [
     _m("replacement_ppg", "Replacement Level", "REPL", 2, "insight", "intelligence",
        rankable=False,
        description="Points per game of the last startable player at this position in "
-                   "your league — the baseline VORP is measured against."),
+                   "your league: the baseline VORP is measured against."),
     _m("expected_vorp", "Expected VORP", "xVORP", 1, "insight", "intelligence",
        modelled=True,
        description="Value over replacement measured on *expected* points instead of "
-                   "actual ones — what the player's usage was worth above the last "
+                   "actual ones: what the player's usage was worth above the last "
                    "startable player at their position. Strips touchdown luck and "
                    "efficiency out of value, so it reads opportunity rather than "
                    "results. The valuation behind the Draft Value Board."),
@@ -148,7 +148,7 @@ REGISTRY: list[MetricDef] = [
     _m("replacement_expected_ppg", "Replacement Level (Expected)", "xREPL", 2, "insight",
        "intelligence", rankable=False, modelled=True,
        description="Expected points per game of the last startable player at this "
-                   "position — the baseline expected VORP is measured against."),
+                   "position: the baseline expected VORP is measured against."),
     _m("fantasy_opportunity_rating", "Fantasy Opportunity Rating", "FOR", 1, "insight",
        "intelligence", modelled=True,
        description="0–100: how much of the offense runs through this player, "
@@ -170,11 +170,11 @@ REGISTRY: list[MetricDef] = [
        "intelligence",
        description="Fantasy points per opportunity compared with this player's own "
                    "earlier seasons. Positive means they're finishing plays better than "
-                   "they ever have — which usually doesn't last."),
+                   "they ever have, which usually doesn't last."),
     _m("opportunity_trend", "Usage Trend", "TREND", "pct", "insight", "intelligence",
        description="Change in share of the offense from the first half of the window to "
-                   "the second — for QBs, the relative change in pass attempts per "
-                   "game. Negative means the role is shrinking."),
+                   "the second (for QBs, the relative change in pass attempts per "
+                   "game). Negative means the role is shrinking."),
 
     # Expected components — the stored ffopportunity estimates xFP is built from
     _m("passing_yards_exp", "Expected Passing Yards", "xPASS YD", "int", "passing", "sum",
@@ -223,12 +223,12 @@ REGISTRY: list[MetricDef] = [
     _m("completion_pct", "Completion %", "COMP%", "pct", "passing", "derived",
        base="completions", per=("attempts",), applies_to=["QB"],
        description="Completions divided by attempts. The plainest passing number there "
-                   "is, and the one CPOE is measured against — read together they "
+                   "is, and the one CPOE is measured against. Read together, they "
                    "separate a passer who completes a lot from one who completes more "
                    "than the throws he attempted should have allowed."),
     _m("yards_per_attempt", "Yards Per Attempt", "Y/A", 1, "passing", "derived",
        base="passing_yards", per=("attempts",), applies_to=["QB"],
-       description="Passing yards per attempt — the oldest and still the most quoted "
+       description="Passing yards per attempt, the oldest and still the most quoted "
                    "quarterback rate. Aggregated first, so a season is total yards "
                    "over total attempts rather than the mean of weekly averages."),
     _m("yards_per_completion", "Yards Per Completion", "Y/C", 1, "passing", "derived",
@@ -238,7 +238,7 @@ REGISTRY: list[MetricDef] = [
                    "the gap between the two is where the incompletions live."),
     _m("cpoe", "CPOE", "CPOE", 1, "passing", "avg", applies_to=["QB"],
        weight_by="attempts",
-       description="Completion percentage over expected, weighted by attempts — a "
+       description="Completion percentage over expected, weighted by attempts, so a "
                    "five-attempt game does not count as much as a forty-five-attempt "
                    "one, which a flat average of per-game rates would let it do."),
 
@@ -251,8 +251,8 @@ REGISTRY: list[MetricDef] = [
        description="Rushing attempts."),
     _m("yards_per_carry", "Yards Per Carry", "YPC", 1, "rushing", "derived",
        base="rushing_yards", per=("carries",), applies_to=["RB", "QB", "WR"],
-       description="Rushing yards per carry. Aggregated first — total yards over total "
-                   "carries — so a season is not the mean of weekly averages, where "
+       description="Rushing yards per carry. Aggregated first (total yards over total "
+                   "carries), so a season is not the mean of weekly averages, where "
                    "one three-carry game would count as much as a twenty-five-carry one."),
     _m("red_zone_rush_attempts", "Red Zone Carries", "RZ CAR", "int", "rushing", "sum", applies_to=["RB", "QB"],
        description="Rushing attempts inside the opponent's 20."),
@@ -263,7 +263,7 @@ REGISTRY: list[MetricDef] = [
     _m("rush_att_inside_10", "Carries Inside 10", "IN10", "int", "rushing", "sum", applies_to=["RB", "QB"],
        description="Rushing attempts from inside the opponent's 10-yard line."),
     _m("rush_att_inside_5", "Carries Inside 5", "IN5", "int", "rushing", "sum", applies_to=["RB", "QB"],
-       description="Rushing attempts from inside the opponent's 5-yard line — the highest-value carries in fantasy."),
+       description="Rushing attempts from inside the opponent's 5-yard line, the highest-value carries in fantasy."),
     _m("rush_att_inside_2", "Carries Inside 2", "IN2", "int", "rushing", "sum", applies_to=["RB", "QB"],
        description="Rushing attempts from inside the opponent's 2-yard line."),
     _m("rush_attempt_share", "Rush Share", "RUSH%", "pct", "rushing", "avg", applies_to=["RB", "QB", "WR"],
@@ -280,11 +280,10 @@ REGISTRY: list[MetricDef] = [
        description="Times targeted."),
     _m("catch_rate", "Catch Rate", "CATCH%", "pct", "receiving", "derived",
        base="receptions", per=("targets",), applies_to=["WR", "TE", "RB"],
-       description="Receptions divided by targets, counted from play-by-play. Reaches "
-                   "back to 1999 and covers every player, unlike the NGS catch "
-                   "percentage, which starts in 2016 and only ranks players it "
-                   "qualifies — the same relationship completion % has to NGS's "
-                   "expected completion %."),
+       description="Receptions divided by targets, counted from play-by-play. It covers "
+                   "every player, unlike the NGS catch percentage, which starts in 2016 "
+                   "and only ranks players it qualifies (the same relationship completion "
+                   "% has to NGS's expected completion %)."),
     _m("target_share", "Target Share", "TGT%", "pct", "receiving", "avg", applies_to=["WR", "TE", "RB"],
        description="Share of the team's targets while on the field."),
     _m("air_yards", "Air Yards", "AIR YD", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
@@ -293,7 +292,7 @@ REGISTRY: list[MetricDef] = [
        description="Share of the team's air yards."),
     _m("adot", "ADOT", "ADOT", 1, "receiving", "avg", applies_to=["WR", "TE", "RB"],
        weight_by="targets",
-       description="Average depth of target, weighted by targets — so the season "
+       description="Average depth of target, weighted by targets, so the season "
                    "value is total air yards over total targets."),
     _m("yards_after_catch", "Yards After Catch", "YAC", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
        description="Total yards after the catch."),
@@ -301,25 +300,25 @@ REGISTRY: list[MetricDef] = [
        description="Weighted opportunity rating (air-yards + target share)."),
     _m("racr", "RACR", "RACR", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
        weight_by="air_yards",
-       description="Receiver air-conversion ratio, weighted by air yards — the season "
+       description="Receiver air-conversion ratio, weighted by air yards, so the season "
                    "value is total receiving yards over total air yards."),
     _m("red_zone_targets", "Red Zone Targets", "RZ TGT", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
        description="Targets inside the opponent's 20."),
-    _m("targets_per_route_run", "Targets Per Route Run", "TPRR", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
+    _m("targets_per_route_run", "Targets Per Route Run", "TPRR", "pct", "receiving", "avg", applies_to=["WR", "TE", "RB"],
        weight_by="routes_run",
-       description="Targets divided by routes run, weighted by routes — total targets "
+       description="Targets divided by routes run, weighted by routes: total targets "
                    "over total routes."),
     _m("yards_per_route_run", "Yards Per Route Run", "YPRR", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
        weight_by="routes_run",
-       description="Receiving yards divided by routes run, weighted by routes — total "
+       description="Receiving yards divided by routes run, weighted by routes: total "
                    "yards over total routes."),
-    _m("yards_per_target", "Yards Per Target", "Y/TGT", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
+    _m("yards_per_target", "Yards Per Target", "Y/TGT", 1, "receiving", "avg", applies_to=["WR", "TE", "RB"],
        weight_by="targets",
-       description="Receiving yards divided by targets, weighted by targets — total "
+       description="Receiving yards divided by targets, weighted by targets: total "
                    "yards over total targets."),
-    _m("yards_per_reception", "Yards Per Reception", "Y/REC", 2, "receiving", "avg", applies_to=["WR", "TE", "RB"],
+    _m("yards_per_reception", "Yards Per Reception", "Y/REC", 1, "receiving", "avg", applies_to=["WR", "TE", "RB"],
        weight_by="receptions",
-       description="Receiving yards divided by receptions, weighted by receptions — "
+       description="Receiving yards divided by receptions, weighted by receptions: "
                    "total yards over total receptions."),
     _m("routes_run", "Routes Run", "RTS", "int", "receiving", "sum", applies_to=["WR", "TE", "RB"],
        description="Total routes run."),
@@ -341,7 +340,7 @@ REGISTRY: list[MetricDef] = [
        description="Share of the team's offensive snaps."),
     _m("opportunity_share", "Opportunity Share", "OPP%", "pct", "usage", "avg",
        applies_to=["RB", "WR", "TE"],
-       description="Share of the team's touches and targets (carries + targets) — the "
+       description="Share of the team's touches and targets (carries + targets), the "
                    "single best read on how much of the offense runs through a player."),
     _m("market_share", "Market Share", "MKT%", "pct", "usage", "avg",
        applies_to=["RB", "WR", "TE"],
@@ -349,16 +348,16 @@ REGISTRY: list[MetricDef] = [
 
     # Composite usage metrics (M4) — defined as formulas over the metrics above and
     # evaluated by the same engine as user-defined custom metrics.
-    _m("high_value_touches_per_game", "High-Value Touches / Game", "HVT/G", 2, "usage",
+    _m("high_value_touches_per_game", "High-Value Touches / Game", "HVT/G", 1, "usage",
        "composite", formula="red_zone_targets+rush_att_inside_5/games",
        applies_to=["RB", "WR", "TE"],
        description="Red-zone targets plus carries inside the 5, per game. The two "
-                   "highest-value touch types in fantasy counted together — volume "
+                   "highest-value touch types in fantasy counted together: volume "
                    "measured where points are actually scored, not between the 20s."),
     _m("touches_per_snap", "Touches Per Snap", "TCH/SNAP", 3, "usage",
        "composite", formula="targets+carries/snap_count",
        applies_to=["RB", "WR", "TE"],
-       description="Targets plus carries divided by snaps played — how efficiently a "
+       description="Targets plus carries divided by snaps played: how efficiently a "
                    "role converts playing time into opportunity. A back who touches "
                    "the ball on a third of his snaps is used very differently from "
                    "one who blocks on most of them."),
@@ -380,27 +379,26 @@ REGISTRY: list[MetricDef] = [
        applies_to=["RB"],
        description="A back's fantasy points divided by his carries, in your league scoring. "
                    "Includes receiving points, so a back who catches the ball reads higher "
-                   "than one with the same rushing line — which is the fantasy truth about "
+                   "than one with the same rushing line, which is the fantasy truth about "
                    "those two players."),
     _m("epa", "EPA", "EPA", 1, "usage", "sum",
-       description="Total expected points added — passing, rushing and receiving "
+       description="Total expected points added: passing, rushing and receiving "
                    "combined, which is why a quarterback's rushing shows up here."),
+    # Targets belong in the denominator and were missing until M12. ``epa`` is the total
+    # across all three phases, so dividing a receiver's by attempts + carries alone
+    # divided his season by his jet sweeps: Justin Jefferson's 2024 read 33.51 EPA per
+    # play, from 67.0 EPA over one carry and one attempt. The cost is that this metric
+    # inherits the 2003-2008 target blackout, which is the honest trade, because a
+    # receiver's per-play rate genuinely is not computable in those seasons. Sacks are
+    # still not in the denominator, so this is per play rather than per dropback, and
+    # ``dropbacks`` exists if that is the question. (This lived in the description,
+    # which renders as the column's tooltip, until September 2026.)
     _m("epa_per_play", "EPA / Play", "EPA/PLAY", 2, "usage", "derived",
        base="epa", per=("attempts", "carries", "targets"),
-       description="Expected points added per play — pass attempts, carries and "
+       description="Expected points added per play: pass attempts, carries and "
                    "targets. Rate rather than volume, so it separates a player who was "
-                   "efficient from one who simply had the ball a lot.\n\n"
-                   "⚠️ Targets belong in the denominator and were missing until M12. "
-                   "``epa`` is the total across all three phases, so dividing a "
-                   "receiver's by attempts + carries alone divided his season by his "
-                   "jet sweeps: Justin Jefferson's 2024 read 33.51 EPA per play, from "
-                   "67.0 EPA over one carry and one attempt. The cost is that this "
-                   "metric now inherits the 2003-2008 target blackout, which is the "
-                   "honest trade — a receiver's per-play rate genuinely is not "
-                   "computable in those seasons.\n\n"
-                   "Sacks are still not in the denominator, so this is per play rather "
-                   "than per dropback — though ``dropbacks`` now exists if that is the "
-                   "question."),
+                   "efficient from one who simply had the ball a lot. Sacks are not in the "
+                   "denominator, so this is per play rather than per dropback."),
     _m("fumbles", "Fumbles", "FUM", "int", "usage", "sum",
        higher_is_better=False, description="Total fumbles."),
     _m("fumbles_lost", "Fumbles Lost", "FUM L", "int", "usage", "sum",
@@ -551,12 +549,11 @@ REGISTRY: list[MetricDef] = [
     # line in a box score and opposite outcomes on the field.
     _m("dropbacks", "Dropbacks", "DB", "int", "passing", "composite",
        formula="attempts+sacks_suffered", applies_to=["QB"],
-       description="Pass attempts plus sacks taken — every snap that was meant to be a "
+       description="Pass attempts plus sacks taken: every snap that was meant to be a "
                    "pass. The honest denominator for a quarterback rate: attempts alone "
                    "reward a passer for the plays where the pass never happened, and a "
                    "sack is a dropback that went wrong rather than a play that was "
-                   "never called. Available from 1999, because sacks were in the stats "
-                   "feed all along."),
+                   "never called."),
     _m("passing_first_downs", "Passing First Downs", "PASS 1D", "int", "passing", "sum",
        applies_to=["QB"],
        description="Passes that moved the chains."),

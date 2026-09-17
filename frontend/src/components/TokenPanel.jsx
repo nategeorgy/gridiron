@@ -99,7 +99,7 @@ function ColorControl({ value, onChange }) {
             </span>
           </div>
         ) : (
-          <p className="text-[10px] text-faint">Not a plain colour — edit as text.</p>
+          <p className="text-[10px] text-faint">Not a plain colour. Edit as text.</p>
         )}
         <DeferredInput value={value} onCommit={onChange} />
       </div>

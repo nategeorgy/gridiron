@@ -826,6 +826,22 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
 - Always use environment variables for secrets and connection strings
 - Write code that a new developer could understand without asking questions
 
+### Writing (UI copy, tooltips, docs, comments, commits, PRs)
+- ⚠️ **Never use the em dash (—) in anything you write.** It reads as AI-generated, and
+  this is a public site. Use a period, a comma, a colon, parentheses, or a plain spaced
+  hyphen instead. That covers every surface a person reads: page copy, tooltips, the
+  metric registry's `description` strings (they render as column tooltips), CSV export
+  headers, docs, code comments, commit messages and PR descriptions
+- Everything the site renders was swept clean in September 2026: page copy, tooltips,
+  the registry's descriptions and availability notes, CSV headers, the tab title, and
+  the hidden Draft and Explore pages. What still carries em dashes is developer text:
+  code comments, docstrings, the API's parameter descriptions on `/docs`, and these
+  markdown docs. Don't copy the pattern from there, and replace one whenever you are
+  already rewriting the sentence it sits in
+- Two things are not prose and stay as they are: the lone `—` that `formatStat` renders
+  for a missing value in a table cell, and en dashes in number ranges (`0–100`,
+  `weeks 1–4`)
+
 ---
 
 ## Environment Variables

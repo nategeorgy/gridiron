@@ -21,6 +21,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import Game, Player, PlayerStats, Team
+from app.sos import MIN_BASIS_WEEKS
 
 SOS = "/api/v1/stats/sos"
 BASIS_SEASON = 2025
@@ -131,6 +132,8 @@ def test_the_basis_is_last_season_and_the_response_says_so(client, league):
 
     assert basis["season"] == BASIS_SEASON
     assert basis["kind"] == "prior_season"
+    # …and when it will stop being last season, which the page quotes.
+    assert basis["min_weeks"] == MIN_BASIS_WEEKS
 
 
 def test_the_basis_moves_to_the_current_season_once_there_is_enough_of_it(

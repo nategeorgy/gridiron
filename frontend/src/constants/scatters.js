@@ -48,7 +48,7 @@ export const SCATTER_GROUPS = [
     position: "",
     blurb:
       "Cross-position views. Only metrics that mean the same thing for a quarterback " +
-      "and a tight end appear here — fantasy points, expected points, and the Insight scores.",
+      "and a tight end appear here: fantasy points, expected points, and the Insight scores.",
     presets: [
       expectedVsActual("all-expected"),
       {
@@ -61,7 +61,7 @@ export const SCATTER_GROUPS = [
           topLeft: "Low usage, overproducing",
           topRight: "Elite usage, cashing in",
           bottomLeft: "Little usage, little to buy",
-          bottomRight: "Real usage, points lagging — buy",
+          bottomRight: "Real usage, points lagging: buy",
         },
       },
       {
@@ -81,7 +81,7 @@ export const SCATTER_GROUPS = [
     id: "qb",
     label: "QB",
     position: "QB",
-    blurb: "Quarterback play — efficiency, volume, and the rushing floor that decides QB1 status.",
+    blurb: "Quarterback play: efficiency, volume, and the rushing floor that decides QB1 status.",
     presets: [
       {
         id: "qb-rushing",
@@ -92,7 +92,7 @@ export const SCATTER_GROUPS = [
         size: "fantasy_ppg",
         corners: {
           topLeft: "Legs carry the value",
-          topRight: "Dual-threat — the QB1 tier",
+          topRight: "Dual-threat: the QB1 tier",
           bottomRight: "Pocket passer, volume-dependent",
         },
       },
@@ -119,7 +119,7 @@ export const SCATTER_GROUPS = [
     id: "rb",
     label: "RB",
     position: "RB",
-    blurb: "Running back roles — carries, receiving work, and goal-line equity.",
+    blurb: "Running back roles: carries, receiving work, and goal-line equity.",
     presets: [
       {
         id: "rb-workhorse",
@@ -157,7 +157,7 @@ export const SCATTER_GROUPS = [
     id: "wr",
     label: "WR",
     position: "WR",
-    blurb: "Receiver roles — target volume, route efficiency, and how they're used downfield.",
+    blurb: "Receiver roles: target volume, route efficiency, and how they're used downfield.",
     presets: [
       {
         id: "wr-volume-efficiency",
@@ -168,7 +168,7 @@ export const SCATTER_GROUPS = [
         size: "fantasy_ppg",
         corners: {
           topLeft: "Efficient on a small role",
-          topRight: "Alpha — volume and efficiency",
+          topRight: "Alpha: volume and efficiency",
           bottomRight: "High volume, low return",
         },
       },
@@ -187,7 +187,7 @@ export const SCATTER_GROUPS = [
       {
         id: "wr-earning",
         label: "Getting Open",
-        question: "Who wins their routes — and turns that into yards?",
+        question: "Who wins their routes, and turns that into yards?",
         x: "targets_per_route_run",
         y: "yards_per_route_run",
       },
@@ -199,7 +199,7 @@ export const SCATTER_GROUPS = [
     label: "TE",
     position: "TE",
     blurb:
-      "Tight end value is a usage story before it is a talent story — a tight end who " +
+      "Tight end value is a usage story before it is a talent story. A tight end who " +
       "blocks cannot score, however good he is.",
     presets: [
       {
@@ -211,7 +211,7 @@ export const SCATTER_GROUPS = [
         size: "fantasy_ppg",
         corners: {
           topRight: "Full-time receiving weapon",
-          bottomLeft: "Blocker — no fantasy path",
+          bottomLeft: "Blocker, no fantasy path",
         },
       },
       {
@@ -237,7 +237,7 @@ export const SCATTER_GROUPS = [
     label: "Flex",
     position: "FLEX",
     blurb:
-      "RB, WR, and TE on one chart — the actual flex decision. Only metrics defined " +
+      "RB, WR, and TE on one chart: the actual flex decision. Only metrics defined " +
       "for all three appear here.",
     presets: [
       {

@@ -31,7 +31,7 @@ function projectUrl(raw) {
   if (stripped !== trimmed) {
     console.warn(
       `[GridironIQ] VITE_SUPABASE_URL is "${trimmed}", which points at a specific API ` +
-        `rather than the project. Using "${stripped}" instead — please correct the ` +
+        `rather than the project. Using "${stripped}" instead. Please correct the ` +
         `environment variable.`,
     );
   }

@@ -18,9 +18,6 @@ export function ScoringControl({ scoring, onChange, bare = false }) {
           onChange={onChange}
           options={SCORING_PRESET_OPTIONS}
         />
-        <span className="pb-2 text-xs text-muted">
-          Every fantasy number on this page is priced in this scoring.
-        </span>
       </div>
     </div>
   );

@@ -36,8 +36,8 @@ export function Teams() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-fg">Team Leaderboard</h1>
         <p className="mt-1 text-sm text-muted">
-          Offensive production by team. Click a team for their depth chart and fixtures,
-          or a column to rank by it.
+          Offensive production by team. Click a team for their depth chart and schedule,
+          or a column to sort by it.
         </p>
       </div>
 

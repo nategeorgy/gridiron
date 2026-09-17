@@ -280,6 +280,7 @@ export function Home() {
           )}
           <WeeklyScoringCard
             week={lastPlayed?.week}
+            scoring={scoring}
             position={weekPosition}
             onPositionChange={setWeekPosition}
             result={weekly.data}
@@ -318,6 +319,7 @@ export function Home() {
           <SignalCard
             kind="under"
             season={SIGNALS_SEASON}
+            scoring={scoring}
             rows={underRows}
             isLoading={signals.isLoading}
             isError={signals.isError}
@@ -325,6 +327,7 @@ export function Home() {
           <SignalCard
             kind="over"
             season={SIGNALS_SEASON}
+            scoring={scoring}
             rows={overRows}
             isLoading={signals.isLoading}
             isError={signals.isError}

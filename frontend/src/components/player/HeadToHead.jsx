@@ -87,7 +87,7 @@ export function HeadToHead({ rows, players, metrics, season }) {
       </div>
 
       <p className="mt-2.5 text-[10.5px] leading-relaxed text-faint">
-        The badge marks who leads each row, and by how much. Direction follows the metric —
+        The badge marks who leads each row, and by how much. Direction follows the metric:
         fewest drops leads the drops row.
       </p>
     </section>

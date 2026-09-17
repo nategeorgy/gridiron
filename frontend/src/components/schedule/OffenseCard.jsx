@@ -57,7 +57,7 @@ export function OffenseCard({ team, players }) {
             className="flex h-2 flex-1 overflow-hidden rounded-full bg-surface"
             title={
               team.implied != null
-                ? `${team.abbreviation} ${formatStat(team.implied, 1)} — ${team.opponent} ${formatStat(opponentImplied, 1)}`
+                ? `${team.abbreviation} ${formatStat(team.implied, 1)} · ${team.opponent} ${formatStat(opponentImplied, 1)}`
                 : "Not priced yet"
             }
           >

@@ -61,7 +61,7 @@ function AddPlayer({ onAdd, existing }) {
           {isFetching && <p className="text-xs text-faint">Searching…</p>}
           {!isFetching && results.length === 0 && (
             <p className="text-xs text-faint">
-              No one new by that name — anyone already on the board is hidden here.
+              No one new by that name. Anyone already on the board is hidden here.
             </p>
           )}
           {results.map((player) => (
@@ -238,7 +238,7 @@ export function BoardEditor() {
 
       <p className="max-w-3xl text-xs leading-relaxed text-muted">
         Drag a row to move it, or type a number in the <span className="stat-num">#</span>{" "}
-        box to send a player straight to that spot. Tiers are yours to draw — they mark
+        box to send a player straight to that spot. Tiers are yours to draw. They mark
         the players you would be equally happy with, which is the read that actually
         matters when your pick arrives.
       </p>
@@ -276,7 +276,7 @@ export function BoardEditor() {
             {entries.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-8 text-center text-muted">
-                  Nobody on this board yet — search above to add someone.
+                  Nobody on this board yet. Search above to add someone.
                 </td>
               </tr>
             )}

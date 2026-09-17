@@ -333,6 +333,9 @@ def build_sos(
             "season": basis_season,
             "kind": basis_kind,
             "weeks": basis_weeks,
+            # When a prior-season basis gives way to the current one, so the page can
+            # say so without keeping its own copy of the threshold.
+            "min_weeks": MIN_BASIS_WEEKS,
         },
         "defense": [
             {

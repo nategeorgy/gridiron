@@ -21,7 +21,7 @@ export function CareerTable({ seasons, position, groups, metrics, league, active
   return (
     <section className="glass-card px-4 pb-3 pt-3">
       <h2 className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-faint">
-        Career — among {position}s, in your scoring
+        Career · among {position}s, in your scoring
       </h2>
 
       {isLoading ? (

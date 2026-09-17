@@ -27,11 +27,14 @@
  * @property {string} path            route path
  * @property {string} menuDesc        one-liner in the nav dropdown
  * @property {string} title           page H1
- * @property {string} description     page subtitle
+ * @property {string} [description]   page subtitle; a board without one shows none
  * @property {Section[]} sections     column groups, in display order
  * @property {string[]} columns       every column flattened, in display order
  * @property {string} defaultSort     metric id to sort by initially
- * @property {string} defaultPosition '' | 'QB' | 'RB' | 'WR' | 'TE'
+ * @property {string} defaultPosition '' for every position, or a comma-separated set in
+ *                                    QB/RB/WR/TE order ('WR,TE'). That is the shape the
+ *                                    Position filter writes, so toggling back to the
+ *                                    default drops the param from the URL
  * @property {string} phase           'passing' | 'rushing' | 'receiving' | 'all' —
  *                                    which column of the Leaderboards menu it sits in
  * @property {string} [fixedPosition]  the board is about exactly this position: the
@@ -58,9 +61,8 @@ export const FANTASY_BOARDS = [
     "id": "fantasy-all",
     "label": "Fantasy",
     "path": "/fantasy/all",
-    "menuDesc": "Points, value and the buy/sell signals",
+    "menuDesc": "Points, expected fantasy output and general stats",
     "title": "Fantasy Leaders",
-    "description": "Every fantasy-relevant number in one place, scored in your league settings, with each phase in its own block.",
     "sections": [
       {
         "name": "General",
@@ -145,8 +147,8 @@ export const FANTASY_BOARDS = [
     "id": "fantasy-passing",
     "label": "Fantasy",
     "path": "/fantasy/passing",
-    "menuDesc": "Points, value and expected",
-    "title": "Fantasy — Passing",
+    "menuDesc": "Points, expected fantasy output and general stats",
+    "title": "Fantasy | Passing",
     "description": "Quarterback fantasy production and the opportunity behind it.",
     "sections": [
       {
@@ -212,9 +214,9 @@ export const FANTASY_BOARDS = [
     "id": "fantasy-rushing",
     "label": "Fantasy",
     "path": "/fantasy/rushing",
-    "menuDesc": "Points, value and expected",
-    "title": "Fantasy — Rushing",
-    "description": "Rushing fantasy production and the value behind it, in your league scoring.",
+    "menuDesc": "Points, expected fantasy output and general stats",
+    "title": "Fantasy | Rushing",
+    "description": "Rushing fantasy production.",
     "sections": [
       {
         "name": "General",
@@ -272,9 +274,9 @@ export const FANTASY_BOARDS = [
     "id": "fantasy-receiving",
     "label": "Fantasy",
     "path": "/fantasy/receiving",
-    "menuDesc": "Points, value and expected",
-    "title": "Fantasy — Receiving",
-    "description": "Receiving fantasy production and the value behind it, in your league scoring.",
+    "menuDesc": "Points, expected fantasy output and general stats",
+    "title": "Fantasy | Receiving",
+    "description": "Receiving fantasy production.",
     "sections": [
       {
         "name": "General",
@@ -312,7 +314,7 @@ export const FANTASY_BOARDS = [
       "fantasy_points_over_expected"
     ],
     "defaultSort": "fantasy_points",
-    "defaultPosition": "WR",
+    "defaultPosition": "WR,TE",
     "scoring": true,
     "signed": [],
     "percentileColumns": [
@@ -339,9 +341,9 @@ export const NFL_BOARDS = [
     "id": "nfl-all",
     "label": "Production",
     "path": "/nfl/all",
-    "menuDesc": "Raw production, every phase",
+    "menuDesc": "Box score, efficiency, and expected production",
     "title": "NFL Production",
-    "description": "Raw on-field production across every phase, with no fantasy scoring applied.",
+    "description": "Raw on-field production across every phase.",
     "sections": [
       {
         "name": "General",
@@ -484,9 +486,9 @@ export const NFL_BOARDS = [
     "id": "nfl-all-advanced",
     "label": "Advanced",
     "path": "/nfl/all-advanced",
-    "menuDesc": "Tracking and charting, every phase",
+    "menuDesc": "Advanced analytics and tracking data (NGS)",
     "title": "All Advanced",
-    "description": "Tracking and charting data across every phase. Next Gen Stats start in 2016 and Pro Football Reference charting in 2018, so this board is a modern-era one by construction.",
+    "description": "Tracking and charting data across every phase.",
     "sections": [
       {
         "name": "Receiving",
@@ -626,9 +628,9 @@ export const NFL_BOARDS = [
     "id": "nfl-passing",
     "label": "Production",
     "path": "/nfl/passing",
-    "menuDesc": "Box score, rate stats and expected",
+    "menuDesc": "Box score, efficiency, and expected production",
     "title": "Passing Production",
-    "description": "Everything a quarterback produced — volume, efficiency, and what the model expected from the same opportunity. Answers back to 1999.",
+    "description": "Everything a quarterback produced - volume, efficiency, and what models expected from the same opportunity.",
     "sections": [
       {
         "name": "General",
@@ -721,9 +723,9 @@ export const NFL_BOARDS = [
     "id": "nfl-passing-advanced",
     "label": "Advanced",
     "path": "/nfl/passing-advanced",
-    "menuDesc": "Air yards, release, pressure",
+    "menuDesc": "Advanced analytics and tracking data (NGS)",
     "title": "Passing Advanced",
-    "description": "How the throw happened and what the quarterback was up against — tracking and charting data. Starts in 2016; the pressure columns in 2018.",
+    "description": "Advanced tracking and charting data on quarterbacks. How the throws happened, what they faced, and how they performed.",
     "sections": [
       {
         "name": "Efficiency",
@@ -810,9 +812,9 @@ export const NFL_BOARDS = [
     "id": "nfl-rushing",
     "label": "Production",
     "path": "/nfl/rushing",
-    "menuDesc": "Yards before and after contact",
+    "menuDesc": "Box score, efficiency, and expected production",
     "title": "Rushing Production",
-    "description": "Everything a back produced — volume, efficiency, and what the model expected from the same carries. Answers back to 1999.",
+    "description": "Everything a back produced - efficiency, and what models expected from the same carries.",
     "sections": [
       {
         "name": "General",
@@ -883,9 +885,8 @@ export const NFL_BOARDS = [
     "id": "nfl-rushing-advanced",
     "label": "Advanced",
     "path": "/nfl/rushing-advanced",
-    "menuDesc": "Contact, broken tackles, RYOE",
+    "menuDesc": "Advanced analytics and tracking data (NGS)",
     "title": "Rushing Advanced",
-    "description": "What the line gave and what the back created. Yards before contact measures the blocking; yards after contact measures the runner. Charting starts in 2018, tracking in 2016.",
     "sections": [
       {
         "name": "Efficiency",
@@ -962,9 +963,9 @@ export const NFL_BOARDS = [
     "id": "nfl-receiving",
     "label": "Production",
     "path": "/nfl/receiving",
-    "menuDesc": "Separation, YAC and efficiency",
+    "menuDesc": "Box score, efficiency, and expected production",
     "title": "Receiving Production",
-    "description": "Everything a receiver produced — volume, efficiency, and what the model expected from the same targets.",
+    "description": "Everything a receiver produced - efficiency, and what models expected from the same opportunities.",
     "sections": [
       {
         "name": "General",
@@ -1025,7 +1026,7 @@ export const NFL_BOARDS = [
       "receiving_first_downs_exp"
     ],
     "defaultSort": "receiving_yards",
-    "defaultPosition": "WR",
+    "defaultPosition": "WR,TE",
     "scoring": false,
     "signed": [],
     "percentileColumns": [
@@ -1056,9 +1057,9 @@ export const NFL_BOARDS = [
     "id": "nfl-receiving-advanced",
     "label": "Advanced",
     "path": "/nfl/receiving-advanced",
-    "menuDesc": "Usage, air yards and tracking",
+    "menuDesc": "Advanced analytics, all opportunity metrics and tracking data (NGS)",
     "title": "Receiving Advanced",
-    "description": "How the offense used a receiver and what he did with it — routes, air yards, separation and yards after catch. Folds in the opportunity columns, because for a receiver those are the same question.",
+    "description": "How the offense used a receiver, what he did with it, and how often he was utilized.",
     "sections": [
       {
         "name": "Efficiency",
@@ -1136,7 +1137,7 @@ export const NFL_BOARDS = [
       "rec_broken_tackles"
     ],
     "defaultSort": "targets",
-    "defaultPosition": "WR",
+    "defaultPosition": "WR,TE",
     "scoring": false,
     "signed": [],
     "percentileColumns": [
@@ -1177,9 +1178,9 @@ export const OPPORTUNITY_BOARDS = [
     "id": "opportunity-all",
     "label": "Opportunity",
     "path": "/opportunity/all",
-    "menuDesc": "Share of the offense",
+    "menuDesc": "Opportunity metrics grouped by phase",
     "title": "Opportunity",
-    "description": "Who the offense is running through, before any of it turns into points — every phase.",
+    "description": "Who the offense is running through, at every phase of offense.",
     "sections": [
       {
         "name": "General",
@@ -1317,7 +1318,7 @@ export const OPPORTUNITY_BOARDS = [
     "id": "opportunity-rushing",
     "label": "Opportunity",
     "path": "/opportunity/rushing",
-    "menuDesc": "Carries and goal-line work",
+    "menuDesc": "All opportunity metrics",
     "title": "Rushing Opportunity",
     "description": "The carries a back is given, and where he is given them.",
     "sections": [
@@ -1416,15 +1417,11 @@ export const INSIGHT_BOARDS = [
     id: "insight-opportunity",
     label: "Opportunity Rating",
     path: "/insight/opportunity",
-    menuDesc: "Who the offense actually runs through",
+    menuDesc: "What players see the most chances",
     title: "Fantasy Opportunity Rating",
     description:
-      "0–100 on how much of an offense runs through a player, regardless of what it " +
-      "produced. Half expected fantasy points in your scoring, half the usage shares " +
-      "that matter at their position.",
-    lede:
-      "Opportunity is the most repeatable thing in fantasy — it predicts next week far " +
-      "better than last week's points do.",
+      "0–100 on how much of an offense runs through a player, regardless of what they " +
+      "produced.",
     columns: ["fantasy_opportunity_rating", "expected_fantasy_ppg", "fantasy_ppg", "opportunity_share", "target_share", "route_participation", "air_yards_share", "rush_attempt_share", "rush_att_inside_10", "red_zone_targets", "snap_share"],
     defaultSort: "fantasy_opportunity_rating",
     defaultPosition: "",
@@ -1464,15 +1461,11 @@ export const INSIGHT_BOARDS = [
     id: "insight-buy-low",
     label: "Buy Low",
     path: "/insight/buy-low",
-    menuDesc: "Real usage, points haven't caught up",
-    title: "Buy Low — Positive Regression",
+    menuDesc: "Players scoring less than expected based on usage",
+    title: "Buy Low | Positive Regression",
     description:
-      "0–100 on players earning more than they're scoring: real opportunity, output " +
-      "below what that opportunity is worth, touchdown-starved, and still cheap to " +
-      "acquire.",
-    lede:
-      "A points-under-expected gap only matters when the usage behind it is real — " +
-      "which is why opportunity rating carries 30% of this score.",
+      "0–100 on players earning more than they're scoring: output below what the " +
+      "opportunity has been worth.",
     columns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share"],
     defaultSort: "positive_regression_index",
     defaultPosition: "",
@@ -1509,15 +1502,11 @@ export const INSIGHT_BOARDS = [
     id: "insight-sell-high",
     label: "Sell High",
     path: "/insight/sell-high",
-    menuDesc: "Scoring above what the usage supports",
+    menuDesc: "Players scoring more than expected based on usage",
     title: "Sell High",
     description:
-      "0–100 on players whose production is running ahead of their opportunity — " +
-      "touchdown luck and above-baseline efficiency, with a role that's already " +
-      "shrinking. Trade while the name is hot.",
-    lede:
-      "Touchdown rate and per-touch efficiency regress hardest. Usage trend is the " +
-      "tiebreak: outproducing your opportunity while losing snaps is the clearest sell.",
+      "0–100 on players whose production is running ahead of their opportunity: " +
+      "touchdown luck and efficiency above what the opportunity has been worth.",
     columns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend"],
     defaultSort: "sell_high_index",
     defaultPosition: "",
@@ -1558,15 +1547,12 @@ export const INSIGHT_TOOLS = [
     id: "insight-sos",
     label: "Strength of Schedule",
     path: "/insight/sos",
-    menuDesc: "Whose fixtures open up, by position",
+    menuDesc: "Positional matchup difficulty",
     title: "Strength of Schedule",
-    description:
-      "How hard every team's fixtures are for one position, in your scoring — the " +
-      "whole season as a grid, so the run of weeks is visible rather than just a rank.",
+    description: "How difficult each position's matchups are.",
     lede:
       "Difficulty is fantasy points allowed to this position, on a 0-100 scale where " +
-      "higher is harder. Position matters more than most sites admit: a defense that " +
-      "smothers receivers is often the one running backs feast on.",
+      "higher is harder.",
   }
 ];
 
@@ -1580,37 +1566,34 @@ export const SCHEDULE_ITEMS = [
     id: "schedule-games",
     label: "Games",
     path: "/schedule/games",
-    menuDesc: "Every fixture and result, back to 1999",
+    menuDesc: "Weekly schedule with lines",
     title: "Games",
     description:
-      "The whole schedule, filterable by season, week and team — results where they " +
-      "have been played, and the betting market's view where they have not.",
+      "Entire schedule, filterable by season, week and team. Results where they have " +
+      "been played, and the betting market's view where they have not.",
   },
   {
     id: "schedule-by-team",
     label: "By Team",
     path: "/schedule/by-team",
-    menuDesc: "One season as a team × week grid",
+    menuDesc: "All teams and all games in one view",
     title: "Schedule by Team",
     description:
-      "Every team's season in one grid. Reading across a row shows the run of fixtures " +
-      "a player has to get through, which a week-by-week list hides.",
+      "Every team's season schedule in one grid. Home games are plain, away games carry " +
+      "an @. Played weeks are tinted by result.",
   },
   {
     id: "schedule-vegas",
     label: "Vegas Board",
     path: "/schedule/vegas",
-    menuDesc: "Who's in the best scoring environment",
+    menuDesc: "Implied point totals, betting market lines",
     title: "Vegas Board",
     description:
-      "What the betting market expects each offense to score this week, and the players " +
-      "who are in those games. A back in a 27-point offense has a different job from " +
-      "the same back in a 17-point one.",
+      "What the betting market expects each offense to score in a week, and the players " +
+      "who are in those games. Which players have the best scoring environment this week.",
     lede:
       "Implied total is the game total split by the spread - the points the market " +
-      "expects one offense to put up. It is the sharpest forward-looking read we have " +
-      "on how many fantasy points there are to go around, and it needs no projection " +
-      "of our own to say so.",
+      "expects one offense to put up.",
   }
 ];
 
@@ -1628,7 +1611,7 @@ export const DRAFT_ITEMS = [
     menuDesc: "The consensus board, or one of your own",
     title: "Rankings",
     description:
-      "Expert consensus by default, with our valuation of every player beside it — " +
+      "Expert consensus by default, with our valuation of every player beside it, " +
       "and your own boards, uploaded or built here, in the same table.",
     lede:
       "The consensus is a blend of every expert board we hold, each re-ranked over " +
@@ -1643,7 +1626,7 @@ export const DRAFT_ITEMS = [
     title: "Mock Draft",
     description:
       "A snake draft against bots, in your scoring and league settings, from whichever " +
-      "board you want to practise against — then graded on what your roster was " +
+      "board you want to practise against, then graded on what your roster was " +
       "actually worth.",
   },
   {
@@ -1654,12 +1637,12 @@ export const DRAFT_ITEMS = [
     title: "Draft Value Board",
     description:
       "Expert consensus rank next to what each player's usage was actually worth, in " +
-      "your scoring and league size — and the gap between the two. A positive gap is " +
+      "your scoring and league size, and the gap between the two. A positive gap is " +
       "a player we rate above the market.",
     lede:
       "Our side is built on expected points, not actual ones: a player who scored " +
       "twelve touchdowns on six touchdowns' worth of usage is valued at six here. " +
-      "That is the point — it prices the opportunity, which tends to repeat, rather " +
+      "That is the point: it prices the opportunity, which tends to repeat, rather " +
       "than the finish, which often does not.",
   }
 ];
@@ -1677,7 +1660,7 @@ export const EXPLORE_ITEMS = [
     title: "Scatter Builder",
     description:
       "Pick a question and see the whole player pool answer it at once. The dashed " +
-      "lines are the medians, so the corners are the story — and every dot is a player " +
+      "lines are the medians, so the corners are the story, and every dot is a player " +
       "you can click.",
   },
   {
@@ -1688,7 +1671,7 @@ export const EXPLORE_ITEMS = [
     title: "Comparison Builder",
     description:
       "Line up to five players side by side. Every stat shows who leads it and by how " +
-      "much, and only stats that apply to all of them are shown — so a quarterback and " +
+      "much, and only stats that apply to all of them are shown, so a quarterback and " +
       "a receiver get compared on common ground.",
   }
 ];

@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { Card, CardHead, CardLink, CardState, PlayerCell, ScrollTable, Tabs, Th } from "./primitives";
 import { formatStat, formatSigned } from "../../utils/format";
+import { scoringLabel } from "../../constants/scoring";
 
 const POSITION_TABS = ["ALL", "QB", "RB", "WR", "TE", "FLEX"].map((value) => ({
   value,
@@ -39,11 +40,12 @@ function statLine(row) {
   return `${formatStat(row.receptions, "int")}/${formatStat(row.targets, "int")} · ${formatStat(row.receiving_yards, "int")} yd${scores}`;
 }
 
-export function WeeklyScoringCard({ week, position, onPositionChange, result, isLoading, isError }) {
+export function WeeklyScoringCard({ week, scoring, position, onPositionChange, result, isLoading, isError }) {
   const rows = result?.data ?? [];
+  const scoredIn = scoringLabel(scoring);
   return (
     <Card>
-      <CardHead title="Last Week's Scoring" sub={week ? `Week ${week} · your scoring` : "your scoring"}>
+      <CardHead title="Last Week's Scoring" sub={week ? `Week ${week} · ${scoredIn}` : scoredIn}>
         <Tabs options={POSITION_TABS} value={position} onChange={onPositionChange} label="Position" />
       </CardHead>
       <CardState isLoading={isLoading} isError={isError} isEmpty={rows.length === 0} empty="No games scored in this week." rows={6} />
@@ -276,7 +278,7 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
         </ScrollTable>
       )}
       <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
-        <b className="font-semibold text-muted">FOR</b> is Fantasy Opportunity Rating —
+        <b className="font-semibold text-muted">FOR</b> is Fantasy Opportunity Rating:
         0-100 on how much of an offense runs through a player, ranked against everyone
         at their position. The shares beneath it are what it is built from.
       </p>

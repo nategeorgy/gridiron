@@ -148,7 +148,7 @@ export function InsightPanel({ playerId, season, scoring }) {
     return (
       <div className="glass-card p-4 text-sm text-muted">
         Insight scores unavailable for {season}
-        {error?.response?.status === 404 ? " — no games in this window." : "."}
+        {error?.response?.status === 404 ? ": no games in this window." : "."}
       </div>
     );
   }
@@ -158,14 +158,14 @@ export function InsightPanel({ playerId, season, scoring }) {
   const badges = [];
   if (scores.positive_regression_index >= STRONG_SIGNAL) {
     badges.push(
-      <Badge key="buy" tone="buy" title="Earning more than they're scoring — a buy-low candidate">
+      <Badge key="buy" tone="buy" title="Earning more than they're scoring: a buy-low candidate">
         Buy Low
       </Badge>,
     );
   }
   if (scores.sell_high_index >= STRONG_SIGNAL) {
     badges.push(
-      <Badge key="sell" tone="sell" title="Scoring above what the usage supports — a sell-high candidate">
+      <Badge key="sell" tone="sell" title="Scoring above what the usage supports: a sell-high candidate">
         Sell High
       </Badge>,
     );
@@ -200,7 +200,7 @@ export function InsightPanel({ playerId, season, scoring }) {
           label="Opportunity Rating"
           score={scores.fantasy_opportunity_rating}
           description={metrics.fantasy_opportunity_rating?.description}
-          caption={`${formatStat(supporting.expected_fantasy_ppg, 2)} expected PPG on this usage`}
+          caption={`${formatStat(supporting.expected_fantasy_ppg, 1)} expected PPG on this usage`}
         />
         <ScoreTile
           label="Buy Low"
@@ -228,7 +228,7 @@ export function InsightPanel({ playerId, season, scoring }) {
         Scores are percentiles within this player's position pool
         {data.pool_size ? ` (${data.pool_size} qualified ${data.position}s)` : ""} over the{" "}
         {season} regular season, in your league scoring. The ones built on
-        expected points use nflverse ffopportunity model estimates — descriptive, not a
+        expected points use nflverse ffopportunity model estimates: descriptive, not a
         projection.
       </p>
     </div>

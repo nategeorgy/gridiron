@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-15 (Launch trim, Schedule tab redesign, and the Command Center's scoring pill + My Players rebuild)
+Last updated: 2026-09-16 (a writing rule: no em dashes in anything added)
 
 ---
 
@@ -697,9 +697,17 @@ repo. Update it in the *same change* that alters the project's structure — spe
 - A new environment variable → update [§8](#8-configuration--environment-variables).
 - A deployment/hosting change → update [§9](#9-hosting--deployment).
 - Bump the **Last updated** date at the top and add a line to the changelog below.
+- Write new entries without em dashes (—), including the changelog's date separator.
+  The rule and its two exceptions are under "Writing" in [`CLAUDE.md`](CLAUDE.md).
 
 ### Changelog
 
+- **2026-09-16**: **A writing rule, no em dashes.** Anything added to this file, or
+  written anywhere else in the project, avoids the em dash because it reads as
+  AI-generated. The rule lives under "Writing" in `CLAUDE.md`, and the maintenance list
+  above now points to it. The same day, every em dash the site renders was replaced
+  (about 120 strings across the frontend, the metric registry and both availability
+  tables). Existing entries in this file were left as they are.
 - **2026-09-15** — **Command Center: the scoring pill, and My Players rebuilt.** The
   "Scored in PPR · Change →" readout was a link to the leaderboard — the page's one
   global setting was the only thing you had to leave the page to change, and it

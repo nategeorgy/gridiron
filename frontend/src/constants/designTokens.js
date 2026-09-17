@@ -26,7 +26,7 @@ export const TOKEN_GROUPS = [
         label: "Environment gradient",
         type: "raw",
         rows: 6,
-        hint: "Layered radial gradients painted on <body>. This is what the glass is blurring — flatten it and the material dies.",
+        hint: "Layered radial gradients painted on <body>. This is what the glass is blurring. Flatten it and the material dies.",
       },
     ],
   },
@@ -58,7 +58,7 @@ export const TOKEN_GROUPS = [
         name: "--edge",
         label: "Specular highlight",
         type: "color",
-        hint: "The 1px inset top light on every card. Carries most of the 'glass' read — drop it and cards look printed on.",
+        hint: "The 1px inset top light on every card. Carries most of the 'glass' read. Drop it and cards look printed on.",
       },
     ],
   },
@@ -96,7 +96,7 @@ export const TOKEN_GROUPS = [
     id: "series",
     label: "Chart series",
     blurb:
-      "A fixed categorical order, never cycled — a series keeps its hue when the set is filtered. Validated for colour-vision deficiency and contrast against both card surfaces; a sixth hue means re-validating, not guessing.",
+      "A fixed categorical order, never cycled, so a series keeps its hue when the set is filtered. Validated for colour-vision deficiency and contrast against both card surfaces; a sixth hue means re-validating, not guessing.",
     tokens: [
       { name: "--series-1", label: "Series 1", type: "color" },
       { name: "--series-2", label: "Series 2", type: "color" },
@@ -109,7 +109,7 @@ export const TOKEN_GROUPS = [
     id: "positions",
     label: "Position identity",
     blurb:
-      "The four positions on the draft board. Aliases of four series hues rather than new colours, because a position is exactly the kind of categorical identity those were validated for — so the board inherits the colour-vision separation for free. Editing one here overrides the alias. The two tint strengths differ per theme on purpose: a hue mixed with `transparent` darkens over a dark surface and lightens over a light one, so one percentage cannot serve both.",
+      "The four positions on the draft board. Aliases of four series hues rather than new colours, because a position is exactly the kind of categorical identity those were validated for, so the board inherits the colour-vision separation for free. Editing one here overrides the alias. The two tint strengths differ per theme on purpose: a hue mixed with `transparent` darkens over a dark surface and lightens over a light one, so one percentage cannot serve both.",
     tokens: [
       { name: "--position-qb", label: "QB", type: "color" },
       { name: "--position-rb", label: "RB", type: "color" },
@@ -122,7 +122,7 @@ export const TOKEN_GROUPS = [
   {
     id: "material",
     label: "Material",
-    blurb: "Geometry and depth — the three knobs that most change how 'glass' the app feels.",
+    blurb: "Geometry and depth: the three knobs that most change how 'glass' the app feels.",
     tokens: [
       { name: "--radius", label: "Card radius", type: "length", unit: "px", min: 0, max: 40, step: 1 },
       {
@@ -176,6 +176,6 @@ export const CONTRAST_CHECKS = [
 
 /** How each theme's block is written back into index.css. */
 export const THEME_BLOCKS = [
-  { theme: "dark", selector: ":root", title: 'Dark (default) — "smoked graphite"' },
-  { theme: "light", selector: ':root[data-theme="light"]', title: 'Light — "Clear"' },
+  { theme: "dark", selector: ":root", title: 'Dark (default): "smoked graphite"' },
+  { theme: "light", selector: ':root[data-theme="light"]', title: 'Light: "Clear"' },
 ];

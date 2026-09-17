@@ -77,9 +77,9 @@ const FORMATS = { int: "int", one: 1, two: 2, three: 3, pct: "pct" };
 // authoritative source at runtime (see useMetrics).
 export const METRICS = {
   fantasy_points: { label: "Fantasy Points", short: "FPTS", format: FORMATS.one },
-  fantasy_ppg: { label: "Fantasy PPG", short: "FPPG", format: FORMATS.two },
+  fantasy_ppg: { label: "Fantasy PPG", short: "FPPG", format: FORMATS.one },
   fantasy_points_ppr: { label: "Fantasy Points (PPR)", short: "PPR", format: FORMATS.one },
-  fantasy_ppg_ppr: { label: "Fantasy PPG (PPR)", short: "PPG", format: FORMATS.two },
+  fantasy_ppg_ppr: { label: "Fantasy PPG (PPR)", short: "PPG", format: FORMATS.one },
   fantasy_points_half: { label: "Fantasy Points (Half)", short: "HALF", format: FORMATS.one },
   fantasy_points_std: { label: "Fantasy Points (Std)", short: "STD", format: FORMATS.one },
   passing_yards: { label: "Passing Yards", short: "PASS YD", format: FORMATS.int },
@@ -107,14 +107,14 @@ export const METRICS = {
   red_zone_targets: { label: "Red Zone Targets", short: "RZ TGT", format: FORMATS.int },
   red_zone_rush_share: { label: "Red Zone Rush Share", short: "RZ RUN%", format: FORMATS.pct },
   air_yards_share: { label: "Air Yards Share", short: "AY%", format: FORMATS.pct },
-  yards_per_target: { label: "Yards Per Target", short: "Y/TGT", format: FORMATS.two },
-  yards_per_reception: { label: "Yards Per Reception", short: "Y/REC", format: FORMATS.two },
+  yards_per_target: { label: "Yards Per Target", short: "Y/TGT", format: FORMATS.one },
+  yards_per_reception: { label: "Yards Per Reception", short: "Y/REC", format: FORMATS.one },
   rushing_epa: { label: "Rushing EPA", short: "RU EPA", format: FORMATS.one },
   receiving_epa: { label: "Receiving EPA", short: "RE EPA", format: FORMATS.one },
   fumbles_lost: { label: "Fumbles Lost", short: "FUM L", format: FORMATS.int },
   // Expected points (M2) — scoring-aware, computed from modelled opportunity.
   expected_fantasy_points: { label: "Expected Fantasy Points", short: "xFPTS", format: FORMATS.one },
-  expected_fantasy_ppg: { label: "Expected Fantasy PPG", short: "xFPPG", format: FORMATS.two },
+  expected_fantasy_ppg: { label: "Expected Fantasy PPG", short: "xFPPG", format: FORMATS.one },
   fantasy_points_over_expected: { label: "Points Over Expected", short: "FP±", format: FORMATS.one },
   // Expected components (M2) — the modelled estimates xFP is built from.
   passing_yards_exp: { label: "Expected Passing Yards", short: "xPASS YD", format: FORMATS.int },
@@ -134,7 +134,7 @@ export const METRICS = {
   opportunity_share: { label: "Opportunity Share", short: "OPP%", format: FORMATS.pct },
   market_share: { label: "Market Share", short: "MKT%", format: FORMATS.pct },
   // Composite usage metrics (M4) — registry formulas over the metrics above.
-  high_value_touches_per_game: { label: "High-Value Touches / Game", short: "HVT/G", format: FORMATS.two },
+  high_value_touches_per_game: { label: "High-Value Touches / Game", short: "HVT/G", format: FORMATS.one },
   fantasy_points_per_route_run: { label: "Fantasy Points Per Route Run", short: "FP/RR", format: FORMATS.two },
   fantasy_points_per_carry: { label: "Fantasy Points Per Carry", short: "FP/CAR", format: FORMATS.two },
   touches_per_snap: { label: "Touches Per Snap", short: "TCH/SNAP", format: FORMATS.three },
@@ -144,7 +144,7 @@ export const METRICS = {
   routes_run: { label: "Routes Run", short: "RTS", format: FORMATS.int },
   routes_run_per_game: { label: "Routes Run / Game", short: "RTS/G", format: FORMATS.one },
   route_participation: { label: "Route Participation", short: "RTE%", format: FORMATS.pct },
-  targets_per_route_run: { label: "Targets Per Route Run", short: "TPRR", format: FORMATS.two },
+  targets_per_route_run: { label: "Targets Per Route Run", short: "TPRR", format: FORMATS.pct },
   yards_per_route_run: { label: "Yards Per Route Run", short: "YPRR", format: FORMATS.two },
   unrealized_air_yards: { label: "Unrealized Air Yards", short: "UAY", format: FORMATS.int },
   // Fantasy intelligence (M3) — scoring-aware *and* league-aware, served by

@@ -47,7 +47,7 @@ function UnmatchedList({ rows }) {
         {rows.length} row{rows.length === 1 ? "" : "s"} could not be matched
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-muted">
-        These are not on the board. Names are matched, never guessed — an
+        These are not on the board. Names are matched, never guessed. An
         &ldquo;ambiguous&rdquo; row means several current players share that name and
         position, and adding the team column separates them.
       </p>
@@ -55,7 +55,7 @@ function UnmatchedList({ rows }) {
         {rows.slice(0, 12).map((row) => (
           <li key={`${row.rank}-${row.name}`} className="text-[11px] text-faint">
             <span className="stat-num">#{row.rank}</span> {row.name} ({row.position})
-            <span className="ml-1 text-faint">— {row.reason}</span>
+            <span className="ml-1 text-faint">· {row.reason}</span>
           </li>
         ))}
         {rows.length > 12 && (
@@ -103,7 +103,7 @@ export function BoardImportDialog({
     setError(null);
     if (!file) return;
     if (file.size > MAX_BYTES) {
-      setError("That file is larger than a ranking board should be — check it's the right one.");
+      setError("That file is larger than a ranking board should be. Check it's the right one.");
       return;
     }
     setFileName(file.name);
@@ -157,7 +157,7 @@ export function BoardImportDialog({
             <>
               {" "}
               {result.out_of_scope} kicker/defense row
-              {result.out_of_scope === 1 ? " was" : "s were"} skipped — GridironIQ
+              {result.out_of_scope === 1 ? " was" : "s were"} skipped. GridironIQ
               covers QB, RB, WR and TE.
             </>
           )}
@@ -236,7 +236,7 @@ export function BoardImportDialog({
         {seedParams && (
           <p className="text-[11px] leading-relaxed text-muted">
             Or leave the file empty to start from{" "}
-            <span className="font-semibold text-fg">{seedFrom}</span> —{" "}
+            <span className="font-semibold text-fg">{seedFrom}</span>:{" "}
             {seedCount || "all"} players in its current order, which you can then drag
             into your own.
           </p>

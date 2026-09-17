@@ -76,7 +76,7 @@ function emitCss(drafts, baselines) {
     );
     if (!changed.length) continue;
     const lines = changed.map((name) => `  ${name}: ${drafts[theme][name]};`).join("\n");
-    blocks.push(`/* ${title} — ${changed.length} changed */\n${selector} {\n${lines}\n}`);
+    blocks.push(`/* ${title}, ${changed.length} changed */\n${selector} {\n${lines}\n}`);
   }
   return blocks.join("\n\n");
 }
@@ -278,11 +278,11 @@ function Gallery({ theme, resolve }) {
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">
           Everything below is drawn from the CSS variables in{" "}
           <code className="text-faint">src/index.css</code>. Drag a slider on the right and every surface here
-          moves together — that is the whole point: you are tuning the system, not a screen.
+          moves together. That is the whole point: you are tuning the system, not a screen.
         </p>
         <p className="mt-2 max-w-2xl text-xs leading-relaxed text-faint">
           You are editing the <strong className="text-muted">{theme}</strong> theme. Switch themes in the panel
-          to tune the other one — the two sets are independent and both are kept. Nothing is written to disk
+          to tune the other one. The two sets are independent and both are kept. Nothing is written to disk
           until you paste the CSS back yourself.
         </p>
       </div>
@@ -296,7 +296,7 @@ function Gallery({ theme, resolve }) {
             <p className="text-xs font-semibold uppercase tracking-wide text-faint">glass-card</p>
             <p className="mt-1 text-sm text-fg">The primary surface. Every board, tile and chart sits on one.</p>
             <div className="mt-3 rounded-xl bg-surface-2 p-3">
-              <p className="text-xs text-muted">Nested raised fill (surface-2) — hover states and chips.</p>
+              <p className="text-xs text-muted">Nested raised fill (surface-2): hover states and chips.</p>
             </div>
           </div>
 
@@ -329,9 +329,9 @@ function Gallery({ theme, resolve }) {
 
       <Section title="Type ramp" note="Three steps. Stat values are mono and tabular so columns align.">
         <div className="glass-card space-y-2 p-4">
-          <p className="text-2xl font-bold text-fg">Primary — who to start this week</p>
-          <p className="text-sm text-muted">Muted — supporting copy, labels, and secondary values.</p>
-          <p className="text-xs text-faint">Faint — hints, units, and table metadata.</p>
+          <p className="text-2xl font-bold text-fg">Primary: who to start this week</p>
+          <p className="text-sm text-muted">Muted: supporting copy, labels, and secondary values.</p>
+          <p className="text-xs text-faint">Faint: hints, units, and table metadata.</p>
           <p className="stat-num pt-2 text-lg text-fg">
             403.2 <span className="text-muted">·</span> 23.7 <span className="text-muted">·</span> 0.318{" "}
             <span className="text-muted">·</span> 1,284
