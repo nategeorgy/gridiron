@@ -180,7 +180,7 @@ export function VegasView({ board }) {
                 { key: "players", label: "Players" },
               ]}
               context={[
-                "GridironIQ — Vegas Board",
+                "GridironIQ: Vegas Board",
                 `${season} week ${week} · scoring: ${scoring}`,
                 "Implied total = game total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
               ]}
@@ -211,24 +211,22 @@ export function VegasView({ board }) {
       ) : (
         <>
           <section className="glass-card p-4">
-            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-base font-bold tracking-tight text-fg">
-                Where the points are
-              </h2>
-              <span className="text-[11px] text-faint">
-                {offenses.length} offenses · week {week}
-              </span>
-            </div>
-            <p className="mb-3.5 text-xs text-muted">
-              Implied team total — the game total split by the spread.{" "}
-              {/* With nothing priced there is no median to be below, and "median of
-                  0.0" would read as a real number rather than an absent one. */}
-              {priced.length > 0 ? (
-                <>Faint bars are below this week&apos;s median of {median.toFixed(1)}.</>
-              ) : (
-                <>The market has not priced this week yet, so there is nothing to rank.</>
+            <div className="mb-3.5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-base font-bold tracking-tight text-fg">
+                  Implied points scored
+                </h2>
+                <span className="text-[11px] text-faint">
+                  {offenses.length} offenses · week {week}
+                </span>
+              </div>
+              {/* Otherwise an unpriced week is a rail of empty bars with no explanation. */}
+              {priced.length === 0 && (
+                <p className="mt-1 text-xs text-muted">
+                  The market has not priced this week yet, so there is nothing to rank.
+                </p>
               )}
-            </p>
+            </div>
             <TeamEnvironmentRail teams={offenses} median={median} max={max} />
           </section>
 
@@ -253,15 +251,14 @@ export function VegasView({ board }) {
       )}
 
       <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
-        Implied total is the game total split by the spread — what the market expects
+        Implied total is the game total split by the spread, what the market expects
         each offense to score. Lines come from the nflverse schedule feed, the same one
         the fixtures do, so there is no odds provider behind this and no intraday
-        movement: they update when the feed does. The player list is each team&apos;s
-        depth chart to third at a position, with points per game from the{" "}
+        movement. The player list is each team&apos;s depth chart to third at a position,
+        with points per game from the{" "}
         <span className="text-muted">{playersQuery.data?.production_season ?? "current"}</span>{" "}
         season in your scoring. Games the market has not priced show{" "}
-        <span className="text-muted">no line</span> and sort last, because no line is not
-        a low total.
+        <span className="text-muted">no line</span> and sort last.
       </p>
     </div>
   );

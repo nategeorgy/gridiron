@@ -122,7 +122,7 @@ const STAT_GROUPS = {
 // feed — nflverse publishes ranks, never projected points — so every number here is
 // last season's, and the header says so rather than letting anyone assume otherwise.
 const POINTS_TITLE =
-  "Last season's total, in your scoring. Not a projection — no free source publishes " +
+  "Last season's total, in your scoring. Not a projection: no free source publishes " +
   "2026 projected points.";
 
 /**
@@ -652,7 +652,7 @@ export function MockDraftView({ board }) {
 
         <p className="max-w-3xl text-xs leading-relaxed text-muted">
           Bots pick near the top of their board, straying further on players the expert
-          boards disagree about and less on the ones they all rate the same — so a
+          boards disagree about and less on the ones they all rate the same, so a
           contested player goes at an unpredictable spot and a consensus one does not.
           They also draft for need against your league&apos;s starting lineup. Inside
           the room you can re-order the available list by any other board without
@@ -696,7 +696,7 @@ export function MockDraftView({ board }) {
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted">
               Graded on <span className="font-semibold text-fg">expected</span> value over
-              replacement — what each starting lineup&apos;s usage was worth in your
+              replacement: what each starting lineup&apos;s usage was worth in your
               scoring, not what it scored. A draft graded on last season&apos;s results
               would reward whoever drafted the most touchdown luck.
             </p>
@@ -838,7 +838,7 @@ export function MockDraftView({ board }) {
 
             <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
               Value is measured against the board the <em>bots</em> were reading,
-              because that is the market this room actually had — grading a pick
+              because that is the market this room actually had. Grading a pick
               against a board nobody was using would measure nothing. Players with no NFL history score
               zero rather than being imputed to replacement level: we have no
               information about them, and pretending otherwise would make every rookie
@@ -1032,21 +1032,21 @@ export function MockDraftView({ board }) {
                 direction="expand"
                 onClick={() => setBoardHeight(MIN_BOARD_HEIGHT)}
                 disabled={clampedBoard <= MIN_BOARD_HEIGHT}
-                title="Expand — fill the screen up to the team names"
+                title="Expand: fill the screen up to the team names"
               />
               <SplitButton
                 direction="collapse"
                 onClick={() => setBoardHeight(maxBoardHeight)}
                 disabled={clampedBoard >= maxBoardHeight}
-                title="Collapse — fold the players and roster back down"
+                title="Collapse: fold the players and roster back down"
               />
             </div>
           </div>
 
           {viewSource !== setup.botSource && (
             <p className="mt-2 text-[11px] text-faint">
-              Viewing your own order. The bots are still drafting from {botLabel} —
-              switching this list never changes what they do.
+              Viewing your own order. The bots are still drafting from {botLabel}.
+              Switching this list never changes what they do.
             </p>
           )}
 

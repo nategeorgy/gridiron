@@ -127,7 +127,7 @@ export function LeaderboardView({ board }) {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
-        <p className="mt-1 text-sm text-muted">{board.description}</p>
+        {board.description && <p className="mt-1 text-sm text-muted">{board.description}</p>}
       </div>
 
       <BoardTabs />
@@ -153,7 +153,7 @@ export function LeaderboardView({ board }) {
             rows={exportData.rows}
             columns={exportData.columns}
             context={[
-              `GridironIQ — ${board.title}`,
+              `GridironIQ: ${board.title}`,
               `${season} ${seasonType}${
                 weeks ? ` · weeks ${weeks}` : " · full season"
               }${positions ? ` · ${positions}` : ""}${team ? ` · ${team}` : ""}`,

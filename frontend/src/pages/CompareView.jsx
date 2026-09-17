@@ -172,7 +172,7 @@ export function CompareView({ board }) {
             rows={exportRows}
             columns={exportColumns}
             context={[
-              `GridironIQ comparison — ${players.map((p) => p.name).join(" vs ")}`,
+              `GridironIQ comparison: ${players.map((p) => p.name).join(" vs ")}`,
               `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} weeks` : ""}`,
               `scoring: ${scoring}`,
             ]}
@@ -262,7 +262,7 @@ export function CompareView({ board }) {
 
           <div className="glass-card p-4">
             <div className="mb-2 text-sm font-medium text-muted">
-              Fantasy Points by Week — in your scoring
+              Fantasy Points by Week · in your scoring
             </div>
             <CompareTrendChart players={players} />
           </div>
@@ -272,11 +272,11 @@ export function CompareView({ board }) {
               <div className="mb-1 text-sm font-medium text-muted">Percentile Shape</div>
               <p className="mb-2 text-xs text-faint">
                 {mixedPositions
-                  ? "Each spoke is a percentile within that player's own position pool — " +
+                  ? "Each spoke is a percentile within that player's own position pool, " +
                     "which is what makes comparing across positions fair. A tight end at the " +
                     "80th percentile and a receiver at the 80th are genuinely comparable; " +
                     "their raw numbers are not."
-                  : "Each spoke is a percentile within this position's qualified pool — the one " +
+                  : "Each spoke is a percentile within this position's qualified pool: the one " +
                     "place a rank still earns its keep, because a shape needs a common scale."}
               </p>
               <CompareRadar players={players} axes={radarAxes} metrics={metrics} />

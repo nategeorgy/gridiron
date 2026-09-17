@@ -74,7 +74,7 @@ function GapCell({ row }) {
         className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-faint"
         title={
           row.missing_reason === "no_history"
-            ? "Ranked by the consensus, but has never played an NFL snap we hold stats for — so there is nothing to value them against."
+            ? "Ranked by the consensus, but has never played an NFL snap we hold stats for, so there is nothing to value them against."
             : "Played too few games last season to be valued against the position pool."
         }
       >
@@ -181,7 +181,7 @@ export function DraftBoardView({ board }) {
               { key: "note", label: "Note" },
             ]}
             context={[
-              "GridironIQ — Draft Value Board",
+              "GridironIQ: Draft Value Board",
               `${data?.ranking_type ?? ""} consensus (${data?.source ?? ""}), scraped ${data?.scraped_at ?? "—"}`,
               `valued from the ${data?.valuation_season ?? season} season · scoring: ${scoring} · league: ${league}`,
               "Gap = market rank − our rank, both ranked over the players we can value. Positive = we rate them higher.",
@@ -204,12 +204,12 @@ export function DraftBoardView({ board }) {
               <th className="px-3 py-3">Player</th>
               <th className="px-3 py-3">Team</th>
               <th className="px-3 py-3 text-right" title="Age today, from the player's birth date">Age</th>
-              <th className="px-3 py-3 text-right" title="Expert consensus rank — the market's opinion, as published">ECR</th>
+              <th className="px-3 py-3 text-right" title="Expert consensus rank: the market's opinion, as published">ECR</th>
               <th className="px-3 py-3 text-right" title="How far apart the experts are: the best and worst rank any of them gave">Range</th>
               <th className="px-3 py-3 text-right" title="Their team's schedule difficulty at this position for the season ahead, 0-100. Higher is harder.">SOS</th>
               <th className="px-3 py-3 text-right" title="Our rank by expected VORP per game, over the same players the market rank is counted over">Ours</th>
               <th className="px-3 py-3 text-right" title="Market rank minus our rank. Positive = we rate this player above the consensus">Gap</th>
-              <th className="px-3 py-3 text-right" title="Expected value over replacement per game — what their usage was worth above a startable replacement, in your scoring and league">xVORP/G</th>
+              <th className="px-3 py-3 text-right" title="Expected value over replacement per game: what their usage was worth above a startable replacement, in your scoring and league">xVORP/G</th>
             </tr>
           </thead>
           <tbody className={isPlaceholderData ? "opacity-60 transition" : "transition"}>
@@ -226,7 +226,7 @@ export function DraftBoardView({ board }) {
             {!isLoading && !isError && rows.length === 0 && (
               <tr>
                 <td colSpan={10} className="px-3 py-8 text-center text-muted">
-                  No consensus rankings loaded yet — run <span className="stat-num">ingest_rankings.py</span>.
+                  No consensus rankings loaded yet. Run <span className="stat-num">ingest_rankings.py</span>.
                 </td>
               </tr>
             )}
@@ -281,13 +281,13 @@ export function DraftBoardView({ board }) {
           <span className="text-muted">
             {data.ranking_type} ({data.source}), scraped {data.scraped_at}
           </span>{" "}
-          for the {data.ranking_season} season — the market's opinion, in its own scoring,
+          for the {data.ranking_season} season: the market's opinion, in its own scoring,
           shown as published. Our side values the{" "}
           <span className="text-muted">{data.valuation_season}</span> season in your
           scoring and league: {data.valued_players} of the top {data.depth} could be
           valued. Both ranks are counted over those same players, so the gap measures
           positions rather than populations. Expected VORP is built on model estimates
-          (nflverse ffopportunity), not projections — it reads last season's opportunity,
+          (nflverse ffopportunity), not projections. It reads last season's opportunity,
           so a player whose situation has changed since will show a gap that is news
           about the offseason rather than a mispricing.
         </p>

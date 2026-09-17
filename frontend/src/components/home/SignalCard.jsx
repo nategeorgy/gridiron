@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { PositionTag } from "../PositionTag";
 import { Card, CardHead, CardLink, CardState } from "./primitives";
 import { formatStat, formatSigned } from "../../utils/format";
+import { scoringLabel } from "../../constants/scoring";
 
 const TONE = {
   under: { color: "var(--series-1)", title: "Underperformers", link: "/insight/buy-low" },
@@ -86,7 +87,7 @@ function GapRow({ row, tone, scale }) {
   );
 }
 
-export function SignalCard({ kind, season, rows, isLoading, isError }) {
+export function SignalCard({ kind, season, scoring, rows, isLoading, isError }) {
   const tone = TONE[kind];
   // One scale for the card, so the rows are comparable with each other rather than
   // each stretching to fill its own track.
@@ -98,7 +99,7 @@ export function SignalCard({ kind, season, rows, isLoading, isError }) {
 
   return (
     <Card>
-      <CardHead title={tone.title} sub={`${season} · your scoring`} />
+      <CardHead title={tone.title} sub={`${season} · ${scoringLabel(scoring)}`} />
       <p className="mb-1 text-[11.5px] leading-relaxed text-muted">{BLURB[kind]}</p>
       <p className="mb-2.5 flex items-center gap-3 text-[9.5px] font-semibold uppercase tracking-[0.04em] text-faint">
         <span>

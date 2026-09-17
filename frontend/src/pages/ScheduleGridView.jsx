@@ -94,10 +94,6 @@ export function ScheduleGridView({ board }) {
             ))}
           </select>
         </label>
-        <p className="ml-auto max-w-md text-[11px] leading-relaxed text-faint">
-          Home games are plain, away games carry an <span className="text-muted">@</span>. Played
-          weeks are tinted by result; upcoming weeks show the opponent.
-        </p>
       </div>
 
       <div className="glass-card p-4">

@@ -83,8 +83,8 @@ export function WeekRail({ weeks, value, onChange, allowAll = true }) {
             onClick={() => onChange(String(entry.week))}
             title={
               done
-                ? `Week ${entry.week} — all ${entry.games} games final`
-                : `Week ${entry.week} — ${entry.priced} of ${entry.games} games priced`
+                ? `Week ${entry.week}: all ${entry.games} games final`
+                : `Week ${entry.week}: ${entry.priced} of ${entry.games} games priced`
             }
             style={active ? { background: ACTIVE_FILL } : undefined}
             className={`w-[52px] flex-none rounded-xl border pb-1.5 pt-2 text-center transition ${

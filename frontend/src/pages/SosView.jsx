@@ -141,7 +141,7 @@ export function SosView({ board }) {
               ...weeks.map((week) => ({ key: `w${week}`, label: `Wk ${week}` })),
             ]}
             context={[
-              `GridironIQ — Strength of Schedule (${position})`,
+              `GridironIQ: Strength of Schedule (${position})`,
               `${season} schedule · ${WINDOWS.find((w) => w.value === windowKey)?.label} · scoring: ${scoring}`,
               `Difficulty 0–100, higher is harder. Based on ${data?.basis?.season ?? "—"} fantasy points allowed.`,
             ]}
@@ -237,21 +237,21 @@ export function SosView({ board }) {
       {data?.basis && (
         <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
           Difficulty is <span className="text-muted">fantasy points allowed per game</span> to{" "}
-          {position}s, in your scoring, as a 0–100 percentile among the 32 defenses —
-          higher is harder. Based on{" "}
+          {position}s, in your scoring, as a 0–100 percentile among the 32 defenses.
+          Higher is harder. Data based on{" "}
           <span className="text-muted">
             {data.basis.kind === "prior_season"
               ? `the ${data.basis.season} season (${data.basis.weeks} weeks)`
               : `${data.basis.season} so far (${data.basis.weeks} weeks played)`}
           </span>
-          {data.basis.kind === "prior_season" && (
+          {/* The week the basis switches comes from the API (MIN_BASIS_WEEKS in
+              app/sos.py) rather than a copy of it here, so the two cannot disagree. */}
+          {data.basis.kind === "prior_season" && data.basis.min_weeks != null && (
             <>
-              , because the {data.season} season has not played enough games to measure yet.
-              Defenses change over an offseason, so treat an August rating as the last
-              thing we know rather than a forecast
+              , until week {data.basis.min_weeks} of {data.season}
             </>
           )}
-          . Byes are skipped rather than counted as easy weeks.
+          .
         </p>
       )}
     </div>

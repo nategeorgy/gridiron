@@ -153,7 +153,7 @@ export function GamesView({ board }) {
                 { key: "home_implied", label: "Home implied" },
               ]}
               context={[
-                "GridironIQ — Games",
+                "GridironIQ: Games",
                 `${season} regular season${oneWeek ? `, week ${week}` : ""}`,
                 "Implied total = total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
               ]}
@@ -202,12 +202,12 @@ export function GamesView({ board }) {
       )}
 
       <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
-        The bar under each game splits its total by the spread — the points the market
-        expects each offense to score. Lines come from the nflverse schedule feed, the
-        same one the fixtures do, so there is no odds provider behind this and no
-        intraday movement. Most of a season carries no line until a few weeks out; those
-        games show <span className="text-muted">no line yet</span> rather than a zero,
-        because no line is not a low total. Kickoffs are Eastern.
+        The bar under each game splits its total by the spread and the points the market
+        expects each offense to score. Lines come from the nflverse schedule feed, there
+        is no odds provider behind this and no intraday movement. Most of a season
+        carries no line until a few weeks out; those games show{" "}
+        <span className="text-muted">no line yet</span> rather than a zero. Kickoffs are
+        Eastern.
       </p>
     </div>
   );

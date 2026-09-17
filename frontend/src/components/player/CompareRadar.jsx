@@ -31,7 +31,7 @@ export function CompareRadar({ axes, players, metrics }) {
     <section className="glass-card flex flex-col p-4">
       <h3 className="text-sm font-semibold tracking-tight text-fg">Profile Comparison</h3>
       <p className="mt-0.5 text-[11.5px] text-faint">
-        Shape is each player's percentile within the position — not against each other
+        Shape is each player's percentile within the position, not against each other
       </p>
 
       <div className="mt-1 flex justify-center">

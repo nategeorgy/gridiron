@@ -41,7 +41,7 @@ export const STANDOUT_GROUPS = [
     label: "Efficiency",
     stats: [
       { id: "yards_per_route_run", label: "YPRR", format: 2 },
-      { id: "targets_per_route_run", label: "TPRR", format: 2 },
+      { id: "targets_per_route_run", label: "TPRR", format: "pct" },
       { id: "fantasy_points_per_route_run", label: "FP/RR", format: 2 },
     ],
   },
@@ -134,10 +134,7 @@ function StandoutRow({ row, headshot, games, league }) {
 export function StandoutsCard({ week, rows, headshots, games = [], league, isLoading, isError }) {
   return (
     <Card>
-      <CardHead
-        title={`Week ${week} Standouts`}
-        sub="rank at the position, coloured by how deep your league starts it"
-      />
+      <CardHead title={`Week ${week} Standouts`} />
       <CardState isLoading={isLoading} isError={isError} isEmpty={rows.length === 0} empty="No standouts picked for this week." rows={5} />
 
       {rows.length > 0 && (

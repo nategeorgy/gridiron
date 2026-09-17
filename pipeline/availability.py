@@ -116,7 +116,7 @@ _EXPECTED_SOUND = Availability(
 _EXPECTED_RECEIVING = Availability(
     first=FIRST_RECEIVING_ADVANCED_SEASON,
     note="The nflverse ffopportunity model starts in 2006, and its receiving side is "
-         "fed by targets — so it runs at roughly two-thirds of actual until 2009, "
+         "fed by targets, so it runs at roughly two-thirds of actual until 2009, "
          "while incompletions cannot be attributed.",
 )
 
@@ -251,7 +251,7 @@ COLUMN_AVAILABILITY: dict[str, Availability] = {
             first=2016,
             note=(
                 "NFL Next Gen Stats, scraped from nextgenstats.nfl.com by nflverse. "
-                "Published from 2016, and only for players NGS qualifies — and only for "
+                "Published from 2016, and only for players NGS qualifies, and only for "
                 "the WEEKS it qualifies them, which is the sharper limit: the weekly feed "
                 "requires roughly 15 attempts, 5 targets or 10 carries, so in 2024 a "
                 "receiver's published weeks covered a median 79% of his targets and a "
@@ -267,7 +267,7 @@ COLUMN_AVAILABILITY: dict[str, Availability] = {
         column: Availability(
             first=2018,
             note="Pro Football Reference advanced stats. Published from 2018, and "
-                 "only for players PFR charts — broader than Next Gen Stats "
+                 "only for players PFR charts. That is broader than Next Gen Stats "
                  "(497 receivers in 2024 against NGS's 212) but two seasons shallower.",
         )
         for column in PFR_COLUMNS

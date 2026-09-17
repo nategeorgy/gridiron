@@ -81,8 +81,8 @@ function SosStrip({ sos, basis }) {
       </div>
       {basis && (
         <p className="mt-2 text-[11px] text-faint">
-          Fantasy points allowed by each opponent, in your scoring — 0–100, higher is
-          harder. Based on{" "}
+          Fantasy points allowed by each opponent, in your scoring, on a 0–100 scale where
+          higher is harder. Based on{" "}
           {basis.kind === "prior_season"
             ? `the ${basis.season} season`
             : `${basis.season} so far (${basis.weeks} weeks)`}
@@ -152,7 +152,7 @@ function DepthColumn({ position, players, productionSeason }) {
               title={
                 player.fantasy_ppg === null || player.fantasy_ppg === undefined
                   ? `No ${productionSeason} production`
-                  : `${formatStat(player.fantasy_ppg, 2)} points per game in ${productionSeason} (${player.games_played} games)`
+                  : `${formatStat(player.fantasy_ppg, 1)} points per game in ${productionSeason} (${player.games_played} game${player.games_played === 1 ? "" : "s"})`
               }
             >
               {player.fantasy_ppg === null || player.fantasy_ppg === undefined
@@ -253,7 +253,7 @@ export function TeamProfile() {
         </div>
         {!isLoading && !data?.depth_chart_as_of && (
           <p className="mt-2 text-[11px] text-faint">
-            Depth charts are stored for the current season only — pick {scheduleSeasons[0]?.label} to see one.
+            Depth charts are stored for the current season only. Pick {scheduleSeasons[0]?.label} to see one.
           </p>
         )}
       </div>
@@ -311,7 +311,7 @@ export function TeamProfile() {
 
       <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
         Lines come from the nflverse schedule feed and are blank on games the market has
-        not priced yet — typically anything more than about thirteen weeks out. The
+        not priced yet, typically anything more than about thirteen weeks out. The
         implied total is the spread and the total combined into what this team is
         expected to score.
       </p>

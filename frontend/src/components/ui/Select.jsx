@@ -29,7 +29,7 @@ export function Select({ label, value, onChange, options }) {
             }}
           >
             {option.label}
-            {option.disabled ? " — no data" : ""}
+            {option.disabled ? " (no data)" : ""}
           </option>
         ))}
       </select>

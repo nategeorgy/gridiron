@@ -174,7 +174,7 @@ def parse_custom(spec: str | None) -> list[CustomMetric]:
                 "lowercase letters, numbers, and underscores (max 24 characters)."
             )
         if name in REGISTRY_BY_ID:
-            raise ValueError(f"'{name}' is already a built-in metric — choose another name.")
+            raise ValueError(f"'{name}' is already a built-in metric. Choose another name.")
         if name in seen:
             raise ValueError(f"Duplicate custom metric name '{name}'.")
         seen.add(name)

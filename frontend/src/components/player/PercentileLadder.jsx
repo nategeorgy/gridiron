@@ -69,7 +69,7 @@ export function PercentileLadder({ groups, row, metrics, position, season, poolS
       <h2 className="text-sm font-semibold tracking-tight text-fg">Percentile Rankings</h2>
       <p className="mt-0.5 text-[11.5px] text-faint">
         Ranked within {position}s for {season}
-        {poolSize ? ` (${poolSize} qualified)` : ""} — direction-corrected, so further right
+        {poolSize ? ` (${poolSize} qualified)` : ""}, direction-corrected so further right
         always means better
       </p>
 

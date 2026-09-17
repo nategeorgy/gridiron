@@ -201,7 +201,7 @@ export function ScatterView({ board }) {
             rows={points}
             columns={exportColumns}
             context={[
-              `GridironIQ scatter — ${preset.label} (${group.label})`,
+              `GridironIQ scatter: ${preset.label} (${group.label})`,
               preset.question,
               `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} weeks` : ""} · top ${density} by fantasy points`,
               `scoring: ${scoring} · league: ${league}`,
@@ -230,7 +230,7 @@ export function ScatterView({ board }) {
         {!isLoading && !isError && points.length === 0 && (
           <div className="p-16 text-center text-sm text-muted">
             {missingAxes.length > 0
-              ? `This chart needs a stat the ${season} season doesn't have — try a later season, or another question above.`
+              ? `This chart needs a stat the ${season} season doesn't have. Try a later season, or another question above.`
               : "Nothing to plot for these filters."}
           </div>
         )}
@@ -268,7 +268,7 @@ export function ScatterView({ board }) {
           , among players with at least{" "}
           <span className="text-muted">{data.min_games} games</span>.
           {(axes?.x?.modelled || axes?.y?.modelled) &&
-            " An axis uses expected points — a model estimate (nflverse ffopportunity), not a projection."}{" "}
+            " An axis uses expected points: a model estimate (nflverse ffopportunity), not a projection."}{" "}
           Players missing a value on either axis are left out rather than plotted at zero.
         </p>
       )}

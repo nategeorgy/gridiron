@@ -119,7 +119,7 @@ FOR_USAGE_TERMS: dict[str, tuple[Term, ...]] = {
 FOR_USAGE_TERMS["TE"] = FOR_USAGE_TERMS["WR"]
 
 FOR_EXPECTED_TERM = Term(
-    "expected_fantasy_ppg", "Expected fantasy PPG", FOR_EXPECTED_WEIGHT, 2
+    "expected_fantasy_ppg", "Expected fantasy PPG", FOR_EXPECTED_WEIGHT, 1
 )
 
 # The buy-low signal: underproducing real opportunity, touchdown-starved, and cheap.
@@ -127,7 +127,7 @@ PRI_TERMS: tuple[Term, ...] = (
     Term("points_over_expected_pg", "Points over expected / game", 0.40, 2, invert=True),
     Term("fantasy_opportunity_rating", "Fantasy Opportunity Rating", 0.30, 1),
     Term("tds_over_expected_pg", "TDs over expected / game", 0.15, 2, invert=True),
-    Term("fantasy_ppg", "Fantasy PPG", 0.15, 2, invert=True),
+    Term("fantasy_ppg", "Fantasy PPG", 0.15, 1, invert=True),
 )
 
 # The sell-high signal: unsustainable scoring on shrinking usage.
@@ -136,7 +136,7 @@ SHI_TERMS: tuple[Term, ...] = (
     Term("tds_over_expected_pg", "TDs over expected / game", 0.20, 2),
     Term("efficiency_over_baseline", "Points per opportunity vs career", 0.20, 2),
     Term("opportunity_trend", "Usage trend (2nd half − 1st half)", 0.15, "pct", invert=True),
-    Term("fantasy_ppg", "Fantasy PPG", 0.10, 2),
+    Term("fantasy_ppg", "Fantasy PPG", 0.10, 1),
 )
 
 # Both indices are built around the expected-points gap; without expected data the

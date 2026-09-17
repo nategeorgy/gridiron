@@ -32,6 +32,11 @@ import { SEASON_TYPES } from "../constants";
 
 const PAGE_SIZE = 50;
 
+/** "week 1" or "weeks 1–4". In the first week of a season "weeks 1–1" reads as a typo. */
+function weekSpan({ week_from: from, week_to: to }) {
+  return from === to ? `week ${from}` : `weeks ${from}–${to}`;
+}
+
 export function InsightView({ board }) {
   // URL-backed for the same reasons as the leaderboard: shareable links and saved
   // views that actually carry a view.
@@ -114,7 +119,9 @@ export function InsightView({ board }) {
       <div>
         <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Insight</div>
         <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
+        {board.description && (
+          <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
+        )}
       </div>
 
       <BoardTabs />
@@ -140,7 +147,7 @@ export function InsightView({ board }) {
             rows={exportData.rows}
             columns={exportData.columns}
             context={[
-              `GridironIQ — ${board.title}`,
+              `GridironIQ: ${board.title}`,
               `${season} ${seasonType}${
                 weeks ? ` · weeks ${weeks}` : " · full season"
               }${positions ? ` · ${positions}` : ""}${team ? ` · ${team}` : ""}`,
@@ -192,13 +199,16 @@ export function InsightView({ board }) {
           Ranked over{" "}
           <span className="text-muted">
             {window.last_weeks
-              ? `the last ${window.last_weeks} played weeks (weeks ${window.week_from}–${window.week_to})`
-              : `the full ${window.season} season (weeks ${window.week_from}–${window.week_to})`}
+              ? `the last ${window.last_weeks} played weeks (${weekSpan(window)})`
+              : `the full ${window.season} season (${weekSpan(window)})`}
           </span>
           , among players with at least{" "}
-          <span className="text-muted">{data.min_games} games</span> in that window — every
-          score is a percentile within a player's own position pool. Scores that lean on
-          expected points are model estimates (nflverse ffopportunity), not projections.
+          <span className="text-muted">
+            {data.min_games} game{data.min_games === 1 ? "" : "s"}
+          </span>{" "}
+          in that window. Every score is a percentile within a player's own position pool.
+          Scores that lean on expected points are model estimates (nflverse
+          ffopportunity), not projections.
         </p>
       )}
 

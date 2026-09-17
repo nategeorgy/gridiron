@@ -16,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { formatStat } from "../../utils/format";
 
 // Bucket ids from the backend -> how they read on an axis.
 const BUCKET_LABELS = {
@@ -36,7 +37,7 @@ function ChartTooltip({ active, payload }) {
       <div className="stat-num text-muted">{row.receiving_yards} yards · {row.receiving_tds} TD</div>
       {row.catch_rate != null && (
         <div className="stat-num text-muted">
-          {(row.catch_rate * 100).toFixed(0)}% caught · {row.yards_per_target} yds/target
+          {(row.catch_rate * 100).toFixed(0)}% caught · {formatStat(row.yards_per_target, 1)} yds/target
         </div>
       )}
       {row.target_share != null && (
