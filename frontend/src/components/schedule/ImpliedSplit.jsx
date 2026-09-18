@@ -19,6 +19,11 @@ import { formatStat } from "../../utils/format";
 const AWAY_FILL = "color-mix(in srgb, var(--accent) 45%, transparent)";
 
 /**
+ * An unpriced game draws the empty track and nothing else. It read "no line yet" in
+ * italics until September 2026, which put a caption on most of the board in August for
+ * something the empty bar already shows; the sentence explaining it moved to the track's
+ * hover text, where it is there for whoever wonders.
+ *
  * @param {number|null} away    away team's implied total
  * @param {number|null} home    home team's implied total
  * @param {number|null} total   the game total, printed between them
@@ -33,7 +38,14 @@ export function ImpliedSplit({ away, home, total, compact = false }) {
 
   return (
     <div>
-      <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-2">
+      <div
+        className="flex h-1.5 overflow-hidden rounded-full bg-surface-2"
+        title={
+          priced
+            ? undefined
+            : "The market has not posted a line for this game yet. Lines appear a few weeks out, with look-ahead numbers on a handful of games beyond that."
+        }
+      >
         {priced && (
           <>
             <span
@@ -44,22 +56,11 @@ export function ImpliedSplit({ away, home, total, compact = false }) {
           </>
         )}
       </div>
-      {!compact && (
+      {!compact && priced && (
         <div className="stat-num mt-1.5 flex items-baseline justify-between text-[10.5px] text-faint">
-          {priced ? (
-            <>
-              <span className="font-semibold text-muted">{formatStat(away, 1)}</span>
-              <span>o/u {formatStat(total, 1)}</span>
-              <span className="font-semibold text-muted">{formatStat(home, 1)}</span>
-            </>
-          ) : (
-            <span
-              className="italic"
-              title="The market has not posted a line for this game yet. Lines appear a few weeks out, with look-ahead numbers on a handful of games beyond that."
-            >
-              no line yet
-            </span>
-          )}
+          <span className="font-semibold text-muted">{formatStat(away, 1)}</span>
+          <span>o/u {formatStat(total, 1)}</span>
+          <span className="font-semibold text-muted">{formatStat(home, 1)}</span>
         </div>
       )}
     </div>

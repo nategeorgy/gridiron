@@ -48,7 +48,13 @@ export function formatKickoffShort(time) {
 // The named windows a week is actually read in. A reader parses a slate as Thursday /
 // Sunday early / Sunday late / Sunday night / Monday, and a flat list by date makes
 // them reconstruct that from timestamps.
+//
+// Wednesday is in the list because an NFL week occasionally opens on one (a season
+// opener moved for a stadium, a Christmas fixture), and those games belong at the top
+// of the slate with their own heading rather than in "Other" at the bottom, which is
+// where they landed while the list started at Thursday.
 export const SLOT_ORDER = [
+  "Wednesday Night",
   "Thursday Night",
   "Friday",
   "Saturday",
@@ -65,12 +71,14 @@ export function slotOf(game) {
   if (!parts) return "Other";
   const hour = Number((game.kickoff_time || "13:00").split(":")[0]);
   switch (parts.dow) {
+    // Named "Night" like Thursday and Monday, which also carry their afternoon
+    // exceptions (Thanksgiving) under the same heading.
+    case "Wed": return "Wednesday Night";
     case "Thu": return "Thursday Night";
     case "Fri": return "Friday";
     case "Sat": return "Saturday";
     case "Mon": return "Monday Night";
-    case "Tue":
-    case "Wed": return "Other";
+    case "Tue": return "Other";
     default: break;
   }
   if (hour >= 20) return "Sunday Night";

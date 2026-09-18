@@ -52,6 +52,19 @@ import {
 // The same fixed-PPR fallback the leaderboard uses when the backend cannot score yet.
 const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
 
+// The watchlist card's seven stat columns, ranked within each player's own position for
+// the season (M12's `percentiles=`). The pool is the whole league at that position, not
+// the starred players: "84th percentile" has to mean the same thing here as on a board.
+const MY_PLAYERS_PERCENTILES = [
+  "fantasy_points",
+  "fantasy_ppg",
+  "fantasy_opportunity_rating",
+  "opportunity_share",
+  "target_share",
+  "route_participation",
+  "rush_attempt_share",
+].join(",");
+
 /** Merge a hardcoded signal list with the live numbers fetched for those players. */
 function withStats(picks, rows) {
   const byId = new Map((rows ?? []).map((row) => [row.player_id, row]));
@@ -209,6 +222,7 @@ export function Home() {
         limit: 6,
         include_unqualified: true,
         player_ids: favoriteIds,
+        percentiles: MY_PLAYERS_PERCENTILES,
       }),
       [season, pointsKey, scoring, league, favoriteIds],
     ),
