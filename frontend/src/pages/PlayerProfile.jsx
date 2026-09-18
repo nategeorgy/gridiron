@@ -22,7 +22,7 @@ import { PositionTag } from "../components/PositionTag";
 import { CareerTable } from "../components/player/CareerTable";
 import { ComparePicker } from "../components/player/ComparePicker";
 import { CompareRadar } from "../components/player/CompareRadar";
-import { GameLog } from "../components/player/GameLog";
+import { GameLog, buildSeasonLog } from "../components/player/GameLog";
 import { HeadToHead } from "../components/player/HeadToHead";
 import { PercentileLadder } from "../components/player/PercentileLadder";
 import { SeasonRadar } from "../components/player/SeasonRadar";
@@ -33,6 +33,7 @@ import {
   usePlayerGameLog,
   usePlayerSeason,
 } from "../hooks/usePlayer";
+import { useGames } from "../hooks/useGames";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useScoring } from "../hooks/useScoring";
@@ -157,6 +158,28 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
     [gameLogQuery.data, season],
   );
 
+  // The log is the whole season, so it needs his team's fixture list beside his stat
+  // lines: weeks still to come become rows of dashes and the bye becomes a greyed row.
+  //
+  // The team comes from his latest game in the season, the same rule a season row uses
+  // (`players.team_id` is who employs him *now*, which is the wrong answer for any
+  // season but the current one). Falling back to it covers a player with no stat lines
+  // yet, whose remaining schedule is his current team's by definition.
+  const logTeamId = seasonGames.length
+    ? seasonGames[seasonGames.length - 1].team_id
+    : player?.team_id;
+  const scheduleQuery = useGames(
+    useMemo(
+      () => ({ season, season_type: "REG", team_id: logTeamId, limit: 400 }),
+      [season, logTeamId],
+    ),
+    { enabled: Boolean(season && logTeamId) },
+  );
+  const seasonLog = useMemo(
+    () => buildSeasonLog(seasonGames, scheduleQuery.data?.data ?? [], logTeamId),
+    [seasonGames, scheduleQuery.data, logTeamId],
+  );
+
   if (playerQuery.isLoading) {
     return <div className="p-6 text-center text-sm text-muted">Loading…</div>;
   }
@@ -244,7 +267,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
           />
 
           <GameLog
-            games={seasonGames}
+            games={seasonLog}
             groups={forPosition(GAMELOG_GROUPS, position)}
             metrics={metrics}
             position={position}

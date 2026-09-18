@@ -8,6 +8,10 @@
 // Deliberately **not** driven by the season-stat tabs above it. A game log is the
 // receipts; re-cutting its columns every time someone glances at a different stat group
 // would mean the one stable table on the page moves under them.
+//
+// It covers the whole season rather than the games already played: `buildSeasonLog`
+// below merges his stat lines onto his team's fixture list, so a week still to come is a
+// row of dashes and the bye is a greyed row in its place.
 import { formatSigned, formatStat } from "../../utils/format";
 import { isMetricAvailable } from "../../utils/availability";
 import { StatTooltip, useStatTooltip } from "../StatTooltip";
@@ -17,6 +21,59 @@ import { metricTip } from "./metricTip";
 
 // A game's rush yards over expected is negative as often as not; the sign is the point.
 const SIGNED = new Set(["ngs_rush_yards_over_expected"]);
+
+/**
+ * The season's whole slate, not only the weeks with a stat line: every fixture his team
+ * has, in week order, with the bye inserted where the schedule skips a week.
+ *
+ * A log that stops at the last game played answers what happened and says nothing about
+ * what is left, which is half of what a manager opens a player page for in October. So a
+ * week still to come is a row of dashes, and the bye is a row of its own rather than a
+ * gap, because it is the one week on the schedule that has to be planned around.
+ *
+ * A fixture already played with no stat line reads the same way, which is correct: he
+ * was inactive, or not on the roster yet. Games he played for a previous team are kept
+ * even though they are absent from this team's fixture list, so a mid-season trade shows
+ * both halves of his season.
+ *
+ * @param {Object[]} statLines  his game log for the season, week ascending
+ * @param {Object[]} fixtures   `/games` for (season, his team), any order
+ * @param {number|undefined} teamId  the team the fixtures belong to
+ */
+export function buildSeasonLog(statLines, fixtures, teamId) {
+  if (!fixtures?.length) return statLines;
+
+  const byGame = new Map(statLines.map((line) => [line.game_id, line]));
+  const byWeek = new Map(fixtures.map((fixture) => [fixture.week, fixture]));
+  const lastWeek = Math.max(...fixtures.map((fixture) => fixture.week ?? 0));
+
+  const rows = [];
+  for (let week = 1; week <= lastWeek; week += 1) {
+    const fixture = byWeek.get(week);
+    if (!fixture) {
+      rows.push({ row_kind: "bye", week });
+      continue;
+    }
+    const line = byGame.get(fixture.game_id);
+    if (line) {
+      rows.push({ ...line, row_kind: "played" });
+      continue;
+    }
+    const home = fixture.home_team_id === teamId;
+    rows.push({
+      row_kind: "scheduled",
+      week,
+      game_id: fixture.game_id,
+      opponent_abbreviation: home ? fixture.away_abbreviation : fixture.home_abbreviation,
+    });
+  }
+
+  const covered = new Set(rows.map((row) => row.game_id));
+  for (const line of statLines) {
+    if (!covered.has(line.game_id)) rows.push({ ...line, row_kind: "played" });
+  }
+  return rows.sort((a, b) => a.week - b.week);
+}
 
 export function GameLog({ games, groups, metrics, position, league, season, isLoading }) {
   const tooltip = useStatTooltip();
@@ -44,7 +101,7 @@ export function GameLog({ games, groups, metrics, position, league, season, isLo
           ))}
         </div>
       ) : games.length === 0 ? (
-        <p className="px-4 py-6 text-center text-xs text-muted">No games played this season.</p>
+        <p className="px-4 py-6 text-center text-xs text-muted">No games this season.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left">
@@ -89,45 +146,79 @@ export function GameLog({ games, groups, metrics, position, league, season, isLo
               </tr>
             </thead>
             <tbody>
-              {games.map((game) => (
-                <tr key={game.game_id} className="border-b border-line last:border-0 hover:bg-surface-2">
-                  <td className="stat-num px-2 py-1 pl-4 text-right text-[12.5px] text-muted">{game.week}</td>
-                  <td className="stat-num px-2 py-1 text-[12.5px] text-muted">
-                    {game.opponent_abbreviation ?? "—"}
-                  </td>
-                  <td className="stat-num px-2 py-1 text-right text-[12.5px] font-semibold text-fg">
-                    {formatStat(game.fantasy_points, 1)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-1 text-right">
-                    <FinishChip
-                      rank={game.position_rank}
-                      position={position}
-                      league={league}
-                      detail={`of ${game.pool_size} ${position}s that week`}
-                    />
-                  </td>
-                  <td className="stat-num px-2 py-1 text-right text-[12.5px] text-muted">
-                    {formatStat(game.snap_share, "pct")}
-                  </td>
-                  {columns.map((column) => {
-                    const metric = metrics[column.id] ?? {};
-                    const available = isMetricAvailable(metric, season);
-                    const value = gameValue(game, column.id);
-                    return (
-                      <td
-                        key={column.key}
-                        className={`stat-num px-2 py-1 text-right text-[12.5px] last:pr-4 ${available ? "text-fg" : "text-faint"} ${column.sectionStart ? "border-l border-line" : ""}`}
-                      >
-                        {!available
-                          ? "—"
-                          : SIGNED.has(column.id)
-                            ? formatSigned(value, metric.format)
-                            : formatStat(value, metric.format)}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {games.map((game) => {
+                const kind = game.row_kind ?? "played";
+                const bye = kind === "bye";
+                return (
+                  <tr
+                    key={game.game_id ?? `bye-${game.week}`}
+                    className={`border-b border-line last:border-0 ${
+                      bye ? "text-faint opacity-60" : "hover:bg-surface-2"
+                    }`}
+                  >
+                    <td
+                      className={`stat-num px-2 py-1 pl-4 text-right text-[12.5px] ${bye ? "" : "text-muted"}`}
+                    >
+                      {game.week}
+                    </td>
+                    <td className={`stat-num px-2 py-1 text-[12.5px] ${bye ? "" : "text-muted"}`}>
+                      {bye ? "BYE" : game.opponent_abbreviation ?? "—"}
+                    </td>
+                    {kind === "played" ? (
+                      <>
+                        <td className="stat-num px-2 py-1 text-right text-[12.5px] font-semibold text-fg">
+                          {formatStat(game.fantasy_points, 1)}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">
+                          <FinishChip
+                            rank={game.position_rank}
+                            position={position}
+                            league={league}
+                            detail={`of ${game.pool_size} ${position}s that week`}
+                          />
+                        </td>
+                        <td className="stat-num px-2 py-1 text-right text-[12.5px] text-muted">
+                          {formatStat(game.snap_share, "pct")}
+                        </td>
+                        {columns.map((column) => {
+                          const metric = metrics[column.id] ?? {};
+                          const available = isMetricAvailable(metric, season);
+                          const value = gameValue(game, column.id);
+                          return (
+                            <td
+                              key={column.key}
+                              className={`stat-num px-2 py-1 text-right text-[12.5px] last:pr-4 ${available ? "text-fg" : "text-faint"} ${column.sectionStart ? "border-l border-line" : ""}`}
+                            >
+                              {!available
+                                ? "—"
+                                : SIGNED.has(column.id)
+                                  ? formatSigned(value, metric.format)
+                                  : formatStat(value, metric.format)}
+                            </td>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      // Nothing was measured, so nothing is stated: a dash in every
+                      // column rather than a short row, which would break the grid, or a
+                      // zero, which would be a claim about a game nobody has played.
+                      <>
+                        <td className="stat-num px-2 py-1 text-right text-[12.5px] text-faint">—</td>
+                        <td className="stat-num px-2 py-1 text-right text-[12.5px] text-faint">—</td>
+                        <td className="stat-num px-2 py-1 text-right text-[12.5px] text-faint">—</td>
+                        {columns.map((column) => (
+                          <td
+                            key={column.key}
+                            className={`stat-num px-2 py-1 text-right text-[12.5px] text-faint last:pr-4 ${column.sectionStart ? "border-l border-line" : ""}`}
+                          >
+                            —
+                          </td>
+                        ))}
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

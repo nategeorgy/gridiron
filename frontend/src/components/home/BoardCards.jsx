@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { Card, CardHead, CardLink, CardState, PlayerCell, ScrollTable, Tabs, Th } from "./primitives";
 import { formatStat, formatSigned } from "../../utils/format";
+import { percentileColor } from "../player/percentile";
 import { scoringLabel } from "../../constants/scoring";
 
 const POSITION_TABS = ["ALL", "QB", "RB", "WR", "TE", "FLEX"].map((value) => ({
@@ -230,6 +231,37 @@ export function QuarterbackCard({ season, result, isLoading, isError }) {
 // are checking on, and dropping him below a games threshold would look like a bug.
 // Columns that do not apply to a position render as a dash rather than a zero — a
 // quarterback has no route participation, and 0% would be a claim.
+/**
+ * A value with its percentile beneath it, the same pairing the boards use.
+ *
+ * Deliberately small and tinted rather than a second column: the rank is context for the
+ * number above it, and a card in the reading column cannot spend seven more columns on
+ * it. A missing percentile is a dash, so "not ranked at this position" (a quarterback's
+ * target share) stays visibly different from a zero.
+ */
+function PercentileCell({ value, format, percentile, position, tone = "text-muted" }) {
+  return (
+    <td className="stat-num py-2 text-right align-top">
+      <span className="flex flex-col items-end leading-tight">
+        <span className={tone}>{formatStat(value, format)}</span>
+        {percentile === null || percentile === undefined ? (
+          <span className="text-[9.5px] font-semibold text-faint" aria-hidden="true">
+            &ndash;
+          </span>
+        ) : (
+          <span
+            className="text-[9.5px] font-semibold"
+            style={{ color: percentileColor(percentile) }}
+            title={`${percentile}th percentile among ${position}s this season`}
+          >
+            {percentile}
+          </span>
+        )}
+      </span>
+    </td>
+  );
+}
+
 export function MyPlayersCard({ season, count, result, isLoading, isError }) {
   const rows = result?.data ?? [];
   return (
@@ -251,36 +283,44 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.player_id} className="border-t border-line">
-                <td className="py-2">
-                  <PlayerCell
-                    playerId={row.player_id}
-                    name={row.name}
-                    position={row.position}
-                    team={row.team_abbreviation}
-                  />
-                </td>
-                <td className="stat-num py-2 text-right font-semibold text-accent">
-                  {formatStat(row.fantasy_points, 1)}
-                </td>
-                <td className="stat-num py-2 text-right text-fg">{formatStat(row.fantasy_ppg, 1)}</td>
-                <td className="stat-num py-2 text-right text-fg">
-                  {formatStat(row.fantasy_opportunity_rating, 1)}
-                </td>
-                <td className="stat-num py-2 text-right text-muted">{formatStat(row.opportunity_share, "pct")}</td>
-                <td className="stat-num py-2 text-right text-muted">{formatStat(row.target_share, "pct")}</td>
-                <td className="stat-num py-2 text-right text-muted">{formatStat(row.route_participation, "pct")}</td>
-                <td className="stat-num py-2 text-right text-muted">{formatStat(row.rush_attempt_share, "pct")}</td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const cell = (id, format, tone) => (
+                <PercentileCell
+                  value={row[id]}
+                  format={format}
+                  percentile={row.percentiles?.[id]}
+                  position={row.position}
+                  tone={tone}
+                />
+              );
+              return (
+                <tr key={row.player_id} className="border-t border-line">
+                  <td className="py-2 align-top">
+                    <PlayerCell
+                      playerId={row.player_id}
+                      name={row.name}
+                      position={row.position}
+                      team={row.team_abbreviation}
+                    />
+                  </td>
+                  {cell("fantasy_points", 1, "font-semibold text-accent")}
+                  {cell("fantasy_ppg", 1, "text-fg")}
+                  {cell("fantasy_opportunity_rating", 1, "text-fg")}
+                  {cell("opportunity_share", "pct", "text-muted")}
+                  {cell("target_share", "pct", "text-muted")}
+                  {cell("route_participation", "pct", "text-muted")}
+                  {cell("rush_attempt_share", "pct", "text-muted")}
+                </tr>
+              );
+            })}
           </tbody>
         </ScrollTable>
       )}
       <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
         <b className="font-semibold text-muted">FOR</b> is Fantasy Opportunity Rating:
         0-100 on how much of an offense runs through a player, ranked against everyone
-        at their position. The shares beneath it are what it is built from.
+        at their position. The shares beneath it are what it is built from. The small
+        number under each value is its percentile at that position this season.
       </p>
       <CardLink to="/fantasy/all?watchlist=1">Manage watchlist</CardLink>
     </Card>

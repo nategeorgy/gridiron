@@ -205,9 +205,8 @@ export function GamesView({ board }) {
         The bar under each game splits its total by the spread and the points the market
         expects each offense to score. Lines come from the nflverse schedule feed, there
         is no odds provider behind this and no intraday movement. Most of a season
-        carries no line until a few weeks out; those games show{" "}
-        <span className="text-muted">no line yet</span> rather than a zero. Kickoffs are
-        Eastern.
+        carries no line until a few weeks out, and those games show an empty bar rather
+        than a zero. Kickoffs are Eastern.
       </p>
     </div>
   );

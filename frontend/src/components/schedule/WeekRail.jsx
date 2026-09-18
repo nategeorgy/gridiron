@@ -1,15 +1,20 @@
 // The week picker, as a rail rather than a <select>.
 //
-// A dropdown can say "Week 12 · no lines" but only once you have opened it and read
-// every option. The rail says it for the whole season at once: how much of each week
-// is **played** and, for the weeks ahead, how much of it the market has **priced** —
-// which matters because most of a season carries no line in September, and an unpriced
-// week is a state rather than an empty page.
+// A dropdown can say "Week 12, no lines" but only once you have opened it and read
+// every option. The rail says it for the whole season at once: a meter under each week
+// showing how much of it is **played** and, for the weeks ahead, how much of it the
+// market has **priced**, which matters because most of a season carries no line in
+// September and an unpriced week is a state rather than an empty page.
 //
-// The meter is deliberately one bar with two meanings, keyed by the label beneath it:
-// for a week in the past it is the share played, for a week ahead the share priced.
-// They are never both partial in practice (a week is priced long before it kicks off),
-// so one bar reads unambiguously and two would be noise.
+// The meter is deliberately one bar with two meanings: for a week in the past it is the
+// share played, for a week ahead the share priced. They are never both partial in
+// practice (a week is priced long before it kicks off), so one bar reads unambiguously
+// and two would be noise.
+//
+// Each state was also spelled out in words under the number ("final" / "live" /
+// "priced" / "no line") until September 2026. That is four characters of chrome per
+// week across eighteen weeks, saying what the bar and the hover text already say, so
+// the words went and the meter stayed.
 const ALL = "all";
 
 // ⚠️ Not `bg-accent/10`: Tailwind's opacity modifier is broken on this project's
@@ -65,7 +70,6 @@ export function WeekRail({ weeks, value, onChange, allowAll = true }) {
         const partly = entry.played > 0 && !done;
         const active = String(entry.week) === String(value);
         // Played beats priced: once a game is final its line is history.
-        const state = done ? "final" : partly ? "live" : entry.priced > 0 ? "priced" : "no line";
         const fill = done
           ? 100
           : partly
@@ -84,10 +88,12 @@ export function WeekRail({ weeks, value, onChange, allowAll = true }) {
             title={
               done
                 ? `Week ${entry.week}: all ${entry.games} games final`
-                : `Week ${entry.week}: ${entry.priced} of ${entry.games} games priced`
+                : partly
+                  ? `Week ${entry.week}: ${entry.played} of ${entry.games} games played`
+                  : `Week ${entry.week}: ${entry.priced} of ${entry.games} games priced`
             }
             style={active ? { background: ACTIVE_FILL } : undefined}
-            className={`w-[52px] flex-none rounded-xl border pb-1.5 pt-2 text-center transition ${
+            className={`w-[52px] flex-none rounded-xl border pb-2 pt-2 text-center transition ${
               active
                 ? "border-accent"
                 : `border-line bg-surface-2 hover:border-edge ${done ? "opacity-70" : ""}`
@@ -100,16 +106,9 @@ export function WeekRail({ weeks, value, onChange, allowAll = true }) {
             >
               {entry.week}
             </div>
-            <div
-              className={`mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.06em] ${
-                active ? "text-accent" : done ? "text-muted" : "text-faint"
-              }`}
-            >
-              {state}
-            </div>
-            <div className="mx-[7px] mt-1 h-[3px] overflow-hidden rounded-full bg-surface">
+            <div className="mx-[7px] mt-1.5 h-[3px] overflow-hidden rounded-full bg-surface">
               <span
-                className={`block h-full ${state === "no line" ? "bg-transparent" : "bg-accent"}`}
+                className={`block h-full ${fill > 0 ? "bg-accent" : "bg-transparent"}`}
                 style={{ width: `${fill}%` }}
               />
             </div>
