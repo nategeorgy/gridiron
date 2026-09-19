@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-18 (the fixed credit bar)
+Last updated: 2026-09-18 (the pipeline connection pool cap)
 
 ---
 
@@ -429,7 +429,7 @@ so **the migrated schema is the single source of truth.** Every script is
 | --- | --- |
 | `README.md` | How to set up and run the pipeline, run order, and which columns each script fills. |
 | `requirements.txt` | Pipeline Python dependencies. |
-| `db.py` | Shared DB helpers — connection, the idempotent `upsert` used by most scripts, **`replace_scoped()`** (M6.2 — delete-and-rewrite whole groups in one transaction, for tables holding *current state* where a row that should vanish simply stops appearing in the source), and `load_stat_keys()` (the guard that keeps enrichment passes from inserting half-empty stat lines). |
+| `db.py` | Shared DB helpers — connection (⭐ **a bounded pool**: 2 + 1 overflow, plus a retried first connect, for the reason spelled out in §9), the idempotent `upsert` used by most scripts, **`replace_scoped()`** (M6.2 — delete-and-rewrite whole groups in one transaction, for tables holding *current state* where a row that should vanish simply stops appearing in the source), and `load_stat_keys()` (the guard that keeps enrichment passes from inserting half-empty stat lines). |
 | `seasons.py` | ⭐ **The season clock (M6.0).** Replaced `DEFAULT_SEASONS = list(range(2020, 2026))`, copied into every script and wrong from the next September. nflreadpy owns two rollovers and this reads both: the **roster** year turns over on 15 March (schedules, rosters, players, depth charts exist months before kickoff), the **stats** year at the first game. `clamp_seasons()` drops seasons a feed can't serve yet — the loaders take every season in one call, so one unstarted season would otherwise fail an entire scheduled run. `in_season()` is the two clocks agreeing. |
 | `availability.py` | ⭐ **Which stored columns are trustworthy in which season (M8).** The feeds report a stat nobody measured as `0`, not as missing — so a 2004 receiver with 90 catches arrives carrying `targets = 0`, which sorts and averages and poisons every share derived from it. `mask_unavailable()` NULLs those at ingest, in one place, from **measured** windows: charted passing starts 2006, snaps 2013, routes 2016–2025 from the feed (the season in progress is hand-loaded by `ingest_routes.py`, which never masks), and targets are unrecoverable 2003–2008. Mirrored by `backend/app/availability.py`. |
 | `franchises.py` | ⭐ **Which code a franchise used in a given season (M8).** `load_schedules` says `STL`; `load_player_stats` and `load_pbp` normalise the same team to today's `LA`. Unreconciled, `games` and `player_stats` point at different `teams` rows — so SOS credited every Rams stat line from 1999–2015 to the wrong defense. The mapping is **derived, never hardcoded**: a franchise is its nickname (36 codes, 32 nicknames, 3 relocations), and the code in use is whichever appears in that season's schedule. |
@@ -564,6 +564,21 @@ idles all summer via `seasons.in_season()`. It needs one repo secret,
 **`PIPELINE_DATABASE_URL`** — the first credential in CI that can *write* to production,
 which is why it is scoped to this workflow and checked for explicitly rather than
 failing four scripts deep.
+
+⚠️ **Three processes share one small pooler, and all three are now bounded.** Supabase's
+free plan runs a session-mode pooler that a single SQLAlchemy default pool (5 + 10
+overflow) can take a large share of on its own. `backend/app/database.py` was capped
+first, after a Render build could not check out a connection to migrate; the scheduled
+pipeline was not, and on 2026-09-18 it failed on the first script of the day with the
+same `(ECHECKOUTTIMEOUT) ... after 15000ms in Session mode`. `pipeline/db.py` is capped
+at 2 + 1 (every ingest is serial, so that is ample) and retries its first connection,
+the way `backend/scripts/migrate.sh` retries a migration. Two optional env vars tune it,
+`PIPELINE_CONNECT_ATTEMPTS` (5) and `PIPELINE_CONNECT_RETRY_DELAY` (15 seconds); it still
+raises once they are spent, so a genuinely unreachable database fails the run loudly.
+
+Note how the two failures differ in how visible they are. A failed deploy leaves the
+previous version serving and shows up as a red build; a failed pipeline run leaves the
+site quietly stale, and nothing surfaces it until someone notices a missing score.
 
 ---
 
@@ -703,6 +718,16 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-18**: **The pipeline's connection pool is bounded** (`pipeline/db.py`).
+  It had been running SQLAlchemy's defaults, up to 15 connections, against the same
+  free-tier session-mode pooler `backend/app/database.py` caps itself to 5 for, and that
+  is what failed the scheduled run that morning: `(ECHECKOUTTIMEOUT) ... after 15000ms in
+  Session mode`, 35 seconds in, on `ingest_teams.py`. Now 2 + 1, since every ingest is
+  serial, with `pool_recycle` matching the backend and a retried first connect mirroring
+  `scripts/migrate.sh` (`PIPELINE_CONNECT_ATTEMPTS`, `PIPELINE_CONNECT_RETRY_DELAY`; it
+  still raises once they are spent). The comment in `app/database.py` had said the cap
+  "leaves headroom for the pipeline", which was true of the backend and never enforced on
+  the pipeline itself. See §9.
 - **2026-09-18**: **A fixed credit bar** (`components/Footer.jsx`, `.glass-footer` in
   `index.css`, mounted in `Layout.jsx`). One line naming the feeds every number on the
   site comes from, the NFL's ownership of its own marks, a disclaimer of affiliation,
