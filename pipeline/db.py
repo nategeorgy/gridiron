@@ -8,16 +8,23 @@ UPDATE`` to stay idempotent — safe to run repeatedly without duplicating rows.
 
 import logging
 import os
+import time
 from functools import lru_cache
 from math import isfinite
 
 from dotenv import load_dotenv
-from sqlalchemy import Engine, MetaData, Table, create_engine
+from sqlalchemy import Engine, MetaData, Table, create_engine, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import OperationalError
 
 load_dotenv()
 
 logger = logging.getLogger("pipeline")
+
+# How long to keep trying for a first connection. The contention this covers is
+# transient by nature, so a failure here is usually a wait rather than a fault.
+CONNECT_ATTEMPTS = int(os.environ.get("PIPELINE_CONNECT_ATTEMPTS", "5"))
+CONNECT_RETRY_DELAY = int(os.environ.get("PIPELINE_CONNECT_RETRY_DELAY", "15"))
 
 
 @lru_cache(maxsize=1)
@@ -28,7 +35,60 @@ def get_engine() -> Engine:
         raise RuntimeError(
             "DATABASE_URL is not set. Copy pipeline/.env from the template."
         )
-    return create_engine(database_url, pool_pre_ping=True)
+    # ⚠️ The pool is bounded for the same reason the backend's is (app/database.py),
+    # and the pipeline is the process that had never been capped. SQLAlchemy defaults
+    # to pool_size=5 with max_overflow=10, so one ingest script could hold **fifteen**
+    # connections against Supabase's free session-mode pooler while Render's instance
+    # is serving from the same one. That is what failed the scheduled run on
+    # 2026-09-18, on the very first script of the day:
+    #
+    #   FATAL: (ECHECKOUTTIMEOUT) unable to check out connection from the pool
+    #          after 15000ms in Session mode
+    #
+    # The failure is quiet in a way the Render one is not: a failed deploy leaves the
+    # previous version serving, but a failed pipeline run just leaves the site stale,
+    # and nothing surfaces that until someone notices a missing score.
+    #
+    # Every ingest is serial, so two connections plus one spare is ample: the scripts
+    # open a connection, do their work and close it. `pool_recycle` matches the backend,
+    # because Supavisor closes idle connections server-side and a pool holding one it
+    # believes is alive fails the *next* statement rather than this one.
+    engine = create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_size=2,
+        max_overflow=1,
+        pool_recycle=1800,
+        pool_timeout=30,
+    )
+    _wait_for_database(engine)
+    return engine
+
+
+def _wait_for_database(engine: Engine) -> None:
+    """Block until the database hands out a connection, or raise after every attempt.
+
+    The pool cap above is the real fix for pooler contention; this covers the rest,
+    exactly as backend/scripts/migrate.sh does for migrations. A burst of traffic or a
+    deploy overlapping the 6am run can exhaust the pooler for a few seconds, and an
+    unattended job should wait it out rather than skip a day of data. A genuinely
+    unreachable database still raises once the attempts are spent, so the workflow
+    still fails loudly.
+    """
+    for attempt in range(1, CONNECT_ATTEMPTS + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except OperationalError as error:
+            if attempt == CONNECT_ATTEMPTS:
+                logger.error("database unreachable after %d attempts", CONNECT_ATTEMPTS)
+                raise
+            logger.warning(
+                "database connection attempt %d/%d failed (%s); retrying in %ds",
+                attempt, CONNECT_ATTEMPTS, type(error.orig).__name__, CONNECT_RETRY_DELAY,
+            )
+            time.sleep(CONNECT_RETRY_DELAY)
 
 
 @lru_cache(maxsize=None)
