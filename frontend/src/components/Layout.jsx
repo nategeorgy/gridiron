@@ -1,8 +1,10 @@
 // App shell: frosted sticky header with brand + primary nav (Home, Insight,
-// Leaderboards, Schedule, Teams), search, and the light/dark theme toggle.
+// Leaderboards, Schedule, Teams), search, and the light/dark theme toggle, plus
+// the fixed credit bar along the bottom.
 // The page background (the Liquid Glass "environment") is painted on <body>.
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { AccountMenu } from "./AccountMenu";
+import { Footer } from "./Footer";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { MegaDropdown } from "./ui/MegaDropdown";
@@ -39,7 +41,7 @@ export function Layout() {
   const wide = WIDE_ROUTES.some((route) => pathname.startsWith(route));
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <header className="glass-header sticky top-0 z-20">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <BrandMark />
@@ -73,9 +75,14 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className={`mx-auto px-4 py-6 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
+      {/* pb-* reserves the credit bar's height, since from `sm` up it is fixed and
+          therefore out of flow. The steps are measured, not guessed: the bar is 57px
+          tall while its text wraps to two lines, and 37px from 1280 up where it fits
+          on one. Below `sm` it is in normal flow and needs no reservation. */}
+      <main className={`mx-auto w-full flex-1 px-4 pb-6 pt-6 sm:pb-16 xl:pb-12 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
         <Outlet />
       </main>
+      <Footer />
     </div>
   );
 }

@@ -178,6 +178,17 @@
     border-bottom: 1px solid var(--border);
   }
 
+  /* The credit bar fixed to the bottom of the viewport. The header's material,
+     mirrored: border and specular highlight on the TOP edge, since that is the one
+     the content scrolls under. */
+  .glass-footer {
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(1.6);
+    backdrop-filter: blur(var(--blur)) saturate(1.6);
+    border-top: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 var(--edge);
+  }
+
   .glass-pill {
     border-radius: 999px;
     background: var(--surface-2);
