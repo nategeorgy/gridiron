@@ -135,7 +135,27 @@ jobs:
   # The stats chain: weekly numbers, then the three enrichment passes over them.
   stats:
     name: Stats and enrichment
-    if: github.event.schedule == '0 11 * * 3' || github.event_name == 'workflow_dispatch'
+    # ⚠️ `needs` here is about LOAD, not data: the two jobs write different tables and
+    # neither reads the other's. They must not run at once because they share one small
+    # Supabase pooler, and on 2026-09-19 a manual dispatch ran both together and both
+    # died on `canceling statement due to statement timeout`, six and seven minutes in.
+    # The same ingest_rankings.py upsert finished in 1m8s the next morning running alone.
+    # The two crons are already staggered (10:00 and 11:00) for exactly this reason, and
+    # a workflow_dispatch defeated it by matching both jobs at once.
+    #
+    # ⚠️ `!cancelled()` is load-bearing, do not drop it to "tidy up". The roster job runs
+    # on the 10:00 cron only, so on the Wednesday 11:00 stats cron it is SKIPPED, and a
+    # job that `needs` a skipped job is skipped too by default. Without this guard the
+    # weekly stats refresh would stop happening, silently, which is the same invisible
+    # failure mode as a pipeline run dying at 6am: nothing goes red, the site just stops
+    # getting newer. `always()` would also work but would run this on a cancellation too.
+    #
+    # A failed roster job does NOT block this one, which is deliberate. Rankings timing
+    # out should not cost the week its player stats.
+    needs: roster
+    if: >-
+      ${{ !cancelled()
+      && (github.event.schedule == '0 11 * * 3' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     environment: production
     env:
