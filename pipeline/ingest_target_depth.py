@@ -120,7 +120,7 @@ def ingest_target_depth(seasons: list[int]) -> int:
     # Only keep players/games we already track, so this never inserts rows for
     # defenders or out-of-scope players (the same guard the other enrichment
     # passes use).
-    stat_keys = load_stat_keys()
+    stat_keys = load_stat_keys(seasons)
 
     written = 0
     for season in seasons:

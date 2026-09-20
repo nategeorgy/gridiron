@@ -744,7 +744,10 @@ repo. Update it in the *same change* that alters the project's structure — spe
   manual dispatch ran both jobs together and both died on a statement timeout: the crons
   had been staggered to keep them apart, but `workflow_dispatch` matches both. The guard
   is required because the roster job is skipped on the Wednesday stats cron, and a job
-  needing a skipped job is skipped too. See §9.
+  needing a skipped job is skipped too. Finally `load_stat_keys()` takes the seasons
+  being ingested: unfiltered it sequentially scanned all 98,186 rows of `player_stats`,
+  once per enrichment script, to filter a feed covering 379 of them, and that is what
+  timed out the stats chain even running alone. 5,802 buffer pages to 106. See §9.
 - **2026-09-18**: **A fixed credit bar** (`components/Footer.jsx`, `.glass-footer` in
   `index.css`, mounted in `Layout.jsx`). One line naming the feeds every number on the
   site comes from, the NFL's ownership of its own marks, a disclaimer of affiliation,
