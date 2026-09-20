@@ -103,7 +103,7 @@ def ingest_expected(seasons: list[int]) -> int:
         return 0
 
     opportunity = nfl.load_ff_opportunity(seasons=seasons, stat_type="weekly")
-    stat_keys = load_stat_keys()
+    stat_keys = load_stat_keys(seasons)
 
     rows: dict[tuple, dict] = {}
     skipped = 0

@@ -188,7 +188,7 @@ def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
         )
         return 0
 
-    stat_keys = load_stat_keys()
+    stat_keys = load_stat_keys(seasons)
     positions = _db_positions()
 
     merged: dict[tuple, dict] = {}

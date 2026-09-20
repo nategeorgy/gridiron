@@ -152,7 +152,7 @@ def ingest_pfr(seasons: list[int]) -> int:
         return 0
 
     crosswalk = pfr_to_gsis()
-    stat_keys = load_stat_keys()
+    stat_keys = load_stat_keys(seasons)
 
     # Merged per player-game before writing: a running back appears in both the rush
     # and rec files, and two separate upserts would each carry only their own columns.
