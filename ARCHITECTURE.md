@@ -580,6 +580,18 @@ Note how the two failures differ in how visible they are. A failed deploy leaves
 previous version serving and shows up as a red build; a failed pipeline run leaves the
 site quietly stale, and nothing surfaces it until someone notices a missing score.
 
+⚠️ **The two jobs are also serialised, and `needs: roster` is only half of it.** Bounding
+each process's pool does not stop the two of them running at once. The staggered crons
+(10:00 daily, 11:00 Wednesday) kept them apart, but `workflow_dispatch` matches *both*
+job conditions, so a manual run put the stats chain and the rankings upsert on the
+database together and both died on `canceling statement due to statement timeout`. The
+stats job now `needs: roster`. The other half is the `!cancelled()` guard on its `if`:
+the roster job runs on the 10:00 cron only, so on the Wednesday 11:00 stats cron it is
+skipped, and a job that needs a skipped job is skipped too by default. Dropping that
+guard would silently stop the weekly stats refresh, with nothing going red. A *failed*
+roster job deliberately does not block the stats chain: rankings timing out should not
+cost the week its player stats.
+
 ---
 
 ## 10. Local development quickstart
@@ -727,7 +739,12 @@ repo. Update it in the *same change* that alters the project's structure — spe
   `scripts/migrate.sh` (`PIPELINE_CONNECT_ATTEMPTS`, `PIPELINE_CONNECT_RETRY_DELAY`; it
   still raises once they are spent). The comment in `app/database.py` had said the cap
   "leaves headroom for the pipeline", which was true of the backend and never enforced on
-  the pipeline itself. See §9.
+  the pipeline itself. Alongside it, `.github/workflows/pipeline.yml` gained
+  **`needs: roster`** on the stats job plus a `!cancelled()` guard on its `if`, after a
+  manual dispatch ran both jobs together and both died on a statement timeout: the crons
+  had been staggered to keep them apart, but `workflow_dispatch` matches both. The guard
+  is required because the roster job is skipped on the Wednesday stats cron, and a job
+  needing a skipped job is skipped too. See §9.
 - **2026-09-18**: **A fixed credit bar** (`components/Footer.jsx`, `.glass-footer` in
   `index.css`, mounted in `Layout.jsx`). One line naming the feeds every number on the
   site comes from, the NFL's ownership of its own marks, a disclaimer of affiliation,
