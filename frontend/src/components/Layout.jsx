@@ -1,9 +1,10 @@
-// App shell: frosted sticky header with brand + primary nav (Home, Insight,
+// App shell: frosted sticky header with the Second Level lockup + primary nav (Home, Insight,
 // Leaderboards, Schedule, Teams), search, and the light/dark theme toggle, plus
-// the fixed credit bar along the bottom.
+// the credit bar at the end of the page.
 // The page background (the Liquid Glass "environment") is painted on <body>.
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AccountMenu } from "./AccountMenu";
+import { BrandLockup } from "./Brand";
 import { Footer } from "./Footer";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
@@ -21,21 +22,6 @@ const navLinkClass = ({ isActive }) =>
     isActive ? "glass-pill !text-accent" : "text-muted hover:text-fg"
   }`;
 
-function BrandMark() {
-  return (
-    <div className="flex items-center gap-2">
-      <svg viewBox="0 0 32 32" className="h-7 w-7">
-        <rect width="32" height="32" rx="7" fill="var(--surface-2)" />
-        <path d="M8 21c4-10 12-10 16 0" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" />
-        <circle cx="16" cy="13" r="3" fill="var(--accent)" />
-      </svg>
-      <span className="text-lg font-bold tracking-tight text-fg">
-        Gridiron<span className="text-accent">IQ</span>
-      </span>
-    </div>
-  );
-}
-
 export function Layout() {
   const { pathname } = useLocation();
   const wide = WIDE_ROUTES.some((route) => pathname.startsWith(route));
@@ -44,7 +30,9 @@ export function Layout() {
     <div className="flex min-h-screen flex-col">
       <header className="glass-header sticky top-0 z-20">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <BrandMark />
+          <Link to="/" aria-label="Second Level home" className="shrink-0">
+            <BrandLockup />
+          </Link>
           <div className="flex items-center gap-2">
             <nav className="flex items-center gap-0.5">
               <NavLink to="/" end className={navLinkClass}>
@@ -75,14 +63,12 @@ export function Layout() {
           </div>
         </div>
       </header>
-      {/* pb-* reserves the credit bar's height, since from `sm` up it is fixed and
-          therefore out of flow. The steps are measured, not guessed: the bar is 57px
-          tall while its text wraps to two lines, and 37px from 1280 up where it fits
-          on one. Below `sm` it is in normal flow and needs no reservation. */}
-      <main className={`mx-auto w-full flex-1 px-4 pb-6 pt-6 sm:pb-16 xl:pb-12 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
+      {/* The credit bar is in normal flow now, so nothing here reserves its height.
+          It takes `wide` so its card matches <main>'s width on either kind of route. */}
+      <main className={`mx-auto w-full flex-1 px-4 pb-6 pt-6 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
         <Outlet />
       </main>
-      <Footer />
+      <Footer wide={wide} />
     </div>
   );
 }

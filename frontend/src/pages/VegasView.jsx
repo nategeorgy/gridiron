@@ -170,7 +170,7 @@ export function VegasView({ board }) {
           <div className="ml-auto flex items-end gap-2">
             <SaveViewButton defaultName={board.title} />
             <ExportButton
-              filename={`gridironiq-vegas-${season}-wk${week}`}
+              filename={`second-level-vegas-${season}-wk${week}`}
               rows={exportRows}
               columns={[
                 { key: "team", label: "Team" },
@@ -180,7 +180,7 @@ export function VegasView({ board }) {
                 { key: "players", label: "Players" },
               ]}
               context={[
-                "GridironIQ: Vegas Board",
+                "Second Level: Vegas Board",
                 `${season} week ${week} · scoring: ${scoring}`,
                 "Implied total = game total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
               ]}

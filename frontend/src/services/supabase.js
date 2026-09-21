@@ -30,7 +30,7 @@ function projectUrl(raw) {
   const stripped = trimmed.replace(ENDPOINT_SUFFIX, "");
   if (stripped !== trimmed) {
     console.warn(
-      `[GridironIQ] VITE_SUPABASE_URL is "${trimmed}", which points at a specific API ` +
+      `[Second Level] VITE_SUPABASE_URL is "${trimmed}", which points at a specific API ` +
         `rather than the project. Using "${stripped}" instead. Please correct the ` +
         `environment variable.`,
     );

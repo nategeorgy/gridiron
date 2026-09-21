@@ -197,11 +197,11 @@ export function ScatterView({ board }) {
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={preset.label} />
           <ExportButton
-            filename={`gridironiq-${preset.id}-${season}`}
+            filename={`second-level-${preset.id}-${season}`}
             rows={points}
             columns={exportColumns}
             context={[
-              `GridironIQ scatter: ${preset.label} (${group.label})`,
+              `Second Level scatter: ${preset.label} (${group.label})`,
               preset.question,
               `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} weeks` : ""} · top ${density} by fantasy points`,
               `scoring: ${scoring} · league: ${league}`,

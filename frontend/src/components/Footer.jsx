@@ -1,20 +1,26 @@
-// The site-wide credit bar, fixed to the bottom of the viewport.
+// The site-wide credit bar, at the end of the page.
 //
-// Two jobs on one line: name the feeds every number on the site is derived from, and
-// say plainly that the NFL owns its own marks and that this is not an NFL site. The
-// contact address rides along so a correction has somewhere to go from any page.
+// Three jobs: carry the brand, name the feeds every number on the site is derived
+// from, and say plainly that the NFL owns its own marks and that this is not an NFL
+// site. The contact address rides along so a correction has somewhere to go.
 //
-// ⚠️ It is fixed only from `sm` up. Measured, the line costs 37px at 1280 and wider
-// (where it fits on one line), 57px between 640 and 1280, and **157px at 390px**,
-// which is a fifth of a phone screen given over permanently to fine print. Below
-// `sm` it therefore sits at the end of the page in normal flow, pushed to the bottom
-// by the shell's flex column on short pages. Layout's `pb-*` steps mirror those
-// measurements; re-measure if this copy changes length.
+// It sits in normal flow, at the bottom of the content, and you reach it by
+// scrolling. It used to be `position: fixed` from `sm` up, which cost a permanent
+// strip of every screen (measured: 37px at 1280 and wider, 57px between 640 and 1280,
+// and 157px at 390px, a fifth of a phone). Layout's `<main>` had to reserve that
+// height with matching `pb-*` steps, so the copy could not change length without
+// re-measuring two files. Unsticking it removed the budget and the coupling, and it is
+// what made room for the lockup.
 //
-// `position: fixed` works here only because Layout's root has no backdrop-filter and
-// no transform. Rendered inside .glass-header it would be clipped to the header, the
-// same containing-block trap that sends modals opened from there to document.body.
+// It is a `glass-card` inside the same max-width wrapper `<main>` uses, so its edges
+// line up with the content above it instead of running to the viewport. It takes
+// `wide` for the same reason `<main>` does: a route that opts out of the 1280px cap
+// would otherwise leave the footer visibly narrower than everything above it.
+//
+// `<main>` carries `flex-1` in the shell's flex column, which is what holds this at
+// the bottom of the viewport on a short page.
 import { Fragment } from "react";
+import { SlashLockup } from "./Brand";
 
 // Every upstream the pipeline reads, in the order they carry weight. ESPN is last
 // because it supplies the headshots and logos rather than any stat.
@@ -47,18 +53,24 @@ function SourceList() {
   ));
 }
 
-export function Footer() {
+export function Footer({ wide = false }) {
   return (
-    <footer className="glass-footer static sm:fixed sm:inset-x-0 sm:bottom-0 sm:z-20">
-      <div className="mx-auto flex max-w-7xl flex-col items-start gap-x-6 gap-y-1 px-4 py-2 sm:flex-row sm:items-center">
-        <p className="min-w-0 flex-1 text-xs leading-5 text-muted">
+    <div className={`mx-auto w-full px-4 pb-10 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
+      <footer className="glass-card px-5 py-6">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <SlashLockup align="start" />
+          <a
+            className={`${linkClass} shrink-0 whitespace-nowrap text-xs font-medium`}
+            href={`mailto:${CONTACT_EMAIL}`}
+          >
+            {CONTACT_EMAIL}
+          </a>
+        </div>
+        <p className="mt-5 border-t border-line pt-4 text-xs leading-5 text-muted">
           Data from <SourceList />. NFL team names and logos are property of the NFL and its
           teams. Not affiliated with the NFL.
         </p>
-        <a className={`${linkClass} shrink-0 whitespace-nowrap text-xs font-medium`} href={`mailto:${CONTACT_EMAIL}`}>
-          {CONTACT_EMAIL}
-        </a>
-      </div>
-    </footer>
+      </footer>
+    </div>
   );
 }

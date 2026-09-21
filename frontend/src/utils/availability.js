@@ -1,6 +1,6 @@
 // Which seasons a metric actually has data in, and how to say so (M8).
 //
-// GridironIQ covers 1999 onwards, but the data does not arrive all at once: the NFL
+// Second Level covers 1999 onwards, but the data does not arrive all at once: the NFL
 // began publishing charted passing data in 2006, snap counts start in 2013, routes in
 // 2016, and 2003–2008 has no targets at all because play-by-play in those seasons
 // names a receiver only on completions.

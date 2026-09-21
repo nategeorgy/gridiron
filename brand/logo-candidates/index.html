@@ -1,0 +1,228 @@
+<!-- @dsCard group="Overview" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Second Level Logo Candidates</title>
+<style>
+  :root {
+    --bg: #f6f6f5; --surface: #ffffff; --fg: #16181a; --muted: #6b7280;
+    --line: #e4e4e2; --accent: #00b06a; --well-dark: #15181a; --well-light: #ffffff;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0d0f11; --surface: #16191c; --fg: #f2f3f4; --muted: #9aa1a8;
+      --line: #262a2e; --accent: #2ecc71; --well-light: #f2f2f0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0f11; --surface: #16191c; --fg: #f2f3f4; --muted: #9aa1a8;
+    --line: #262a2e; --accent: #2ecc71; --well-light: #f2f2f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px 56px; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 22px; font-weight: 650; margin: 0 0 6px; letter-spacing: -0.02em; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  section { margin-top: 34px; }
+  h2 {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--muted); margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .count {
+    font-size: 11px; letter-spacing: 0; color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-radius: 999px; padding: 1px 7px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .tile { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .tile a { display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 132px; }
+  .tile.dark a { background: var(--well-dark); }
+  .tile.light a { background: var(--well-light); }
+  .tile img { max-width: 100%; max-height: 118px; height: auto; display: block; }
+  figcaption {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    padding: 9px 11px 11px; border-top: 1px solid var(--line);
+  }
+  .nm { font-size: 12.5px; font-weight: 550; }
+  code { font: 11px/1 "JetBrains Mono", "Roboto Mono", ui-monospace, monospace; color: var(--muted); }
+  @media (max-width: 480px) { .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Second Level logo candidates</h1>
+      <p>29 marks pulled out of five source sheets, one file each. Click a tile for the full size version.</p>
+    </header>
+    <section>
+      <h2>Monogram lockups <span class="count">11</span></h2>
+      <div class="grid">
+        <figure class="tile dark">
+          <a href="logos/stacked-arrow-monogram.html"><img src="logos/stacked-arrow-monogram.png" alt="Stacked arrow monogram" loading="lazy"></a>
+          <figcaption><span class="nm">Stacked arrow monogram</span><code>A01</code></figcaption>
+        </figure>
+        <figure class="tile light">
+          <a href="logos/monogram-lockup-light.html"><img src="logos/monogram-lockup-light.png" alt="Monogram lockup, light" loading="lazy"></a>
+          <figcaption><span class="nm">Monogram lockup, light</span><code>B01</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/monogram-lockup-dark.html"><img src="logos/monogram-lockup-dark.png" alt="Monogram lockup, dark" loading="lazy"></a>
+          <figcaption><span class="nm">Monogram lockup, dark</span><code>C01</code></figcaption>
+        </figure>
+        <figure class="tile light">
+          <a href="logos/monogram-italic-light.html"><img src="logos/monogram-italic-light.png" alt="Monogram over italic, light" loading="lazy"></a>
+          <figcaption><span class="nm">Monogram over italic, light</span><code>D01</code></figcaption>
+        </figure>
+        <figure class="tile light">
+          <a href="logos/tall-arrow-stacked-light.html"><img src="logos/tall-arrow-stacked-light.png" alt="Tall arrow, stacked, light" loading="lazy"></a>
+          <figcaption><span class="nm">Tall arrow, stacked, light</span><code>D03</code></figcaption>
+        </figure>
+        <figure class="tile light">
+          <a href="logos/arrow-monogram-spaced-light.html"><img src="logos/arrow-monogram-spaced-light.png" alt="Arrow monogram, spaced, light" loading="lazy"></a>
+          <figcaption><span class="nm">Arrow monogram, spaced, light</span><code>D05</code></figcaption>
+        </figure>
+        <figure class="tile light">
+          <a href="logos/overlap-monogram-light.html"><img src="logos/overlap-monogram-light.png" alt="Overlapped 2L, light" loading="lazy"></a>
+          <figcaption><span class="nm">Overlapped 2L, light</span><code>D09</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/monogram-italic-dark.html"><img src="logos/monogram-italic-dark.png" alt="Monogram over italic, dark" loading="lazy"></a>
+          <figcaption><span class="nm">Monogram over italic, dark</span><code>E01</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/tall-arrow-stacked-dark.html"><img src="logos/tall-arrow-stacked-dark.png" alt="Tall arrow, stacked, dark" loading="lazy"></a>
+          <figcaption><span class="nm">Tall arrow, stacked, dark</span><code>E03</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/arrow-monogram-spaced-dark.html"><img src="logos/arrow-monogram-spaced-dark.png" alt="Arrow monogram, spaced, dark" loading="lazy"></a>
+          <figcaption><span class="nm">Arrow monogram, spaced, dark</span><code>E05</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/speed-lines-monogram.html"><img src="logos/speed-lines-monogram.png" alt="Speed lines monogram" loading="lazy"></a>
+          <figcaption><span class="nm">Speed lines monogram</span><code>E09</code></figcaption>
+        </figure>
+      </div>
+    </section>
+    <section>
+      <h2>Wordmarks <span class="count">9</span></h2>
+      <div class="grid">
+        <figure class="tile dark">
+          <a href="logos/arrow-through-second.html"><img src="logos/arrow-through-second.png" alt="Arrow through SECOND" loading="lazy"></a>
+          <figcaption><span class="nm">Arrow through SECOND</span><code>C03</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/stacked-ticks-rules.html"><img src="logos/stacked-ticks-rules.png" alt="Stacked wordmark, rule ticks" loading="lazy"></a>
+          <figcaption><span class="nm">Stacked wordmark, rule ticks</span><code>D02</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/wordmark-tagline-dark.html"><img src="logos/wordmark-tagline-dark.png" alt="Wordmark with tagline" loading="lazy"></a>
+          <figcaption><span class="nm">Wordmark with tagline</span><code>D04</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/slanted-box-italic.html"><img src="logos/slanted-box-italic.png" alt="Slanted outline box" loading="lazy"></a>
+          <figcaption><span class="nm">Slanted outline box</span><code>D06</code></figcaption>
+        </figure>
+        <figure class="tile light">
+          <a href="logos/underline-arrow-light.html"><img src="logos/underline-arrow-light.png" alt="Underline arrow, light" loading="lazy"></a>
+          <figcaption><span class="nm">Underline arrow, light</span><code>D11</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/stacked-ticks-arrows.html"><img src="logos/stacked-ticks-arrows.png" alt="Stacked wordmark, arrow ticks" loading="lazy"></a>
+          <figcaption><span class="nm">Stacked wordmark, arrow ticks</span><code>E02</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/wordmark-tagline-rules.html"><img src="logos/wordmark-tagline-rules.png" alt="Wordmark, tagline, rules" loading="lazy"></a>
+          <figcaption><span class="nm">Wordmark, tagline, rules</span><code>E04</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/slanted-box-italic-dark.html"><img src="logos/slanted-box-italic-dark.png" alt="Slanted outline box, dark" loading="lazy"></a>
+          <figcaption><span class="nm">Slanted outline box, dark</span><code>E06</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/slash-divider-thin.html"><img src="logos/slash-divider-thin.png" alt="Thin slash divider" loading="lazy"></a>
+          <figcaption><span class="nm">Thin slash divider</span><code>E10</code></figcaption>
+        </figure>
+      </div>
+    </section>
+    <section>
+      <h2>Badges and frames <span class="count">4</span></h2>
+      <div class="grid">
+        <figure class="tile dark">
+          <a href="logos/lace-frame-badge.html"><img src="logos/lace-frame-badge.png" alt="Football lace frame" loading="lazy"></a>
+          <figcaption><span class="nm">Football lace frame</span><code>C02</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/circle-badge.html"><img src="logos/circle-badge.png" alt="Circle badge" loading="lazy"></a>
+          <figcaption><span class="nm">Circle badge</span><code>D12</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/circle-monogram-tagline.html"><img src="logos/circle-monogram-tagline.png" alt="Circle monogram with tagline" loading="lazy"></a>
+          <figcaption><span class="nm">Circle monogram with tagline</span><code>E08</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/hexagon-badge.html"><img src="logos/hexagon-badge.png" alt="Hexagon badge" loading="lazy"></a>
+          <figcaption><span class="nm">Hexagon badge</span><code>E11</code></figcaption>
+        </figure>
+      </div>
+    </section>
+    <section>
+      <h2>Symbol + type <span class="count">3</span></h2>
+      <div class="grid">
+        <figure class="tile light">
+          <a href="logos/bars-mark-light.html"><img src="logos/bars-mark-light.png" alt="Rising bars mark, light" loading="lazy"></a>
+          <figcaption><span class="nm">Rising bars mark, light</span><code>D07</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/chevron-field.html"><img src="logos/chevron-field.png" alt="Chevron on the field" loading="lazy"></a>
+          <figcaption><span class="nm">Chevron on the field</span><code>D08</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/bars-mark-dark.html"><img src="logos/bars-mark-dark.png" alt="Rising bars mark, dark" loading="lazy"></a>
+          <figcaption><span class="nm">Rising bars mark, dark</span><code>E07</code></figcaption>
+        </figure>
+      </div>
+    </section>
+    <section>
+      <h2>App icons <span class="count">2</span></h2>
+      <div class="grid">
+        <figure class="tile dark">
+          <a href="logos/app-icon-solid.html"><img src="logos/app-icon-solid.png" alt="App icon, solid" loading="lazy"></a>
+          <figcaption><span class="nm">App icon, solid</span><code>D10</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/app-icon-outline.html"><img src="logos/app-icon-outline.png" alt="App icon, outline" loading="lazy"></a>
+          <figcaption><span class="nm">App icon, outline</span><code>E12</code></figcaption>
+        </figure>
+      </div>
+    </section>
+    <section>
+      <h2>Round two concepts <span class="count">4</span></h2>
+      <div class="grid">
+        <figure class="tile dark">
+          <a href="logos/field-graph-axis-bold.html"><img src="logos/field-graph-axis-bold.png" alt="Field / graph axis, bold" loading="lazy"></a>
+          <figcaption><span class="nm">Field / graph axis, bold</span><code>F04</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/two-levels-tiers.html"><img src="logos/two-levels-tiers.png" alt="Two levels / tiers" loading="lazy"></a>
+          <figcaption><span class="nm">Two levels / tiers</span><code>G02</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/field-graph-axis.html"><img src="logos/field-graph-axis.png" alt="Field / graph axis" loading="lazy"></a>
+          <figcaption><span class="nm">Field / graph axis</span><code>G04</code></figcaption>
+        </figure>
+        <figure class="tile dark">
+          <a href="logos/forward-motion.html"><img src="logos/forward-motion.png" alt="Forward motion" loading="lazy"></a>
+          <figcaption><span class="nm">Forward motion</span><code>G09</code></figcaption>
+        </figure>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

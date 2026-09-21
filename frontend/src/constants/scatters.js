@@ -26,7 +26,7 @@
  * @property {Object} [corners]   quadrant labels: { topLeft, topRight, bottomLeft, bottomRight }
  */
 
-// Used by several groups — the signature GridironIQ chart.
+// Used by several groups — the signature Second Level chart.
 const expectedVsActual = (id) => ({
   id,
   label: "Expected vs Actual PPG",

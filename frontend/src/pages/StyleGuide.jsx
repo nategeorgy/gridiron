@@ -9,6 +9,7 @@
 // whole page switches themes and you tune one at a time; drafts for the other
 // theme are kept, not discarded.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { BrandLockup, SlashLockup } from "../components/Brand";
 import { TokenPanel } from "../components/TokenPanel";
 import { THEME_BLOCKS, TOKEN_NAMES } from "../constants/designTokens";
 import { useTheme } from "../hooks/useTheme";
@@ -316,11 +317,13 @@ function Gallery({ theme, resolve }) {
           </div>
         </div>
 
+        <div className="glass-card mb-3 flex justify-center rounded-2xl px-4 py-6">
+          <SlashLockup />
+        </div>
+
         <div className="glass-header rounded-2xl px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-fg">
-              Gridiron<span className="text-accent">IQ</span>
-            </span>
+            <BrandLockup />
             <span className="glass-pill px-3 py-1 text-xs">glass-header</span>
             <span className="ml-auto text-xs text-faint">radius {resolve("--radius")} · blur {resolve("--blur")}</span>
           </div>
