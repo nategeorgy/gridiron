@@ -202,7 +202,7 @@ export function AuthDialog({ open, mode: initialMode = "signin", onClose }) {
             </p>
             <p className="mt-3 text-xs text-faint">
               Nothing after a minute or two? Check spam. You can keep using
-              GridironIQ without an account in the meantime.
+              Second Level without an account in the meantime.
             </p>
             <button
               type="button"

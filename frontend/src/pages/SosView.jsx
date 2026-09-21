@@ -131,7 +131,7 @@ export function SosView({ board }) {
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
           <ExportButton
-            filename={`gridironiq-sos-${position}-${season}`}
+            filename={`second-level-sos-${position}-${season}`}
             rows={exportRows}
             columns={[
               { key: "rank", label: "Rank" },
@@ -141,7 +141,7 @@ export function SosView({ board }) {
               ...weeks.map((week) => ({ key: `w${week}`, label: `Wk ${week}` })),
             ]}
             context={[
-              `GridironIQ: Strength of Schedule (${position})`,
+              `Second Level: Strength of Schedule (${position})`,
               `${season} schedule · ${WINDOWS.find((w) => w.value === windowKey)?.label} · scoring: ${scoring}`,
               `Difficulty 0–100, higher is harder. Based on ${data?.basis?.season ?? "—"} fantasy points allowed.`,
             ]}

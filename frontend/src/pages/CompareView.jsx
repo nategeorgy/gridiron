@@ -168,11 +168,11 @@ export function CompareView({ board }) {
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName="Comparison" />
           <ExportButton
-            filename={`gridironiq-compare-${season}`}
+            filename={`second-level-compare-${season}`}
             rows={exportRows}
             columns={exportColumns}
             context={[
-              `GridironIQ comparison: ${players.map((p) => p.name).join(" vs ")}`,
+              `Second Level comparison: ${players.map((p) => p.name).join(" vs ")}`,
               `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} weeks` : ""}`,
               `scoring: ${scoring}`,
             ]}

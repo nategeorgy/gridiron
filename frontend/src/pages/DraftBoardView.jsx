@@ -161,7 +161,7 @@ export function DraftBoardView({ board }) {
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
           <ExportButton
-            filename={`gridironiq-draft-board-${data?.ranking_season ?? season}`}
+            filename={`second-level-draft-board-${data?.ranking_season ?? season}`}
             rows={exportRows}
             columns={[
               { key: "consensus_rank", label: "#" },
@@ -181,7 +181,7 @@ export function DraftBoardView({ board }) {
               { key: "note", label: "Note" },
             ]}
             context={[
-              "GridironIQ: Draft Value Board",
+              "Second Level: Draft Value Board",
               `${data?.ranking_type ?? ""} consensus (${data?.source ?? ""}), scraped ${data?.scraped_at ?? "—"}`,
               `valued from the ${data?.valuation_season ?? season} season · scoring: ${scoring} · league: ${league}`,
               "Gap = market rank − our rank, both ranked over the players we can value. Positive = we rate them higher.",

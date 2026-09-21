@@ -1,6 +1,6 @@
 // Says which of a board's columns have no data in the selected season, and why (M8).
 //
-// GridironIQ covers 1999 onwards, but coverage deepens over time: charted passing data
+// Second Level covers 1999 onwards, but coverage deepens over time: charted passing data
 // starts in 2006, snap counts in 2013, routes in 2016, and targets are missing entirely
 // from 2003 to 2008 because play-by-play in those seasons names a receiver only on
 // completions. Without this, picking 2004 on a receiving board renders three columns of

@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-18 (the pipeline connection pool cap)
+Last updated: 2026-09-20 (the Second Level rebrand, and the credit bar unstuck)
 
 ---
 
@@ -136,7 +136,9 @@ Recharts (charts). Package manager: **npm**. Dev server runs on **port 5173**.
 | `tailwind.config.js` | Tailwind theme — fonts (Inter, mono) and **semantic color tokens** (`fg`, `muted`, `faint`, `surface`, `line`, `accent`, `pos/neg/warn`) that resolve to the active theme's CSS variables. The actual Liquid Glass look lives in `src/index.css`. |
 | `postcss.config.js` | Runs Tailwind + autoprefixer during the build. |
 | `vercel.json` | Tells **Vercel** (the frontend host) to route all paths to `index.html` (needed for a single-page app so deep links work). |
-| `public/favicon.svg` | The browser-tab icon. |
+| `public/favicon.svg` | The browser-tab icon: the 2L mark on its dark tile. Drawn at 84% of the tile rather than the app icon's 72%, because the mark has interior detail that dies at 16px. |
+| `public/apple-touch-icon.png` | 180x180 home-screen icon, exported from `brand/second-level/mark/2l-icon.svg`. |
+| `public/icon-512.png` | 512x512 icon, for anything that wants a large raster. |
 
 ### `frontend/src/` — the actual app code
 
@@ -181,8 +183,9 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `pages/TeamProfile.jsx` | page | ⭐ **One team (M6.2)** at `/teams/:teamId`: record, next game with its line and implied total, a **strength-of-schedule strip** per position (season and fantasy playoffs), the depth chart by position with each player's fantasy PPG in your scoring, and the full fixture list. Two seasons are on the page at once — the schedule is about the season coming, the production about the last one played — and it labels both rather than hoping nobody notices. |
 | `pages/StyleGuide.jsx` | page (dev only) | ⭐ **The design-token studio** at `/styleguide` — a build tool, not a product page, so `App.jsx` only registers it under `npm run dev` and nothing links to it. Renders every surface the Liquid Glass material produces beside a live editor for the theme's CSS variables, and emits the CSS to paste back into `index.css`. Reads the current values with `getComputedStyle` (so `index.css` stays the single source of truth), applies edits as inline custom properties on `<html>`, and **removes them on unmount** — a draft can never leak into the rest of the app. One page rather than one per theme: the glass is `backdrop-filter`, so a light panel nested in a dark page would blur an environment that does not exist. |
 | **`components/`** | UI | Reusable pieces used by pages. |
-| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, **Insight ▾**, the **Leaderboards** mega menu, **Schedule ▾**, Teams), search box, the theme toggle, and **the account menu**; renders the current page inside. `WIDE_ROUTES` (routes opting out of the 1280px cap) is **empty** while the draft room — its only member — is hidden for launch. The page background (the Liquid Glass "environment") is painted on `<body>`. The shell is a **flex column** with `<main>` on `flex-1`, so `Footer` is pushed to the bottom of the viewport on a short page; `main`'s `pb-*` steps reserve the fixed bar's measured height. |
-| `components/Footer.jsx` | UI | ⭐ **The site-wide credit bar.** Names every upstream the pipeline reads (nflverse, Next Gen Stats, Pro Football Reference, FantasyPros, ESPN for images), states that NFL team names and logos belong to the NFL and its teams, disclaims affiliation, and carries `CONTACT_EMAIL`. ⚠️ **Fixed only from `sm` up**: measured, the bar is 37px at 1280 and wider (one line), 57px between 640 and 1280, and **157px at 390px**, so on a phone it sits at the end of the page in normal flow instead. Links are `--fg` with a `--muted` underline, never `--accent` (2.44:1 on the light surface). |
+| `components/Layout.jsx` | UI | The app shell: frosted sticky header with brand, nav (Home, **Insight ▾**, the **Leaderboards** mega menu, **Schedule ▾**, Teams), search box, the theme toggle, and **the account menu**; renders the current page inside. `WIDE_ROUTES` (routes opting out of the 1280px cap) is **empty** while the draft room — its only member — is hidden for launch. The page background (the Liquid Glass "environment") is painted on `<body>`. The brand is the stacked `BrandLockup`, wrapped in a link to `/`. The shell is a **flex column** with `<main>` on `flex-1` and the footer on `mt-auto`, so the footer sits at the bottom of a short page without being fixed and `<main>` reserves nothing. |
+| `components/Brand.jsx` | UI | ⭐ **The Second Level identity.** `BrandMark` (the 2L, the only inline SVG here because it is artwork), `BrandLockup` (mark + SECOND LEVEL, used in the header) and `SlashLockup` (SECOND / LEVEL over the tagline). Everything except the 2L is **live text**, not outlines: the app already loads Inter 400-700, so the wordmarks cost nothing in the bundle and stay selectable. The outlined SVGs in `brand/second-level/` exist for the places a webfont cannot be relied on (social cards, PDFs, email). Colour follows the theme: the 2's half is `currentColor` so it inverts on light, and the green is `var(--accent)` (the deeper `#00b06a` on light, where the brand `#11c759` would fail contrast). |
+| `components/Footer.jsx` | UI | ⭐ **The site-wide credit bar**, carrying the `SlashLockup`, every upstream the pipeline reads (nflverse, Next Gen Stats, Pro Football Reference, FantasyPros, ESPN for images), the statement that NFL team names and logos belong to the NFL and its teams, the affiliation disclaimer, and `CONTACT_EMAIL`. **A `glass-card` in normal flow**, inside the same max-width wrapper `<main>` uses, so its edges line up with the content above it rather than running to the viewport; it takes `wide` for the same reason `<main>` does. It used to be `position: fixed` from `sm` up on a bespoke `.glass-footer` surface, which spent a permanent strip of every screen (37px at 1280+, 57px between 640 and 1280, **157px at 390px**) and forced `<main>` to reserve that height with matching `pb-*` steps. `.glass-footer` is now **deleted**: its `backdrop-filter` blurred nothing once the bar stopped floating over scrolling content, and the card material is shared. Links are `--fg` with a `--muted` underline, never `--accent` (2.44:1 on the light surface). |
 | `components/ThemeToggle.jsx` | UI | Header sun/moon button that flips light ↔ dark (via `useTheme`). |
 | `components/AccountMenu.jsx` | UI | ⭐ **The header account control (M5).** A *Sign in* button when signed out; an avatar dropdown when signed in — league profiles (switch or delete), saved views (open or delete), and sign out. Renders **nothing** when the build has no Supabase project configured. Mounts `AuthDialog` in *both* branches, because a password-reset link signs the user in before they set the new password. |
 | `components/AuthDialog.jsx` | UI | ⭐ **The sign-in surface (M5)**: password sign-in, sign-up, magic link, forgot-password, a "check your inbox" state, and a set-a-new-password form entered only via Supabase's `PASSWORD_RECOVERY` event. **Portalled to `document.body`** — it renders from inside the sticky header, and `.glass-header`'s `backdrop-filter` makes that a containing block for `position: fixed`, which would otherwise clip the overlay to the header. Any future modal opened from the header needs the same treatment. |
@@ -730,6 +733,23 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-20**: **The Second Level rebrand, wired in.** `components/Brand.jsx` replaces the
+  placeholder arc-and-dot `BrandMark` that lived inside `Layout.jsx`; the header lockup is now a
+  link to `/`. New `public/favicon.svg`, `apple-touch-icon.png` and `icon-512.png`, and the page
+  title becomes "Second Level | Fantasy Football Data". Every user-visible "GridironIQ" string is
+  renamed (17 across 16 files), including the **CSV download filenames**, which were `gridironiq-*`
+  and are now `second-level-*`. ⚠️ **The `gridiron.*` localStorage keys are deliberately unchanged**
+  (`gridiron.theme`, `gridiron.scoring`, `gridiron.mock`, `gridiron.styleguide.draft`): renaming a
+  storage key does not migrate it, it silently resets every existing visitor's theme, scoring and
+  in-progress mock draft. The full vector identity lives in `brand/second-level/`.
+  The header lockup is **stacked** (mark over wordmark) at the artwork's own ratios; the wordmark's
+  cap is floored at 9px because the canonical ratio puts it near 5px at header scale, and the
+  tracking is solved from the target width so the lockup still spans what the artwork specifies.
+  ⚠️ **The credit bar is no longer fixed.** It sits in normal flow at the end of the page, which
+  removed both the reserved-height coupling in `Layout.jsx` and the measured-copy-length budget,
+  and is what made room for the `SlashLockup` in it. It is a **`glass-card` constrained to the
+  content width**, not a full-bleed band, so its edges line up with the boards above it. The
+  bespoke `.glass-footer` rule is deleted.
 - **2026-09-18**: **The pipeline's connection pool is bounded** (`pipeline/db.py`).
   It had been running SQLAlchemy's defaults, up to 15 connections, against the same
   free-tier session-mode pooler `backend/app/database.py` caps itself to 5 for, and that

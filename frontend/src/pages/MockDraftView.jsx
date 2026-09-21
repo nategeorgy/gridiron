@@ -16,7 +16,7 @@
 // next pick", "does team 4 already have three backs") are spatial, and a scrolling feed
 // cannot answer any of them. See `components/DraftBoardGrid`.
 //
-// **Kickers and defenses are absent**, and the page says so: GridironIQ holds no data
+// **Kickers and defenses are absent**, and the page says so: Second Level holds no data
 // for them, and a placeholder round would be a fake.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -659,7 +659,7 @@ export function MockDraftView({ board }) {
           changing what they do.
         </p>
         <p className="max-w-3xl text-xs leading-relaxed text-faint">
-          Quarterbacks, running backs, receivers and tight ends only. GridironIQ holds
+          Quarterbacks, running backs, receivers and tight ends only. Second Level holds
           no kicker or defense data, and drafting placeholder names would not be
           practice.
           {picks.length > 0 && (

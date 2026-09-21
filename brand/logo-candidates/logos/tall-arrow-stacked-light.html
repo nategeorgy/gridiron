@@ -1,0 +1,66 @@
+<!-- @dsCard group="Monogram lockups" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tall arrow, stacked, light</title>
+<style>
+  :root {
+    --bg: #f6f6f5; --surface: #fff; --fg: #16181a; --muted: #6b7280; --line: #e2e2e0;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0d0f11; --surface: #16191c; --fg: #f2f3f4; --muted: #9aa1a8; --line: #262a2e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0f11; --surface: #16191c; --fg: #f2f3f4; --muted: #9aa1a8; --line: #262a2e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 26px 16px 40px; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 17px; font-weight: 640; margin: 0 0 4px; letter-spacing: -0.015em; }
+  .note { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+  .well {
+    border: 1px solid var(--line); border-radius: 13px; padding: 26px 22px; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: center; min-height: 116px;
+  }
+  .well.asis  { background: #ffffff; }
+  .well.onlight { background: #ffffff; }
+  .well.ondark  { background: #0f1214; }
+  .well img { max-width: 100%; height: auto; display: block; }
+  .lbl {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .085em;
+    color: var(--muted); margin: 16px 0 7px;
+  }
+  .lbl:first-of-type { margin-top: 0; }
+  footer { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+  code { font: 11.5px/1.7 "JetBrains Mono", "Roboto Mono", ui-monospace, monospace; color: var(--muted); display: block; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Tall arrow, stacked, light</h1>
+    <p class="note">Arrow overshoots the mark, SECOND over LEVEL</p>
+
+    <p class="lbl">As supplied</p>
+    <div class="well asis"><img src="tall-arrow-stacked-light.png" alt="Tall arrow, stacked, light" width="418" height="360"></div>
+
+    <p class="lbl">Background removed, on light</p>
+    <div class="well onlight"><img src="transparent/tall-arrow-stacked-light.png" alt="Tall arrow, stacked, light, transparent" width="300" height="246"></div>
+
+    <p class="lbl">Background removed, on dark</p>
+    <div class="well ondark"><img src="transparent/tall-arrow-stacked-light.png" alt="Tall arrow, stacked, light, transparent" width="300" height="246"></div>
+
+    <footer>
+      <code>tall-arrow-stacked-light.png &middot; 418&times;360</code>
+      <code>transparent/tall-arrow-stacked-light.png &middot; 300&times;246</code>
+      <code>source tile D03</code>
+    </footer>
+  </div>
+</body>
+</html>

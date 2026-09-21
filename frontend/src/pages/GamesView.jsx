@@ -137,7 +137,7 @@ export function GamesView({ board }) {
           <div className="ml-auto flex items-end gap-2">
             <SaveViewButton defaultName={board.title} />
             <ExportButton
-              filename={`gridironiq-games-${season}${oneWeek ? `-wk${week}` : ""}`}
+              filename={`second-level-games-${season}${oneWeek ? `-wk${week}` : ""}`}
               rows={exportRows}
               columns={[
                 { key: "week", label: "Week" },
@@ -153,7 +153,7 @@ export function GamesView({ board }) {
                 { key: "home_implied", label: "Home implied" },
               ]}
               context={[
-                "GridironIQ: Games",
+                "Second Level: Games",
                 `${season} regular season${oneWeek ? `, week ${week}` : ""}`,
                 "Implied total = total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
               ]}

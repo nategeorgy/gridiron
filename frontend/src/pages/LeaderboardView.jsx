@@ -149,11 +149,11 @@ export function LeaderboardView({ board }) {
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
           <ExportButton
-            filename={`gridironiq-${board.id}-${season}${weeks ? `-wk${weeks.replace(/,/g, "-")}` : ""}`}
+            filename={`second-level-${board.id}-${season}${weeks ? `-wk${weeks.replace(/,/g, "-")}` : ""}`}
             rows={exportData.rows}
             columns={exportData.columns}
             context={[
-              `GridironIQ: ${board.title}`,
+              `Second Level: ${board.title}`,
               `${season} ${seasonType}${
                 weeks ? ` · weeks ${weeks}` : " · full season"
               }${positions ? ` · ${positions}` : ""}${team ? ` · ${team}` : ""}`,

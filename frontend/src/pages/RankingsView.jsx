@@ -180,7 +180,7 @@ export function RankingsView({ board }) {
           </button>
           <SaveViewButton defaultName={board.title} />
           <ExportButton
-            filename={`gridironiq-rankings-${data?.board ?? "consensus"}`}
+            filename={`second-level-rankings-${data?.board ?? "consensus"}`}
             rows={exportRows}
             columns={[
               { key: "rank", label: "#" },
@@ -200,7 +200,7 @@ export function RankingsView({ board }) {
               { key: "fantasy_ppg", label: "FPPG" },
             ]}
             context={[
-              `GridironIQ: ${data?.board_label ?? "Rankings"}`,
+              `Second Level: ${data?.board_label ?? "Rankings"}`,
               data?.attribution ?? "A blend of every expert board held, each re-ranked before averaging.",
               `${data?.ranking_type ?? ""} for the ${data?.ranking_season ?? ""} season · valued from ${data?.valuation_season ?? season}`,
               `scoring: ${scoring} · league: ${league}`,

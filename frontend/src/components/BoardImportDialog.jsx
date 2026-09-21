@@ -34,7 +34,7 @@ function downloadTemplate() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "gridironiq-rankings-template.csv";
+  link.download = "second-level-rankings-template.csv";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -157,7 +157,7 @@ export function BoardImportDialog({
             <>
               {" "}
               {result.out_of_scope} kicker/defense row
-              {result.out_of_scope === 1 ? " was" : "s were"} skipped. GridironIQ
+              {result.out_of_scope === 1 ? " was" : "s were"} skipped. Second Level
               covers QB, RB, WR and TE.
             </>
           )}
