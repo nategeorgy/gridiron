@@ -27,6 +27,36 @@ _SUMMARY: VersionedCache[list] = VersionedCache(max_entries=1)
 _WEEK_BOUNDS: VersionedCache[tuple[int, int]] = VersionedCache(max_entries=64)
 
 
+# ⚠️ A "loose index scan", not the `SELECT DISTINCT season` this used to be, and the
+# difference is the whole reason the endpoint was usable.
+#
+# Postgres does not turn a plain DISTINCT over an indexed column into a skip scan: it
+# reads every row and hash-aggregates. That is a **sequential scan of `player_stats`**
+# to learn eighteen integers, measured here at 5,963 buffer pages (~47 MB) against 61
+# (~0.5 MB) for the form below. Locally the difference is invisible (17 ms vs 0.1 ms,
+# because the table is in page cache); on Supabase's smallest instance `player_stats`
+# does not fit in memory, so those pages are real disk reads against a throttled IO
+# budget, and the endpoint took over two minutes and then 500ed.
+#
+# The recursive form walks `ix_player_stats_season` instead: find the lowest season,
+# then repeatedly ask for the lowest season strictly greater than the last one. That is
+# one index probe per season held rather than one heap read per stat line, so its cost
+# tracks the number of SEASONS and not the size of the table, which is the property
+# that matters, since the table grows every week and the season count grows once a year.
+#
+# The trailing NULL is expected: the recursion terminates by probing past the last
+# season and getting no row, so the caller filters it out.
+_DISTINCT_STAT_SEASONS = """
+WITH RECURSIVE seasons_held AS (
+    SELECT MIN(season) AS season FROM player_stats WHERE season IS NOT NULL
+    UNION ALL
+    SELECT (SELECT MIN(season) FROM player_stats WHERE season > seasons_held.season)
+    FROM seasons_held WHERE seasons_held.season IS NOT NULL
+)
+SELECT season FROM seasons_held WHERE season IS NOT NULL
+"""
+
+
 class SeasonInfo(BaseModel):
     """One season the database knows about."""
 
@@ -57,9 +87,8 @@ def _season_summary(db: Session) -> list[SeasonInfo]:
     ).all()
     stat_seasons = {
         season
-        for (season,) in db.execute(
-            text("SELECT DISTINCT season FROM player_stats WHERE season IS NOT NULL")
-        ).all()
+        for (season,) in db.execute(text(_DISTINCT_STAT_SEASONS)).all()
+        if season is not None
     }
     return [
         SeasonInfo(
