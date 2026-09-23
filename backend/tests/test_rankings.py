@@ -2,7 +2,7 @@
 
 Two quite different risks are covered here.
 
-**The security one.** Several of the boards blended into the GridironIQ Consensus are
+**The security one.** Several of the boards blended into the Second Level Consensus are
 paywalled, and the whole guarantee is that they can only ever leave the server inside
 an average. That is a property of `app.rankings.GLOBAL_SOURCES` being fail-closed, so
 these tests assert it directly rather than through any one endpoint: a source that is

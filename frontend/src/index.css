@@ -75,6 +75,12 @@
     --cell-tint: 42%;
     --cell-tint-edge: 70%;
 
+    /* A reference line drawn inside a chart (the par diagonal on the home page's
+       expected-vs-actual plot). Not `--border-strong`: that is a glass EDGE, and the
+       light theme defines it as near-white, which made the par line invisible on the
+       light card. This is ink on the surface in both themes. */
+    --plot-rule: rgba(255, 255, 255, 0.38);
+
     --shadow: 0 20px 55px -22px rgba(0, 0, 0, 0.7);
     --radius: 20px;
     --blur: 24px;
@@ -132,6 +138,10 @@
        lightens, so the dark theme's 42% reads as a wash here. */
     --cell-tint: 58%;
     --cell-tint-edge: 85%;
+
+    /* Black on the light card, which is what makes it readable: the same line drawn
+       in the glass edge colour was white on near-white. */
+    --plot-rule: rgba(20, 24, 33, 0.9);
 
     --shadow: 0 18px 44px -22px rgba(20, 30, 60, 0.35);
     --radius: 20px;

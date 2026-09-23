@@ -1,4 +1,4 @@
-# GridironIQ — Product Roadmap
+# Second Level — Product Roadmap
 
 > Source of truth for product direction. `CLAUDE.md` holds the spec and scope
 > summary; this file holds the vision, architecture spines, and the milestone
@@ -10,7 +10,7 @@ Last updated: 2026-08-20 (M6 shipped)
 
 ## Product vision
 
-**The fastest way to make a confident fantasy decision.** GridironIQ turns raw NFL
+**The fastest way to make a confident fantasy decision.** Second Level turns raw NFL
 data into fantasy answers — *in your league's exact scoring* — so a manager can see
 who to **start, buy, sell, and draft**, and *why*, better than anywhere else. Free,
 fast, beautiful, and deep enough for the analytics crowd.
@@ -56,7 +56,7 @@ retrofitted:
 Plus one data-model rule set now to avoid a later migration:
 
 - **Multi-source projections.** Model projections as `(player, season, week, source,
-  scoring_context)` from day one so **consensus**, a future **GridironIQ model**, and
+  scoring_context)` from day one so **consensus**, a future **Second Level model**, and
   **user-generated** projections coexist. (See Decision Log.)
 
 ---
@@ -467,7 +467,7 @@ loading the data, because several surfaces had quietly assumed a full season.
 
 ### 💭 Dream tail (only when the base is proven)
 - **Fantasy trade calculator** — on VORP / rest-of-season value.
-- **GridironIQ projection model** — own weekly/season model (see Decision Log).
+- **Second Level projection model** — own weekly/season model (see Decision Log).
 - **User-generated projections** — let users publish their own projections/rankings
   (multi-source schema makes this additive).
 - **Survivor pool** — live-odds dependency.
@@ -554,7 +554,7 @@ URLs, fotmob-grade design). Timing tracks the milestones:
 
 | When | Action |
 |---|---|
-| **Now** | Reserve the handle (`@GridironIQ` or chosen name) across Twitter/X + Bluesky + Instagram. Bio + app link + one pinned "what this is" post. Then go dormant — no cadence yet. |
+| **Now** | Reserve the handle (`@secondlevelff`) across Twitter/X + Bluesky + Instagram. Bio + app link + one pinned "what this is" post. Then go dormant — no cadence yet. |
 | **M2 shipped** | Soft launch. 1–2 posts/week of expected-vs-actual / regression takeaways. Enough hook to start without feeling empty. |
 | **M3 shipped** | Go active. The indices (Positive-Regression, Sell-High, FOR, VORP) *are* the content engine — each is a screenshottable, argument-starting post that links to the live tool. |
 | **M4 shipped** | Lean into visuals. Scatter/comparison charts are native shareable assets that carry branding into other timelines. |
@@ -574,14 +574,14 @@ URLs, fotmob-grade design). Timing tracks the milestones:
    draft season (Aug), waiver mornings (Tue/Wed), and Sunday-night/Monday reaction.
    Post when managers are making decisions, not when you finish the build.
 4. **Reply-guy into the ecosystem, generously.** Answer "start/sit X or Y?" threads
-   with a GridironIQ-backed take and a link. More reach early than posting into the void.
+   with a Second Level-backed take and a link. More reach early than posting into the void.
    Be useful first; the brand follows.
 5. **Be provably right in public.** Track your own calls (the Sell-High names that
    busted, the regression names that hit) and post the scorecard monthly. Receipts are
    the cheapest credibility in a space full of unfalsifiable takes.
 6. **Court the mid-tier, not the mega-accounts.** Analysts with 5–50k followers embed
    tools in their content and reply to DMs. Give a few of them a heads-up / free look;
-   one embedding a GridironIQ chart in their podcast prep is worth more than a like from
+   one embedding a Second Level chart in their podcast prep is worth more than a like from
    a 500k account.
 7. **Seed where fantasy players argue, not just X.** r/fantasyfootball, r/DynastyFF,
    fantasy Discords, Bluesky's fantasy circle. Post genuinely useful tool-backed answers
@@ -799,7 +799,7 @@ tells people it exists.
   analytics" to fantasy-first. Trigger: nflsavant.com. Dropped the "Baseball Savant for
   the NFL" one-liner.
 - **2026-07-16 — Consensus-first projections, designed multi-source.** Use
-  `ff_rankings` + `ff_opportunity` now. Future: build a **GridironIQ projection model**
+  `ff_rankings` + `ff_opportunity` now. Future: build a **Second Level projection model**
   *and* let **users create their own projections** on the site. Therefore projections
   are modeled as `(player, season, week, source, scoring_context)` from the start.
 - **2026-07-16 — Defer accounts (spine C).** Ship saved/custom features via

@@ -20,7 +20,7 @@ league while the 13th already matters in a 6-team one. So value has to be measur
 against **replacement level**, and replacement level depends on the league.
 
 We could have hard-coded the conventional baselines (QB12 / RB24 / WR36 / TE12). That
-would have been the one place where GridironIQ was *less* custom than its own pitch —
+would have been the one place where Second Level was *less* custom than its own pitch —
 "your league scoring everywhere" is the product, and a fixed 12-team assumption
 contradicts it. So league context became a first-class per-request config, built
 exactly like `ScoringConfig`:

@@ -103,6 +103,9 @@ export const TOKEN_GROUPS = [
       { name: "--series-3", label: "Series 3", type: "color" },
       { name: "--series-4", label: "Series 4", type: "color" },
       { name: "--series-5", label: "Series 5", type: "color" },
+      // Ink on the card, not a glass edge: `--border-strong` is near-white on the light
+      // theme, which made the par line on the home page's plot invisible there.
+      { name: "--plot-rule", label: "Chart reference line", type: "color" },
     ],
   },
   {

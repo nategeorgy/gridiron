@@ -50,15 +50,24 @@ function TeamLogo({ url }) {
  * dim together, which says who won without a second lookup. The middle column is a fixed
  * width so logos and scores line up down the whole list.
  */
-function GameRow({ game }) {
+function GameRow({ game, records }) {
   const awayLost = game.played && game.winner === "home";
   const homeLost = game.played && game.winner === "away";
   const side = (lost) => (lost ? "font-medium text-faint" : "font-semibold text-fg");
+  // The record sits on the far side of the abbreviation so the abbreviation stays next
+  // to its own logo, which is what keeps the two halves of the row mirror images.
+  const record = (abbreviation) => {
+    const value = records?.[abbreviation];
+    return value ? <span className="stat-num text-[10px] font-normal text-faint">{value}</span> : null;
+  };
 
   return (
     <div className="border-t border-line py-2 first:border-t-0">
       <div className="grid grid-cols-[1fr_18px_84px_18px_1fr] items-center gap-2">
-        <span className={`justify-self-end text-[12.5px] ${side(awayLost)}`}>{game.away_abbreviation}</span>
+        <span className={`flex items-baseline justify-end gap-1.5 text-[12.5px] ${side(awayLost)}`}>
+          {record(game.away_abbreviation)}
+          {game.away_abbreviation}
+        </span>
         <TeamLogo url={game.away_logo_url} />
         <span className="flex flex-col items-center leading-tight">
           <span className="text-[10px] text-faint">{formatDate(game.game_date)}</span>
@@ -73,7 +82,10 @@ function GameRow({ game }) {
           )}
         </span>
         <TeamLogo url={game.home_logo_url} />
-        <span className={`justify-self-start text-[12.5px] ${side(homeLost)}`}>{game.home_abbreviation}</span>
+        <span className={`flex items-baseline justify-start gap-1.5 text-[12.5px] ${side(homeLost)}`}>
+          {game.home_abbreviation}
+          {record(game.home_abbreviation)}
+        </span>
       </div>
       <div className="stat-num mt-0.5 text-center text-[10.5px] text-faint">
         {game.played ? (
@@ -125,7 +137,7 @@ export function ScoreboardCard({ scoreboard, isLoading, isError }) {
         // them pushes everything below it off the screen.
         <div className="max-h-[322px] overflow-y-auto pr-1.5">
           {games.map((game) => (
-            <GameRow key={game.game_id} game={game} />
+            <GameRow key={game.game_id} game={game} records={active.records} />
           ))}
         </div>
       )}

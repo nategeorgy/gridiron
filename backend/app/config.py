@@ -13,9 +13,19 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     # Regex of additional allowed origins, matched with a full match. Defaults to
     # this project's Vercel URLs so every preview deploy (e.g.
-    # https://gridiron-git-<branch>-<scope>.vercel.app) and production are allowed
+    # https://second-level-git-<branch>-<scope>.vercel.app) and production are allowed
     # without listing each one. Override or clear via the CORS_ORIGIN_REGEX env var.
-    cors_origin_regex: str = r"https://gridiron-[a-z0-9-]+\.vercel\.app"
+    #
+    # BOTH project prefixes are matched on purpose. The Vercel project was created as
+    # `gridiron` and the rebrand renames it, which rewrites every preview URL; keeping
+    # the old prefix means the rename can happen in either order without an outage, and
+    # a stale preview link keeps working. Drop `gridiron` once nothing serves it.
+    #
+    # A CUSTOM DOMAIN IS NOT COVERED HERE. This pattern only matches *.vercel.app, so
+    # the production domain goes in CORS_ORIGINS (the exact list) in the Render
+    # dashboard. Forgetting it is a browser-only failure: curl succeeds, the site does
+    # not, because CORS is enforced by the browser and nothing else.
+    cors_origin_regex: str = r"https://(second-level|gridiron)-[a-z0-9-]+\.vercel\.app"
 
     # --- Supabase Auth (M5) ---
     # The project URL, e.g. https://abcdefgh.supabase.co. Used to derive the token

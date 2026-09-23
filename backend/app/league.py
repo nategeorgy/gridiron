@@ -38,7 +38,7 @@ _MAX_BENCH = 20  # deep-bench dynasty leagues exist; 20 is past all of them
 class LeagueConfig(BaseModel):
     """A resolved league: how many teams, and what each team starts.
 
-    Kicker and defense slots are deliberately absent — GridironIQ covers QB/RB/WR/TE,
+    Kicker and defense slots are deliberately absent — Second Level covers QB/RB/WR/TE,
     and neither slot affects the replacement level at those positions.
     """
 

@@ -13,9 +13,10 @@
 // what made room for the lockup.
 //
 // It is a `glass-card` inside the same max-width wrapper `<main>` uses, so its edges
-// line up with the content above it instead of running to the viewport. It takes
-// `wide` for the same reason `<main>` does: a route that opts out of the 1280px cap
-// would otherwise leave the footer visibly narrower than everything above it.
+// line up with the content above it instead of running to the viewport. ⚠️ **The width
+// is passed in rather than decided here**: it used to pick between two Tailwind classes
+// of its own, and the moment a route chose a third width the footer was visibly
+// narrower than everything above it. `components/Layout.jsx` owns the number now.
 //
 // `<main>` carries `flex-1` in the shell's flex column, which is what holds this at
 // the bottom of the viewport on a short page.
@@ -53,9 +54,9 @@ function SourceList() {
   ));
 }
 
-export function Footer({ wide = false }) {
+export function Footer({ maxWidth }) {
   return (
-    <div className={`mx-auto w-full px-4 pb-10 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
+    <div className="mx-auto w-full px-4 pb-10" style={{ maxWidth }}>
       <footer className="glass-card px-5 py-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <SlashLockup align="start" />

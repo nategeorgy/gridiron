@@ -1,4 +1,4 @@
-# GridironIQ Data Pipeline
+# Second Level Data Pipeline
 
 Ingests nflverse data into PostgreSQL via [`nflreadpy`](https://github.com/nflverse/nflreadpy).
 All scripts are **idempotent** (`INSERT ... ON CONFLICT DO UPDATE`) — safe to
@@ -229,7 +229,7 @@ table, at the real week number:
 `data/rankings/` — see the README in that folder for the format, which is the same one
 the in-app upload accepts.
 
-- Boards blend **anonymously** into the GridironIQ Consensus. The backend's source
+- Boards blend **anonymously** into the Second Level Consensus. The backend's source
   registry is fail-closed, so a source id nobody registered can reach a user only as one
   un-named input to an average — several of these are paywalled. The script refuses to
   write a source id the API publishes, and never writes a display name.

@@ -1,7 +1,7 @@
 # Expert ranking boards (CSV drop)
 
 Boards dropped in this folder are ingested by `pipeline/ingest_expert_boards.py` and
-**blended anonymously** into the GridironIQ Consensus. They are never exposed
+**blended anonymously** into the Second Level Consensus. They are never exposed
 individually: the API's source registry treats any source it does not explicitly
 publish as private, so an individual board here can only ever reach a user as one
 un-named input to an average. That is deliberate — several of these are paywalled, and
@@ -17,7 +17,7 @@ upload accepts — one parser, so a board that ingests here also imports there.
 |---|---|---|
 | `rank` | ✅ | Integer. Gaps are fine (we re-densify); ties are broken by file order. |
 | `player` | ✅ | Full name as the expert writes it. Suffixes, punctuation and casing are normalised before matching. |
-| `position` | ✅ | `QB`, `RB`, `WR` or `TE`. Any other position (K, DST, IDP) is skipped and counted in the log — GridironIQ holds no data for them. |
+| `position` | ✅ | `QB`, `RB`, `WR` or `TE`. Any other position (K, DST, IDP) is skipped and counted in the log — Second Level holds no data for them. |
 | `team` | optional | Team abbreviation. Not needed to match, but it is what separates two players with the same name, so include it when you have it. |
 | `tier` | optional | Integer. Carried through to the board display; ignored in the blend. |
 

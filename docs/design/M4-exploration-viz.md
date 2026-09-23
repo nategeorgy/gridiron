@@ -69,7 +69,7 @@ readings:
 - **combine-then-average** — `mean(receiving_yards_g / targets_g)` over games
 
 They differ whenever the denominator varies by game, and the second one lets a 1-target
-1-catch-for-40 game count as much as a 12-target game. **GridironIQ always
+1-catch-for-40 game count as much as a 12-target game. **Second Level always
 aggregates first, then combines.** Each term is aggregated over the window by its
 registry `aggregation` (`sum` → `SUM`, `avg` → `AVG`, `scoring`/`expected` → the M1
 engine's SQL expression), and the arithmetic runs on those aggregates.

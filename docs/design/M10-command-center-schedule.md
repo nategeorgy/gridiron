@@ -84,10 +84,16 @@ the M6.2 chart already reports.
 ## 4. The preseason problem, and the outlook mode
 
 > **Update, 2026-09-14 — retired.** Once Week 1 produced real snaps, a hand-picked
-> **Week standouts** card (`components/home/StandoutsCard.jsx`, `WEEKLY_STANDOUTS` in
-> `constants/signals.js`) took the top slot: one week of usage — Snap%, Routes, Route%,
+> **Week standouts** card took the top slot: one week of usage — Snap%, Routes, Route%,
 > Targets, Tgt%, Air yds, YPRR, TPRR, FP/RR — with each value's positional rank as a
-> `FinishChip`. `TrendingCard` is now live-only and renders once the endpoint has rows;
+> `FinishChip`.
+>
+> **Update, 2026-09-22 — renamed and reshaped.** That card is now
+> `components/home/TrendingPlayersCard.jsx` (`TRENDING_PLAYERS` in
+> `constants/signals.js`): four stats **per pick** rather than nine for everyone, the
+> change stated as an arrow and a delta rather than drawn, and a per-pick basis for what
+> the change is measured against. The two signal cards in the rail were replaced in the
+> same change by `components/home/ExpectedActualCard.jsx` in the wide column. `TrendingCard` is now live-only and renders once the endpoint has rows;
 > the outlook mode and its data were removed (they remain in git history). The same
 > change redrew the scoreboard as one line per game — away, then the date above the score
 > or kickoff, then home, with team logos from `teams.logo_url` — because a score at the

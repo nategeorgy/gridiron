@@ -1,6 +1,6 @@
 # UI Theme — Liquid Glass (light + dark)
 
-> Design note for GridironIQ's visual system. Pairs with
+> Design note for Second Level's visual system. Pairs with
 > [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) (where the code lives) and
 > [`../../CLAUDE.md`](../../CLAUDE.md) (product spec / design principles).
 
@@ -27,7 +27,7 @@ the sun/moon control in the header, and the choice persists in `localStorage`.
 ### Accent decision
 
 The two mockup skins these themes came from happened to use a **blue** accent. We
-deliberately kept GridironIQ's **electric green** brand accent instead (dark
+deliberately kept Second Level's **electric green** brand accent instead (dark
 `#00e389`, light `#00b06a` for contrast). It's a single token — `--accent` — so
 switching the whole app to another hue is a one-line change if we ever want to.
 

@@ -50,6 +50,45 @@ def _game_rows(db: Session, *filters, order_desc: bool = False):
     ).mappings().all()
 
 
+def _season_records(db: Session, season: int) -> dict[str, str]:
+    """Each team's record over the season's completed regular-season games.
+
+    Formatted here rather than in the client because the tie is the awkward part: it is
+    dropped when there are none ("2-0") and shown when there are ("1-1-1"), and two
+    surfaces deciding that separately is two chances to disagree.
+    """
+    home = aliased(Team)
+    away = aliased(Team)
+    rows = db.execute(
+        select(
+            home.abbreviation.label("home"), away.abbreviation.label("away"),
+            Game.home_score, Game.away_score,
+        )
+        .join(home, Game.home_team_id == home.team_id)
+        .join(away, Game.away_team_id == away.team_id)
+        .where(
+            Game.season == season,
+            Game.season_type == "REG",
+            Game.home_score.is_not(None),
+            Game.away_score.is_not(None),
+        )
+    ).mappings().all()
+
+    tally: dict[str, list[int]] = {}
+    for row in rows:
+        for team, scored, allowed in (
+            (row["home"], row["home_score"], row["away_score"]),
+            (row["away"], row["away_score"], row["home_score"]),
+        ):
+            entry = tally.setdefault(team, [0, 0, 0])
+            entry[0 if scored > allowed else 1 if scored < allowed else 2] += 1
+
+    return {
+        team: f"{wins}-{losses}" + (f"-{ties}" if ties else "")
+        for team, (wins, losses, ties) in tally.items()
+    }
+
+
 def _to_game(row: dict) -> GameOut:
     """Shape one row, deriving the result and the market's split of it."""
     home_score, away_score = row["home_score"], row["away_score"]
@@ -167,6 +206,9 @@ def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
         return ScoreboardWindow(
             season=season, week=week, label=f"Week {week}",
             games=[_to_game(dict(row)) for row in rows],
+            # Records belong to the window, not the fixture: the two windows straddle
+            # two seasons from January to September, and each one's records are its own.
+            records=_season_records(db, season),
         )
 
     last = newest_played_week(db)
