@@ -22,7 +22,7 @@ the leaderboard is: the pool is computed first, then the page is cut from it.
 from bisect import bisect_left, bisect_right
 from statistics import median
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -48,6 +48,7 @@ from app.percentiles import (
     percentile_metric_ids,
     qualify_games,
 )
+from app.cache import VersionedCache, cached_response
 from app.custom_metrics import (
     BUILTIN_COMPOSITES,
     CustomMetric,
@@ -94,6 +95,17 @@ ALLOWED_METRICS = (
 # The intelligence board can also rank by any of the plain aggregate metrics, so its
 # supporting columns are sortable next to the scores.
 ALLOWED_INSIGHT_METRICS = ALLOWED_METRICS | INSIGHT_METRICS
+
+# Whole encoded responses, keyed on the query string (see ``cached_response``). The
+# home page sends the same URLs on every visit, and before these each one re-read the
+# season's stat lines. Sized from measured bodies: the home page's boards are ~30 kB, a
+# 50-row board with 35 percentile columns 182 kB, and the largest a request can ask
+# for (200 rows) 718 kB; the home scatter is 83 kB and a 3,000-point one 681 kB; a
+# comparison is under 10 kB. So a full set of worst cases holds ~57 MB, and the
+# ordinary traffic that fills them a small fraction of that, on a 512 MB instance.
+_LEADERBOARD_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=64)
+_SCATTER_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=16)
+_COMPARE_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=32)
 
 
 def _round(value: float | None, digits: int = 3) -> float | None:
@@ -210,7 +222,9 @@ def _parse_player_ids(raw: str) -> tuple[str, ...] | None:
 
 
 @router.get("/leaderboard")
+@cached_response(_LEADERBOARD_RESPONSES)
 def leaderboard(
+    request: Request,
     season: int = Query(..., description="Season year, e.g. 2024"),
     week: int | None = Query(None, ge=1, le=22, description="Omit for a season aggregate"),
     weeks: str = Query(
@@ -463,7 +477,9 @@ def _compare_metrics(positions: set[str]) -> list[str]:
 
 
 @router.get("/compare")
+@cached_response(_COMPARE_RESPONSES)
 def compare(
+    request: Request,
     players: str = Query(..., description="Comma-separated player ids (max 5)"),
     season: int = Query(..., description="Season year, e.g. 2024"),
     last_weeks: int | None = Query(
@@ -658,7 +674,9 @@ def _compare_weekly(
 
 
 @router.get("/scatter")
+@cached_response(_SCATTER_RESPONSES)
 def scatter(
+    request: Request,
     season: int = Query(..., description="Season year, e.g. 2024"),
     x: str = Query("expected_fantasy_ppg", description="Metric on the x axis"),
     y: str = Query("fantasy_ppg", description="Metric on the y axis"),
