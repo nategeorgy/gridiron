@@ -35,7 +35,7 @@ two pages that both claim to be "the ranking" is how a user stops trusting eithe
 
 **"Consensus" means a blend, and the blend is anonymous.** We hold FantasyPros ECR plus
 a handful of expert boards dropped in as CSVs, several of them paywalled. Those blend
-into one **GridironIQ Consensus** and are *never individually selectable, labelled, or
+into one **Second Level Consensus** and are *never individually selectable, labelled, or
 returned*. The source registry (§4.1) is **fail-closed**: a source the backend does not
 explicitly publish can only ever leave the server as one un-named input to an average.
 FantasyPros keeps its own selectable board and its attribution, per the M6 rule that
@@ -68,7 +68,7 @@ QB/RB/WR/TE plus bench and say so. A placeholder round would be a fake.
 consensus ranking — measured, not assumed: `load_ff_rankings` publishes draft boards
 and **weekly** boards (`weekly-offense`, `weekly-op`, per-position) and nothing else.
 So Rankings switches to weekly ECR once the season starts and is labelled as weekly.
-**We do not build a GridironIQ ROS ranking** in this milestone; that is a projection
+**We do not build a Second Level ROS ranking** in this milestone; that is a projection
 model by another name, and the roadmap defers it.
 
 ---
@@ -95,7 +95,7 @@ Measured 2026-08-23 against `nflreadpy`, not assumed:
 
 ```python
 GLOBAL_SOURCES = {
-    "consensus":   Source(label="GridironIQ Consensus", public=True,  blend=True),
+    "consensus":   Source(label="Second Level Consensus", public=True,  blend=True),
     "fantasypros": Source(label="FantasyPros ECR",      public=True,  blend=False),
 }
 ```

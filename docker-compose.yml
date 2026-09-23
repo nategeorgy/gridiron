@@ -1,4 +1,4 @@
-# Local development database for GridironIQ.
+# Local development database for Second Level.
 #   Start:  docker compose up -d
 #   Stop:   docker compose down          (data persists in the named volume)
 #   Reset:  docker compose down -v        (drops the volume — wipes all data)

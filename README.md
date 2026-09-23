@@ -1,4 +1,4 @@
-# GridironIQ
+# Second Level
 
 Fantasy-first NFL analytics. Free advanced stats framed around fantasy value —
 every metric answers a fantasy question, recomputed in **your league's exact

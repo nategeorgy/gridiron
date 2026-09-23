@@ -59,6 +59,11 @@ class ScoreboardWindow(BaseModel):
     week: int
     label: str
     games: list[GameOut]
+    # Each team's win-loss record for this window's season, keyed by abbreviation and
+    # already formatted ("2-0", "1-1-1"). A map rather than two fields on every game:
+    # a record is a fact about the season, not about the fixture, and the same team
+    # would otherwise carry its record twice in a week it plays once.
+    records: dict[str, str] = {}
 
 
 class ScoreboardOut(BaseModel):

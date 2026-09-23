@@ -11,11 +11,28 @@ import { ThemeToggle } from "./ThemeToggle";
 import { MegaDropdown } from "./ui/MegaDropdown";
 import { NavDropdown } from "./ui/NavDropdown";
 import { LEADERBOARD_MENU, NAV_GROUPS } from "../constants/boards";
+import { HOME_LAYOUT } from "../constants/homeLayout";
 
 // Routes that opt out of the 1280px shell, capped rather than full-bleed so nothing
 // stretches to absurd cell sizes on an ultrawide display. Empty while the draft room
 // — the only page that ever needed it — is hidden for launch.
 const WIDE_ROUTES = [];
+
+// The shell's own cap, and the wide routes' cap, as numbers rather than Tailwind classes
+// (`max-w-7xl` is 80rem). They are numbers because **one place has to own the content
+// width**: `<main>` and the credit bar both read it here, so the footer can never end up
+// a different width from the content above it — which is what happened when the home
+// page started choosing its own width and the footer kept the 1280px class.
+const SHELL_WIDTH = 1280;
+const WIDE_WIDTH = 1800;
+
+/** How wide the content column is on this route. */
+function contentWidth(pathname) {
+  // The home page's arrangement decides how much room its columns need, so it names its
+  // own width (constants/homeLayout.js). Every other route takes the shell.
+  if (pathname === "/") return HOME_LAYOUT.container;
+  return WIDE_ROUTES.some((route) => pathname.startsWith(route)) ? WIDE_WIDTH : SHELL_WIDTH;
+}
 
 const navLinkClass = ({ isActive }) =>
   `whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
@@ -24,7 +41,7 @@ const navLinkClass = ({ isActive }) =>
 
 export function Layout() {
   const { pathname } = useLocation();
-  const wide = WIDE_ROUTES.some((route) => pathname.startsWith(route));
+  const maxWidth = contentWidth(pathname);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -63,12 +80,12 @@ export function Layout() {
           </div>
         </div>
       </header>
-      {/* The credit bar is in normal flow now, so nothing here reserves its height.
-          It takes `wide` so its card matches <main>'s width on either kind of route. */}
-      <main className={`mx-auto w-full flex-1 px-4 pb-6 pt-6 ${wide ? "max-w-[1800px]" : "max-w-7xl"}`}>
+      {/* The credit bar is in normal flow now, so nothing here reserves its height. It
+          takes the same width `<main>` does, from the one function that decides it. */}
+      <main className="mx-auto w-full flex-1 px-4 pb-6 pt-6" style={{ maxWidth }}>
         <Outlet />
       </main>
-      <Footer wide={wide} />
+      <Footer maxWidth={maxWidth} />
     </div>
   );
 }

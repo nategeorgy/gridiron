@@ -1,6 +1,6 @@
 """Ingest expert ranking boards dropped in as CSVs (M9).
 
-Boards in `data/rankings/` are blended **anonymously** into the GridironIQ Consensus.
+Boards in `data/rankings/` are blended **anonymously** into the Second Level Consensus.
 Several are paywalled, and the backend's source registry is fail-closed: a source id
 that is not explicitly published there can only ever leave the server as one un-named
 input to an average. That property is what makes this script safe to run, and it is

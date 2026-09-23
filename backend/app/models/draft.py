@@ -58,7 +58,7 @@ class RankingBoard(Base):
     origin: Mapped[str] = mapped_column(String(20), default="custom")
 
     # The source or board this was cloned from, for provenance in the UI ("started
-    # from GridironIQ Consensus"). Free text rather than a FK: it may name a global
+    # from Second Level Consensus"). Free text rather than a FK: it may name a global
     # source id, and a board whose parent was later deleted should keep its history.
     seeded_from: Mapped[str | None] = mapped_column(String(60))
 

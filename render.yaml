@@ -1,4 +1,4 @@
-# Render Blueprint for the GridironIQ backend API.
+# Render Blueprint for the Second Level backend API.
 # Render reads this file when you create a "Blueprint" from the repo.
 #
 # NOTE: editing this file does not reconfigure a service that was created from an

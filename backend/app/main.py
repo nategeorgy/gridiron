@@ -1,4 +1,4 @@
-"""FastAPI application entry point for the GridironIQ API."""
+"""FastAPI application entry point for the Second Level API."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +9,7 @@ from app.routers import account, draft, games, health, metrics, players, seasons
 API_V1_PREFIX = "/api/v1"
 
 app = FastAPI(
-    title="GridironIQ API",
+    title="Second Level API",
     version="0.1.0",
     description="Advanced NFL analytics API.",
 )
@@ -44,4 +44,4 @@ app.include_router(draft.account_router, prefix=API_V1_PREFIX)
 @app.get("/")
 def root() -> dict[str, str]:
     """Root endpoint pointing clients at the API docs."""
-    return {"service": "GridironIQ API", "docs": "/docs", "api": API_V1_PREFIX}
+    return {"service": "Second Level API", "docs": "/docs", "api": API_V1_PREFIX}

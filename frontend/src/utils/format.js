@@ -37,6 +37,24 @@ export function formatPercentile(fraction) {
   return ordinal(Math.max(1, Math.min(99, Math.round(fraction * 100))));
 }
 
+/**
+ * A *change* in a metric, formatted on the metric's own scale.
+ *
+ * A share moves in **percentage points**, not percent: a target share going 0.13 to
+ * 0.33 is "+20pp", and writing that as "+20.0%" would read as a fifth of a share
+ * rather than a fifth of the targets. Everything else keeps its own precision, so a
+ * count changes by whole numbers and a rate by its own decimals.
+ */
+export function formatDelta(value, format) {
+  if (value === null || value === undefined) return "—";
+  const sign = value >= 0 ? "+" : "-";
+  const magnitude = Math.abs(value);
+  if (format === "pct") return `${sign}${Math.round(magnitude * 100)}pp`;
+  if (format === "int") return `${sign}${Math.round(magnitude).toLocaleString()}`;
+  if (typeof format === "number") return `${sign}${magnitude.toFixed(format)}`;
+  return `${sign}${formatStat(magnitude, format)}`;
+}
+
 /** Prefix a signed value with an explicit "+" so gaps read as gaps. */
 export function formatSigned(value, format) {
   if (value === null || value === undefined) return "—";

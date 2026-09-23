@@ -31,12 +31,12 @@ function Face({ player, side, align }) {
         <img
           src={player.headshot_url}
           alt=""
-          className="h-16 w-16 shrink-0 rounded-full object-cover object-top"
+          className="h-24 w-24 shrink-0 rounded-full object-cover object-top"
           style={{ border: `2px solid ${side.color}`, background: "var(--surface-2)" }}
         />
       ) : (
         <span
-          className="grid h-16 w-16 shrink-0 place-items-center rounded-full text-lg font-bold"
+          className="grid h-24 w-24 shrink-0 place-items-center rounded-full text-2xl font-bold"
           style={{ border: `2px solid ${side.color}`, color: side.color }}
         >
           {player.name?.[0]}

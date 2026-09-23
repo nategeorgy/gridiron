@@ -88,7 +88,7 @@ class Source:
 GLOBAL_SOURCES: dict[str, Source] = {
     BLEND_ID: Source(
         id=BLEND_ID,
-        label="GridironIQ Consensus",
+        label="Second Level Consensus",
         public=True,
         blend=True,
         description=(

@@ -10,14 +10,14 @@
 // last season *played*; the scoreboard describes the schedule, which runs a year ahead.
 // Every card names its own season rather than the page claiming one, for the same
 // reason the M6.2 team page does.
-import { useMemo, useState } from "react";
+import { cloneElement, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useTrending } from "../hooks/useTrending";
 import { useGames, useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
-import { useCompare } from "../hooks/useExplore";
+import { useCompare, useScatter } from "../hooks/useExplore";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
 import { useScoring } from "../hooks/useScoring";
@@ -28,19 +28,20 @@ import { useSeasons } from "../hooks/useSeasons";
 import { getPlayers } from "../services/players";
 import { parseLeague } from "../constants/league";
 import {
+  EXPECTED_VS_ACTUAL,
   FEATURED_MATCHUP,
-  REGRESSION_CANDIDATES,
   SIGNALS_SEASON,
-  UNDERPERFORMERS,
-  WEEKLY_STANDOUTS,
+  TRENDING_BASIS,
+  TRENDING_PLAYERS,
 } from "../constants/signals";
 import { scaledMinGames, weeksPlayed } from "../utils/qualify";
+import { HOME_LAYOUT } from "../constants/homeLayout";
 
 import { ScoreboardCard } from "../components/home/ScoreboardCard";
-import { StandoutsCard, STANDOUT_METRICS } from "../components/home/StandoutsCard";
+import { TrendingPlayersCard } from "../components/home/TrendingPlayersCard";
 import { TrendingCard } from "../components/home/TrendingCard";
 import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
-import { SignalCard } from "../components/home/SignalCard";
+import { ExpectedActualCard } from "../components/home/ExpectedActualCard";
 import {
   MyPlayersCard,
   OpportunityCard,
@@ -65,15 +66,9 @@ const MY_PLAYERS_PERCENTILES = [
   "rush_attempt_share",
 ].join(",");
 
-/** Merge a hardcoded signal list with the live numbers fetched for those players. */
-function withStats(picks, rows) {
-  const byId = new Map((rows ?? []).map((row) => [row.player_id, row]));
-  return picks
-    .map((pick) => {
-      const row = byId.get(pick.playerId);
-      return row ? { ...row, note: pick.note } : null;
-    })
-    .filter(Boolean);
+/** Index rows by player id, so a card can look a pick up rather than scanning. */
+function byPlayerId(rows) {
+  return Object.fromEntries((rows ?? []).map((row) => [row.player_id, row]));
 }
 
 export function Home() {
@@ -81,7 +76,7 @@ export function Home() {
   const [league] = useLeague();
   const leagueConfig = useMemo(() => parseLeague(league), [league]);
   const { currentSeason: season } = useSeasons();
-  const { supportsScoring } = useMetrics();
+  const { metrics, supportsScoring } = useMetrics();
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
   const [weekPosition, setWeekPosition] = useState("ALL");
@@ -109,43 +104,112 @@ export function Home() {
   const seasonUnderway = scheduled[0] === season;
   const trendingLive = seasonUnderway && (trending.data?.data?.length ?? 0) > 0;
 
-  // --- Week standouts: one week's usage for a hand-picked few, ranked at the position.
-  //     Scoped to that week alone (`weeks=`), and in the reader's scoring for FP/RR. ---
-  const standoutIds = WEEKLY_STANDOUTS.players.join(",");
-  const standouts = useIntelligence(
+  // --- Trending Players: one week of usage for a hand-picked few, each with his own
+  //     four stats and his own basis for the change beneath them (constants/signals.js).
+  //     Scoped to that week alone (`weeks=`) and in the reader's scoring. ---
+  const trendingIds = useMemo(
+    () => [
+      ...new Set(TRENDING_PLAYERS.players.flatMap((pick) => [pick.playerId, pick.against].filter(Boolean))),
+    ],
+    [],
+  );
+  const trendingMetrics = useMemo(
+    () => [...new Set(TRENDING_PLAYERS.players.flatMap((pick) => pick.stats))].join(","),
+    [],
+  );
+  // Which extra windows the picks actually need. A card of quarterbacks ranked on the
+  // season asks for no previous week; a card with no season ranks asks for no season.
+  const needsPreviousWeek = TRENDING_PLAYERS.players.some(
+    (pick) => (pick.basis ?? TRENDING_BASIS.LAST_WEEK) === TRENDING_BASIS.LAST_WEEK,
+  );
+  const seasonRankIds = TRENDING_PLAYERS.players
+    .filter((pick) => pick.basis === TRENDING_BASIS.SEASON_RANK)
+    .map((pick) => pick.playerId)
+    .join(",");
+
+  const trendingParams = useMemo(
+    () => ({
+      season: TRENDING_PLAYERS.season,
+      season_type: "REG",
+      player_ids: trendingIds.join(","),
+      metric: "fantasy_points",
+      ranks: trendingMetrics,
+      scoring,
+      league,
+      limit: trendingIds.length,
+      // A pick can miss games and still be the story; the card is a list, not a board.
+      include_unqualified: true,
+    }),
+    [trendingIds, trendingMetrics, scoring, league],
+  );
+  const trendingNow = useIntelligence(
+    useMemo(() => ({ ...trendingParams, weeks: String(TRENDING_PLAYERS.week) }), [trendingParams]),
+  );
+  const trendingBefore = useIntelligence(
+    useMemo(() => ({ ...trendingParams, weeks: String(TRENDING_PLAYERS.week - 1) }), [trendingParams]),
+    { enabled: needsPreviousWeek && TRENDING_PLAYERS.week > 1 },
+  );
+  const trendingSeason = useIntelligence(
+    useMemo(
+      () => ({ ...trendingParams, player_ids: seasonRankIds, limit: 10 }),
+      [trendingParams, seasonRankIds],
+    ),
+    { enabled: Boolean(seasonRankIds) },
+  );
+
+  // --- Expected vs Actual: the five picks, plus every other player as a faint dot. ---
+  const expectedIds = EXPECTED_VS_ACTUAL.join(",");
+  const expected = useLeaderboard(
     useMemo(
       () => ({
-        season: WEEKLY_STANDOUTS.season,
-        weeks: String(WEEKLY_STANDOUTS.week),
+        season: SIGNALS_SEASON,
         season_type: "REG",
-        player_ids: standoutIds,
-        metric: "fantasy_points",
-        ranks: STANDOUT_METRICS.join(","),
+        metric: "fantasy_points_over_expected",
         scoring,
-        league,
-        limit: WEEKLY_STANDOUTS.players.length,
+        order: "asc",
+        min_games: 1,
+        limit: EXPECTED_VS_ACTUAL.length,
+        player_ids: expectedIds,
       }),
-      [standoutIds, scoring, league],
+      [scoring, expectedIds],
     ),
   );
-  // In the order they were picked, not the order the endpoint sorts them.
-  const standoutRows = useMemo(() => {
-    const byId = new Map((standouts.data?.data ?? []).map((row) => [row.player_id, row]));
-    return WEEKLY_STANDOUTS.players.map((id) => byId.get(id)).filter(Boolean);
-  }, [standouts.data]);
-  // Headshots live on the profile, not on an aggregated stat row. One request for all.
-  const { data: standoutPlayers } = useQuery({
-    queryKey: ["players", standoutIds],
-    queryFn: () => getPlayers({ player_ids: standoutIds, limit: 10 }),
+  // The scatter endpoint rather than a paged leaderboard: the cloud needs two numbers a
+  // row, and /stats/scatter returns exactly those for the whole league in one request.
+  const expectedCloud = useScatter(
+    useMemo(
+      () => ({
+        season: SIGNALS_SEASON,
+        season_type: "REG",
+        x: "expected_fantasy_points",
+        y: "fantasy_points",
+        mode: "season",
+        min_games: 1,
+        limit: 600,
+        scoring,
+      }),
+      [scoring],
+    ),
+  );
+
+  // Headshots live on the profile, not on an aggregated stat row. One request for every
+  // face the page draws.
+  const faceIds = useMemo(
+    () => [...new Set([...trendingIds, ...EXPECTED_VS_ACTUAL])].join(","),
+    [trendingIds],
+  );
+  const { data: facePlayers } = useQuery({
+    queryKey: ["players", faceIds],
+    queryFn: () => getPlayers({ player_ids: faceIds, limit: 30 }),
     staleTime: Infinity,
   });
-  const standoutHeadshots = useMemo(
-    () => Object.fromEntries((standoutPlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
-    [standoutPlayers],
+  const headshots = useMemo(
+    () => Object.fromEntries((facePlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
+    [facePlayers],
   );
-  const standoutGames = useGames({
-    season: WEEKLY_STANDOUTS.season,
-    week: WEEKLY_STANDOUTS.week,
+  const trendingGames = useGames({
+    season: TRENDING_PLAYERS.season,
+    week: TRENDING_PLAYERS.week,
     season_type: "REG",
     limit: 32,
   });
@@ -229,28 +293,6 @@ export function Home() {
     { enabled: isSignedIn && favoriteIds.length > 0 },
   );
 
-  // --- The two signal cards. The *picks* are hardcoded (see constants/signals.js);
-  //     every number below is live, and in the reader's own scoring — for the season
-  //     the picks describe, not the current one. ---
-  const signalIds = [...UNDERPERFORMERS, ...REGRESSION_CANDIDATES].map((pick) => pick.playerId).join(",");
-  const signals = useLeaderboard(
-    useMemo(
-      () => ({
-        season: SIGNALS_SEASON,
-        season_type: "REG",
-        metric: "fantasy_points_over_expected",
-        scoring,
-        order: "asc",
-        min_games: 1,
-        limit: 20,
-        player_ids: signalIds,
-      }),
-      [scoring, signalIds],
-    ),
-  );
-  const underRows = withStats(UNDERPERFORMERS, signals.data?.data);
-  const overRows = withStats(REGRESSION_CANDIDATES, signals.data?.data);
-
   // --- The featured matchup. ---
   const matchup = useCompare(
     useMemo(
@@ -259,6 +301,102 @@ export function Home() {
     ),
   );
 
+  // The cards, keyed so the arrangement can be a config rather than fixed JSX. A card
+  // that has nothing to show returns null here and the layout skips it.
+  const cards = {
+    trending: (
+      <TrendingPlayersCard
+        picks={TRENDING_PLAYERS.players}
+        week={TRENDING_PLAYERS.week}
+        rows={byPlayerId(trendingNow.data?.data)}
+        previousRows={byPlayerId(trendingBefore.data?.data)}
+        seasonRows={byPlayerId(trendingSeason.data?.data)}
+        headshots={headshots}
+        games={trendingGames.data?.data}
+        league={leagueConfig}
+        metrics={metrics}
+        isLoading={trendingNow.isLoading}
+        isError={trendingNow.isError}
+      />
+    ),
+    // Rendered only once signed in *and* something is starred: an empty card here
+    // would be a permanent advert for a feature rather than a useful panel.
+    myPlayers:
+      isSignedIn && favorites.length > 0 ? (
+        <MyPlayersCard
+          season={season}
+          count={favorites.length}
+          result={watchlist.data}
+          isLoading={watchlist.isLoading}
+          isError={watchlist.isError}
+        />
+      ) : null,
+    trendingUsage: trendingLive ? (
+      <TrendingCard result={trending.data} isLoading={trending.isLoading} isError={trending.isError} />
+    ) : null,
+    weekly: (
+      <WeeklyScoringCard
+        week={lastPlayed?.week}
+        scoring={scoring}
+        position={weekPosition}
+        onPositionChange={setWeekPosition}
+        result={weekly.data}
+        isLoading={scoreboard.isLoading || weekly.isLoading}
+        isError={weekly.isError}
+      />
+    ),
+    expected: (
+      <ExpectedActualCard
+        season={SIGNALS_SEASON}
+        scoring={scoring}
+        rows={expected.data?.data ?? []}
+        cloud={expectedCloud.data?.data ?? []}
+        headshots={headshots}
+        isLoading={expected.isLoading}
+        isError={expected.isError}
+      />
+    ),
+    opportunity: (
+      <OpportunityCard
+        season={season}
+        position={oppPosition}
+        onPositionChange={setOppPosition}
+        result={opportunity.data}
+        isLoading={scoreboard.isLoading || opportunity.isLoading}
+        isError={opportunity.isError}
+      />
+    ),
+    quarterbacks: (
+      <QuarterbackCard
+        season={season}
+        result={quarterbacks.data}
+        isLoading={scoreboard.isLoading || quarterbacks.isLoading}
+        isError={quarterbacks.isError}
+      />
+    ),
+    headToHead: (
+      <HeadToHeadCard
+        caption={FEATURED_MATCHUP.caption}
+        result={matchup.data}
+        isLoading={matchup.isLoading}
+        isError={matchup.isError}
+      />
+    ),
+    scoreboard: (
+      <ScoreboardCard
+        scoreboard={scoreboard.data}
+        isLoading={scoreboard.isLoading}
+        isError={scoreboard.isError}
+      />
+    ),
+  };
+
+  // Each card carries its own key so React can follow it across a layout change rather
+  // than re-mounting the column, which would refetch nothing but would lose each card's
+  // own tab state (the position pickers on the weekly and opportunity boards).
+  const column = (keys) =>
+    keys.filter((key) => cards[key]).map((key) => cloneElement(cards[key], { key }));
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -266,87 +404,29 @@ export function Home() {
         <ScoringPill scoring={scoring} onChange={setScoring} />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2.15fr)_minmax(300px,1fr)]">
-        <div className="grid min-w-0 gap-4">
-          <StandoutsCard
-            week={WEEKLY_STANDOUTS.week}
-            rows={standoutRows}
-            headshots={standoutHeadshots}
-            games={standoutGames.data?.data}
-            league={leagueConfig}
-            isLoading={standouts.isLoading}
-            isError={standouts.isError}
-          />
-          {/* Moved out of the sticky rail when it grew to seven stat columns: the
-              rail is 300px of reference, and a board this wide could only have
-              scrolled sideways in it. */}
-          {isSignedIn && favorites.length > 0 && (
-            <MyPlayersCard
-              season={season}
-              count={favorites.length}
-              result={watchlist.data}
-              isLoading={watchlist.isLoading}
-              isError={watchlist.isError}
-            />
-          )}
-          {trendingLive && (
-            <TrendingCard result={trending.data} isLoading={trending.isLoading} isError={trending.isError} />
-          )}
-          <WeeklyScoringCard
-            week={lastPlayed?.week}
-            scoring={scoring}
-            position={weekPosition}
-            onPositionChange={setWeekPosition}
-            result={weekly.data}
-            isLoading={scoreboard.isLoading || weekly.isLoading}
-            isError={weekly.isError}
-          />
-          <OpportunityCard
-            season={season}
-            position={oppPosition}
-            onPositionChange={setOppPosition}
-            result={opportunity.data}
-            isLoading={scoreboard.isLoading || opportunity.isLoading}
-            isError={opportunity.isError}
-          />
-          <QuarterbackCard
-            season={season}
-            result={quarterbacks.data}
-            isLoading={scoreboard.isLoading || quarterbacks.isLoading}
-            isError={quarterbacks.isError}
-          />
-          <HeadToHeadCard
-            caption={FEATURED_MATCHUP.caption}
-            result={matchup.data}
-            isLoading={matchup.isLoading}
-            isError={matchup.isError}
-          />
-        </div>
-
-        {/* Sticky so the scoreboard stays put while the boards scroll past it. */}
-        <aside className="grid min-w-0 gap-4 lg:sticky lg:top-[76px]">
-          <ScoreboardCard
-            scoreboard={scoreboard.data}
-            isLoading={scoreboard.isLoading}
-            isError={scoreboard.isError}
-          />
-          <SignalCard
-            kind="under"
-            season={SIGNALS_SEASON}
-            scoring={scoring}
-            rows={underRows}
-            isLoading={signals.isLoading}
-            isError={signals.isError}
-          />
-          <SignalCard
-            kind="over"
-            season={SIGNALS_SEASON}
-            scoring={scoring}
-            rows={overRows}
-            isLoading={signals.isLoading}
-            isError={signals.isError}
-          />
-        </aside>
+      <div className="grid grid-cols-1 items-start gap-4" data-home-columns="">
+        {/* The column template has to come from data and a Tailwind class cannot carry a
+            runtime value, so it ships as scoped rules rather than an inline style: inline
+            styles have no media query, and each template applies only above its own
+            width. The widths are the tables' (see homeLayout.js), not Tailwind's. */}
+        <style>
+          {HOME_LAYOUT.columns
+            .map((step) => `@media (min-width:${step.from}px){[data-home-columns]{grid-template-columns:${step.template}}}`)
+            .join("")}
+        </style>
+        {HOME_LAYOUT.assign.map((keys, index) => {
+          const contents = column(keys);
+          if (contents.length === 0) return <div key={index} className="hidden" />;
+          const sticky = HOME_LAYOUT.sticky === index;
+          return (
+            <div
+              key={index}
+              className={`grid min-w-0 gap-4 ${sticky ? "lg:sticky lg:top-[76px]" : ""}`}
+            >
+              {contents}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

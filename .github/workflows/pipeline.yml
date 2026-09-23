@@ -117,7 +117,7 @@ jobs:
         run: python ingest_rankings.py --weekly
 
       # Expert boards dropped into pipeline/data/rankings as CSVs (M9). They blend
-      # anonymously into the GridironIQ Consensus and are never individually exposed —
+      # anonymously into the Second Level Consensus and are never individually exposed —
       # the API's source registry is fail-closed, so a board added here reaches nobody
       # by name. No-ops when the folder is empty.
       - name: Ingest expert ranking boards

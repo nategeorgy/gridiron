@@ -13,7 +13,7 @@ game modes** (§4), the **one engine** they should share (§3), the **data that 
 possible** (§2), the **one cheap pipeline addition** that gates the sixth (§5), and a
 **backlog of modes that were considered and kept** (§6) rather than silently dropped.
 
-The product argument for building any of this: every other feature in GridironIQ answers
+The product argument for building any of this: every other feature in Second Level answers
 a question the user brought with them. A game is the only thing here that gives someone a
 reason to open the site on a Tuesday in June.
 

@@ -1,8 +1,8 @@
-# GridironIQ — Claude Code Project Instructions
+# Second Level — Claude Code Project Instructions
 
 ## Project Overview
 
-GridironIQ is a **fantasy-first** NFL analytics web application. The goal is a clean, fast,
+Second Level is a **fantasy-first** NFL analytics web application. The goal is a clean, fast,
 beautifully designed public-facing platform where fantasy managers come first: every stat is
 framed around what it means for fantasy value, and the app answers fantasy questions (who to
 start, who's earning opportunity, who's due to regress) as its primary job.
@@ -626,7 +626,7 @@ Build order per ROADMAP. **Build the foundation before the features on top of it
   simulator. Full option set, backlog, and rejected ideas in
   [`docs/design/M7-games.md`](docs/design/M7-games.md) — **read it before building any
   game**, and add new ideas there rather than losing them in a conversation.
-- **Dream**: trade calculator (on VORP), GridironIQ + user-generated projection models,
+- **Dream**: trade calculator (on VORP), Second Level + user-generated projection models,
   survivor pool, dynasty value + league import.
 
 ### Out of Scope — Do Not Build Yet
@@ -1104,6 +1104,37 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       request also passes `include_unqualified` so a starred player who has missed
       games never vanishes from his own card. At seven stat columns the card no longer
       fits the 300px rail, so it moved to the wide column under Week standouts
+- [x] Trending Players + Expected vs Actual (September 2026) — the home page's top card is
+      renamed from Week Standouts and reshaped: **four stats per pick instead of nine for
+      everyone**, chosen per pick, with the week-over-week change stated as an arrow and a
+      delta rather than drawn as a dumbbell (the dumbbell showed both the move and the
+      league position, and the rank chip beside the player's points already showed the
+      second). A pick names its own basis (`TRENDING_BASIS`): the same player last week, a
+      teammate the same week (for a backfield takeover, where the split is the story), or
+      no change at all and the season's positional ranks. The two signal cards in the rail
+      became **one plot** (`ExpectedActualCard`): the league as a faint cloud from
+      `/stats/scatter`, par as the diagonal, the picks as headshots on collision-avoiding
+      leaders, and the cause of each gap in a tooltip **derived from the stored expected
+      components** rather than written each week. No backend, migration or pipeline change
+- [x] Home page rearranged (September 2026) — the page ran 3,893px with 3,515px of it in
+      one column and 445px in the rail. Every card's height was **measured at nine column
+      widths**, four arrangements were built behind a temporary `?layout=` switcher, and the
+      two-column one with the boards moved into the rail won: container **1,560px**, columns
+      983/561, **2,855px (27% shorter)**, and the rail carries real weight rather than one
+      card. The arrangement is now data (`frontend/src/constants/homeLayout.js`) and `<main>`
+      drops its 1280px cap on `/` so the page owns its own width. Three things the measuring
+      settled: **Expected vs Actual grows with its column** (fixed-ratio SVG at 100% width,
+      457px at 660 and 1,029px at 1,500); **the column ratio changes at 1,440px**, because
+      1.75/1 only clears the rail's widest table above that; and **nothing is sticky any
+      more**, since sticky on a 1,600px column does nothing
+- [x] Home page polish (September 2026) — team records on the scoreboard (a `records` map
+      on each `/games/scoreboard` window, formatted server-side so the tie is decided once),
+      plainer copy on Expected vs Actual, the featured head-to-head swapped to two receivers
+      on one offence with bigger faces, and **one owner for the content column's width**
+      (`Layout.contentWidth()`, read by `<main>` and the credit bar alike) after the footer
+      was left at 1,280px by the home page's move to 1,560px. ⚠️ A chart's reference line
+      uses the new `--plot-rule` token, never `--border-strong`: that is a glass *edge* and
+      the light theme defines it as near-white, which drew the par line invisibly
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -1311,7 +1342,7 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   honest about what it is: last season's usage against next season's market, so a gap
   can be news about the offseason rather than a mispricing
 - ⚠️ **A private ranking source may never leave the server on its own** (M9). Several
-  boards blended into the GridironIQ Consensus are paywalled, so `app/rankings.py`'s
+  boards blended into the Second Level Consensus are paywalled, so `app/rankings.py`'s
   source registry is **fail-closed**: only a source marked `public` can be named in a
   request or returned by name, and a source nobody registered can reach a user *only*
   as one un-named input to an average. Private, unknown, another user's board and
