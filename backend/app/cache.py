@@ -35,12 +35,16 @@ the cache itself.
 
 from __future__ import annotations
 
+import functools
 import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Hashable
 from typing import Generic, TypeVar
 
+from fastapi import Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -121,3 +125,51 @@ class VersionedCache(Generic[T]):
         """Drop every entry."""
         with self._lock:
             self._entries.clear()
+
+
+def cached_response(
+    store: VersionedCache[bytes],
+) -> Callable[[Callable[..., dict]], Callable[..., Response]]:
+    """Serve a GET endpoint from ``store``, keyed on the query string it was sent.
+
+    For endpoints whose whole answer is a function of the URL and the data. The home
+    page asks the leaderboard, the scatter and the comparison for the same URLs on every
+    visit, and each of those re-aggregated ``player_stats`` from scratch: about 110 MB
+    of pages per visit even with every engine cache warm, measured in September 2026.
+
+    The key is the path plus every query parameter as sent, so a parameter added to an
+    endpoint later is part of the key without anyone having to remember it. ``store``
+    adds the data version, as for every other entry. Two spellings of one request (the
+    same parameters in another order are fine, since they are sorted; ``weeks=3,7``
+    against ``weeks=7,3`` is not) are two entries: wasted memory, never a wrong answer.
+
+    The endpoint must declare ``request: Request`` and a ``db`` session, and must not
+    depend on who is asking. A ``player_ids`` filter passes that test: the ids arrive in
+    the query string, so they sit in the key, and the value holds only public stats that
+    anyone sending the same URL would be given anyway.
+
+    What is stored is the encoded body, not the dict. Bytes cannot be changed by the
+    request that reads them, which settles the copying rule above, and they are several
+    times smaller than the dicts they came from. An error the endpoint raises (a 400, a
+    404) is never stored, because it never returns a body to store.
+    """
+
+    def decorate(endpoint: Callable[..., dict]) -> Callable[..., Response]:
+        # functools.wraps matters here: FastAPI reads the endpoint's parameters through
+        # __wrapped__, so query parameters and dependencies resolve exactly as before.
+        @functools.wraps(endpoint)
+        def serve(*args, **kwargs) -> Response:
+            request: Request = kwargs["request"]
+            key = (request.url.path, tuple(sorted(request.query_params.multi_items())))
+            body = store.get_or_compute(
+                kwargs["db"],
+                key,
+                # The same encoding FastAPI would apply to the returned dict, so a hit
+                # and a miss send identical bytes.
+                lambda: JSONResponse(jsonable_encoder(endpoint(*args, **kwargs))).body,
+            )
+            return Response(content=body, media_type="application/json")
+
+        return serve
+
+    return decorate
