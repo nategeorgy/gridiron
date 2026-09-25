@@ -1052,7 +1052,7 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       seasons (52,146 stat lines, 2,646 games) and the tables were rewritten with
       `VACUUM FULL`, which together took the database from 238 MB to 121 MB — 57% of
       `player_stats` was space freed by past backfills and never returned
-- [x] Backend test suite (`backend/tests/`, 379 tests) — the repo's first automated
+- [x] Backend test suite (`backend/tests/`, 387 tests) — the repo's first automated
       tests, started at the M5 auth boundary: token verification, JIT provisioning,
       cross-user isolation on every account endpoint, and the RLS lockdown. Run with
       `.venv/bin/python -m pytest` from `backend/`; it builds and drops its own
@@ -1217,6 +1217,15 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   cache switched on, as `tests/test_engine_cache.py` does. And measure **pages, not
   rows**: narrowing a query to fewer rows saved nothing here, because those rows were
   spread across most of the table
+- **Whole responses are cached too, where the URL is the whole question.**
+  `cached_response` in `app/cache.py` stores the encoded body of `/stats/leaderboard`,
+  `/stats/scatter` and `/stats/compare`, keyed on the query string plus the data
+  version, because the home page sends them the same URLs on every visit and they were
+  ~110 MB of pages a visit with every engine cache warm. It suits an endpoint whose
+  answer is a function of its query parameters and nothing else: no auth dependency, no
+  clock. A `player_ids` filter is fine, since the ids are in the key and the value holds
+  only public stats. Adding one is a decorator and a `request: Request` parameter; size
+  the store from measured bodies (the largest leaderboard a request can ask for is 718 kB)
 - ⚠️ **`MIN(week)/MAX(week) WHERE season = …` is the most expensive cheap-looking query
   in the app.** With accurate statistics Postgres answers it by walking the `week` index
   from each end and discarding other seasons' rows — and the season in progress holds
@@ -1532,8 +1541,9 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - **Every player leaderboard tab is served by `/stats/intelligence`, not
   `/stats/leaderboard`.** TDs over expected (on Expected) exists only at query time, and
   the intelligence path reads the cached scored season (`app/cache.py`), where the
-  leaderboard endpoint rebuilds its percentile pool from a full-league aggregate on every
-  request. The percentile index is built from the *scored* rows, which is also the only
+  leaderboard endpoint caches only whole responses (`cached_response`), so every new
+  combination of filters, sort and page rebuilds its percentile pool from a full-league
+  aggregate. The percentile index is built from the *scored* rows, which is also the only
   place the query-time columns exist. Note it returns only players who clear the games
   threshold (`QUALIFY_FRACTION`), which the page states under the table
 - ⚠️ **`ingest_stats.py --skip-pbp` writes NULL into the play-by-play columns**, it does
