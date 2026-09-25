@@ -665,8 +665,8 @@ GET /api/v1/stats/leaderboard                ← filterable leaderboard. M12 add
                                                positions= (multi), weeks= (an explicit
                                                set, e.g. '3,7,12')
 GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / buy /
-                                               sell). Also serves any leaderboard board
-                                               carrying a query-time column. Takes the
+                                               sell). Also serves every player
+                                               leaderboard tab. Takes the
                                                same M12 percentiles=/team=/positions=/
                                                weeks= params, plus ranks= (M13): a
                                                positional rank per metric (1 = best),
@@ -762,24 +762,25 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   scoring, opportunity leaders, quarterbacks, a featured head-to-head —
   beside a **sticky rail** of reference (scoreboard, watchlist, the two signal cards).
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
-  in the code and in these docs. The nav holds **two dropdowns** — **Insight**
-  (`/insight/*` — Strength of Schedule / Opportunity Rating / Buy Low / Sell High) and
-  **Schedule** (`/schedule/*` — Games, By Team, Vegas Board) — plus a single
-  **Leaderboards** mega menu (M12) holding all **14 player boards**, arranged in a
-  column per *area*:
+  in the code and in these docs. The nav holds **three dropdowns**: **Insight**
+  (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
+  **Schedule** (`/schedule/*`: Games, By Team, Vegas Board) and **Leaderboards**, which
+  lists five preset tabs of **one leaderboard page** (September 2026, replacing M12's 14
+  boards):
 
-  | | Fantasy | Production | Advanced | Opportunity |
-  |---|:-:|:-:|:-:|:-:|
-  | **Passing** | 16 | 20 | 18 | — |
-  | **Rushing** | 14 | 13 | 15 | 12 |
-  | **Receiving** | 15 | 20 | 26 | *merged into Advanced* |
-  | **All** | 16 | 35 | 36 | 30 |
+  - **The tab is the question**: Fantasy, Usage, Efficiency, Expected, Tracking, plus a
+    **Custom** tab (on the page only, not in the menu). `/leaderboards/:tab`.
+  - **The position group is a control on the page**: QB, RB, WR, TE, WR/TE, RB/WR/TE,
+    All. Default **RB/WR/TE**. It stays put when the tab changes.
+  - **Every stat has one home tab**, chosen per position (a back's Usage is carries and
+    goal-line work, a receiver's is routes and air yards). Only targets, carries and
+    attempts repeat, as box score on Fantasy. **FPPG leads every preset**, unlabelled.
+  - **Edit Columns** opens a slide-out that adds, removes, searches and drag-reorders,
+    live; any edit turns the board into Custom.
 
-  Area first because that is how someone arrives — they want receivers, then choose a
-  lens. ⚠️ **Routes stay grouped by type** (`/fantasy/*`, `/nfl/*`, `/opportunity/*`)
-  even though the menu groups by area: a route is what a saved view (M5) and a shared
-  link store. All 17 boards (14 + the 3 Insight) and the tool pages are configured in
-  `frontend/src/constants/boards.js`, which also carries `LEADERBOARD_MENU`.
+  Tab, group and a custom column list all live in the URL. The presets are in
+  `frontend/src/constants/leaderboards.js`; the Insight boards and tool pages are in
+  `frontend/src/constants/boards.js`.
 - ⚠️ **Draft ▾ and Explore ▾ are built but HIDDEN for launch.** `DRAFT_ITEMS` and
   `EXPLORE_ITEMS` are still exported from `boards.js` and their pages still compile;
   they are simply absent from `NAV_GROUPS`, and `HIDDEN_SECTIONS` in `App.jsx`
@@ -1135,6 +1136,17 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       was left at 1,280px by the home page's move to 1,560px. ⚠️ A chart's reference line
       uses the new `--plot-rule` token, never `--border-strong`: that is a glass *edge* and
       the light theme defines it as near-white, which drew the par line invisibly
+- [x] Player leaderboards rebuilt as one page (September 2026). M12's 14 boards (four
+      areas crossed with four lenses) become `/leaderboards/:tab`: five **preset tabs**
+      (Fantasy, Usage, Efficiency, Expected, Tracking), a **Custom** tab, and a
+      **position group** control (QB, RB, WR, TE, WR/TE, RB/WR/TE, All; default RB/WR/TE).
+      Every stat has one home tab, FPPG leads every preset, and seven stats that sat on no
+      board got one (FP per route run, FP per carry, fumbles, fumbles lost, drops, drop
+      rate, passer rating when targeted). Next Gen's own CPOE, catch rate, intended air
+      yards and air-yard share are deliberately left off: they are a second model's
+      version of stats the boards already show. **Edit Columns** is a live slide-out
+      (`components/leaderboard/ColumnEditor.jsx`). The old paths redirect to the matching
+      tab and group with their filters. Chosen over three rounds of mockups; frontend only
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -1412,9 +1424,9 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   assumption the flex allocation makes; the known weakness is QB in a one-QB league,
   where most managers stream rather than roster two, so QB replacement runs slightly
   deep. Documented in `replacement_ranks`, and it is a model rather than a measurement
-- **A filter narrows the board, never the percentile pool.** The position filter is
-  multi-select (M12), so "receivers and tight ends" is one view — and a tight end in it
-  is still ranked among tight ends. CeeDee Lamb and Brock Bowers both gained 1,194
+- **A filter narrows the board, never the percentile pool.** A position group can span
+  positions (WR/TE, RB/WR/TE), so "receivers and tight ends" is one view, and a tight end
+  in it is still ranked among tight ends. CeeDee Lamb and Brock Bowers both gained 1,194
   receiving yards in 2024 and read 96th and 99th percentile respectively, which is the
   behaviour working rather than an inconsistency. Same rule as the team filter and the
   watchlist
@@ -1452,22 +1464,29 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   a column whose header returned 400 — visible only if someone clicked it. Sortability
   is derived from the registry's aggregation kinds and that set is the single place
   they are enumerated
-- **The Leaderboards menu is grouped by PHASE; the routes are grouped by TYPE.** That
-  mismatch is deliberate (M12). People arrive wanting receivers and then pick a lens, so
-  the menu reads Passing / Rushing / Receiving / All — but `/nfl/receiving` is what a
-  saved view (M5) and a shared link store, and re-cutting every URL to echo a menu
-  reorganisation would break them for nothing. `board.phase` carries the menu grouping
-- **Split a board along the *coverage* seam, not the column count.** Passing Production
-  was cut into Production (1999+) and Advanced (NGS 2016+, PFR 2018+) because the
-  alternative was one board where a third of the columns are dimmed for two-thirds of
-  the seasons. A split that leaves both halves answerable in the same eras is a worse
-  split even when it balances the column counts better
-- **A board that is *about* one position hides the position filter** (`fixedPosition`
-  in `constants/boards.js`, M12). The three passing boards are QB-only, and offering a
-  control that can only produce an empty table implies the opposite. It also ignores
-  `?position=` outright — a stale param carried from another board would otherwise
-  render an empty table with no visible cause, which is worse than not offering the
-  choice
+- **A leaderboard is a tab and a position group, and both are in the URL.** The tab is the
+  path (`/leaderboards/usage`) and the group is `?positions=` (`WR,TE`, or `all`; the
+  default RB/WR/TE stays out of the URL). A preset exists per group per tab in
+  `constants/leaderboards.js`, and All has no Tracking preset because no tracking stat
+  applies to quarterbacks and receivers alike. The fourteen M12 board paths redirect to
+  the tab and group that answer the same question (`LEGACY_BOARD_REDIRECTS`), keeping
+  their filters, because saved views (M5) stored them
+- ⚠️ **A column change must never cost a request.** The leaderboard asks
+  `/stats/intelligence` for percentiles on **every stat the position group has**
+  (`poolColumns`), not the columns on screen, and rows already carry every stat. So the
+  query key depends on the group, season, filters, sort and scoring only, and Edit Columns
+  redraws the table in the browser, which is what makes a live editor affordable. Sending
+  the visible columns as `percentiles=` instead would refetch on every tick and every drag
+- **A custom board keeps the user's order, and its headers follow it.** Neighbouring
+  columns from the same tab share a header, so dragging a stat between two sections
+  splits them rather than the headers forcing an order. `cols=` absent means "no custom
+  board yet" and `cols=` empty means "the user cleared every column", which is why the
+  page reads it raw rather than through `useUrlState` (which treats empty as default)
+- **Split along the *coverage* seam, not the column count.** Tracking is its own tab
+  because Next Gen starts in 2016 and PFR charting in 2018: mixed into the other tabs,
+  a third of their columns would be dimmed for most of the seasons we hold. A split that
+  leaves both halves answerable in the same eras is a worse split even when it balances
+  the column counts better
 - **`dropbacks` is attempts + sacks, and it exists because sacks now do.** Attempts
   alone flatter a quarterback by omitting the plays where the pass never happened; a
   sack is a dropback that went wrong, not a play that was never called. Available from
@@ -1501,11 +1520,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   `higher_is_better` is applied in `PercentileIndex.for_row`, so 95th percentile always
   reads as good — including for drops, interceptions and pressure rate. No UI should
   ever have to know which way a metric points
-- **A board carrying a query-time column is served by `/stats/intelligence`, not the
-  leaderboard.** VORP, the buy/sell indices and usage trend do not exist as columns, so
-  six of the twelve boards set `insight: true` in `constants/boards.js`. Their percentile
-  index is built from the *scored* rows rather than re-aggregating raw stat lines —
-  a re-aggregation cannot see VORP
+- **Every player leaderboard tab is served by `/stats/intelligence`, not
+  `/stats/leaderboard`.** TDs over expected (on Expected) exists only at query time, and
+  the intelligence path reads the cached scored season (`app/cache.py`), where the
+  leaderboard endpoint rebuilds its percentile pool from a full-league aggregate on every
+  request. The percentile index is built from the *scored* rows, which is also the only
+  place the query-time columns exist. Note it returns only players who clear the games
+  threshold (`QUALIFY_FRACTION`), which the page states under the table
 - ⚠️ **`ingest_stats.py --skip-pbp` writes NULL into the play-by-play columns**, it does
   not leave them alone. It is a fast path for a fresh load, not a way to refresh the
   other columns — using it on a populated database erases red-zone targets, the

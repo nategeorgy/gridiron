@@ -215,9 +215,10 @@ export function gameValue(game, column) {
 // ---------------------------------------------------------------------------
 // Season stat grid — the leaderboard boards, as one player's row
 // ---------------------------------------------------------------------------
-// Deliberately the same column sets as `constants/boards.js`, so a number a manager
-// read on a board reads identically here. The tabs are the boards that apply to the
-// position; the sections inside them are the boards' own sections.
+// Built from the M12 boards' column sets (Fantasy / Production / Advanced). The
+// leaderboards have since become five preset tabs per position group
+// (`constants/leaderboards.js`), and this grid has not followed yet, so a stat can sit
+// under a different heading here than on the board.
 const FANTASY_SECTIONS = {
   general: {
     QB: ["fantasy_points", "fantasy_ppg", "passing_yards", "passing_tds", "interceptions", "rushing_yards", "rushing_tds"],

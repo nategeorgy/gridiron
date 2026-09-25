@@ -80,7 +80,9 @@ export function WeeklyScoringCard({ week, scoring, position, onPositionChange, r
           </tbody>
         </ScrollTable>
       )}
-      <CardLink to="/fantasy/all">Full weekly board</CardLink>
+      <CardLink to={`/leaderboards/fantasy?positions=${WEEKLY_TAB_POSITIONS[position] ?? "all"}${week ? `&weeks=${week}` : ""}`}>
+        Full weekly board
+      </CardLink>
     </Card>
   );
 }
@@ -155,7 +157,7 @@ export function OpportunityCard({ season, position, onPositionChange, result, is
           </tbody>
         </ScrollTable>
       )}
-      <CardLink to={`/nfl/all?position=${position}`}>Full {position} usage board</CardLink>
+      <CardLink to={`/leaderboards/usage?positions=${position}`}>Full {position} usage board</CardLink>
     </Card>
   );
 }
@@ -212,7 +214,7 @@ export function QuarterbackCard({ season, result, isLoading, isError }) {
         EPA is passing plus rushing. <b className="font-semibold text-muted">EPA/play</b> divides it by
         attempts and carries, so a running quarterback's legs count toward the rate.
       </p>
-      <CardLink to="/nfl/passing">Full QB board</CardLink>
+      <CardLink to="/leaderboards/efficiency?positions=QB">Full QB board</CardLink>
     </Card>
   );
 }
@@ -322,7 +324,7 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
         at their position. The shares beneath it are what it is built from. The small
         number under each value is its percentile at that position this season.
       </p>
-      <CardLink to="/fantasy/all?watchlist=1">Manage watchlist</CardLink>
+      <CardLink to="/leaderboards/fantasy?positions=all&watchlist=1">Manage watchlist</CardLink>
     </Card>
   );
 }

@@ -22,6 +22,33 @@ const WEEKS = Array.from({ length: 18 }, (_, index) => index + 1);
 /** Trailing-window shortcuts, in weeks. */
 const SHORTCUTS = [4, 8];
 
+/**
+ * "Week 2", "Weeks 1, 2", "Weeks 1–4, 7": the weeks themselves rather than a count, so
+ * the control says what is selected. Runs of three or more collapse to a range.
+ */
+export function formatWeeks(weeks) {
+  const sorted = [...weeks].sort((a, b) => a - b);
+  if (!sorted.length) return "";
+  const parts = [];
+  let start = sorted[0];
+  let previous = sorted[0];
+  const flush = () => {
+    if (previous - start >= 2) parts.push(`${start}\u2013${previous}`);
+    else for (let week = start; week <= previous; week += 1) parts.push(String(week));
+  };
+  for (const week of sorted.slice(1)) {
+    if (week === previous + 1) {
+      previous = week;
+      continue;
+    }
+    flush();
+    start = week;
+    previous = week;
+  }
+  flush();
+  return `${sorted.length === 1 ? "Week" : "Weeks"} ${parts.join(", ")}`;
+}
+
 export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange }) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState(null);
@@ -51,11 +78,12 @@ export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange })
     if (window.length) onChange(window.join(","));
   };
 
-  /** True when the current selection is exactly that trailing window. */
+  /** True when the current selection is exactly that trailing window. A season with
+   *  fewer played weeks than the window has no "last 4", so nothing matches it. */
   const isLast = (count) => {
     const window = playedWeeks.slice(-count);
     return (
-      window.length > 0 &&
+      window.length === count &&
       window.length === selected.length &&
       window.every((week, index) => week === selected[index])
     );
@@ -97,12 +125,7 @@ export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange })
     });
   };
 
-  const shortcutLabel = SHORTCUTS.find((count) => isLast(count));
-  const label = shortcutLabel
-    ? `Last ${shortcutLabel}`
-    : selected.length
-      ? `${selected.length} week${selected.length > 1 ? "s" : ""}`
-      : "Full season";
+  const label = selected.length ? formatWeeks(selected) : "Full season";
 
   return (
     <div className="flex items-end gap-2" ref={container}>
@@ -113,7 +136,8 @@ export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange })
           ref={button}
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
-          className={`glass-input min-w-[124px] px-3 py-2 text-left text-sm ${
+          title={label}
+          className={`glass-input min-w-[124px] max-w-[240px] truncate px-3 py-2 text-left text-sm ${
             selected.length ? "!text-accent" : ""
           }`}
         >
@@ -168,11 +192,11 @@ export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange })
               </div>
               <div className="mt-2 flex items-center justify-between text-xs">
                 <span className="text-faint">
-                  {selected.length ? `Weeks ${selected.join(", ")}` : "Whole season"}
+                  {selected.length ? formatWeeks(selected) : "Whole season"}
                 </span>
                 <button
                   type="button"
-                  onClick={() => onChange({ lastWeeks: "", weeks: "" })}
+                  onClick={() => onChange("")}
                   disabled={!selected.length}
                   className="btn-ghost px-2 py-1 enabled:hover:!text-accent disabled:opacity-40"
                 >

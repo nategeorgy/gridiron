@@ -1,5 +1,6 @@
 // Generalized Insight board (M3), driven by a board config (see constants/boards.js).
-// Every /insight/* route renders this with a different board.
+// Every /insight/* ranked board renders this with a different board. The player
+// leaderboards use the same endpoint but their own page (LeaderboardView).
 //
 // Unlike the leaderboard, these numbers are *relative*: each score ranks a player
 // against their position pool, so the page always states what the pool was (window,
@@ -8,7 +9,6 @@ import { useMemo, useState } from "react";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
-import { BoardTabs } from "../components/BoardTabs";
 import { TeamFilter } from "../components/TeamFilter";
 import { PositionFilter } from "../components/PositionFilter";
 import { TimeframeFilter } from "../components/TimeframeFilter";
@@ -124,8 +124,6 @@ export function InsightView({ board }) {
         )}
       </div>
 
-      <BoardTabs />
-
       <div className="glass-card flex flex-wrap gap-3 p-4">
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
         <TimeframeFilter
@@ -158,10 +156,6 @@ export function InsightView({ board }) {
         </div>
       </div>
 
-      {/* A board is served by this endpoint whenever it carries a query-time column,
-          which is not the same as it being scoring-aware. NFL Production routes here
-          only for TDs-over-expected — a number no scoring config changes — so showing
-          a league editor there would offer a control that does nothing. */}
       {board.scoring && (
         <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />
       )}

@@ -13,6 +13,7 @@ import { StyleGuide } from "./pages/StyleGuide";
 import { TeamProfile } from "./pages/TeamProfile";
 import { Teams } from "./pages/Teams";
 import { ALL_BOARDS, INSIGHT_TOOLS, SCHEDULE_ITEMS } from "./constants/boards";
+import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants/leaderboards";
 
 // Route prefixes that are built but hidden for launch. Everything beneath one
 // redirects to the home page.
@@ -44,18 +45,13 @@ const SCHEDULE_VIEWS = {
 
 // Board paths that have been retired, and the board that absorbed each. A saved view
 // (M5) and a shared link both store a route, and with no route matching, the app
-// renders nothing at all — header included — so a retired path has to go somewhere.
+// renders nothing at all (header included), so a retired path has to go somewhere.
 //
-// `insight/vorp` is the newest entry: VORP was pulled from the product before launch,
-// and Opportunity Rating is the nearest surviving board — it answers the question
-// people were mostly asking VORP, which is who is actually worth starting.
+// VORP was pulled from the product before launch, and Opportunity Rating is the nearest
+// surviving board: it answers the question people were mostly asking VORP, which is
+// who is actually worth starting. The old player-board paths are redirected by
+// LegacyBoard below, since each one also names a position group.
 const RETIRED_BOARDS = {
-  "fantasy/leaders": "/fantasy/all",
-  "fantasy/expected": "/fantasy/all",
-  "nfl/all-general": "/nfl/all",
-  "nfl/passing-general": "/nfl/passing",
-  "nfl/receiving-general": "/nfl/receiving",
-  "nfl/rushing-general": "/nfl/rushing",
   "insight/vorp": "/insight/opportunity",
 };
 
@@ -65,25 +61,44 @@ function MovedTo({ path }) {
   return <Navigate to={`${path}${search}`} replace />;
 }
 
+/**
+ * An M12 board path, redirected to the leaderboard tab and position group that answer
+ * the same question. Filters survive; a `positions` the old board carried survives too
+ * when it is one of the new groups, and otherwise the board's own group replaces it.
+ */
+function LegacyBoard({ tab, group }) {
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  if (!GROUP_VALUES.includes(params.get("positions"))) {
+    if (group === DEFAULT_GROUP) params.delete("positions");
+    else params.set("positions", group);
+  }
+  // The old boards' sort ids mostly survive as columns; one that does not is dropped by
+  // the page's whitelist, so it needs no handling here.
+  const query = params.toString();
+  return <Navigate to={`/leaderboards/${tab}${query ? `?${query}` : ""}`} replace />;
+}
+
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Home />} />
 
-        {/* One route per board (Insight + fantasy + NFL). Insight boards are served by
-            a different endpoint, so they render InsightView instead. The key forces a
-            fresh instance per board so filters/sort reset to that board's defaults. */}
-        {ALL_BOARDS.map((board) => {
-          const View = board.insight ? InsightView : LeaderboardView;
-          return (
-            <Route
-              key={board.id}
-              path={board.path.replace(/^\//, "")}
-              element={<View key={board.id} board={board} />}
-            />
-          );
-        })}
+        {/* Player leaderboards: one page, the tab in the path. One route rather than one
+            per tab, so switching tabs keeps the page (and an open Edit Columns panel). */}
+        <Route path="leaderboards" element={<Navigate to="/leaderboards/fantasy" replace />} />
+        <Route path="leaderboards/:tab" element={<LeaderboardView />} />
+
+        {/* Insight boards, served by the intelligence endpoint. The key forces a fresh
+            instance per board so filters and sort reset to that board's defaults. */}
+        {ALL_BOARDS.map((board) => (
+          <Route
+            key={board.id}
+            path={board.path.replace(/^\//, "")}
+            element={<InsightView key={board.id} board={board} />}
+          />
+        ))}
 
         {/* Insight tools (M6): Strength of Schedule, which is a grid rather than a
             ranked table, so it is a page not a board config. */}
@@ -124,10 +139,11 @@ export function App() {
             shared links and saved views survive. */}
         <Route path="insight/vegas" element={<Navigate to="/schedule/vegas" replace />} />
 
-        {/* Legacy leaderboard URL → the default fantasy board. */}
-        <Route path="leaderboard" element={<Navigate to="/fantasy/all" replace />} />
         {Object.entries(RETIRED_BOARDS).map(([retired, current]) => (
           <Route key={retired} path={retired} element={<MovedTo path={current} />} />
+        ))}
+        {Object.entries(LEGACY_BOARD_REDIRECTS).map(([retired, target]) => (
+          <Route key={retired} path={retired} element={<LegacyBoard {...target} />} />
         ))}
 
         <Route path="players/:playerId" element={<PlayerProfile />} />

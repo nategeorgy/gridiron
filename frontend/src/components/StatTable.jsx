@@ -140,9 +140,11 @@ export function StatTable({
             <tr className="border-b border-line text-[10px] uppercase tracking-[0.11em] text-faint">
               {/* Rank, player, team, games — the identity block the sections sit beside. */}
               <th colSpan={4} className="px-3 py-1.5" />
-              {sections.map((section) => (
+              {/* Keyed by position: a custom board can repeat a section name (two runs
+                  of Usage columns either side of a dragged one), and FPPG's is empty. */}
+              {sections.map((section, index) => (
                 <th
-                  key={section.name}
+                  key={`${index}-${section.name}`}
                   colSpan={section.columns.length}
                   className="border-l border-line px-3 py-1.5 text-center"
                 >

@@ -187,7 +187,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
     return (
       <div className="p-6 text-center text-sm text-neg">
         Player not found.{" "}
-        <Link to="/fantasy/all" className="text-accent hover:underline">
+        <Link to="/leaderboards/fantasy" className="text-accent hover:underline">
           Back to leaderboard
         </Link>
       </div>
@@ -217,7 +217,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
           *to* — the thing behind it is the draft board, and the close button is the
           way out. */}
       {!embedded && (
-        <Link to="/fantasy/all" className="inline-block text-sm text-muted transition hover:text-accent">
+        <Link to="/leaderboards/fantasy" className="inline-block text-sm text-muted transition hover:text-accent">
           ← Leaderboard
         </Link>
       )}
