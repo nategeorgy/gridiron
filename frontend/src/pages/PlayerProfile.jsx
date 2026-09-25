@@ -27,6 +27,7 @@ import { HeadToHead } from "../components/player/HeadToHead";
 import { PercentileLadder } from "../components/player/PercentileLadder";
 import { SeasonRadar } from "../components/player/SeasonRadar";
 import { SeasonStatGrid } from "../components/player/SeasonStatGrid";
+import { TableViewBar } from "../components/player/TableViewBar";
 import {
   usePlayer,
   usePlayerCareer,
@@ -39,17 +40,17 @@ import { useMetrics } from "../hooks/useMetrics";
 import { useScoring } from "../hooks/useScoring";
 import { parseLeague } from "../constants/league";
 import {
-  CAREER_GROUPS,
   COMPARE_AXES,
-  GAMELOG_GROUPS,
   H2H_ROWS,
   HEADLINE_STATS,
   PERCENTILE_GROUPS,
-  SEASON_BOARDS,
+  TABLE_VIEWS,
   forPosition,
   headlineColumns,
   percentileColumns,
+  seasonBoards,
 } from "../constants/playerPage";
+import { useTableView } from "../hooks/useTableView";
 
 function ProfileHeader({ player, seasonTeam }) {
   return (
@@ -122,6 +123,11 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
   const player = playerQuery.data;
   const position = player?.position ?? "WR";
 
+  // The career table and the game log each pick their own leaderboard tab (September
+  // 2026), in the URL unless the page is embedded in a dialog.
+  const careerView = useTableView(TABLE_VIEWS.career, position, embedded);
+  const gameLogView = useTableView(TABLE_VIEWS.gamelog, position, embedded);
+
   const careerQuery = usePlayerCareer(playerId, scoring);
   const careerSeasons = careerQuery.data?.data ?? [];
 
@@ -187,7 +193,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
     return (
       <div className="p-6 text-center text-sm text-neg">
         Player not found.{" "}
-        <Link to="/fantasy/all" className="text-accent hover:underline">
+        <Link to="/leaderboards/fantasy" className="text-accent hover:underline">
           Back to leaderboard
         </Link>
       </div>
@@ -217,27 +223,24 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
           *to* — the thing behind it is the draft board, and the close button is the
           way out. */}
       {!embedded && (
-        <Link to="/fantasy/all" className="inline-block text-sm text-muted transition hover:text-accent">
+        <Link to="/leaderboards/fantasy" className="inline-block text-sm text-muted transition hover:text-accent">
           ← Leaderboard
         </Link>
       )}
 
       <ProfileHeader player={player} seasonTeam={row?.team_abbreviation} />
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         {seasonOptions.length > 0 && (
           <Select
+            label="Season"
             value={String(season)}
             onChange={(value) => setChosenSeason(Number(value))}
             options={seasonOptions}
           />
         )}
-        <span className="text-xs text-faint">
-          Fantasy numbers and career finishes are in your league scoring.
-        </span>
+        <ScoringControl scoring={scoring} onChange={setScoring} label="Scoring" bare />
       </div>
-
-      <ScoringControl scoring={scoring} onChange={setScoring} />
 
       {season == null ? (
         <section className="glass-card p-8 text-center text-sm text-muted">
@@ -247,7 +250,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
         <>
           <SeasonStatGrid
             headline={forPosition(HEADLINE_STATS, position)}
-            boards={forPosition(SEASON_BOARDS, position)}
+            boards={seasonBoards(position)}
             row={row}
             metrics={metrics}
             position={position}
@@ -258,7 +261,8 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
           <CareerTable
             seasons={careerSeasons}
             position={position}
-            groups={forPosition(CAREER_GROUPS, position)}
+            sections={careerView.sections}
+            controls={<TableViewBar view={careerView} title="Career" player={player.name} metrics={metrics} />}
             metrics={metrics}
             league={leagueConfig}
             activeSeason={season}
@@ -268,7 +272,8 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
 
           <GameLog
             games={seasonLog}
-            groups={forPosition(GAMELOG_GROUPS, position)}
+            sections={gameLogView.sections}
+            controls={<TableViewBar view={gameLogView} title="Game log" player={player.name} metrics={metrics} />}
             metrics={metrics}
             position={position}
             league={leagueConfig}

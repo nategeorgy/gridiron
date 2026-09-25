@@ -5,24 +5,30 @@
 // It is re-ranked in the caller's scoring by the API, so a superflex or TE-premium
 // league sees its own history rather than someone else's PPR one.
 //
-// Columns after the Fantasy block are position-specific (`constants/playerPage.js`)
-// and render under a spanning header, the same grouping language the boards use.
-import { formatStat } from "../../utils/format";
+// Columns after the Fantasy block are the table's own view: one of the leaderboard's five
+// tabs for the position, or a custom list, picked with the controls in its header
+// (`useTableView`, `TableViewBar`). They render under a spanning header, the same
+// grouping language the boards use.
+import { formatSigned, formatStat } from "../../utils/format";
 import { isMetricAvailable } from "../../utils/availability";
 import { StatTooltip, useStatTooltip } from "../StatTooltip";
 import { FinishChip } from "./FinishChip";
 import { metricTip } from "./metricTip";
+import { SIGNED_COLUMNS } from "../../constants/playerPage";
 
-export function CareerTable({ seasons, position, groups, metrics, league, activeSeason, onSelectSeason, isLoading }) {
+export function CareerTable({ seasons, position, sections, controls, metrics, league, activeSeason, onSelectSeason, isLoading }) {
   const tooltip = useStatTooltip();
-  const columns = groups.flatMap((group) => group.columns);
-  const starts = new Set(groups.map((group) => group.columns[0]));
+  const columns = sections.flatMap((section) => section.columns);
+  const starts = new Set(sections.map((section) => section.columns[0]));
 
   return (
     <section className="glass-card px-4 pb-3 pt-3">
-      <h2 className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-faint">
-        Career · among {position}s, in your scoring
-      </h2>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-faint">
+          Career · among {position}s
+        </h2>
+        {controls}
+      </div>
 
       {isLoading ? (
         <div className="space-y-1.5 py-2" aria-busy="true">
@@ -37,21 +43,22 @@ export function CareerTable({ seasons, position, groups, metrics, league, active
           <table className="w-full min-w-[780px] text-left">
             <thead>
               <tr className="text-[9.5px] uppercase tracking-[0.08em] text-fg">
-                <th colSpan={6} className="border-b-2 border-edge px-2 pb-0.5 pt-1 font-bold">
+                <th colSpan={7} className="border-b-2 border-edge px-2 pb-0.5 pt-1 font-bold">
                   Fantasy
                 </th>
-                {groups.map((group) => (
+                {/* Keyed by position: a custom table can repeat a section name. */}
+                {sections.map((section, index) => (
                   <th
-                    key={group.name}
-                    colSpan={group.columns.length}
+                    key={`${index}-${section.name}`}
+                    colSpan={section.columns.length}
                     className="border-b-2 border-l border-edge px-2 pb-0.5 pt-1 font-bold"
                   >
-                    {group.name}
+                    {section.name}
                   </th>
                 ))}
               </tr>
               <tr className="border-b border-line text-[9.5px] uppercase tracking-[0.06em] text-faint">
-                {["Season", "Team", "G", "Pts", "PPG", "Finish"].map((head, index) => (
+                {["Season", "Team", "G", "Pts", "PPG", "Finish", "Snap%"].map((head, index) => (
                   <th
                     key={head}
                     className={`whitespace-nowrap px-2 py-1 font-semibold ${index === 0 ? "text-left" : "text-right"}`}
@@ -119,6 +126,12 @@ export function CareerTable({ seasons, position, groups, metrics, league, active
                         }`}
                       />
                     </td>
+                    {/* Snaps start in 2013 (M8), so an earlier season shows a dash. */}
+                    <td className="stat-num px-2 py-1 text-right text-[12.5px] text-muted">
+                      {isMetricAvailable(metrics.snap_share ?? {}, season.season)
+                        ? formatStat(season.snap_share, "pct")
+                        : "—"}
+                    </td>
                     {columns.map((column) => {
                       const metric = metrics[column] ?? {};
                       const available = isMetricAvailable(metric, season.season);
@@ -127,7 +140,11 @@ export function CareerTable({ seasons, position, groups, metrics, league, active
                           key={column}
                           className={`stat-num px-2 py-1 text-right text-[12.5px] ${available ? "text-fg" : "text-faint"} ${starts.has(column) ? "border-l border-line" : ""}`}
                         >
-                          {available ? formatStat(season[column], metric.format) : "—"}
+                          {!available
+                            ? "—"
+                            : SIGNED_COLUMNS.has(column)
+                              ? formatSigned(season[column], metric.format)
+                              : formatStat(season[column], metric.format)}
                         </td>
                       );
                     })}

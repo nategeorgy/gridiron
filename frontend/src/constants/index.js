@@ -157,9 +157,8 @@ export const METRICS = {
   opportunity_trend: { label: "Usage Trend", short: "TREND", format: FORMATS.pct },
 };
 
-// Leaderboard columns and sort options are no longer defined here — each board in
-// constants/boards.js declares its own columns, and LeaderboardView builds the "sort
-// by" dropdown from them.
+// Leaderboard columns and sort options are not defined here. The player leaderboards'
+// presets are in constants/leaderboards.js, and the Insight boards' in constants/boards.js.
 
 // Team leaderboard metric definitions (offensive production).
 export const TEAM_METRICS = {

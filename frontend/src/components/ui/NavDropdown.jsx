@@ -2,9 +2,8 @@
 // and on click/tap everywhere (so it works on touch). Closes on outside click,
 // Escape, or a route change. The trigger highlights when a child route is active.
 //
-// The open/close behaviour — including the grace period that stops the menu closing
-// while the pointer travels toward it — lives in useHoverMenu, shared with
-// MegaDropdown. Note the panel's offset is PADDING on a hoverable wrapper rather than
+// The open/close behaviour, including the grace period that stops the menu closing
+// while the pointer travels toward it, lives in useHoverMenu. Note the panel's offset is PADDING on a hoverable wrapper rather than
 // a margin: a margin would put 6px of dead space between the trigger and the panel,
 // and crossing dead space is a mouseleave.
 import { NavLink, useLocation } from "react-router-dom";

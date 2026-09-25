@@ -199,7 +199,7 @@ export function TrendingPlayersCard({
         </div>
       )}
 
-      <CardLink to={`/nfl/receiving-advanced?weeks=${week}`}>Full receiving board for the week</CardLink>
+      <CardLink to={`/leaderboards/usage?positions=WR,TE&weeks=${week}`}>Full receiving board for the week</CardLink>
     </Card>
   );
 }

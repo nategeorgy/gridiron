@@ -82,6 +82,37 @@ class StatLineOut(BaseModel):
     ngs_rush_yards_over_expected: float | None = None
     ngs_pass_intended_air_yards: float | None = None
 
+    # Everything else a leaderboard tab can show, so the player page's game log can show
+    # the same tabs one game at a time (September 2026). Same coverage caveat as above.
+    passing_first_downs: int | None = None
+    rushing_first_downs: int | None = None
+    receiving_first_downs: int | None = None
+    sacks_suffered: int | None = None
+    sack_fumbles_lost: int | None = None
+    pressure_rate: float | None = None
+    times_blitzed: int | None = None
+    rush_broken_tackles: int | None = None
+    rec_broken_tackles: int | None = None
+    receiving_drops: int | None = None
+    passer_rating_when_targeted: float | None = None
+    ngs_pass_time_to_throw: float | None = None
+    ngs_pass_completed_air_yards: float | None = None
+    ngs_pass_air_yards_differential: float | None = None
+    ngs_pass_aggressiveness: float | None = None
+    ngs_pass_air_yards_to_sticks: float | None = None
+    ngs_pass_expected_completion_pct: float | None = None
+    ngs_rec_separation: float | None = None
+    ngs_rec_cushion: float | None = None
+    ngs_rec_yac: float | None = None
+    ngs_rec_expected_yac: float | None = None
+    ngs_rec_yac_above_expectation: float | None = None
+    ngs_rush_yards_over_expected_per_att: float | None = None
+    ngs_rush_expected_yards: float | None = None
+    ngs_rush_pct_over_expected: float | None = None
+    ngs_rush_efficiency: float | None = None
+    ngs_rush_time_to_los: float | None = None
+    ngs_rush_pct_attempts_eight_defenders: float | None = None
+
     # Where this game finished among the player's position that week, in the request's
     # scoring (M13). Computed, never stored: it depends on the scoring config.
     position_rank: int | None = None
@@ -97,6 +128,10 @@ class StatLineOut(BaseModel):
     receiving_tds_exp: float | None = None
     receptions_exp: float | None = None
     two_point_conv_exp: float | None = None
+    passing_first_downs_exp: float | None = None
+    rushing_first_downs_exp: float | None = None
+    receiving_first_downs_exp: float | None = None
+    completions_exp: float | None = None
 
     # Fantasy
     fantasy_points_ppr: float | None = None

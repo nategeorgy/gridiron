@@ -1,8 +1,8 @@
-// Open/close behaviour shared by every hover menu in the header (NavDropdown and the
-// Leaderboards MegaDropdown).
+// Open/close behaviour for the header's hover menus (NavDropdown).
 //
-// Why it is a hook rather than two copies: both menus had the same two bugs, and both
-// were bugs of *geometry* rather than of state, so fixing one copy fixed nothing.
+// Why it is a hook: until the Leaderboards mega menu was retired (September 2026) two
+// menus shared it. Both had the same two bugs, and both were bugs of *geometry* rather
+// than of state, so fixing one copy fixed nothing.
 //
 //  1. **No grace period.** `onMouseLeave` closed the menu on the same frame the pointer
 //     left. A menu you have to keep the pointer inside of is a menu you have to aim at,

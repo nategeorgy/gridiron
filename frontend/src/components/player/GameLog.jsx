@@ -2,12 +2,13 @@
 //
 // The lead block — week, opponent, points, snap share, and where those points finished
 // among the position that week — is the same for every position: it is the "did he play,
-// and did it matter" question, which nobody asks differently for a quarterback. What follows is position-specific (`constants/playerPage.js`) under a
-// spanning header, the same grouping language the career table and the boards use.
+// and did it matter" question, which nobody asks differently for a quarterback. What
+// follows is the table's own view: one of the leaderboard's five tabs for the position,
+// or a custom list, under a spanning header (September 2026; see `useTableView`).
 //
-// Deliberately **not** driven by the season-stat tabs above it. A game log is the
-// receipts; re-cutting its columns every time someone glances at a different stat group
-// would mean the one stable table on the page moves under them.
+// Deliberately **not** driven by anything else on the page. A game log is the receipts;
+// it changes columns when someone picks one of *its* tabs, never because they glanced at
+// a different part of the page.
 //
 // It covers the whole season rather than the games already played: `buildSeasonLog`
 // below merges his stat lines onto his team's fixture list, so a week still to come is a
@@ -15,12 +16,9 @@
 import { formatSigned, formatStat } from "../../utils/format";
 import { isMetricAvailable } from "../../utils/availability";
 import { StatTooltip, useStatTooltip } from "../StatTooltip";
-import { columnEntry, gameValue } from "../../constants/playerPage";
+import { GAMELOG_LABELS, SIGNED_COLUMNS, gameValue } from "../../constants/playerPage";
 import { FinishChip } from "./FinishChip";
 import { metricTip } from "./metricTip";
-
-// A game's rush yards over expected is negative as often as not; the sign is the point.
-const SIGNED = new Set(["ngs_rush_yards_over_expected"]);
 
 /**
  * The season's whole slate, not only the weeks with a stat line: every fixture his team
@@ -75,24 +73,28 @@ export function buildSeasonLog(statLines, fixtures, teamId) {
   return rows.sort((a, b) => a.week - b.week);
 }
 
-export function GameLog({ games, groups, metrics, position, league, season, isLoading }) {
+export function GameLog({ games, sections, controls, metrics, position, league, season, isLoading }) {
   const tooltip = useStatTooltip();
-  const columns = groups.flatMap((group, groupIndex) =>
-    group.columns.map((entry, columnIndex) => ({
-      ...columnEntry(entry),
+  const columns = sections.flatMap((section, sectionIndex) =>
+    section.columns.map((id, columnIndex) => ({
+      id,
+      label: GAMELOG_LABELS[id],
       sectionStart: columnIndex === 0,
-      key: `${groupIndex}-${columnIndex}`,
+      key: `${sectionIndex}-${id}`,
     })),
   );
 
   return (
     <section className="glass-card px-0 pb-2 pt-3">
-      <h2 className="mb-1 px-4 text-sm font-semibold tracking-tight text-fg">
-        Game Log
-        <span className="ml-2 text-[11px] font-medium text-faint">
-          {season} regular season · fantasy points in your scoring
-        </span>
-      </h2>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-4">
+        <h2 className="text-sm font-semibold tracking-tight text-fg">
+          Game Log
+          <span className="ml-2 text-[11px] font-medium text-faint">
+            {season} regular season
+          </span>
+        </h2>
+        {controls}
+      </div>
 
       {isLoading ? (
         <div className="space-y-1.5 px-4 py-2" aria-busy="true">
@@ -110,13 +112,14 @@ export function GameLog({ games, groups, metrics, position, league, season, isLo
                 <th colSpan={5} className="border-b-2 border-edge px-2 pb-0.5 pt-1 pl-4 font-bold">
                   Game
                 </th>
-                {groups.map((group) => (
+                {/* Keyed by position: a custom table can repeat a section name. */}
+                {sections.map((section, index) => (
                   <th
-                    key={group.name}
-                    colSpan={group.columns.length}
+                    key={`${index}-${section.name}`}
+                    colSpan={section.columns.length}
                     className="border-b-2 border-l border-edge px-2 pb-0.5 pt-1 font-bold"
                   >
-                    {group.name}
+                    {section.name}
                   </th>
                 ))}
               </tr>
@@ -191,7 +194,7 @@ export function GameLog({ games, groups, metrics, position, league, season, isLo
                             >
                               {!available
                                 ? "—"
-                                : SIGNED.has(column.id)
+                                : SIGNED_COLUMNS.has(column.id)
                                   ? formatSigned(value, metric.format)
                                   : formatStat(value, metric.format)}
                             </td>

@@ -6,39 +6,26 @@
 // on a desktop screen and never a horizontal scroll: it wraps to five across below
 // `xl`, and to two on a phone.
 //
-// **The boards** — Fantasy, Production, Advanced — sit beneath as three rows sharing a
-// single scroll frame, like three players on a leaderboard, so one scrollbar moves all
-// of them. The board names are a static column *outside* that frame rather than a
+// **The boards** are the leaderboard's five tabs (Fantasy, Usage, Efficiency, Expected,
+// Tracking; `seasonBoards` in constants/playerPage.js), five rows sharing a single scroll
+// frame, like five players on a leaderboard, so one scrollbar moves all of them. The board names are a static column *outside* that frame rather than a
 // sticky one inside it: a sticky label needs a background to mask the cells sliding
 // under it, and a label that nothing can scroll under can be plain text. Every cell
-// carries its own label, because the three boards hold different stats and cannot share
+// carries its own label, because the five boards hold different stats and cannot share
 // a header row.
 import { formatStat, formatSigned } from "../../utils/format";
+import { SIGNED_COLUMNS } from "../../constants/playerPage";
 import { isMetricAvailable } from "../../utils/availability";
 import { StatTooltip, useStatTooltip } from "../StatTooltip";
 import { metricTip } from "./metricTip";
 import { percentileColor } from "./percentile";
-
-// Columns whose sign is the whole point, so they carry an explicit "+".
-const SIGNED = new Set([
-  "fantasy_points_over_expected",
-  "epa",
-  "receiving_epa",
-  "rushing_epa",
-  "cpoe",
-  "ngs_rec_yac_above_expectation",
-  "ngs_rush_yards_over_expected",
-  "ngs_rush_yards_over_expected_per_att",
-  "ngs_pass_completion_pct_above_expectation",
-  "ngs_pass_air_yards_differential",
-]);
 
 // Row height is fixed so the static label column and the scrolling strips stay in step.
 const BOARD_ROW_HEIGHT = "h-[54px]";
 
 function display(column, row, metric, season) {
   if (!isMetricAvailable(metric, season)) return null;
-  return SIGNED.has(column)
+  return SIGNED_COLUMNS.has(column)
     ? formatSigned(row?.[column], metric.format)
     : formatStat(row?.[column], metric.format);
 }
@@ -151,7 +138,7 @@ export function SeasonStatGrid({ headline, boards, row, metrics, position, seaso
       <h2 className="mb-2.5 text-sm font-semibold tracking-tight text-fg">
         Season Stats
         <span className="ml-2 text-[11px] font-medium text-faint">
-          {season} · rank among {position}s in the headline, percentile beneath each board stat
+          {season} · rank among {position}s in the headline, percentile beneath each stat
         </span>
       </h2>
 

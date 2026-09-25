@@ -8,9 +8,8 @@ import { BrandLockup } from "./Brand";
 import { Footer } from "./Footer";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
-import { MegaDropdown } from "./ui/MegaDropdown";
 import { NavDropdown } from "./ui/NavDropdown";
-import { LEADERBOARD_MENU, NAV_GROUPS } from "../constants/boards";
+import { NAV_GROUPS } from "../constants/boards";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 
 // Routes that opt out of the 1280px shell, capped rather than full-bleed so nothing
@@ -63,13 +62,6 @@ export function Layout() {
                   match={group.match}
                 />
               ))}
-              {/* One tab for all fourteen player boards. Its routes are still grouped
-                  by type, so the active check takes all three prefixes. */}
-              <MegaDropdown
-                label="Leaderboards"
-                columns={LEADERBOARD_MENU}
-                matches={["/fantasy", "/nfl", "/opportunity"]}
-              />
               <NavLink to="/teams" className={navLinkClass}>
                 Teams
               </NavLink>
