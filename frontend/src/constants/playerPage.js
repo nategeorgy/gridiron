@@ -11,6 +11,8 @@
 // and the game log derives the handful of per-game values no stored column holds — see
 // `gameValue` below.
 
+import { LEADERBOARD_TABS, presetSections } from "./leaderboards";
+
 /** Pick a position's config, falling back to the receiver layout. */
 export function forPosition(map, position) {
   return map[position] ?? map.WR;
@@ -74,103 +76,96 @@ export function headlineColumns(position) {
 }
 
 // ---------------------------------------------------------------------------
-// Career table — one row per season, grouped by phase
+// Season stats, career and game log: the leaderboard's five tabs (September 2026)
 // ---------------------------------------------------------------------------
-// The Fantasy group (season, team, games, points, PPG, finish) is rendered by the
-// component itself because those columns are not all metrics; what follows is
-// position-specific and comes from here.
-export const CAREER_GROUPS = {
-  QB: [
-    { name: "Passing", columns: ["attempts", "completions", "passing_yards", "passing_tds", "interceptions"] },
-    { name: "Rushing", columns: ["carries", "rushing_yards", "yards_per_carry", "rushing_tds"] },
-  ],
-  RB: [
-    { name: "Rushing", columns: ["carries", "rushing_yards", "yards_per_carry", "rushing_tds"] },
-    { name: "Receiving", columns: ["targets", "receptions", "receiving_yards", "receiving_tds"] },
-  ],
-  WR: [
-    { name: "Receiving", columns: ["targets", "receptions", "receiving_yards", "receiving_tds"] },
-    {
-      name: "Efficiency",
-      columns: [
-        "yards_per_reception",
-        "yards_per_target",
-        "yards_per_route_run",
-        "targets_per_route_run",
-        "target_share",
-      ],
-    },
-  ],
-};
-CAREER_GROUPS.TE = CAREER_GROUPS.WR;
-
-// ---------------------------------------------------------------------------
-// Game log — one row per game, its own column lists
-// ---------------------------------------------------------------------------
-// Deliberately NOT the career table's lists any more. A season row and a game row answer
-// different questions — a career wants volume, a week wants the usage detail that
-// explains one result — so the two were split when the game log grew an Advanced group.
+// The player page reads the same presets as the leaderboards
+// (`constants/leaderboards.js`), so a stat sits under the same tab in both places.
+// Season Stats shows all five tabs at once as rows; the career table and the game log
+// each pick their own tab, with a Custom tab and Edit Columns, so the career can show
+// Fantasy while the game log shows Usage.
 //
-// The lead group (week, opponent, points, snap share, weekly finish) is the same for every
-// position and is rendered by the component. An entry is a metric id, or
-// `{ id, label }` where the registry's short name reads wrong on a single game.
-export const GAMELOG_GROUPS = {
+// Each table has a fixed lead block (the career's season, team, games, points, PPG,
+// finish and snap share; the game log's week, opponent, points, finish and snap share). A
+// stat that block already shows is left out of that table's tabs and editor rather than
+// printed twice. The game log also drops the per-game twins of season rates: on one game,
+// routes per game is routes, and expected PPG is expected points.
+//
+// The **Fantasy** tab is the player page's own, not the leaderboard's: a player's season
+// or week reads as the box score of his position plus the rate that explains it (yards
+// per carry for a back, per target and per reception for a pass-catcher), where the
+// leaderboard's Fantasy tab also shows every phase so positions can sit side by side.
+const PLAYER_FANTASY = {
   QB: [
-    { name: "Passing", columns: ["attempts", "completions", "completion_pct", "passing_yards", "passing_tds", "interceptions"] },
+    { name: "Passing", columns: ["completions", "attempts", "passing_yards", "passing_tds", "interceptions"] },
     { name: "Rushing", columns: ["carries", "rushing_yards", "yards_per_carry", "rushing_tds"] },
-    {
-      name: "Advanced",
-      columns: [
-        "passer_rating",
-        "yards_per_attempt",
-        "yards_per_completion",
-        // `adot` is the receiving column and is null for quarterbacks.
-        { id: "ngs_pass_intended_air_yards", label: "ADOT" },
-        "bad_throw_rate",
-        "drops_by_receivers",
-      ],
-    },
   ],
   RB: [
     { name: "Rushing", columns: ["carries", "rushing_yards", "yards_per_carry", "rushing_tds"] },
     { name: "Receiving", columns: ["targets", "receptions", "receiving_yards", "receiving_tds"] },
-    {
-      name: "Advanced",
-      columns: [
-        "rush_attempt_share",
-        "red_zone_rush_attempts",
-        "rush_att_inside_5",
-        "rush_yards_before_contact",
-        "rush_yards_after_contact",
-        "ngs_rush_yards_over_expected",
-        "target_share",
-        "routes_run",
-        // The registry's short is "HVT/G"; on one game it is simply the count.
-        { id: "high_value_touches_per_game", label: "HVT" },
-        "opportunity_share",
-      ],
-    },
   ],
   WR: [
-    { name: "Receiving", columns: ["targets", "receptions", "receiving_yards", "receiving_tds"] },
     {
-      name: "Advanced",
-      columns: [
-        "target_share",
-        "red_zone_targets",
-        "routes_run",
-        "route_participation",
-        "yards_per_route_run",
-        "targets_per_route_run",
-        { id: "fantasy_points_per_route_run", label: "PTS/RR" },
-        "adot",
-        "yards_per_reception",
-        "yards_per_target",
-      ],
+      name: "Receiving",
+      columns: ["targets", "receptions", "receiving_yards", "yards_per_target", "yards_per_reception", "receiving_tds"],
     },
   ],
 };
-GAMELOG_GROUPS.TE = GAMELOG_GROUPS.WR;
+PLAYER_FANTASY.TE = PLAYER_FANTASY.WR;
+
+export const TABLE_VIEWS = {
+  career: {
+    key: "career",
+    defaultTab: "fantasy",
+    exclude: ["fantasy_points", "fantasy_ppg", "snap_share"],
+    presets: { fantasy: PLAYER_FANTASY },
+  },
+  gamelog: {
+    key: "log",
+    defaultTab: "usage",
+    exclude: ["fantasy_points", "fantasy_ppg", "snap_share", "routes_run_per_game", "expected_fantasy_ppg"],
+    presets: { fantasy: PLAYER_FANTASY },
+  },
+};
+
+/** The leaderboard preset a position reads, with the same WR fallback as `forPosition`. */
+export const presetPosition = (position) => (["QB", "RB", "WR", "TE"].includes(position) ? position : "WR");
+
+/** The game log's own labels, where the registry's short name reads wrong on one game. */
+export const GAMELOG_LABELS = { high_value_touches_per_game: "HVT" };
+
+/**
+ * Season Stats' five rows: each tab's preset for the position. FPPG leads every preset
+ * on the leaderboard, but five stacked rows would print it five times, so it stays on
+ * the Fantasy row only.
+ */
+export function seasonBoards(position) {
+  const group = presetPosition(position);
+  return LEADERBOARD_TABS.map((tab) => ({
+    id: tab.id,
+    label: tab.label,
+    sections: (presetSections(group, tab.id) ?? [])
+      .map((section) => ({
+        name: section.name,
+        columns: tab.id === "fantasy" ? section.columns : section.columns.filter((id) => id !== "fantasy_ppg"),
+      }))
+      .filter((section) => section.columns.length),
+  }));
+}
+
+/** Columns whose sign is the whole point, so they carry an explicit "+". */
+export const SIGNED_COLUMNS = new Set([
+  "fantasy_points_over_expected",
+  "tds_over_expected",
+  "epa",
+  "receiving_epa",
+  "rushing_epa",
+  "cpoe",
+  "ngs_rec_yac_above_expectation",
+  "ngs_rush_yards_over_expected",
+  "ngs_rush_yards_over_expected_per_att",
+  "ngs_pass_completion_pct_above_expectation",
+  "ngs_pass_air_yards_differential",
+]);
 
 /** A column entry — a metric id, or `{ id, label }` — normalised to `{ id, label? }`. */
 export function columnEntry(entry) {
@@ -179,138 +174,62 @@ export function columnEntry(entry) {
 
 // Per-game values no stored column holds. ⚠️ Y/REC, Y/TGT and YPRR are NOT here: they
 // are stored per game and match their own division exactly, so the stored value is used.
-// These are the registry's `derived` rates (stored only as their inputs) and two
-// composites. A season's rate is `Σnumerator / Σdenominator` and keeps coming from the
-// API; a single game's has to divide that game's own numbers, which is all this does.
+// These are the registry's `derived` rates and composites, stored only as their inputs.
+// A season's rate is `Σnumerator / Σdenominator` and keeps coming from the API; a single
+// game's has to divide that game's own numbers, which is all this does. A side listed as
+// several columns is their sum, and all-missing stays missing rather than becoming 0.
 const GAME_RATES = {
   yards_per_carry: ["rushing_yards", "carries"],
   completion_pct: ["completions", "attempts"],
   yards_per_attempt: ["passing_yards", "attempts"],
   yards_per_completion: ["passing_yards", "completions"],
-  // Uses the line's `fantasy_points`, which the API fills in the request's scoring.
+  catch_rate: ["receptions", "targets"],
+  receiving_drop_rate: ["receiving_drops", "targets"],
+  rush_ybc_per_att: ["rush_yards_before_contact", "carries"],
+  rush_yac_per_att: ["rush_yards_after_contact", "carries"],
+  touches_per_snap: [["targets", "carries"], "snap_count"],
+  epa_per_play: ["epa", ["attempts", "carries", "targets"]],
+  // Use the line's `fantasy_points`, which the API fills in the request's scoring.
   fantasy_points_per_route_run: ["fantasy_points", "routes_run"],
+  fantasy_points_per_carry: ["fantasy_points", "carries"],
 };
 
-// Composites that are a plain sum on one game (the season version divides by games).
-// Terms coalesce to 0 like the composite engine's, but all-missing stays missing.
+// Composites that are a plain sum on one game (the season versions divide by games).
 const GAME_SUMS = {
   high_value_touches_per_game: ["red_zone_targets", "rush_att_inside_5"],
+  dropbacks: ["attempts", "sacks_suffered"],
+  total_first_downs: ["passing_first_downs", "rushing_first_downs", "receiving_first_downs"],
 };
+
+// Actual minus expected, on one game. The same definitions the Insight engine uses.
+const GAME_DIFFS = {
+  fantasy_points_over_expected: ["fantasy_points", "expected_fantasy_points"],
+  tds_over_expected: [
+    ["passing_tds", "rushing_tds", "receiving_tds"],
+    ["passing_tds_exp", "rushing_tds_exp", "receiving_tds_exp"],
+  ],
+};
+
+function gameSum(game, side) {
+  const names = Array.isArray(side) ? side : [side];
+  const parts = names.map((name) => game[name]);
+  if (parts.every((part) => part === null || part === undefined)) return null;
+  return parts.reduce((total, part) => total + (part ?? 0), 0);
+}
 
 /** One game's value for a column, deriving what no stored column holds. */
 export function gameValue(game, column) {
-  const sum = GAME_SUMS[column];
-  if (sum) {
-    const parts = sum.map((name) => game[name]);
-    if (parts.every((part) => part === null || part === undefined)) return null;
-    return parts.reduce((total, part) => total + (part ?? 0), 0);
+  if (GAME_SUMS[column]) return gameSum(game, GAME_SUMS[column]);
+  if (GAME_DIFFS[column]) {
+    const [actual, expected] = GAME_DIFFS[column].map((side) => gameSum(game, side));
+    return actual === null || expected === null ? null : actual - expected;
   }
   const rate = GAME_RATES[column];
   if (!rate) return game[column];
-  const [numerator, denominator] = rate.map((name) => game[name]);
-  if (numerator === null || numerator === undefined || !denominator) return null;
+  const [numerator, denominator] = rate.map((side) => gameSum(game, side));
+  if (numerator === null || !denominator) return null;
   return numerator / denominator;
 }
-
-// ---------------------------------------------------------------------------
-// Season stat grid — the leaderboard boards, as one player's row
-// ---------------------------------------------------------------------------
-// Built from the M12 boards' column sets (Fantasy / Production / Advanced). The
-// leaderboards have since become five preset tabs per position group
-// (`constants/leaderboards.js`), and this grid has not followed yet, so a stat can sit
-// under a different heading here than on the board.
-const FANTASY_SECTIONS = {
-  general: {
-    QB: ["fantasy_points", "fantasy_ppg", "passing_yards", "passing_tds", "interceptions", "rushing_yards", "rushing_tds"],
-    RB: ["fantasy_points", "fantasy_ppg", "carries", "rushing_yards", "rushing_tds", "targets", "receptions", "receiving_yards"],
-    WR: ["fantasy_points", "fantasy_ppg", "targets", "receptions", "receiving_yards", "yards_per_reception", "receiving_tds", "snap_share"],
-  },
-  advanced: [
-    "expected_fantasy_points",
-    "expected_fantasy_ppg",
-    "fantasy_points_over_expected",
-  ],
-};
-FANTASY_SECTIONS.general.TE = FANTASY_SECTIONS.general.WR;
-
-const fantasyBoard = (position) => ({
-  id: "fantasy",
-  label: "Fantasy",
-  // The page is served by /stats/intelligence rather than the leaderboard: it is the
-  // endpoint that also returns percentiles, so the stat grid, the radar and the
-  // percentile panel all come out of one request ranked against one pool.
-  sections: [
-    { name: "General", columns: FANTASY_SECTIONS.general[position] },
-    { name: "Advanced", columns: FANTASY_SECTIONS.advanced },
-  ],
-});
-
-export const SEASON_BOARDS = {
-  QB: [
-    fantasyBoard("QB"),
-    {
-      id: "production",
-      label: "Production",
-      sections: [
-        { name: "General", columns: ["completions", "attempts", "dropbacks", "passing_yards", "passing_tds", "interceptions", "passing_first_downs", "sacks_suffered"] },
-        { name: "Efficiency", columns: ["passer_rating", "cpoe", "epa", "epa_per_play", "yards_per_attempt", "completion_pct"] },
-        { name: "Rushing", columns: ["carries", "rushing_yards", "yards_per_carry", "rushing_tds", "rushing_epa"] },
-      ],
-    },
-    {
-      id: "advanced",
-      label: "Advanced",
-      sections: [
-        { name: "Expected", columns: ["passing_yards_exp", "passing_tds_exp", "interceptions_exp", "completions_exp"] },
-        { name: "Pressure", columns: ["pressure_rate", "times_blitzed", "bad_throw_rate", "drops_by_receivers"] },
-        { name: "Next Gen Stats", columns: ["ngs_pass_time_to_throw", "ngs_pass_aggressiveness", "ngs_pass_intended_air_yards", "ngs_pass_air_yards_to_sticks", "ngs_pass_expected_completion_pct", "ngs_pass_completion_pct_above_expectation"] },
-      ],
-    },
-  ],
-  RB: [
-    fantasyBoard("RB"),
-    {
-      id: "production",
-      label: "Production",
-      sections: [
-        { name: "Rushing", columns: ["carries", "rushing_yards", "yards_per_carry", "rushing_tds", "rushing_first_downs", "rushing_epa"] },
-        { name: "Receiving", columns: ["targets", "receptions", "receiving_yards", "receiving_tds", "yards_per_reception"] },
-        { name: "Expected", columns: ["rushing_yards_exp", "rushing_tds_exp", "receiving_yards_exp", "receptions_exp"] },
-      ],
-    },
-    {
-      id: "advanced",
-      label: "Advanced",
-      sections: [
-        { name: "Opportunity", columns: ["rush_attempt_share", "opportunity_share", "market_share", "target_share", "snap_count", "snap_share", "high_value_touches_per_game", "touches_per_snap"] },
-        { name: "Red Zone", columns: ["red_zone_rush_attempts", "red_zone_rush_share", "red_zone_targets", "rush_att_inside_10", "rush_att_inside_5", "rush_att_inside_2"] },
-        { name: "Next Gen Stats", columns: ["ngs_rush_efficiency", "ngs_rush_time_to_los", "ngs_rush_pct_attempts_eight_defenders", "ngs_rush_yards_over_expected", "ngs_rush_yards_over_expected_per_att", "rush_yards_after_contact", "rush_broken_tackles"] },
-      ],
-    },
-  ],
-  WR: [
-    fantasyBoard("WR"),
-    {
-      id: "production",
-      label: "Production",
-      sections: [
-        { name: "General", columns: ["targets", "receptions", "receiving_yards", "receiving_tds", "receiving_first_downs", "yards_after_catch", "snap_share"] },
-        { name: "Efficiency", columns: ["epa", "epa_per_play", "receiving_epa", "yards_per_reception", "yards_per_target", "yards_per_route_run", "targets_per_route_run", "catch_rate", "racr"] },
-        { name: "Expected", columns: ["receiving_yards_exp", "receiving_tds_exp", "receptions_exp", "receiving_first_downs_exp"] },
-      ],
-    },
-    {
-      id: "advanced",
-      label: "Advanced",
-      sections: [
-        { name: "Volume", columns: ["targets", "target_share", "routes_run", "routes_run_per_game", "route_participation", "red_zone_targets", "snap_count", "snap_share"] },
-        { name: "Air Yards", columns: ["air_yards", "air_yards_share", "adot", "unrealized_air_yards", "wopr"] },
-        { name: "Next Gen Stats", columns: ["ngs_rec_separation", "ngs_rec_cushion", "ngs_rec_yac", "ngs_rec_expected_yac", "ngs_rec_yac_above_expectation", "rec_broken_tackles", "receiving_drops"] },
-      ],
-    },
-  ],
-};
-SEASON_BOARDS.TE = SEASON_BOARDS.WR;
 
 // ---------------------------------------------------------------------------
 // Season profile radar — slices grouped by what they measure
@@ -528,7 +447,7 @@ export function percentileColumns(position) {
   // The headline shows ranks, but tints each by its percentile — same pool, so the
   // colour and the number can never disagree about how good a stat is.
   const wanted = new Set(headlineColumns(position));
-  for (const board of forPosition(SEASON_BOARDS, position)) {
+  for (const board of seasonBoards(position)) {
     for (const section of board.sections) section.columns.forEach((id) => wanted.add(id));
   }
   for (const group of forPosition(RADAR_GROUPS, position)) {

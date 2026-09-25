@@ -1147,6 +1147,15 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       version of stats the boards already show. **Edit Columns** is a live slide-out
       (`components/leaderboard/ColumnEditor.jsx`). The old paths redirect to the matching
       tab and group with their filters. Chosen over three rounds of mockups; frontend only
+- [x] Player page on the same five tabs (September 2026). Season Stats shows the five tabs
+      as rows from the leaderboard presets; the career table and the game log each pick
+      their own tab (defaults Fantasy and Usage) with a Custom tab and Edit Columns, kept in
+      the URL (`?career=`, `?log=`). Each table's fixed lead block (points, PPG, finish,
+      snap share) stays, and those stats are left out of its tabs and editor. Their
+      **Fantasy** tab is the player page's own (`PLAYER_FANTASY` in `constants/playerPage.js`):
+      the position's box score plus the rate that explains it, not the leaderboard's
+      every-phase view. The game log endpoint now returns every stored column a tab can
+      show; no migration
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com

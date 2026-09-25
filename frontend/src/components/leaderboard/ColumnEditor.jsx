@@ -184,8 +184,25 @@ function BoardList({ sections, metrics, onChange }) {
  * @param resetLabel  e.g. "Reset to Usage"
  * @param initialTab  the library tab to open on: the preset the board came from
  * @param metrics     the registry, from useMetrics
+ * @param exclude     stats this table shows elsewhere, left out of the library (the
+ *                    player page's tables have a fixed lead block)
+ * @param boardTitle  heading over the column list ("On your board", "In this table")
+ * @param subtitle    optional line under the panel title
  */
-export function ColumnEditor({ open, onClose, group, sections, onChange, onReset, resetLabel, initialTab, metrics }) {
+export function ColumnEditor({
+  open,
+  onClose,
+  group,
+  sections,
+  onChange,
+  onReset,
+  resetLabel,
+  initialTab,
+  metrics,
+  exclude = [],
+  boardTitle = "On your board",
+  subtitle = null,
+}) {
   const [query, setQuery] = useState("");
   const [libraryTab, setLibraryTab] = useState(initialTab);
   const [info, setInfo] = useState(null);
@@ -216,8 +233,16 @@ export function ColumnEditor({ open, onClose, group, sections, onChange, onReset
 
   const columns = sections.flatMap((entry) => entry.columns);
   const members = groupFor(group).positions;
-  const pool = groupPool(group);
-  const tabs = LEADERBOARD_TABS.filter((tab) => pool[tab.id]);
+  const excluded = new Set(exclude);
+  const pool = Object.fromEntries(
+    Object.entries(groupPool(group)).map(([tab, entries]) => [
+      tab,
+      entries
+        .map((entry) => ({ name: entry.name, columns: entry.columns.filter((id) => !excluded.has(id)) }))
+        .filter((entry) => entry.columns.length),
+    ]),
+  );
+  const tabs = LEADERBOARD_TABS.filter((tab) => pool[tab.id]?.length);
   const activeTab = pool[libraryTab] ? libraryTab : tabs[0]?.id;
   const chosen = new Set(columns);
   const needle = query.trim().toLowerCase();
@@ -259,10 +284,13 @@ export function ColumnEditor({ open, onClose, group, sections, onChange, onReset
           animation: "slide-in-right 0.2s ease-out",
         }}
       >
-        <header className="flex flex-none items-center justify-between px-5 pb-3 pt-4">
-          <h2 id="column-editor-title" className="text-xl font-extrabold tracking-tight text-fg">
-            Edit Columns
-          </h2>
+        <header className="flex flex-none items-start justify-between gap-3 px-5 pb-3 pt-4">
+          <div>
+            <h2 id="column-editor-title" className="text-xl font-extrabold tracking-tight text-fg">
+              Edit Columns
+            </h2>
+            {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -281,7 +309,7 @@ export function ColumnEditor({ open, onClose, group, sections, onChange, onReset
         >
           <div className="flex items-center gap-2 px-3 pb-1.5 pt-2.5">
             <h3 id="column-editor-board" className="flex-1 text-sm font-bold text-fg">
-              On your board
+              {boardTitle}
             </h3>
             <span className="text-xs text-faint">
               {columns.length} column{columns.length === 1 ? "" : "s"}
@@ -410,7 +438,8 @@ export function ColumnEditor({ open, onClose, group, sections, onChange, onReset
 
         <footer className="flex flex-none items-center gap-3 border-t border-line px-5 py-3">
           <span className="text-xs text-faint">
-            {columns.length} of {poolColumns(group).length} stats · {groupFor(group).label}
+            {columns.length} of {poolColumns(group).filter((id) => !excluded.has(id)).length} stats ·{" "}
+            {groupFor(group).label}
           </span>
           <span className="flex-1" />
           <button type="button" onClick={onClose} className="btn-accent-solid px-6 py-2 text-sm">
