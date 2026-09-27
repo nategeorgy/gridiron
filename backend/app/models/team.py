@@ -18,5 +18,7 @@ class Team(Base):
     division: Mapped[str | None] = mapped_column(String(20))
     # nflverse's ESPN logo, hotlinked like players.headshot_url.
     logo_url: Mapped[str | None] = mapped_column(String(255))
+    # nflverse's primary team colour, a hex string. Tints the team page header only.
+    color: Mapped[str | None] = mapped_column(String(7))
 
     players: Mapped[list["Player"]] = relationship(back_populates="team")  # noqa: F821

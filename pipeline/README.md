@@ -35,6 +35,8 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_rankings.py --weekly           # 8b. weekly rankings (M9, in season)
 .venv/bin/python ingest_expert_boards.py               # 8c. expert CSV boards (M9)
 .venv/bin/python ingest_depth_charts.py                # 9. depth charts (M6)
+.venv/bin/python ingest_team_stats.py --seasons 2024   # 10. team sums + personnel (team pages)
+.venv/bin/python ingest_staff.py                       # 11. coaching staff (from a CSV)
 ```
 
 Steps 8 and 9 are independent of 4–7 — they need only `players` (and `teams`) — but
@@ -84,6 +86,7 @@ script clamps to its own feed's window, so the same range can be passed to all o
 .venv/bin/python ingest_target_depth.py --seasons $(seq 2009 2025)
 .venv/bin/python ingest_nextgen.py      --seasons $(seq 2009 2025)
 .venv/bin/python ingest_pfr.py          --seasons $(seq 2009 2025)
+.venv/bin/python ingest_team_stats.py   --seasons $(seq 2009 2025)
 ```
 
 `ingest_stats.py` downloads a season of play-by-play at a time, so a full backfill is
@@ -270,6 +273,30 @@ disagree about which code a franchise used in a given season (`STL` vs `LA`). Se
   team missing from a download is a glitch, not a released roster.
 - QB/RB/WR/TE only. The feed carries all 53 players, but a fantasy product has nothing
   to say about a left guard.
+
+`ingest_team_stats.py` populates the **team pages' tables** (September 2026):
+
+- **`team_game_stats`**: one row per team, game and side. Side `o` is the team's own
+  plays and `d` is opponents' plays against it, so a defense's numbers are simply the
+  `d` rows. Only **sums** are stored (plays, EPA, successes, drives, conversions, snaps,
+  penalties, FTN charting counts, and the pass-depth and run-lane buckets as columns);
+  every rate is divided at query time over whatever weeks were picked.
+- **`team_personnel`**: offensive plays, EPA, successes and yards per personnel grouping
+  (11, 12, 21, ...) per game, from the participation feed. That feed starts in 2016 and
+  trails a season, so the season in progress has no personnel until it is supplied by
+  hand.
+- Sources: play-by-play, FTN charting (2022+: play action, RPO, screens, motion, huddle,
+  box counts, blitz and pass rushers), participation (coverage and personnel, 2016+),
+  `load_team_stats` (penalties, giveaways, takeaways) and snap counts (2013+).
+- Needs `teams` and `games` first. Team codes go through `franchises.py`, and a game not
+  in `games` is skipped rather than written.
+
+`ingest_staff.py` loads **`team_staff`** from `data/staff/team_staff.csv`, one row per
+person: `team, season, role (hc|oc|dc), order, name, note`. Order puts an in-season
+replacement after the coach he replaced; the note says so ("fired after Week 10",
+"head coach called the defense"). Each team and season is replaced whole. The file is
+kept by hand from Wikipedia's season pages: the nflverse schedule's head coaches are
+wrong for 2026 and no free feed names coordinators.
 
 ### Left NULL — no free data source
 

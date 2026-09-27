@@ -11,15 +11,29 @@ from app.schemas.team import TeamOut
 from app.scoring import ScoringConfig, parse_scoring
 from app.seasons import current_season, latest_scheduled_season
 from app.sos import team_summary
+from app.team_stats import team_board, team_breakdown
 from app.utils.dates import age_in_years
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
 
 @router.get("", response_model=list[TeamOut])
-def list_teams(db: Session = Depends(get_db)) -> list[Team]:
-    """Return all teams, ordered by name."""
-    return db.scalars(select(Team).order_by(Team.name)).all()
+def list_teams(
+    active: bool = Query(False, description="Only the teams on the newest season's schedule (the 32 franchises as they are now)."),
+    db: Session = Depends(get_db),
+) -> list[Team]:
+    """Return teams, ordered by name.
+
+    ``teams`` also holds the codes a relocated franchise used to play under (STL, SD,
+    OAK), because historical games point at them. ``active`` drops those, which is what
+    a menu of today's 32 teams wants.
+    """
+    query = select(Team).order_by(Team.name)
+    if active:
+        season = latest_scheduled_season(db)
+        playing = select(Game.home_team_id).where(Game.season == season).union(select(Game.away_team_id).where(Game.season == season))
+        query = query.where(Team.team_id.in_(playing))
+    return db.scalars(query).all()
 
 
 # Summed offensive columns available for the team leaderboard.
@@ -129,6 +143,52 @@ def team_stats(
         "season_type": season_type,
         **dict(row),
     }
+
+
+# --- Team pages and team leaderboards -----------------------------------------------
+
+def _stats_season(db: Session, season: int | None) -> int:
+    resolved = season if season is not None else current_season(db)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="No seasons are loaded")
+    return resolved
+
+
+@router.get("/stats")
+def team_stats_board(
+    season: int | None = Query(None, description="Season. Defaults to the newest season with stats."),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    weeks: str = Query("", description="Comma-separated weeks, e.g. '3,7,12'. Empty means every week played."),
+    scoring: str = Query("ppr", description="Scoring for the fantasy metrics, e.g. 'ppr' or 'half'"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Every team metric for every team, on both sides of the ball, with ranks.
+
+    Rates are computed from sums over the chosen weeks (never averaged per game), and
+    every rank is 1 = best; a tendency with no better direction ranks 1 = most. One
+    response serves every team leaderboard tab and the team page's stat strips and rank
+    table, so switching a tab or a column costs no request.
+    """
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return team_board(db, _stats_season(db, season), season_type, weeks, config)
+
+
+@router.get("/{team_id}/breakdown")
+def team_breakdown_detail(
+    team_id: int,
+    season: int | None = Query(None, description="Season. Defaults to the newest season with stats."),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    weeks: str = Query("", description="Comma-separated weeks. Empty means every week played."),
+    db: Session = Depends(get_db),
+) -> dict:
+    """One team's panels: the EPA trend by week, pass depth, run lanes, personnel
+    groupings and the coaching staff by season."""
+    if db.get(Team, team_id) is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    return team_breakdown(db, team_id, _stats_season(db, season), season_type, weeks)
 
 
 # --- The team page (M6.2) ---------------------------------------------------------
@@ -264,6 +324,7 @@ def _depth_chart(
         select(
             DepthChartEntry.pos_abb,
             DepthChartEntry.pos_rank,
+            DepthChartEntry.pos_slot,
             DepthChartEntry.snapshot_at,
             Player.player_id,
             Player.name,
@@ -294,6 +355,9 @@ def _depth_chart(
             "age": age_in_years(row["birth_date"]),
             "years_of_experience": row["years_of_experience"],
             "pos_rank": row["pos_rank"],
+            # The feed's alignment slot, which splits the three receiver spots apart
+            # (1 and 2 wide, 8 in the slot) so the team page can draw a formation.
+            "pos_slot": row["pos_slot"],
             "games_played": stats.get("games_played"),
             "fantasy_points": stats.get("fantasy_points"),
             "fantasy_ppg": stats.get("fantasy_ppg"),

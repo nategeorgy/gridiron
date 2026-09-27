@@ -132,6 +132,13 @@ jobs:
         working-directory: pipeline
         run: python ingest_depth_charts.py
 
+      # Head coaches and coordinators for the team pages, from a hand-kept CSV
+      # (pipeline/data/staff/team_staff.csv). Replaced per team and season, so a
+      # corrected coordinator lands on the next run. No download; seconds.
+      - name: Refresh coaching staff
+        working-directory: pipeline
+        run: python ingest_staff.py
+
   # The stats chain: weekly numbers, then the three enrichment passes over them.
   stats:
     name: Stats and enrichment
@@ -202,6 +209,8 @@ jobs:
       #
       # The order is a dependency, not a preference: the five enrichment passes only
       # update stat lines ingest_stats.py has already created (pipeline/README.md).
+      # ingest_team_stats.py is independent of them (it writes its own tables from
+      # play-by-play) and goes last so a failure there never costs the player stats.
       - name: Refresh the current season
         if: steps.clock.outputs.in_season == 'true' || inputs.run_stats == true
         working-directory: pipeline
@@ -218,3 +227,4 @@ jobs:
           python ingest_target_depth.py --seasons $SEASONS
           python ingest_nextgen.py      --seasons $SEASONS
           python ingest_pfr.py          --seasons $SEASONS
+          python ingest_team_stats.py   --seasons $SEASONS

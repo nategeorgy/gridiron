@@ -9,6 +9,7 @@ import { Footer } from "./Footer";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { NavDropdown } from "./ui/NavDropdown";
+import { TeamsMenu } from "./team/TeamsMenu";
 import { NAV_GROUPS } from "../constants/boards";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 
@@ -62,9 +63,7 @@ export function Layout() {
                   match={group.match}
                 />
               ))}
-              <NavLink to="/teams" className={navLinkClass}>
-                Teams
-              </NavLink>
+              <TeamsMenu />
             </nav>
             <SearchBox />
             <ThemeToggle />

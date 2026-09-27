@@ -128,7 +128,8 @@ teams (
   abbreviation  VARCHAR(5),          -- e.g. "KC"
   conference    VARCHAR(10),         -- "AFC" / "NFC"
   division      VARCHAR(20),         -- e.g. "AFC West"
-  logo_url      VARCHAR(255)         -- nflverse's ESPN logo, hotlinked like headshots
+  logo_url      VARCHAR(255),        -- nflverse's ESPN logo, hotlinked like headshots
+  color         VARCHAR(7)           -- primary colour, tints the team page header
 )
 
 -- Players
@@ -437,6 +438,39 @@ mock_draft_picks (
   PRIMARY KEY (mock_id, pick_number)
 )
 
+-- Team sums for the team pages and team leaderboards (September 2026). SUMS ONLY,
+-- never rates: every rate is Σnumerator / Σdenominator over the weeks a request picks,
+-- so a week filter is exact. side 'o' is the team's own plays, 'd' is opponents' plays
+-- against it, which is all a defense's numbers are. Pass-depth and run-lane buckets are
+-- columns (depth_{behind,short,intermediate,deep}_*, lane_{left_end..right_end}_*).
+-- Full column list in backend/app/models/team_game_stats.py.
+team_game_stats (
+  team_id      INT REFERENCES teams(team_id),
+  game_id      VARCHAR(50) REFERENCES games(game_id),
+  side         VARCHAR(1),    -- 'o' | 'd'
+  opponent_id  INT REFERENCES teams(team_id),
+  season INT, week INT, season_type VARCHAR(20),
+  plays FLOAT, dropbacks FLOAT, designed_runs FLOAT, epa FLOAT, successes FLOAT, ...
+  PRIMARY KEY (team_id, game_id, side)
+)
+
+-- Offensive personnel groupings per game, from participation (2016+, a season behind).
+team_personnel (
+  team_id INT, game_id VARCHAR(50), grouping VARCHAR(4),   -- '11', '12', '21', ...
+  season INT, week INT, season_type VARCHAR(20),
+  plays FLOAT, dropbacks FLOAT, epa FLOAT, successes FLOAT, yards FLOAT,
+  PRIMARY KEY (team_id, game_id, grouping)
+)
+
+-- Head coach and coordinators by season, from the hand-kept
+-- pipeline/data/staff/team_staff.csv. Each role is a JSON list of [name, note], in
+-- order, so an in-season change keeps both people.
+team_staff (
+  team_id INT, season INT,
+  head_coach JSON, offensive_coordinator JSON, defensive_coordinator JSON,
+  PRIMARY KEY (team_id, season)
+)
+
 -- Target distribution by pass depth and direction (M4).
 -- A different grain from player_stats, which is why it is its own table: air_yards is
 -- stored there as a per-game total, and a total cannot be un-summed into buckets.
@@ -704,6 +738,13 @@ GET /api/v1/teams/{team_id}                  ← M6 team page: record, fixtures 
                                                depth chart with production in your
                                                scoring
 GET /api/v1/teams/{team_id}/stats            ← team stats
+GET /api/v1/teams/stats                      ← every team metric for every team, both
+                                               sides, ranked (1 = best, or most for a
+                                               tendency), with league means. season=,
+                                               weeks=, scoring=
+GET /api/v1/teams/{team_id}/breakdown        ← one team's EPA trend, pass depth, run
+                                               lanes, personnel and staff. season=,
+                                               weeks=
 GET /api/v1/games                            ← M10 the schedule: filter by season,
                                                week and team. Defaults to the newest
                                                SCHEDULED season, not the newest played
@@ -762,7 +803,7 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   scoring, opportunity leaders, quarterbacks, a featured head-to-head —
   beside a **sticky rail** of reference (scoreboard, watchlist, the two signal cards).
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
-  in the code and in these docs. The nav holds **three dropdowns**: **Insight**
+  in the code and in these docs. The nav holds **four dropdowns**: **Insight**
   (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
   **Schedule** (`/schedule/*`: Games, By Team, Vegas Board) and **Leaderboards**, which
   lists five preset tabs of **one leaderboard page** (September 2026, replacing M12's 14
@@ -778,7 +819,9 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   - **Edit Columns** opens a slide-out that adds, removes, searches and drag-reorders,
     live; any edit turns the board into Custom.
 
-  Tab, group and a custom column list all live in the URL. The presets are in
+  Tab, group and a custom column list all live in the URL. The fourth dropdown, **Teams**,
+  holds Team Leaderboards (`/teams/leaderboards/:tab`), Team Pages (`/teams`) and all 32
+  teams by division, each linking to `/teams/:teamId`. The presets are in
   `frontend/src/constants/leaderboards.js`; the Insight boards and tool pages are in
   `frontend/src/constants/boards.js`.
 - ⚠️ **Draft ▾ and Explore ▾ are built but HIDDEN for launch.** `DRAFT_ITEMS` and
@@ -1156,6 +1199,18 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       the position's box score plus the rate that explains it, not the leaderboard's
       every-phase view. The game log endpoint now returns every stored column a tab can
       show; no migration
+- [x] Team pages and team leaderboards (September 2026). **Teams** becomes a dropdown.
+      Every team gets one long page (`/teams/:teamId`): EPA strips against the league,
+      a season trend (each game, season to date, league to date, the league's middle
+      half), players, team stat strips on offense and defense, a pace/tendencies/personnel
+      rank table, passing by depth on a field, running by lane, personnel formations, the
+      depth chart as a formation, schedule with SOS and coaching staff. The cards below
+      the players flow in two columns balanced by measurement. **Team Leaderboards** has
+      eight tabs plus Custom, with the rank of 32 under every value. Three new tables
+      (`team_game_stats`, `team_personnel`, `team_staff`, migration `177a7137df5c`, RLS
+      on), `app/team_stats.py`, `GET /teams/stats` and `GET /teams/{id}/breakdown`,
+      `pipeline/ingest_team_stats.py` and `pipeline/ingest_staff.py`
+      (see [`docs/design/team-pages.md`](docs/design/team-pages.md))
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -1799,6 +1854,15 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   receiving column and is null for quarterbacks (a stray value there is a gadget catch), so
   anything quarterback-facing that wants depth of throw reads the NGS column and inherits
   its 2016 floor
+- **Team stats are stored as sums and divided at query time** (`team_game_stats`). A
+  week filter is then exact, and a rate is never the mean of per-game rates. A team
+  metric is one `TeamMetric` in `app/team_stats.py` (its `get` reads the summed window);
+  add the sum to the model, the migration and `ingest_team_stats.py` only if no stored
+  column already covers it
+- **A team rank is 1 = best, or 1 = most for a tendency with no better direction**
+  (pass rate, formation and play-type shares, personnel usage). Every team surface
+  colours a rank the same way (green toward 1st, red toward last, `utils/teamStats.js`),
+  so a tendency's green means "does this the most", not "good"
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

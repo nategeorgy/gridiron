@@ -11,7 +11,8 @@ import { GamesView } from "./pages/GamesView";
 import { ScheduleGridView } from "./pages/ScheduleGridView";
 import { StyleGuide } from "./pages/StyleGuide";
 import { TeamProfile } from "./pages/TeamProfile";
-import { Teams } from "./pages/Teams";
+import { TeamLeaderboards } from "./pages/TeamLeaderboards";
+import { TeamsIndex } from "./pages/TeamsIndex";
 import { ALL_BOARDS, INSIGHT_TOOLS, SCHEDULE_ITEMS } from "./constants/boards";
 import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants/leaderboards";
 
@@ -147,7 +148,9 @@ export function App() {
         ))}
 
         <Route path="players/:playerId" element={<PlayerProfile />} />
-        <Route path="teams" element={<Teams />} />
+        <Route path="teams" element={<TeamsIndex />} />
+        <Route path="teams/leaderboards" element={<Navigate to="/teams/leaderboards/overview" replace />} />
+        <Route path="teams/leaderboards/:tab" element={<TeamLeaderboards />} />
         <Route path="teams/:teamId" element={<TeamProfile />} />
 
         {/* Design-token studio — a build tool, not a page of the product, so it
