@@ -63,6 +63,7 @@ def ingest_teams(seasons: list[int] | None = None) -> int:
             "conference": record.get("team_conf"),
             "division": record.get("team_division"),
             "logo_url": record.get("team_logo_espn"),
+            "color": record.get("team_color"),
         }
 
     written = upsert("teams", list(rows.values()), conflict_columns=["abbreviation"])

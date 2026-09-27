@@ -108,6 +108,9 @@ NEXTGEN = Feed("nextgen", clock="stats", first_season=2016)
 # load_pfr_advstats: Pro Football Reference charting, 2018+. Stats clock — a
 # charted pressure only exists once the game has been played.
 PFR = Feed("pfr", clock="stats", first_season=2018)
+# load_ftn_charting: FTN's play charting (formation, motion, play action, blitzers,
+# box count, drops), 2022+. Published weekly in season, unlike participation.
+FTN = Feed("ftn", clock="stats", first_season=2022)
 
 
 def latest_season(feed: Feed = STATS) -> int:

@@ -13,3 +13,5 @@ class TeamOut(BaseModel):
     abbreviation: str | None = None
     conference: str | None = None
     division: str | None = None
+    logo_url: str | None = None
+    color: str | None = None

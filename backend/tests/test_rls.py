@@ -48,6 +48,9 @@ REFERENCE_TABLES = (
     "player_target_depth",
     "player_rankings",
     "depth_chart_entries",
+    "team_game_stats",
+    "team_personnel",
+    "team_staff",
 )
 # Alembic's own bookkeeping. No user data, but `anon` rewriting the migration head
 # would strand the database, and locking it costs nothing.
