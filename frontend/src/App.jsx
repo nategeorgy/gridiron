@@ -1,4 +1,5 @@
 // Route table for the app.
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
@@ -13,7 +14,7 @@ import { StyleGuide } from "./pages/StyleGuide";
 import { TeamProfile } from "./pages/TeamProfile";
 import { TeamLeaderboards } from "./pages/TeamLeaderboards";
 import { TeamsIndex } from "./pages/TeamsIndex";
-import { ALL_BOARDS, INSIGHT_TOOLS, SCHEDULE_ITEMS } from "./constants/boards";
+import { ALL_BOARDS, EXPLORE_ITEMS, INSIGHT_TOOLS, SCHEDULE_ITEMS } from "./constants/boards";
 import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants/leaderboards";
 
 // Route prefixes that are built but hidden for launch. Everything beneath one
@@ -22,7 +23,8 @@ import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants
 //   draft   — M9's Rankings, Mock Draft and Value Board. The season has started, so a
 //             redraft board has nothing left to say; it returns as a rookie-draft
 //             surface while the college season runs.
-//   explore — M4's Scatter and Compare builders, pending another pass.
+//
+// Explore was hidden here too until its September 2026 rebuild.
 //
 // The pages still live in pages/ and still compile; nothing here deletes them. But
 // redirecting is deliberate rather than merely un-linking from the nav: a hidden
@@ -30,7 +32,7 @@ import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants
 // search results pointing into it, and finding an unfinished page that way is worse
 // than finding no page. Un-hiding a section is two edits: drop its prefix here, and
 // restore its group in NAV_GROUPS (constants/boards.js).
-const HIDDEN_SECTIONS = ["draft", "explore"];
+const HIDDEN_SECTIONS = ["draft"];
 
 // Insight tools (M6) — pages rather than boards, so they map to their own components.
 const INSIGHT_TOOL_VIEWS = {
@@ -43,6 +45,22 @@ const SCHEDULE_VIEWS = {
   "schedule-by-team": ScheduleGridView,
   "schedule-vegas": VegasView,
 };
+
+// Explore (September 2026): five tools, each its own page, loaded on first visit. They
+// are most of a megabyte of charts between them, and a visitor who never opens one
+// should not download them with the home page.
+const page = (load, name) => lazy(() => load().then((module) => ({ default: module[name] })));
+const EXPLORE_VIEWS = {
+  "explore-scatter": page(() => import("./pages/ScatterView"), "ScatterView"),
+  "explore-network": page(() => import("./pages/PassingNetworkView"), "PassingNetworkView"),
+  "explore-compare": page(() => import("./pages/CompareView"), "CompareView"),
+  "explore-targets": page(() => import("./pages/TargetAnalysisView"), "TargetAnalysisView"),
+  "explore-query": page(() => import("./pages/QueryBuilderView"), "QueryBuilderView"),
+};
+
+function PageLoading() {
+  return <div className="glass-card p-6 text-center text-sm text-muted">Loading…</div>;
+}
 
 // Board paths that have been retired, and the board that absorbed each. A saved view
 // (M5) and a shared link both store a route, and with no route matching, the app
@@ -122,6 +140,20 @@ export function App() {
               key={item.id}
               path={item.path.replace(/^\//, "")}
               element={<View key={item.id} board={item} />}
+            />
+          );
+        })}
+
+        {/* Explore: the scatter, passing networks, player comparison, target analysis
+            and the Query Builder. */}
+        <Route path="explore" element={<Navigate to="/explore/scatter" replace />} />
+        {EXPLORE_ITEMS.map((item) => {
+          const View = EXPLORE_VIEWS[item.id];
+          return (
+            <Route
+              key={item.id}
+              path={item.path.replace(/^\//, "")}
+              element={<Suspense fallback={<PageLoading />}><View board={item} /></Suspense>}
             />
           );
         })}

@@ -37,6 +37,7 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_depth_charts.py                # 9. depth charts (M6)
 .venv/bin/python ingest_team_stats.py --seasons 2024   # 10. team sums + personnel (team pages)
 .venv/bin/python ingest_staff.py                       # 11. coaching staff (from a CSV)
+.venv/bin/python ingest_plays.py --seasons 2024        # 12. every target + run lanes (Explore)
 ```
 
 Steps 8 and 9 are independent of 4–7 — they need only `players` (and `teams`) — but
@@ -87,6 +88,7 @@ script clamps to its own feed's window, so the same range can be passed to all o
 .venv/bin/python ingest_nextgen.py      --seasons $(seq 2009 2025)
 .venv/bin/python ingest_pfr.py          --seasons $(seq 2009 2025)
 .venv/bin/python ingest_team_stats.py   --seasons $(seq 2009 2025)
+.venv/bin/python ingest_plays.py        --seasons $(seq 2009 2025)
 ```
 
 `ingest_stats.py` downloads a season of play-by-play at a time, so a full backfill is
@@ -290,6 +292,24 @@ disagree about which code a franchise used in a given season (`STL` vs `LA`). Se
   `load_team_stats` (penalties, giveaways, takeaways) and snap counts (2013+).
 - Needs `teams` and `games` first. Team codes go through `franchises.py`, and a game not
   in `games` is skipped rather than written.
+
+`ingest_plays.py` populates the **Explore tab's play-level tables** (September 2026):
+
+- **`play_targets`**: one row per targeted pass, 2009 on: passer, receiver, air yards,
+  side (left / middle / right), result, yards, EPA, down and field position. The
+  passing network, the target maps and heatmaps and the air-yard distributions all
+  aggregate it at query time for whatever weeks and situation a page asks for. Sacks, spikes and two-point tries are not targets.
+  `passer_id` and `receiver_id` carry **no foreign key**: a target to a fullback or a
+  two-way defensive back is still one of the quarterback's targets, and dropping it
+  would skew every share, so the API labels an untracked receiver "other" instead.
+- **`player_run_lanes`**: one row per player, game and run lane (end, tackle, guard,
+  middle on each side, or unknown) with designed carries, yards, successes and how each
+  carry ended: stuffed (0 or less), 1-3, 4-9 and 10+. Scrambles and kneels are left
+  out. Only players with a stat line in that game are kept, so it runs after step 4.
+- Both tables are **replaced per game** (`replace_scoped` on `game_id`): a stat
+  correction can remove or renumber a play, and an upsert would keep the stale row.
+- About 17,000 targets and 6,000 run-lane rows a season; the full 2009 backfill is
+  ~310,000 and ~100,000 rows, roughly 90 MB with indexes.
 
 `ingest_staff.py` loads **`team_staff`** from `data/staff/team_staff.csv`, one row per
 person: `team, season, role (hc|oc|dc), order, name, note`. Order puts an in-season

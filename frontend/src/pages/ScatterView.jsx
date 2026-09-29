@@ -1,277 +1,276 @@
-// Scatter builder (M4) — a curated set of charts, not a blank axis picker.
+// Scatter: one question at a time, every qualified player at a position answering it.
 //
-// Users choose a *question* (a preset), not two metrics. Arbitrary axis pairs mostly
-// produce meaningless clouds, and the curation is the product: every preset in
-// constants/scatters.js answers something a fantasy manager actually asks, scoped to
-// the position where that question makes sense.
-//
-// Everything is in the user's own scoring and league context, and the whole view is
-// reconstructible from the URL, so a chart can be shared as a link.
-import { useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+// The questions are curated per position (constants/scatters.js): two metrics chosen
+// at random usually make a meaningless cloud. The data is the leaderboard's own
+// (/stats/intelligence), so a timeframe re-aggregates exactly as the boards do, and each
+// tooltip's percentile is the same one the leaderboard prints under that value.
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { Segmented } from "../components/team/Segmented";
 import { ScoringControl } from "../components/ScoringControl";
+import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
 import { ExportButton } from "../components/ExportButton";
-import { SaveViewButton } from "../components/SaveViewButton";
-import { MetricScatter } from "../components/charts/MetricScatter";
-import { useScatter } from "../hooks/useExplore";
-import { useScoreboard } from "../hooks/useGames";
-import { scaledMinGames, weeksPlayed } from "../utils/qualify";
-import { useScoring } from "../hooks/useScoring";
+import { ExportImageButton } from "../components/explore/ExportImageButton";
+import { ChartTooltip, TipCard, useChartTooltip } from "../components/explore/ChartTooltip";
+import { ChartState, Chips, ExploreHeader, Field, Headshot, PlayerLine, Toggle } from "../components/explore/common";
+import { ScatterPlot } from "../components/explore/ScatterPlot";
+import { SCATTER_POSITIONS, SCATTER_PRESETS, scatterPreset } from "../constants/scatters";
+import { useHeadshots } from "../hooks/useExplore";
+import { useIntelligence } from "../hooks/useInsight";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
-import { AvailabilityNotice } from "../components/AvailabilityNotice";
-import { unavailableColumns } from "../utils/availability";
-import { DENSITY_OPTIONS, SCATTER_GROUPS, findGroup } from "../constants/scatters";
+import { useScoring } from "../hooks/useScoring";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
-import { INSIGHT_TIMEFRAMES, SEASON_TYPES } from "../constants";
+import { formatStat } from "../utils/format";
+import { percentileColor } from "../utils/explore";
 
-// Whitelists for the URL-backed filters. A value outside them falls back rather than
-// reaching the API, so a param carried over from another view cannot wedge the chart.
-// The empty timeframe is the fallback and is deliberately absent: it never appears in
-// a URL, so it never needs to be allowed in one.
-const SEASON_TYPE_VALUES = SEASON_TYPES.map((option) => option.value);
-const TIMEFRAME_VALUES = INSIGHT_TIMEFRAMES.map((option) => option.value).filter(Boolean);
-const DENSITY_VALUES = DENSITY_OPTIONS.map((option) => option.value);
-
-
-// Games needed to appear. Deliberately not a user control — each preset is a ranked
-// top-N, and a 1-game sample in a rate-stat plot is noise dressed as an outlier.
-// Stated for a full season and a full window, and scaled to the weeks actually played
-// (utils/qualify), or every chart is empty for the first month of a season.
-const MIN_GAMES_FULL_SEASON = 4;
-const MIN_GAMES_WINDOW = 2;
+const CAPS = [
+  { value: "25", label: "Top 25" },
+  { value: "50", label: "Top 50" },
+  { value: "100", label: "Top 100" },
+  { value: "all", label: "Every qualified player" },
+];
 
 export function ScatterView({ board }) {
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  // Every filter lives in the URL, so a chart link reproduces the chart — the group
-  // and preset already did; season, timeframe, type and density now do too.
-  //
-  // Seasons come from the API (M6), and `String(currentSeason)` is the fallback rather
-  // than a literal: the default stays out of the query string *and* tracks the served
-  // current season, so this view rolls over when the data does.
   const { seasonOptions, currentSeason } = useSeasons();
+  const [position, setPosition] = useUrlState("pos", "WR", SCATTER_POSITIONS);
+  const [presetId, setPresetId] = useUrlState("q", SCATTER_PRESETS[position][0].id);
   const [season, setSeason] = useUrlState("season", String(currentSeason));
-  const [lastWeeks, setLastWeeks] = useUrlState("last_weeks", "", TIMEFRAME_VALUES);
-  const [seasonType, setSeasonType] = useUrlState("type", "REG", SEASON_TYPE_VALUES);
-  const [density, setDensity] = useUrlState("density", "50", DENSITY_VALUES);
+  const [weeks, setWeeks] = useUrlState("weeks", "");
+  const [cap, setCap] = useUrlState("players", "50", CAPS.map((option) => option.value));
+  const [display, setDisplay] = useUrlState("display", "heads", ["heads", "dots"]);
+  const [namesOff, setNamesOff] = useUrlState("names", "", ["off"]);
+  const [view, setView] = useUrlState("view", "chart", ["chart", "table"]);
+  const [pinned, setPinned] = useUrlState("pin", "");
+  const [find, setFind] = useState("");
   const [scoring, setScoring] = useScoring();
   const [league] = useLeague();
   const { metrics } = useMetrics();
-  const scoreboard = useScoreboard();
-  const weeks = weeksPlayed(Number(season), scoreboard.data?.last);
+  const tip = useChartTooltip();
 
-  // Group + preset live in the URL so a chart is shareable.
-  const groupId = searchParams.get("group") ?? SCATTER_GROUPS[0].id;
-  const group = findGroup(groupId);
-  const presetId = searchParams.get("chart") ?? group.presets[0].id;
-  const preset = group.presets.find((item) => item.id === presetId) ?? group.presets[0];
+  const preset = scatterPreset(position, presetId);
+  const axisIds = [preset.x, preset.y, ...(preset.size ? [preset.size] : [])];
+  const params = useMemo(() => ({
+    season: Number(season),
+    ...(weeks ? { weeks } : {}),
+    season_type: "REG",
+    positions: position,
+    metric: "fantasy_points",
+    order: "desc",
+    scoring,
+    league,
+    limit: 200,
+    percentiles: axisIds.join(","),
+  }), [season, weeks, position, scoring, league, axisIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { data, isLoading, isError, isPlaceholderData } = useIntelligence(params);
 
-  const setUrl = (next) => {
-    setSearchParams(
-      (prev) => {
-        const params = new URLSearchParams(prev);
-        for (const [key, value] of Object.entries(next)) {
-          if (value) params.set(key, value);
-          else params.delete(key);
-        }
-        return params;
-      },
-      { replace: true },
-    );
-  };
+  const pool = useMemo(
+    () => (data?.data ?? []).filter((row) => row[preset.x] !== null && row[preset.x] !== undefined && row[preset.y] !== null && row[preset.y] !== undefined),
+    [data, preset.x, preset.y],
+  );
+  const shownRows = cap === "all" ? pool : pool.slice(0, Number(cap));
+  const headshots = useHeadshots(shownRows.map((row) => row.player_id));
+  const points = useMemo(() => shownRows.map((row, index) => ({
+    id: row.player_id,
+    name: row.name,
+    position: row.position,
+    team: row.team_abbreviation,
+    games: row.games_played,
+    headshot_url: headshots[row.player_id],
+    x: row[preset.x],
+    y: row[preset.y],
+    z: preset.size ? row[preset.size] : null,
+    rank: index + 1,
+    percentiles: row.percentiles ?? {},
+  })), [shownRows, headshots, preset]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Switching position group resets to that group's first chart.
-  const changeGroup = (nextGroupId) => {
-    const nextGroup = findGroup(nextGroupId);
-    setUrl({ group: nextGroupId, chart: nextGroup.presets[0].id });
-  };
+  const needle = find.trim().toLowerCase();
+  const lit = useMemo(() => {
+    const ids = new Set(needle.length >= 2 ? points.filter((point) => point.name.toLowerCase().includes(needle)).map((point) => point.id) : []);
+    if (pinned && ids.size) ids.add(pinned);
+    return ids;
+  }, [points, needle, pinned]);
 
-  const params = useMemo(
-    () => ({
-      season: Number(season),
-      x: preset.x,
-      y: preset.y,
-      ...(preset.size ? { size: preset.size } : {}),
-      mode: "season",
-      rank_by: preset.rankBy ?? "fantasy_points",
-      ...(lastWeeks ? { last_weeks: Number(lastWeeks) } : {}),
-      season_type: seasonType,
-      ...(group.position ? { position: group.position } : {}),
-      scoring,
-      league,
-      min_games: lastWeeks
-        ? scaledMinGames(preset.minGames ?? MIN_GAMES_WINDOW, weeks, Number(lastWeeks))
-        : scaledMinGames(preset.minGames ?? MIN_GAMES_FULL_SEASON, weeks),
-      limit: Number(density),
-    }),
-    [season, preset, group, lastWeeks, seasonType, scoring, league, density, weeks],
+  const xMetric = metrics[preset.x];
+  const yMetric = metrics[preset.y];
+  const sizeMetric = preset.size ? metrics[preset.size] : null;
+  const label = (id) => metrics[id]?.label ?? id;
+  const when = `${season} · ${weeks ? formatWeeks(weeks.split(",").map(Number)) : "Full season"}`;
+  const pin = points.find((point) => point.id === pinned);
+
+  const tipFor = (point) => (
+    <TipCard
+      player={point}
+      sub={`${point.position} · ${point.team} · ${point.games} games`}
+      rows={axisIds.map((id) => [label(id), formatStat(point[id === preset.x ? "x" : id === preset.y ? "y" : "z"], metrics[id]?.format), point.percentiles[id] ?? null])}
+      note={`Percentile among ${position}s${weeks ? " in these weeks" : ""}, right. Click to pin.`}
+    />
   );
 
-  // Waits for the scoreboard, which says how many weeks the floor is scaled to.
-  const scatter = useScatter(params, { enabled: !scoreboard.isLoading });
-  const { data, isError, error } = scatter;
-  const isLoading = scoreboard.isLoading || scatter.isLoading;
+  const plot = (forExport = false) => (
+    <ScatterPlot
+      points={points}
+      xMetric={xMetric}
+      yMetric={yMetric}
+      sizeMetric={sizeMetric}
+      identity={preset.identity}
+      corners={preset.corners}
+      display={display}
+      labels={forExport || !namesOff || display === "dots"}
+      always={pinned ? [pinned] : []}
+      lit={forExport ? null : lit}
+      tip={forExport ? undefined : tip}
+      tipFor={tipFor}
+      onPick={forExport ? undefined : (point) => setPinned(pinned === point.id ? "" : point.id)}
+    />
+  );
 
-  const points = data?.data ?? [];
-  const axes = data?.axes;
-
-  // A preset's axes are not answerable in every season (M8) — "Expected vs Actual PPG"
-  // needs expected points, which start in 2009. The chart already drops players
-  // missing either axis rather than plotting them at zero, so it renders correctly;
-  // what it cannot do on its own is explain that 2004 is empty for a reason.
-  const presetMetrics = [preset.x, preset.y, ...(preset.size ? [preset.size] : [])];
-  const missingAxes = unavailableColumns(presetMetrics, metrics, season);
-
-  const exportColumns = [
-    { key: "name", label: "Player" },
-    { key: "position", label: "Position" },
-    { key: "team_abbreviation", label: "Team" },
-    { key: "games_played", label: "Games" },
-    { key: "x", label: axes?.x?.label ?? preset.x },
-    { key: "y", label: axes?.y?.label ?? preset.y },
-    ...(preset.size ? [{ key: "size", label: axes?.size?.label ?? preset.size }] : []),
-  ];
+  const pickPosition = (value) => {
+    setPosition(value);
+    setPresetId(SCATTER_PRESETS[value][0].id);
+    setPinned("");
+  };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Explore</div>
-        <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
-      </div>
+    <div className="space-y-4">
+      <ExploreHeader title={board.title} description={board.description} />
 
-      {/* Position group — tabs, because the group decides which questions are even
-          askable, and that is the first choice a user makes. */}
-      <div className="glass-card p-2">
-        <div className="flex flex-wrap gap-1">
-          {SCATTER_GROUPS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => changeGroup(item.id)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                item.id === group.id ? "glass-pill !text-accent" : "text-muted hover:text-fg"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Chart picker — each option is a question, not a pair of metrics. */}
-      <div className="glass-card p-4">
-        <div className="flex flex-wrap gap-2">
-          {group.presets.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setUrl({ chart: item.id })}
-              // The semantic colour tokens are bare CSS variables, so Tailwind's
-              // `/opacity` modifier can't apply to them — use the token as-is.
-              className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                item.id === preset.id
-                  ? "border-accent bg-surface-2 text-fg"
-                  : "border-edge text-muted hover:text-fg"
-              }`}
-            >
-              <div className="font-semibold">{item.label}</div>
-              <div className="mt-0.5 text-[11px] leading-snug text-faint">
-                {metrics[item.y]?.short ?? item.y} vs {metrics[item.x]?.short ?? item.x}
-                {item.size ? ` · size = ${metrics[item.size]?.short ?? item.size}` : ""}
-              </div>
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-muted">{group.blurb}</p>
-      </div>
-
-      <div className="glass-card flex flex-wrap gap-3 p-4">
-        <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
-        <Select label="Timeframe" value={lastWeeks} onChange={setLastWeeks} options={INSIGHT_TIMEFRAMES} />
-        <Select label="Type" value={seasonType} onChange={setSeasonType} options={SEASON_TYPES} />
-        <Select label="Players" value={density} onChange={setDensity} options={DENSITY_OPTIONS} />
-        <div className="ml-auto flex items-end gap-2">
-          <SaveViewButton defaultName={preset.label} />
+      <div className="glass-card flex flex-wrap items-end gap-3 p-4">
+        <Field label="Position">
+          <Segmented label="Position" value={position} onChange={pickPosition}
+            options={SCATTER_POSITIONS.map((value) => ({ value, label: value }))} />
+        </Field>
+        <Select label="Season" value={season} onChange={(value) => { setSeason(value); setWeeks(""); setPinned(""); }} options={seasonOptions} />
+        <TimeframeFilter weeks={weeks} season={season} onChange={(value) => { setWeeks(value); setPinned(""); }} />
+        <Select label="Players" value={cap} onChange={setCap} options={CAPS} />
+        <ScoringControl scoring={scoring} onChange={setScoring} label="Scoring" bare />
+        <div className="ml-auto">
           <ExportButton
-            filename={`second-level-${preset.id}-${season}`}
-            rows={points}
-            columns={exportColumns}
-            context={[
-              `Second Level scatter: ${preset.label} (${group.label})`,
-              preset.question,
-              `${season} ${seasonType}${lastWeeks ? ` · last ${lastWeeks} weeks` : ""} · top ${density} by fantasy points`,
-              `scoring: ${scoring} · league: ${league}`,
+            filename={`second-level-scatter-${preset.id}-${season}`}
+            rows={points.map((point) => ({ rank: point.rank, name: point.name, position: point.position, team: point.team, games: point.games, x: point.x, y: point.y, z: point.z }))}
+            columns={[
+              { key: "rank", label: "Rank" }, { key: "name", label: "Player" }, { key: "position", label: "Position" },
+              { key: "team", label: "Team" }, { key: "games", label: "Games" }, { key: "x", label: label(preset.x) },
+              { key: "y", label: label(preset.y) }, ...(preset.size ? [{ key: "z", label: label(preset.size) }] : []),
             ]}
+            context={[`Second Level: ${preset.question}`, `${position}s · ${when} · scoring: ${scoring}`]}
           />
         </div>
       </div>
 
-        <ScoringControl scoring={scoring} onChange={setScoring} />
-
-      <div className="glass-card p-4">
-        <div className="mb-1 text-sm font-semibold text-fg">{preset.label}</div>
-        <p className="mb-3 text-xs text-muted">{preset.question}</p>
-
-        {isLoading && <div className="p-16 text-center text-sm text-muted">Loading…</div>}
-        {isError && (
-          <div className="p-16 text-center text-sm text-neg">
-            {error?.response?.data?.detail ?? error?.message ?? "Failed to load."}
-          </div>
-        )}
-        {missingAxes.length > 0 && (
-          <div className="mb-3">
-            <AvailabilityNotice columns={presetMetrics} metrics={metrics} season={season} />
-          </div>
-        )}
-        {!isLoading && !isError && points.length === 0 && (
-          <div className="p-16 text-center text-sm text-muted">
-            {missingAxes.length > 0
-              ? `This chart needs a stat the ${season} season doesn't have. Try a later season, or another question above.`
-              : "Nothing to plot for these filters."}
-          </div>
-        )}
-        {!isLoading && !isError && points.length > 0 && axes && (
-          <>
-            <MetricScatter
-              points={points}
-              axes={axes}
-              medians={data.medians}
-              preset={preset}
-              onSelect={(point) => point?.player_id && navigate(`/players/${point.player_id}`)}
-            />
-            <div className="mt-2 border-t border-line pt-3 text-xs text-faint">
-              Dashed lines are the medians
-              {preset.identity ? "; the diagonal is where actual equals expected" : ""} · click a
-              player to open their page
-            </div>
-          </>
-        )}
+      <div className="glass-card grid gap-2.5 px-4 py-3">
+        <Chips label="Questions" value={preset.id} onChange={(value) => { setPresetId(value); setPinned(""); }}
+          options={SCATTER_PRESETS[position].map((entry) => ({ value: entry.id, label: entry.label, hint: entry.question }))} />
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <Segmented label="Marks" value={display} onChange={setDisplay}
+            options={[{ value: "heads", label: "Headshots" }, { value: "dots", label: "Dots" }]} />
+          <Toggle checked={!namesOff} onChange={(checked) => setNamesOff(checked ? "" : "off")}>Name the outliers</Toggle>
+        </div>
       </div>
 
-      {data && (
-        <p className="text-[11px] leading-relaxed text-faint">
-          Showing the top <span className="text-muted">{points.length}</span> by fantasy points
-          {data.total != null && data.truncated && (
-            <> of <span className="text-muted">{data.total}</span> qualified</>
-          )}{" "}
-          over{" "}
-          <span className="text-muted">
-            {data.window.last_weeks
-              ? `the last ${data.window.last_weeks} played weeks`
-              : `the full ${data.window.season} season`}{" "}
-            (weeks {data.window.week_from}–{data.window.week_to})
-          </span>
-          , among players with at least{" "}
-          <span className="text-muted">{data.min_games} games</span>.
-          {(axes?.x?.modelled || axes?.y?.modelled) &&
-            " An axis uses expected points: a model estimate (nflverse ffopportunity), not a projection."}{" "}
-          Players missing a value on either axis are left out rather than plotted at zero.
-        </p>
-      )}
+      <section className={`glass-card p-4 transition ${isPlaceholderData ? "opacity-70" : ""}`}>
+        <div className="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight text-fg">{preset.question}</h2>
+            <div className="stat-num mt-0.5 text-[11.5px] text-faint">
+              {label(preset.x)} (x) · {label(preset.y)} (y){preset.size ? ` · size: ${label(preset.size)}` : ""}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input value={find} onChange={(event) => setFind(event.target.value)} list="scatter-names" placeholder="Highlight a player"
+              className="glass-input w-[190px] px-3 py-1.5 text-sm" />
+            <datalist id="scatter-names">{points.map((point) => <option key={point.id} value={point.name} />)}</datalist>
+            <Segmented label="View" value={view} onChange={setView}
+              options={[{ value: "chart", label: "Chart" }, { value: "table", label: "Table" }]} />
+            <ExportImageButton
+              title={preset.question}
+              subtitle={`${label(preset.x)} vs ${label(preset.y)} · ${cap === "all" ? `all ${pool.length}` : `top ${points.length}`} ${position}s by fantasy points · ${when}`}
+              render={() => plot(true)}
+              disabled={!points.length}
+            />
+          </div>
+        </div>
+
+        {pin && (
+          <div className="mb-2 flex flex-wrap items-center gap-2.5 rounded-xl border border-edge bg-surface-2 px-3 py-2 text-xs">
+            <Headshot url={pin.headshot_url} name={pin.name} size={30} ring={`var(--position-${pin.position.toLowerCase()})`} />
+            <div className="min-w-0 flex-1">
+              <b className="text-fg">{pin.name}</b> <span className="stat-num text-faint">{pin.position} · {pin.team}</span>
+              <div className="stat-num text-[11.5px] text-muted">
+                {metrics[preset.x]?.short ?? preset.x} {formatStat(pin.x, xMetric?.format)} · {metrics[preset.y]?.short ?? preset.y} {formatStat(pin.y, yMetric?.format)}
+                {preset.size ? ` · ${metrics[preset.size]?.short ?? preset.size} ${formatStat(pin.z, sizeMetric?.format)}` : ""}
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <Link to={`/explore/compare?players=${pin.id}:${season}`} className="btn-ghost px-3 py-1.5 text-xs hover:!text-accent">Add to Compare</Link>
+              <Link to={`/players/${pin.id}`} className="btn-ghost px-3 py-1.5 text-xs hover:!text-accent">Player page</Link>
+              <button type="button" onClick={() => setPinned("")} className="btn-ghost px-3 py-1.5 text-xs hover:!text-accent">Clear</button>
+            </div>
+          </div>
+        )}
+
+        {isLoading || isError || !points.length ? (
+          <ChartState isLoading={isLoading} isError={isError} isEmpty={!points.length} height={520}
+            empty="No qualified players in those weeks yet." />
+        ) : view === "chart" ? (
+          plot()
+        ) : (
+          <ScatterTable points={points} preset={preset} metrics={metrics} />
+        )}
+
+        {data && (
+          <p className="mt-2 text-[11px] text-faint">
+            {cap === "all" ? `All ${pool.length}` : `The ${points.length} with the most fantasy points of ${pool.length}`} qualified {position}s
+            ({data.min_games}+ games), {when}. Percentiles are within the position.
+          </p>
+        )}
+      </section>
+      <ChartTooltip tip={tip} />
+    </div>
+  );
+}
+
+/** The same points as a table, tall enough to read without the page scrolling under it. */
+function ScatterTable({ points, preset, metrics }) {
+  const rows = [...points].sort((a, b) => b.y - a.y);
+  const cell = (id, value, percentile) => (
+    <td className="px-2 py-1.5 text-right">
+      <span className="stat-num inline-flex flex-col items-end leading-tight">
+        {formatStat(value, metrics[id]?.format)}
+        <small className="text-[10px] font-semibold" style={{ color: percentileColor(percentile) }}>{percentile ?? ""}</small>
+      </span>
+    </td>
+  );
+  return (
+    <div className="max-h-[min(80vh,920px)] overflow-auto">
+      <table className="w-full min-w-[560px] border-collapse text-sm">
+        <thead className="sticky top-0 z-[1]" style={{ background: "var(--surface-solid)" }}>
+          <tr className="text-[10px] font-bold uppercase tracking-[0.07em] text-faint">
+            <th className="w-8 px-2 pb-2 text-left">#</th>
+            <th className="px-2 pb-2 text-left">Player</th>
+            <th className="px-2 pb-2 text-right">G</th>
+            <th className="px-2 pb-2 text-right">{metrics[preset.x]?.short ?? preset.x}</th>
+            <th className="px-2 pb-2 text-right text-fg">{metrics[preset.y]?.short ?? preset.y} ↓</th>
+            {preset.size && <th className="px-2 pb-2 text-right">{metrics[preset.size]?.short ?? preset.size}</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((point, index) => (
+            <tr key={point.id} className="border-t border-line">
+              <td className="stat-num px-2 py-1.5 text-xs text-faint">{index + 1}</td>
+              <td className="px-2 py-1.5">
+                <Link to={`/players/${point.id}`} className="hover:text-accent"><PlayerLine player={point} size={24} /></Link>
+              </td>
+              <td className="stat-num px-2 py-1.5 text-right">{point.games}</td>
+              {cell(preset.x, point.x, point.percentiles[preset.x])}
+              {cell(preset.y, point.y, point.percentiles[preset.y])}
+              {preset.size && cell(preset.size, point.z, point.percentiles[preset.size])}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

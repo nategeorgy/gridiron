@@ -28,6 +28,7 @@ import { PercentileLadder } from "../components/player/PercentileLadder";
 import { SeasonRadar } from "../components/player/SeasonRadar";
 import { SeasonStatGrid } from "../components/player/SeasonStatGrid";
 import { TableViewBar } from "../components/player/TableViewBar";
+import { PlayerTargetCard } from "../components/explore/TargetCard";
 import {
   usePlayer,
   usePlayerCareer,
@@ -293,6 +294,8 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
               isLoading={seasonQuery.isLoading}
             />
           </div>
+
+          <PlayerTargetCard player={player} season={season} />
 
           {/* Compare is a page-level tool, not a dialog one: inside the draft room the
               board behind this modal is already the comparison. */}

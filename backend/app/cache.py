@@ -54,7 +54,8 @@ T = TypeVar("T")
 
 # The tables the cached computations read. Account tables are deliberately absent: a
 # user starring a player must not throw away every pool in the process.
-DATA_TABLES = ("player_stats", "players", "teams", "games", "team_game_stats", "team_personnel", "team_staff")
+DATA_TABLES = ("player_stats", "players", "teams", "games", "team_game_stats", "team_personnel", "team_staff",
+               "play_targets", "player_run_lanes")
 
 # Backstop only. Correctness comes from the data version.
 MAX_AGE_SECONDS = 60 * 60

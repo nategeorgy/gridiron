@@ -1,5 +1,5 @@
 // App shell: frosted sticky header with the Second Level lockup + primary nav (Home, Insight,
-// Leaderboards, Schedule, Teams), search, and the light/dark theme toggle, plus
+// Leaderboards, Schedule, Teams, Explore), search, and the light/dark theme toggle, plus
 // the credit bar at the end of the page.
 // The page background (the Liquid Glass "environment") is painted on <body>.
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
@@ -10,7 +10,7 @@ import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { NavDropdown } from "./ui/NavDropdown";
 import { TeamsMenu } from "./team/TeamsMenu";
-import { NAV_GROUPS } from "../constants/boards";
+import { EXPLORE_GROUP, NAV_GROUPS } from "../constants/boards";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 
 // Routes that opt out of the 1280px shell, capped rather than full-bleed so nothing
@@ -64,6 +64,7 @@ export function Layout() {
                 />
               ))}
               <TeamsMenu />
+              <NavDropdown label={EXPLORE_GROUP.label} items={EXPLORE_GROUP.items} match={EXPLORE_GROUP.match} />
             </nav>
             <SearchBox />
             <ThemeToggle />
