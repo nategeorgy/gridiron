@@ -1,5 +1,5 @@
 // Nav config for everything that is not a player leaderboard: the Insight boards and
-// tools, Schedule, and the hidden Draft and Explore sections.
+// tools, Schedule, Explore, and the hidden Draft section.
 //
 // The player leaderboards live in constants/leaderboards.js (September 2026). They were
 // fourteen boards here, one route each; they are now one page with preset tabs, and
@@ -265,46 +265,66 @@ export const DRAFT_ITEMS = [
   }
 ];
 
-// --- Explore (M4) ---
-// Not boards: these are tools, not ranked tables, so they have no `columns` and are
-// routed to their own pages. They share the nav-item shape so the dropdown can render
-// them alongside the boards.
+// --- Explore (September 2026) ---
+// Tools rather than ranked tables, so they have no `columns` and route to their own
+// pages; they share the nav-item shape so the dropdown can render them. Names and
+// subheadings are Nate's, as he wrote them.
 export const EXPLORE_ITEMS = [
   {
     id: "explore-scatter",
     label: "Scatter",
     path: "/explore/scatter",
-    menuDesc: "Plot any two metrics against each other",
-    title: "Scatter Builder",
-    description:
-      "Pick a question and see the whole player pool answer it at once. The dashed " +
-      "lines are the medians, so the corners are the story, and every dot is a player " +
-      "you can click.",
+    menuDesc: "Visualize how players rank between two stats",
+    title: "Scatter",
+    description: "Two stats plotted for every player. The dashed lines are the medians of the players shown.",
+  },
+  {
+    id: "explore-network",
+    label: "Passing Network",
+    path: "/explore/network",
+    menuDesc: "Where each quarterback's targets go",
+    title: "Passing Network",
+    description: "Where a quarterback's targets go, how deep, and what they return.",
   },
   {
     id: "explore-compare",
-    label: "Compare",
+    label: "Player Comparison",
     path: "/explore/compare",
-    menuDesc: "Up to five players, side by side",
-    title: "Comparison Builder",
-    description:
-      "Line up to five players side by side. Every stat shows who leads it and by how " +
-      "much, and only stats that apply to all of them are shown, so a quarterback and " +
-      "a receiver get compared on common ground.",
-  }
+    menuDesc: "Compare up to five players side by side",
+    title: "Player Comparison",
+    description: "Up to five players side by side. Each player can be a different season.",
+  },
+  {
+    id: "explore-targets",
+    label: "Target Analysis",
+    path: "/explore/targets",
+    menuDesc: "Where and how deep players are targeted",
+    title: "Target Analysis",
+    description: "How deep and to which side each player is targeted.",
+  },
+  {
+    id: "explore-query",
+    label: "Query Builder",
+    path: "/explore/query",
+    menuDesc: "Search for games and seasons by any stat",
+    title: "Query Builder",
+    description: "Search every game and season since 2009 by any stat, then rank what comes back.",
+  },
 ];
+
+/** The Explore dropdown. Rendered after Teams (components/Layout.jsx). */
+export const EXPLORE_GROUP = { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" };
 
 
 // Nav dropdown groups. Insight leads, since it is the reason to come back. Leaderboards
 // lists the five preset tabs; Custom is a tab on the page only.
 //
-// ⚠️ **Draft and Explore are built but hidden for launch**, which is why DRAFT_ITEMS
-// and EXPLORE_ITEMS are still exported above and absent here. Draft has nothing left
-// to say now the season has started (it returns as a rookie-draft surface); Explore's
-// two builders want another pass before strangers see them. Their routes redirect to
-// the home page — see HIDDEN_SECTIONS in App.jsx — so an old link cannot reach them
-// either. Un-hiding one is two edits: add its group back to this list, and drop its
-// prefix from HIDDEN_SECTIONS.
+// ⚠️ **Draft is built but hidden**, which is why DRAFT_ITEMS is still exported above
+// and absent here: it has nothing left to say now the season has started (it returns
+// as a rookie-draft surface). Its routes redirect to the home page (HIDDEN_SECTIONS in
+// App.jsx), so an old link cannot reach it either. Un-hiding it is two edits: add its
+// group back to this list, and drop its prefix from HIDDEN_SECTIONS. Explore is live
+// again (September 2026) and is rendered after Teams, from EXPLORE_GROUP.
 export const NAV_GROUPS = [
   { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
   { label: "Schedule", items: SCHEDULE_ITEMS, match: "/schedule" },

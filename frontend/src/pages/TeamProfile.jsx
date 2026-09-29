@@ -25,6 +25,7 @@ import { TeamPlayersTable } from "../components/team/TeamPlayersTable";
 import { TeamRankTable } from "../components/team/TeamRankTable";
 import { TeamSchedule } from "../components/team/TeamSchedule";
 import { TeamStatStrips } from "../components/team/TeamStatStrips";
+import { TeamTargetCard } from "../components/explore/TargetCard";
 import { scoringLabel } from "../constants/scoring";
 import { useScoring } from "../hooks/useScoring";
 import { useSeasons } from "../hooks/useSeasons";
@@ -66,7 +67,7 @@ function useFlowColumns(contentKey) {
       return;
     }
 
-    const where = (id) => (["strips", "depth"].includes(id) ? "L" : ["pass", "run"].includes(id) ? "R" : placement[id] ?? "L");
+    const where = (id) => (["strips", "depth"].includes(id) ? "L" : ["pass", "targets", "run"].includes(id) ? "R" : placement[id] ?? "L");
     for (const [id, element] of Object.entries(refs.current)) {
       if (element) state.heights[id] = { ...state.heights[id], [where(id)]: element.offsetHeight };
     }
@@ -76,7 +77,7 @@ function useFlowColumns(contentKey) {
     };
 
     const leftBase = heightIn("strips", "L") + heightIn("depth", "L");
-    const rightBase = heightIn("pass", "R") + heightIn("run", "R");
+    const rightBase = heightIn("pass", "R") + heightIn("targets", "R") + heightIn("run", "R");
     let next = {};
     let best = Infinity;
     for (let mask = 0; mask < 1 << FLOW.length; mask += 1) {
@@ -162,6 +163,7 @@ export function TeamProfile() {
       />
     ),
     pass: <PassDepthField depth={breakdown?.pass_depth} weeksLabel={weeksLabel} />,
+    targets: <TeamTargetCard teamId={teamId} teamName={team.name} season={seasonNumber} weeks={weeks} weeksLabel={weeksLabel} />,
     run: <RunLaneColumns lanes={breakdown?.run_lanes} groups={breakdown?.run_groups} weeksLabel={weeksLabel} />,
     rank: <TeamRankTable board={board} abbreviation={abbreviation} weeksLabel={weeksLabel} season={seasonNumber} />,
     personnel: <PersonnelCards cards={breakdown?.personnel} season={seasonNumber} weeksLabel={weeksLabel} />,
@@ -228,6 +230,7 @@ export function TeamProfile() {
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-4">
           {wrap("pass")}
+          {wrap("targets")}
           {wrap("run")}
           {rightFlow.map(wrap)}
         </div>

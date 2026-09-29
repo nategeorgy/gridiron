@@ -9,6 +9,8 @@ python-dotenv==1.0.1
 # M5 accounts: verify Supabase-issued JWTs. The [crypto] extra pulls in `cryptography`,
 # needed for the asymmetric (ES256/RS256) signing keys newer Supabase projects use.
 PyJWT[crypto]==2.10.1
+# The Query Builder searches an in-memory copy of every player-game (app/query_builder.py).
+numpy==2.3.5
 
 # --- Tests ---
 # Installed alongside the app rather than in a separate requirements-dev.txt: there is

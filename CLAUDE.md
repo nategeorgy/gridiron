@@ -492,6 +492,37 @@ player_target_depth (
   air_yards       INT,
   PRIMARY KEY (player_id, game_id, depth_bucket, direction)
 )
+
+-- Every targeted pass (Explore, September 2026). The only play-grain table: the
+-- passing network, the target heatmaps and "every target" need the play itself, and
+-- aggregate it at query time for any weeks and situation. 2009 on (receivers are named
+-- on incompletions from then). Replaced per game, never upserted.
+play_targets (
+  game_id       VARCHAR(50) REFERENCES games(game_id),
+  play_id       INT,
+  season INT, week INT, season_type VARCHAR(20),
+  team_id       INT REFERENCES teams(team_id),   -- the offense
+  passer_id     VARCHAR(50),   -- deliberately NOT a FK, and nor is receiver_id: a target to
+  receiver_id   VARCHAR(50),   -- a fullback or two-way player is still one of the QB's targets
+  air_yards     SMALLINT,      -- NULL (never 0) when play-by-play gives no depth
+  location      VARCHAR(6),    -- left | middle | right: a third, not a spot
+  complete BOOLEAN, touchdown BOOLEAN, interception BOOLEAN, first_down BOOLEAN,
+  yards SMALLINT, yards_after_catch SMALLINT, epa FLOAT, down SMALLINT, yardline_100 SMALLINT,
+  PRIMARY KEY (game_id, play_id)
+)
+
+-- A player's designed runs per game and run lane (le/lt/lg/mid/rg/rt/re/unknown), and
+-- how each ended: stuffed (0 or less), short (1-3), medium (4-9), explosive (10+).
+-- Scrambles and kneels are not designed runs. Replaced per game.
+player_run_lanes (
+  player_id  VARCHAR(50) REFERENCES players(player_id),
+  game_id    VARCHAR(50) REFERENCES games(game_id),
+  lane       VARCHAR(8),
+  season INT, week INT, season_type VARCHAR(20),
+  carries INT, yards INT, successes INT, first_downs INT, touchdowns INT,
+  stuffed INT, short INT, medium INT, explosive INT,
+  PRIMARY KEY (player_id, game_id, lane)
+)
 ```
 
 ---
@@ -757,6 +788,21 @@ GET /api/v1/games/scoreboard                 ← M10 the week just played beside
 GET /api/v1/stats/trending                   ← M10 who is gaining or losing work over a
                                                trailing window. ?direction=up|down
 
+# Explore (September 2026). Play-level views, all public, all but the Query Builder
+# served through cached_response. weeks= and situation=all|red_zone|late_downs apply.
+GET /api/v1/explore/passers                  ← passers with a network that season, by team
+GET /api/v1/explore/network                  ← one QB's targets by receiver. passer_id=,
+                                               team= (his games for one team)
+GET /api/v1/explore/targets                  ← every receiver's depth/side/air-yard profile
+                                               + position averages. positions=, min_targets=
+GET /api/v1/explore/players/{id}/targets     ← every target he drew (role=receiver) or
+                                               threw (role=passer), + the average
+GET /api/v1/explore/teams/{id}/targets       ← every target a team threw, + league average
+GET /api/v1/explore/players/{id}/runs        ← designed runs by lane, how each ended
+GET /api/v1/explore/query                    ← the Query Builder: grain=games|seasons,
+                                               mode=list|count, where=field:min:max,...
+GET /api/v1/explore/query/fields             ← its searchable stats
+
 # M5 — accounts. All require a verified Supabase token; none takes a user id.
 GET/DELETE /api/v1/me                        ← profile + counts / delete account
 CRUD       /api/v1/me/league-profiles        ← named scoring+league bundles
@@ -803,7 +849,7 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   scoring, opportunity leaders, quarterbacks, a featured head-to-head —
   beside a **sticky rail** of reference (scoreboard, watchlist, the two signal cards).
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
-  in the code and in these docs. The nav holds **four dropdowns**: **Insight**
+  in the code and in these docs. The nav holds **five dropdowns**: **Insight**
   (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
   **Schedule** (`/schedule/*`: Games, By Team, Vegas Board) and **Leaderboards**, which
   lists five preset tabs of **one leaderboard page** (September 2026, replacing M12's 14
@@ -823,14 +869,15 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   holds Team Leaderboards (`/teams/leaderboards/:tab`), Team Pages (`/teams`) and all 32
   teams by division, each linking to `/teams/:teamId`. The presets are in
   `frontend/src/constants/leaderboards.js`; the Insight boards and tool pages are in
-  `frontend/src/constants/boards.js`.
-- ⚠️ **Draft ▾ and Explore ▾ are built but HIDDEN for launch.** `DRAFT_ITEMS` and
-  `EXPLORE_ITEMS` are still exported from `boards.js` and their pages still compile;
-  they are simply absent from `NAV_GROUPS`, and `HIDDEN_SECTIONS` in `App.jsx`
-  redirects both subtrees to `/` — un-linking alone is not enough, because a hidden
-  section still has bookmarks, saved views and search results pointing into it.
-  Un-hiding one is two edits: its group back in `NAV_GROUPS`, its prefix out of
-  `HIDDEN_SECTIONS`.
+  `frontend/src/constants/boards.js`. The fifth, **Explore** (after Teams, September 2026),
+  holds Scatter, Passing Network, Player Comparison, Target Analysis and Query Builder
+  (`EXPLORE_ITEMS`, see [`docs/design/explore.md`](docs/design/explore.md)).
+- ⚠️ **Draft ▾ is built but HIDDEN for launch.** `DRAFT_ITEMS` is still exported from
+  `boards.js` and its pages still compile; it is simply absent from `NAV_GROUPS`, and
+  `HIDDEN_SECTIONS` in `App.jsx` redirects the subtree to `/`. Un-linking alone is not
+  enough, because a hidden section still has bookmarks, saved views and search results
+  pointing into it. Un-hiding is two edits: its group back in `NAV_GROUPS`, its prefix out
+  of `HIDDEN_SECTIONS`. (Explore was hidden the same way until its rebuild.)
 - **Data density** — show a lot of information without feeling cluttered
 - **Fast** — tables should load quickly; use pagination, not infinite scroll dumps
 - **Mobile responsive** — works on phone, optimized for desktop
@@ -1211,6 +1258,16 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       on), `app/team_stats.py`, `GET /teams/stats` and `GET /teams/{id}/breakdown`,
       `pipeline/ingest_team_stats.py` and `pipeline/ingest_staff.py`
       (see [`docs/design/team-pages.md`](docs/design/team-pages.md))
+- [x] The Explore tab (September 2026). A fifth dropdown, after Teams, un-hidden:
+      **Scatter** (per-position questions over `/stats/intelligence`), **Passing Network**
+      (field or radial, situations, same-team quarterbacks side by side), **Player
+      Comparison** (five players in any seasons, the leaderboard's tabs with leader pills,
+      charts by position), **Target Analysis** (depth mix, air-yard curves, zones, heatmap,
+      every target) and **Query Builder** (games or seasons by any stat). Every chart
+      exports a branded PNG. The every-target map also joins player and team pages. Two
+      tables (`play_targets`, `player_run_lanes`, migration `311908bb9b96`, RLS on) from
+      `pipeline/ingest_plays.py`; `app/explore.py`, `app/query_builder.py` (numpy, in
+      memory) and `routers/explore.py` (see [`docs/design/explore.md`](docs/design/explore.md))
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -1863,6 +1920,27 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   (pass rate, formation and play-type shares, personnel usage). Every team surface
   colours a rank the same way (green toward 1st, red toward last, `utils/teamStats.js`),
   so a tendency's green means "does this the most", not "good"
+- ⚠️ **The Query Builder searches memory, not Postgres.** `app/query_builder.py` loads
+  every player-game into numpy arrays once per data version and answers every search
+  and histogram from them. Do not "simplify" it into a SQL query per request: a screener
+  sends one on every range change, and each would read all of `player_stats`, the Disk
+  IO pattern `app/cache.py` exists to prevent. Its fantasy points and weekly finish are
+  the scoring engine and the game log's `RANK()` reimplemented, so both are pinned
+  against the originals in `tests/test_explore.py`; change one and that test says so
+- **`play_targets.receiver_id` has no foreign key, on purpose.** A target to a fullback
+  or a two-way player counts toward the quarterback's total; the API returns an
+  untracked receiver with `name: None` and the pages fold him into "others". A
+  **position average is every target to the position** in the same window, never the
+  subset a page's minimum shows, so it does not move when the minimum does
+- **An exported chart renders with no providers.** `utils/exportImage.js` renders the
+  chart offscreen in a fresh React root, so a chart component must not need the router
+  or React Query, and a chart placed inside a combined export takes `nested` (see
+  `chartRoot` in `components/explore/TargetField.jsx`): the `svg.chart` class's CSS width
+  would override a nested SVG's placement. The URL and handle printed on every image
+  are `constants/brand.js`
+- ⚠️ **`useLeague()` returns the spec string, not a league.** Anything that reads
+  `teams` or `lineup` (`FinishChip`, `finishTier`) needs `parseLeague(spec)` first; the
+  Query Builder's first build passed the string and blanked the page
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

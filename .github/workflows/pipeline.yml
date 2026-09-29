@@ -209,8 +209,10 @@ jobs:
       #
       # The order is a dependency, not a preference: the five enrichment passes only
       # update stat lines ingest_stats.py has already created (pipeline/README.md).
-      # ingest_team_stats.py is independent of them (it writes its own tables from
-      # play-by-play) and goes last so a failure there never costs the player stats.
+      # ingest_team_stats.py and ingest_plays.py are independent of them (each writes
+      # its own tables from play-by-play) and go last so a failure there never costs
+      # the player stats. ingest_plays.py still follows ingest_stats.py: run lanes are
+      # only kept for players with a stat line in that game.
       - name: Refresh the current season
         if: steps.clock.outputs.in_season == 'true' || inputs.run_stats == true
         working-directory: pipeline
@@ -228,3 +230,4 @@ jobs:
           python ingest_nextgen.py      --seasons $SEASONS
           python ingest_pfr.py          --seasons $SEASONS
           python ingest_team_stats.py   --seasons $SEASONS
+          python ingest_plays.py        --seasons $SEASONS
