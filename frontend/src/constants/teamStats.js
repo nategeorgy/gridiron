@@ -65,7 +65,7 @@ export const RUN_GROUPS = [
 export const TEAM_BOARD_TABS = [
   {
     id: "overview", label: "Overview", sided: false, sort: ["net_epa", "o"],
-    description: "Results and EPA per play on both sides of the ball, with the schedule behind them.",
+    description: "General stats and EPA per play on both sides of the ball.",
     sections: [
       ["Results", [["record", null, "Record"], ["pdiff", null, "Diff/G"], ["ppg", "o", "Pts/G"], ["ppg", "d", "Allowed/G"]]],
       ["EPA per play", [["net_epa", null, "Net"], ["epa", "o", "Offense"], ["epa", "d", "Defense"]]],
@@ -84,22 +84,22 @@ export const TEAM_BOARD_TABS = [
   },
   {
     id: "rushing", label: "Rushing", sided: true, sort: "r_yds_g",
-    description: "Designed runs only: volume, results, where the runs go and how stacked the box is.",
+    description: "Volume and results on designed runs only.",
     sections: [["Volume", ["ru_g", "r_yds_g", "r_td_g"]], ["Results", ["ypc", "stuff", "x_run"]], ["Direction", ["gap_in", "gap_tk", "gap_out"]], ["Looks", ["box8"]]],
   },
   {
     id: "drives", label: "Drives and situations", sided: true, sort: "pts_drive",
-    description: "Drive results, the red zone, third and fourth down, turnovers and penalties.",
+    description: "Drive results.",
     sections: [["Drives", ["drives_g", "pts_drive", "three_out", "to_drive", "start"]], ["Red zone", ["rz_g", "rz_td"]], ["Downs", ["d3", "d4_go", "d4_conv"]], ["Turnovers and penalties", ["tov_g", "pen_yds"]]],
   },
   {
     id: "tendencies", label: "Pace and tendencies", sided: true, sort: "plays_g",
-    description: "How fast they play, how often they throw, and how they line up.",
+    description: "Pace of play, pass/run splits and formations.",
     sections: [["Pace", ["plays_g", "snaps_g", "sec_snap"]], ["Pass or run", ["pass_rate", "n_pass", "proe"]], ["Formation", ["gun", "under", "empty", "motion", "nohud"]], ["Play type", ["pa", "rpo", "screen"]], ["Pressure and coverage", ["blitz", "rushers", "man"]]],
   },
   {
     id: "fantasy", label: "Fantasy", sided: true, sideLabels: ["Scored", "Allowed"], sort: "fp",
-    description: "Fantasy points by position, scored by the offense or allowed by the defense, next to the betting market and the volume behind them.",
+    description: "Fantasy points scored and allowed by position, with implied point totals.",
     sections: [["Fantasy points per game", [["fp", null, "All"], ["fp_QB", null, "QB"], ["fp_RB", null, "RB"], ["fp_WR", null, "WR"], ["fp_TE", null, "TE"]]], ["Market", ["imp", "vs_imp"]], ["Volume", ["plays_g", "rz_g"]]],
   },
   {

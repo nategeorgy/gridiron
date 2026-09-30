@@ -462,6 +462,21 @@ team_personnel (
   PRIMARY KEY (team_id, game_id, grouping)
 )
 
+-- The season in progress's personnel, which participation does not reach. Hand-supplied
+-- as season-to-date totals (pipeline/ingest_personnel.py, files gitignored), so it cannot
+-- be split into games: a team window uses it only if it holds every game it counts, and
+-- a narrower window shows a dash. Stored as the file states it; each newer file replaces
+-- the older one team by team.
+team_personnel_season (
+  team_id INT, season INT, season_type VARCHAR(20), grouping VARCHAR(4),
+  through_week INT,          -- the last week the totals include
+  plays FLOAT,
+  share FLOAT,               -- of every offensive play, including groupings not listed
+  epa_per_play FLOAT,        -- NULL where the file withholds it (under 20 plays)
+  success_rate FLOAT,
+  PRIMARY KEY (team_id, season, season_type, grouping)
+)
+
 -- Head coach and coordinators by season, from the hand-kept
 -- pipeline/data/staff/team_staff.csv. Each role is a JSON list of [name, note], in
 -- order, so an in-season change keeps both people.
@@ -1268,6 +1283,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       tables (`play_targets`, `player_run_lanes`, migration `311908bb9b96`, RLS on) from
       `pipeline/ingest_plays.py`; `app/explore.py`, `app/query_builder.py` (numpy, in
       memory) and `routers/explore.py` (see [`docs/design/explore.md`](docs/design/explore.md))
+- [x] 2026 personnel (September 2026). Participation trails a season, so the season in
+      progress arrives by hand as season-to-date totals per team and grouping. New
+      `team_personnel_season` (migration `a1470d03b94d`, RLS on) and
+      `pipeline/ingest_personnel.py` (files in the gitignored `data/personnel/`, loaded
+      locally like routes, never by CI). `app/team_stats.py` uses it for any window holding
+      every game it counts, and every personnel surface says "through Week N" when it runs
+      behind the stats
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com

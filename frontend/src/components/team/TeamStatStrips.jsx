@@ -26,7 +26,7 @@ export function TeamStatStrips({ board, abbreviation, weeksLabel }) {
   return (
     <section className="glass-card p-4">
       <h2 className="text-[15px] font-semibold tracking-tight text-fg">Team stats</h2>
-      <p className="text-[11.5px] text-faint">{weeksLabel} {"·"} each line is all 32 teams, better to the right, the badge is the rank</p>
+      <p className="text-[11.5px] text-faint">{weeksLabel} {"·"} all 32 teams.</p>
       <div className={`${grid} mt-3 pb-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-faint`}>
         <span className="col-span-2 text-right">Offense</span><span /><span className="col-span-2">Defense</span>
       </div>

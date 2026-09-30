@@ -36,7 +36,7 @@ export function RunLaneColumns({ lanes, groups, weeksLabel }) {
           );
         })}
       </svg>
-      <p className="mt-1 text-[11px] text-faint">Column: share of designed runs, dashed tick is the league. Colour and the numbers below: EPA per run and its rank.</p>
+      <p className="mt-1 text-[11px] text-faint">Column: share of designed runs, dashed tick is the league. Color and the numbers below represent EPA per run and rank.</p>
       <div className="mt-2.5 grid grid-cols-3 gap-2">
         {RUN_GROUPS.map((group) => {
           const row = (groups ?? []).find((entry) => entry.key === group.key);

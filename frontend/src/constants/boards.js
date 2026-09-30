@@ -276,7 +276,6 @@ export const EXPLORE_ITEMS = [
     path: "/explore/scatter",
     menuDesc: "Visualize how players rank between two stats",
     title: "Scatter",
-    description: "Two stats plotted for every player. The dashed lines are the medians of the players shown.",
   },
   {
     id: "explore-network",
@@ -284,7 +283,6 @@ export const EXPLORE_ITEMS = [
     path: "/explore/network",
     menuDesc: "Where each quarterback's targets go",
     title: "Passing Network",
-    description: "Where a quarterback's targets go, how deep, and what they return.",
   },
   {
     id: "explore-compare",
@@ -308,7 +306,7 @@ export const EXPLORE_ITEMS = [
     path: "/explore/query",
     menuDesc: "Search for games and seasons by any stat",
     title: "Query Builder",
-    description: "Search every game and season since 2009 by any stat, then rank what comes back.",
+    description: "Search every game and season since 2009 by any stat.",
   },
 ];
 

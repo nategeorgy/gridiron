@@ -50,6 +50,7 @@ REFERENCE_TABLES = (
     "depth_chart_entries",
     "team_game_stats",
     "team_personnel",
+    "team_personnel_season",
     "team_staff",
     "play_targets",
     "player_run_lanes",

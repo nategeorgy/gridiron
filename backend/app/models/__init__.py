@@ -20,7 +20,7 @@ from app.models.player_stats import PlayerStats
 from app.models.player_target_depth import PlayerTargetDepth
 from app.models.plays import PlayerRunLane, PlayTarget
 from app.models.team import Team
-from app.models.team_extras import TeamPersonnel, TeamStaff
+from app.models.team_extras import TeamPersonnel, TeamPersonnelSeason, TeamStaff
 from app.models.team_game_stats import TeamGameStats
 
 __all__ = [
@@ -28,6 +28,7 @@ __all__ = [
     "Team",
     "TeamGameStats",
     "TeamPersonnel",
+    "TeamPersonnelSeason",
     "TeamStaff",
     "Player",
     "Game",
