@@ -153,21 +153,29 @@ def derive_route_rates(seasons: list[int]) -> int:
     Derived in SQL after the route counts land, so the numerator and denominator
     always come from the same stat line. Shared with ``ingest_routes.py``, which loads
     the in-season route counts this script cannot.
+
+    Only rows whose rates actually change are written, for the reasons ``db.upsert``
+    gives: this runs every Wednesday over the whole season, and nearly every rate it
+    computes is the one already stored. Returns the rows changed.
     """
+    # The rate expressions appear twice, in SET and in the guard, rather than once in a
+    # CTE joined back on stat_id: a join lets the planner choose a hash join over the
+    # whole of player_stats, where this stays on the season index it always used.
+    tprr = "CASE WHEN routes_run > 0 THEN targets::float / routes_run END"
+    yprr = "CASE WHEN routes_run > 0 THEN receiving_yards::float / routes_run END"
     statement = text(
-        """
+        f"""
         UPDATE player_stats
-           SET targets_per_route_run = CASE
-                   WHEN routes_run > 0 THEN targets::float / routes_run END,
-               yards_per_route_run = CASE
-                   WHEN routes_run > 0 THEN receiving_yards::float / routes_run END
+           SET targets_per_route_run = {tprr},
+               yards_per_route_run = {yprr}
          WHERE season = ANY(:seasons)
            AND routes_run IS NOT NULL
+           AND (targets_per_route_run, yards_per_route_run) IS DISTINCT FROM ({tprr}, {yprr})
         """
     )
     with get_engine().begin() as connection:
         result = connection.execute(statement, {"seasons": seasons})
-    logger.info("route rates: derived TPRR/YPRR on %d rows", result.rowcount)
+    logger.info("route rates: TPRR/YPRR changed on %d rows", result.rowcount)
     return result.rowcount
 
 

@@ -339,7 +339,7 @@ def ingest_snap_sums(seasons: list[int]) -> int:
             if values:
                 rows.append({"team_id": team_id, "game_id": game_id, "side": side, **values})
         written += upsert("team_game_stats", rows, conflict_columns=["team_id", "game_id", "side"])
-        logger.info("snap sums %d: wrote %d team-game-side rows (%d with no snap counts)", season, len(rows), len(existing) - len(rows))
+        logger.info("snap sums %d: %d team-game-side rows sent (%d with no snap counts)", season, len(rows), len(existing) - len(rows))
     return written
 
 

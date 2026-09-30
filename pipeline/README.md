@@ -1,8 +1,11 @@
 # Second Level Data Pipeline
 
 Ingests nflverse data into PostgreSQL via [`nflreadpy`](https://github.com/nflverse/nflreadpy).
-All scripts are **idempotent** (`INSERT ... ON CONFLICT DO UPDATE`) — safe to
-re-run.
+All scripts are **idempotent** (`INSERT ... ON CONFLICT DO UPDATE`): safe to
+re-run, and a re-run that finds nothing new writes nothing. Every write goes through
+`db.py`'s `upsert` or `replace_scoped`, which send 200 rows per statement inside one
+transaction (`PIPELINE_WRITE_CHUNK_ROWS`), because production cancels any single
+statement that runs past about two minutes.
 
 ## Setup
 
