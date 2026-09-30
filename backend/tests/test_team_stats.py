@@ -110,3 +110,24 @@ def test_personnel_cards_leave_withheld_success_blank():
     cards = {c["grouping"]: c for c in _personnel_cards(_windows(data, {1, 2, 3}, {}), 1)}
     assert cards["11"]["success"] == 0.541 and cards["11"]["epa_rank"] == 1
     assert cards["13"]["success"] is None and cards["13"]["epa"] is None
+
+
+def test_players_on_the_field_are_summed_before_dividing():
+    # week 1: 1.0 TE per snap on 40 snaps; week 2: 2.0 on 80. Mean of the weekly rates
+    # would be 1.5; over both weeks it is (40 + 160) / 120.
+    rows = [
+        _row(1, 1, "o", 2, snaps=40.0, back_snaps=40.0, te_snaps=40.0, wr_snaps=120.0, two_back_snaps=0.0), _row(1, 1, "d", 2),
+        _row(1, 2, "o", 2, snaps=80.0, back_snaps=100.0, te_snaps=160.0, wr_snaps=140.0, two_back_snaps=20.0), _row(1, 2, "d", 2),
+    ]
+    window = _windows({"rows": rows, "personnel": {}, "teams": {}, "weeks": [1, 2]}, {1, 2}, {})[1]
+    assert round(_value(BY_ID["te_play"], window, "o"), 4) == round(200 / 120, 4)
+    assert round(_value(BY_ID["back_play"], window, "o"), 4) == round(140 / 120, 4)
+    assert round(_value(BY_ID["wr_play"], window, "o"), 4) == round(260 / 120, 4)
+    assert round(_value(BY_ID["two_back"], window, "o"), 4) == round(20 / 120, 4)
+
+
+def test_players_on_the_field_are_blank_before_snap_counts():
+    rows = [_row(1, 1, "o", 2, plays=60.0), _row(1, 1, "d", 2)]
+    window = _windows({"rows": rows, "personnel": {}, "teams": {}, "weeks": [1]}, {1}, {})[1]
+    for metric in ("back_play", "te_play", "wr_play", "two_back"):
+        assert _value(BY_ID[metric], window, "o") is None

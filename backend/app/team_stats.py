@@ -204,7 +204,17 @@ METRICS: tuple[TeamMetric, ...] = (
     _m("sos", "Opponent strength", "sched", lambda s: s.get("sos"), fmt="sgn2", better_o=-1, better_d=1, short="Opp EPA",
        label_o="Opponent defenses, EPA allowed", label_d="Opponent offenses, EPA per play",
        desc="Average EPA per play of the opponents played, over the same weeks. Rank 1 is the hardest."),
-    # personnel (offense only)
+    # personnel from snap counts (offense only, 2013+): players on the field per snap, and
+    # the share of snaps with a second back. Exact as averages; the grouping split is not.
+    _m("back_play", "Backs per play", "pers", lambda s: _per(s["back_snaps"], s["snaps"]), fmt="num2", better_o=0, sides=("o",),
+       short="RB/play", first_season=SNAPS, desc="Running backs and fullbacks on the field per snap."),
+    _m("te_play", "Tight ends per play", "pers", lambda s: _per(s["te_snaps"], s["snaps"]), fmt="num2", better_o=0, sides=("o",),
+       short="TE/play", first_season=SNAPS, desc="Tight ends on the field per snap."),
+    _m("wr_play", "Receivers per play", "pers", lambda s: _per(s["wr_snaps"], s["snaps"]), fmt="num2", better_o=0, sides=("o",),
+       short="WR/play", first_season=SNAPS, desc="Wide receivers on the field per snap."),
+    _m("two_back", "2-back rate", "pers", lambda s: _per(s["two_back_snaps"], s["snaps"]), fmt="pct1", better_o=0, sides=("o",),
+       short="2-back %", first_season=SNAPS, desc="Share of snaps with two backs on the field (21 and 22 personnel)."),
+    # personnel groupings (offense only)
     *[m for g in GROUPINGS for m in (
         _m(f"pers_{g}_share", f"{g} personnel usage", "pers", _pers(g, "share"), fmt="pct1", better_o=0, sides=("o",), short=f"{g} use", first_season=PART),
         _m(f"pers_{g}_epa", f"{g} personnel EPA per play", "pers", _pers(g, "epa"), fmt="sgn2", sides=("o",), short=f"{g} EPA", first_season=PART),

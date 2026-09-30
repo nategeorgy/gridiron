@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-29 (2026 personnel from a hand-supplied file, `team_personnel_season`; team page and Explore copy)
+Last updated: 2026-09-30 (personnel from snap counts: players on the field per play and the 2-back rate)
 
 ---
 
@@ -432,6 +432,7 @@ machine (your laptop, Supabase) can be brought to the exact same schema with
 | `alembic/versions/177a7137df5c_*.py` | ⭐ **Team pages.** Creates `team_game_stats`, `team_personnel` and `team_staff` (RLS on, `anon`/`authenticated` revoked, in the same migration) and adds `teams.color`. |
 | `alembic/versions/311908bb9b96_*.py` | ⭐ **Explore.** Creates `play_targets` and `player_run_lanes` (RLS on, `anon`/`authenticated` revoked). |
 | `alembic/versions/a1470d03b94d_*.py` | **2026 personnel.** Creates `team_personnel_season` (RLS on, `anon`/`authenticated` revoked). |
+| `alembic/versions/cc1003cfc34f_*.py` | **Personnel from snap counts.** Adds `back_snaps`, `te_snaps`, `wr_snaps`, `two_back_snaps` to `team_game_stats`. |
 | `alembic/versions/85d024666c8f_*.py` | ⭐ **Scope narrowed to 2009.** Deletes 52,146 stat lines and 2,646 games before 2009 — the M8 audit's own conclusion applied, since targets are unrecoverable 2003–2008 and expected points have no usable receiving side until 2009. Leaves `players` and `teams` alone: `load_players` republishes every retired player daily, so that delete would undo itself overnight. ⚠️ Frees pages without returning them — `VACUUM FULL player_stats` afterwards, by hand, since it cannot run in a transaction. |
 | `alembic/versions/4a2fb3bf6c6b_*.py` | Migration #2 — adds a unique constraint on team abbreviation. |
 | `alembic/versions/521f727f5461_*.py` | Migration #3 (M2) — adds the expected stat components, the three market-share columns, and carries inside the 10/5/2. |
@@ -475,7 +476,7 @@ so **the migrated schema is the single source of truth.** Every script is
 | `ingest_personnel.py` | **In-season personnel, hand-loaded.** Participation trails a season, so the season in progress arrives as season-to-date totals per team and grouping (usage %, plays, EPA per play, success rate) and is written to `team_personnel_season` as given, replacing each team's previous snapshot. Groupings are read from the header; `-` is NULL. Cross-checks each team's listed plays against play-by-play. `--dry-run` writes nothing. Loaded locally, never by CI. |
 | `data/personnel/` | **Gitignored apart from its README**, like `data/routes/`. Files are named `<season>-w<through week>.xlsx`; only the newest per season is loaded. |
 | `ingest_rankings.py` | **Run 8th** (M6.1). Consensus draft boards from the FantasyPros snapshot, joined to `gsis_id` through `load_ff_playerids`. ⭐ **`--weekly` (M9)** reads the ECR *archive* instead — 1.8M rows back to 2019, which unlike the snapshot is a real time series, so weekly history is backfillable. The archive carries no week number, so the week is **derived from the schedule**: a board scraped on date D belongs to the first week whose games have not all finished. No-ops before kickoff rather than downloading the archive daily all summer. |
-| `ingest_team_stats.py` | ⭐ **Team sums (September 2026).** Play-by-play, FTN charting (2022+), participation (coverage and personnel, 2016+ and a season behind), `load_team_stats` (penalties, turnovers) and snap counts, summed to one row per team, game and side in `team_game_stats`, and per personnel grouping in `team_personnel`. Codes resolved through `franchises.py`; only games already in `games` are written. Runs after the player stats chain in the Wednesday job. |
+| `ingest_team_stats.py` | ⭐ **Team sums (September 2026).** Play-by-play, FTN charting (2022+), participation (coverage and personnel, 2016+ and a season behind), `load_team_stats` (penalties, turnovers) and snap counts (team snaps, plus the snaps backs, tight ends and receivers played, via `snap_sums`), summed to one row per team, game and side in `team_game_stats`, and per personnel grouping in `team_personnel`. Codes resolved through `franchises.py`; only games already in `games` are written. Runs after the player stats chain in the Wednesday job. `--snaps-only` rewrites just the snap columns on existing rows, for a backfill without play-by-play. |
 | `ingest_plays.py` | ⭐ **Every target and every designed run by lane (September 2026)**, from play-by-play, 2009 on: `play_targets` and `player_run_lanes`. Both **replaced per game** (a stat correction can renumber a play). Runs after `ingest_stats.py`, since lanes are kept only for players with a stat line in that game. On the Wednesday stats job. |
 | `ingest_staff.py` | Head coaches and coordinators from the hand-kept `data/staff/team_staff.csv` (team, season, role hc/oc/dc, order, name, note; sourced from Wikipedia, since the feed's 2026 head coaches are wrong and it has no coordinators). Replaced per team and season. Daily job. |
 | `ingest_depth_charts.py` | **Run 9th** (M6.2). The newest depth-chart snapshot, QB/RB/WR/TE. **The one ingest that is not an upsert** — it replaces each team's rows, because a cut player stops appearing in the feed rather than appearing with a worse rank, and an upsert would leave him at WR3 forever. |
@@ -774,6 +775,14 @@ repo. Update it in the *same change* that alters the project's structure — spe
   The rule and its two exceptions are under "Writing" in [`CLAUDE.md`](CLAUDE.md).
 
 ### Changelog
+
+- **2026-09-30**: **Personnel from snap counts.** Four sums on `team_game_stats` (migration `cc1003cfc34f`):
+  the snaps backs, tight ends and receivers played, and backs' snaps beyond one per snap. `snap_sums()`
+  in `pipeline/ingest_team_stats.py` fills them (2013+, weekly) and `--snaps-only` backfills them without
+  play-by-play. Four team metrics in `app/team_stats.py` (`back_play`, `te_play`, `wr_play`, `two_back`).
+  The Personnel card (`components/team/PersonnelCards.jsx`) opens with a lineup bar and three ranked
+  rows; the rank table and the Personnel leaderboard tab add them and hide grouping rows and columns
+  a season has no data for. The hand-supplied `team_personnel_season` path is unchanged.
 
 - **2026-09-29**: **2026 personnel and copy.** The season in progress's personnel arrives by hand as
   season-to-date totals, so it gets its own table, `team_personnel_season` (migration `a1470d03b94d`, RLS

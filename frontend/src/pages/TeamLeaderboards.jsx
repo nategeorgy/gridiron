@@ -28,8 +28,12 @@ const parseCustom = (raw) =>
   raw.split(",").filter(Boolean).map((entry) => entry.split(".")).filter(([id, side]) => id && (side === "o" || side === "d"));
 const writeCustom = (columns) => columns.map(([id, side]) => `${id}.${side}`).join(",");
 
-/** Resolve a tab's sections into columns: { id, side, header, key }. */
-function resolveColumns(tab, metrics, side) {
+/**
+ * Resolve a tab's sections into columns: { id, side, header, key }. On a preset tab, a
+ * personnel column with nothing in it this season (the 11/12/13 split for the season in
+ * progress) is left out rather than shown as a column of dashes.
+ */
+function resolveColumns(tab, metrics, side, values) {
   return tab.sections.map(([name, columns]) => [
     name,
     columns
@@ -41,7 +45,8 @@ function resolveColumns(tab, metrics, side) {
         const tag = tab.id === "custom" && !metric.single ? (resolved === "o" ? " O" : " D") : "";
         return { id, side: resolved, metric, header: (header ?? metric.short) + tag, key: `${id}.${resolved}` };
       })
-      .filter(Boolean),
+      .filter(Boolean)
+      .filter((column) => tab.id === "custom" || column.metric.group !== "pers" || Object.keys(values?.[column.id]?.[column.side] ?? {}).length > 0),
   ]).filter(([, columns]) => columns.length);
 }
 
@@ -71,7 +76,7 @@ export function TeamLeaderboards() {
     description: "Pick any team stat, on either side of the ball.",
     sections: [["Your columns", customColumns.map(([id, columnSide]) => [id, columnSide, null])]],
   };
-  const sections = resolveColumns(tab, metrics, side);
+  const sections = resolveColumns(tab, metrics, side, board?.values);
   const flat = sections.flatMap(([, columns]) => columns);
   const firstOfSection = new Set(sections.map(([, columns]) => columns[0].key));
 
