@@ -1808,6 +1808,21 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   `PIPELINE_DATABASE_URL`, the first credential in CI that can change real data. Keep it
   scoped to that workflow, keep the ingests idempotent, and remember that a new ingest
   script added to it runs unattended at 6am
+- ⚠️ **Production cancels any statement past about two minutes, and the limit is per
+  statement, not per transaction.** So the size of a statement decides how slow a day the
+  database can have before a run fails. Four scheduled runs died in four days in late
+  September 2026, the last taking 2026 Week 3's stats with it, because `pipeline/db.py`
+  let SQLAlchemy pack up to ~32,700 parameters into each INSERT (667 stat lines, 1,816
+  players). Both write helpers now send `WRITE_CHUNK_ROWS` (200) rows per statement inside
+  one transaction. **Write through `upsert` or `replace_scoped`**, never a bare
+  `connection.execute(statement, rows)`, and a new ingest inherits the chunking
+- **A write that changes nothing writes nothing.** `upsert` updates only
+  `WHERE stored IS DISTINCT FROM incoming`, and `replace_scoped` skips a group whose stored
+  rows already match. This matters beyond disk IO: every rewritten row, identical or not,
+  moves the counters `app/cache.py` keys its data version on, so the daily roster job used
+  to drop the backend's whole cache every morning. The logs now say how many rows were
+  written and how many were already up to date; `tests/test_pipeline_writes.py` checks by
+  `ctid` that an unchanged row keeps its row version
 - ⚠️ **An on/off split must exclude games the *subject* did not play in full** (M10).
   DeVonta Smith's two 2025 games without A.J. Brown average to a 52% snap share — one is
   a genuine 90%-snap game where he took 45% of the targets, the other a Week 18 he played

@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-09-29 (2026 personnel from a hand-supplied file, `team_personnel_season`; team page and Explore copy)
+Last updated: 2026-09-30 (pipeline writes: small statements, and nothing rewritten that already matches; 2026 personnel from a hand-supplied file, `team_personnel_season`; team page and Explore copy)
 
 ---
 
@@ -460,7 +460,7 @@ so **the migrated schema is the single source of truth.** Every script is
 | --- | --- |
 | `README.md` | How to set up and run the pipeline, run order, and which columns each script fills. |
 | `requirements.txt` | Pipeline Python dependencies. |
-| `db.py` | Shared DB helpers — connection (⭐ **a bounded pool**: 2 + 1 overflow, plus a retried first connect, for the reason spelled out in §9), the idempotent `upsert` used by most scripts, **`replace_scoped()`** (M6.2 — delete-and-rewrite whole groups in one transaction, for tables holding *current state* where a row that should vanish simply stops appearing in the source), and `load_stat_keys()` (the guard that keeps enrichment passes from inserting half-empty stat lines). |
+| `db.py` | Shared DB helpers: connection (⭐ **a bounded pool**: 2 + 1 overflow, plus a retried first connect, for the reason spelled out in §9), the idempotent `upsert` used by most scripts, **`replace_scoped()`** (M6.2: delete-and-rewrite whole groups in one transaction, for tables holding *current state* where a row that should vanish simply stops appearing in the source). ⭐ **Both write `WRITE_CHUNK_ROWS` (200) rows per statement inside one transaction, and neither rewrites what already matches**: `upsert` guards its update with `IS DISTINCT FROM`, `replace_scoped` skips a group whose stored rows are identical (see §9). Also `load_stat_keys()` (the guard that keeps enrichment passes from inserting half-empty stat lines). |
 | `seasons.py` | ⭐ **The season clock (M6.0).** Replaced `DEFAULT_SEASONS = list(range(2020, 2026))`, copied into every script and wrong from the next September. nflreadpy owns two rollovers and this reads both: the **roster** year turns over on 15 March (schedules, rosters, players, depth charts exist months before kickoff), the **stats** year at the first game. `clamp_seasons()` drops seasons a feed can't serve yet — the loaders take every season in one call, so one unstarted season would otherwise fail an entire scheduled run. `in_season()` is the two clocks agreeing. |
 | `availability.py` | ⭐ **Which stored columns are trustworthy in which season (M8).** The feeds report a stat nobody measured as `0`, not as missing — so a 2004 receiver with 90 catches arrives carrying `targets = 0`, which sorts and averages and poisons every share derived from it. `mask_unavailable()` NULLs those at ingest, in one place, from **measured** windows: charted passing starts 2006, snaps 2013, routes 2016–2025 from the feed (the season in progress is hand-loaded by `ingest_routes.py`, which never masks), and targets are unrecoverable 2003–2008. Mirrored by `backend/app/availability.py`. |
 | `franchises.py` | ⭐ **Which code a franchise used in a given season (M8).** `load_schedules` says `STL`; `load_player_stats` and `load_pbp` normalise the same team to today's `LA`. Unreconciled, `games` and `player_stats` point at different `teams` rows — so SOS credited every Rams stat line from 1999–2015 to the wrong defense. The mapping is **derived, never hardcoded**: a franchise is its nickname (36 codes, 32 nicknames, 3 relocations), and the code in use is whichever appears in that season's schedule. |
@@ -572,6 +572,7 @@ dashboard (production).
 | `SUPABASE_JWT_SECRET` | backend | *(optional)* | only for projects still signing HS256; newer ones verify from the public JWKS |
 | `VITE_SUPABASE_URL` | frontend | *(optional)* | `https://<project-ref>.supabase.co` (Vercel) |
 | `VITE_SUPABASE_ANON_KEY` | frontend | *(optional)* | the **publishable anon** key — never the `service_role` key, which must never reach a client bundle |
+| `PIPELINE_CONNECT_ATTEMPTS`, `PIPELINE_CONNECT_RETRY_DELAY`, `PIPELINE_WRITE_CHUNK_ROWS` | pipeline | *(unset: 5 attempts, 15 seconds, 200 rows)* | unset. Tuning only, see §9 |
 
 The four Supabase variables are optional by design: with them unset the app runs
 exactly as it did before M5, minus the sign-in button, and the `/me` endpoints return
@@ -617,6 +618,28 @@ at 2 + 1 (every ingest is serial, so that is ample) and retries its first connec
 the way `backend/scripts/migrate.sh` retries a migration. Two optional env vars tune it,
 `PIPELINE_CONNECT_ATTEMPTS` (5) and `PIPELINE_CONNECT_RETRY_DELAY` (15 seconds); it still
 raises once they are spent, so a genuinely unreachable database fails the run loudly.
+
+⚠️ **Production cancels any statement that runs past about two minutes, and the limit is
+per statement.** `pipeline/db.py` used to hand SQLAlchemy every row in one call, which it
+packs into INSERTs of up to ~32,700 parameters: 667 rows of player_stats, 1,816 players,
+2,725 rankings. When the Disk IO budget ran out in late September 2026 the database
+slowed down, those statements crossed the limit, and four scheduled runs failed in four
+days, the last of them taking production's Week 3 stats with it (the same upsert had taken
+four seconds the week before). Both write helpers now send `WRITE_CHUNK_ROWS` (200) rows
+per statement inside one transaction, so the write is still all or nothing and each piece
+has the full two minutes. **And neither rewrites what already matches.** The roster job
+sends all 8,297 players and 4,902 games every morning, and the stats job re-sends every
+stat line of the season six times; every one of those was a new row version and new index
+entries (player_stats has seven indexes), and moved the counters `backend/app/cache.py`
+keys on, so the backend dropped its whole cache daily whether or not anything had changed.
+`upsert` now updates only `WHERE stored IS DISTINCT FROM incoming`, and `replace_scoped`
+compares each group's stored rows with the incoming ones and skips an identical group. On
+a day nothing changed, measured locally, players went from 7.1 MB of WAL to 2.9 MB, games
+from 3.3 to 0.9 and the season's stat lines from 2.4 to 0.65, and a second run moves no
+counters at all. `replace_scoped` also deletes many groups per statement: one DELETE per
+game was a full scan of `player_run_lanes` per game, since no index on it leads with
+`game_id` (48 scans for the 2026 refresh through Week 3; now 6, or 12 if every game
+changed).
 
 Note how the two failures differ in how visible they are. A failed deploy leaves the
 previous version serving and shows up as a red build; a failed pipeline run leaves the
@@ -775,6 +798,19 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-09-30**: **Pipeline writes are small statements, and skip what already matches**
+  (`pipeline/db.py`). Four scheduled runs in four days died on `canceling statement due to
+  statement timeout`, the last one before writing 2026 Week 3's stat lines. The timeout is
+  per statement and SQLAlchemy had been packing up to ~32,700 parameters into each INSERT;
+  `upsert` and `replace_scoped` now send `WRITE_CHUNK_ROWS` (200, env
+  `PIPELINE_WRITE_CHUNK_ROWS`) rows per statement inside one transaction. `upsert` updates
+  only rows whose values differ (`IS DISTINCT FROM` over the columns being written, json
+  compared as jsonb), and `replace_scoped` skips any group whose stored rows already
+  match and deletes the rest many groups per statement rather than one (a per-game DELETE
+  on `player_run_lanes` was a sequential scan each time). Both log how many rows they
+  wrote and how many were already up to date. `ingest_usage.py`'s `derive_route_rates`,
+  the one write outside `db.py`, gets the same guard. New `backend/tests/test_pipeline_writes.py`
+  pins the chunking and, by `ctid`, that an unchanged row is never rewritten. See §9.
 - **2026-09-29**: **2026 personnel and copy.** The season in progress's personnel arrives by hand as
   season-to-date totals, so it gets its own table, `team_personnel_season` (migration `a1470d03b94d`, RLS
   on), loaded by `pipeline/ingest_personnel.py` from the gitignored `pipeline/data/personnel/`.
@@ -783,7 +819,6 @@ repo. Update it in the *same change* that alters the project's structure — spe
   when it runs behind the stats. The personnel card's league figure is now the mean of the teams'
   shares, like the rank table's. Shorter subheadings on the team leaderboards, team page cards and
   Explore pages; the Scatter and Passing Network pages have none.
-
 - **2026-09-29**: **The Explore tab.** Five pages under a new **Explore ▾** after Teams, un-hidden from
   launch: **Scatter** (per-position questions over `/stats/intelligence`), **Passing Network** (field or
   radial, situations, same-team quarterbacks side by side), **Player Comparison** (up to five players in
