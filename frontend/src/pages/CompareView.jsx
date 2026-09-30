@@ -545,7 +545,7 @@ function FinishesCard({ slots, weeks, league, scoring }) {
   const template = `150px repeat(${shown.length}, minmax(24px, 1fr)) 64px 64px`;
   return (
     <section className="glass-card min-w-0 p-4">
-      <CardTitle title="Weekly finishes" sub={`Rank at the position each week, in ${scoringLabel(scoring)}. Coloured by how a 12-team league starts that position.`} />
+      <CardTitle title="Weekly finishes" sub={`Rank at the position each week, in ${scoringLabel(scoring)}.`} />
       <div className="overflow-x-auto">
         <div className="stat-num grid gap-[3px] text-[10.5px]" style={{ minWidth: 260 + shown.length * 30 }}>
           <div className="grid items-center gap-[3px]" style={{ gridTemplateColumns: template }}>

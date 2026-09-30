@@ -23,7 +23,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.cache import VersionedCache
-from app.models import Game, Player, PlayerStats, Team, TeamGameStats, TeamPersonnel, TeamStaff
+from app.models import Game, Player, PlayerStats, Team, TeamGameStats, TeamPersonnel, TeamPersonnelSeason, TeamStaff
 from app.models.team_game_stats import DEPTHS, LANES, SUM_COLUMNS
 from app.scoring import ScoringConfig, points_expr
 
@@ -95,15 +95,15 @@ def _fp(pos=None):
 
 def _pers(g, what):
     def get(s):
+        if not s["pers"]:
+            return None
         p = s["pers"].get(g)
-        total = sum(x["plays"] for x in s["pers"].values())
-        if not total:
-            return None
         if what == "share":
-            return (p["plays"] if p else 0.0) / total
-        if not p or p["plays"] < PERSONNEL_MIN_PLAYS:
+            return p["share"] if p else 0.0
+        key = "epa" if what == "epa" else "successes"
+        if not p or p["plays"] < PERSONNEL_MIN_PLAYS or p[key] is None:
             return None
-        return p["epa" if what == "epa" else "successes"] / p["plays"]
+        return p[key] / p["plays"]
     return get
 
 
@@ -237,13 +237,36 @@ def _load_rows(db: Session, season: int, season_type: str) -> dict:
         personnel: dict[tuple[int, int], dict] = {}
         for p in pers:
             bucket = personnel.setdefault((p.team_id, p.week), {})
-            bucket[p.grouping] = {"plays": p.plays or 0.0, "epa": p.epa or 0.0, "successes": p.successes or 0.0, "dropbacks": p.dropbacks or 0.0}
+            bucket[p.grouping] = {"plays": p.plays or 0.0, "epa": p.epa or 0.0, "successes": p.successes or 0.0}
         teams = {t.team_id: t for t in db.execute(select(Team)).scalars()}
-        return {"rows": out, "personnel": personnel, "teams": {tid: {"team_id": tid, "abbreviation": t.abbreviation, "name": t.name,
+        return {"rows": out, "personnel": personnel, "personnel_season": _personnel_season(db, season, season_type, out), "teams": {tid: {"team_id": tid, "abbreviation": t.abbreviation, "name": t.name,
                                                                      "conference": t.conference, "division": t.division, "logo_url": t.logo_url, "color": t.color}
                                                                for tid, t in teams.items() if any(r["team_id"] == tid for r in out)},
                 "weeks": sorted({r["week"] for r in out})}
     return _ROWS.get_or_compute(db, ("rows", season, season_type), query)
+
+
+def _personnel_season(db: Session, season: int, season_type: str, rows: list[dict]) -> dict[int, dict]:
+    """team_id -> the hand-supplied season-to-date personnel, and the weeks it counts.
+
+    Season totals cannot be split into games, so a window may use them only if it holds
+    every game they count (``_personnel``). ``weeks`` is the team's played weeks up to
+    ``through_week``, so a bye inside that range is not required.
+    """
+    out: dict[int, dict] = {}
+    for p in db.execute(select(TeamPersonnelSeason).where(
+            TeamPersonnelSeason.season == season, TeamPersonnelSeason.season_type == season_type)).scalars():
+        team = out.setdefault(p.team_id, {"through_week": p.through_week, "groups": {}})
+        team["through_week"] = min(team["through_week"], p.through_week)
+        team["groups"][p.grouping] = {
+            "plays": p.plays, "share": p.share,
+            "epa": None if p.epa_per_play is None else p.epa_per_play * p.plays,
+            "successes": None if p.success_rate is None else p.success_rate * p.plays,
+        }
+    for team_id, team in out.items():
+        team["weeks"] = frozenset(r["week"] for r in rows
+                                  if r["team_id"] == team_id and r["side"] == "o" and r["week"] <= team["through_week"])
+    return out
 
 
 def _fantasy(db: Session, season: int, season_type: str, config: ScoringConfig) -> dict:
@@ -267,7 +290,32 @@ def _fantasy(db: Session, season: int, season_type: str, config: ScoringConfig) 
 # ---------------------------------------------------------------------------------
 # Windows
 # ---------------------------------------------------------------------------------
-def _sum_side(rows: list[dict], side: str, personnel: dict, fantasy: dict, team_id: int) -> dict:
+def _personnel(rows: list[dict], personnel: dict, snapshot: dict | None, team_id: int) -> tuple[dict, int | None]:
+    """A team's offensive personnel over the window's games, and the week it runs to
+    when it came from a hand-supplied season total (None when it came from games).
+
+    Per-game rows (participation) are summed and each grouping's share taken over every
+    grouping. With none, a season total is used if the window holds every game it
+    counts, share as the file states it; a narrower window gets nothing rather than a
+    season's numbers under a label that says otherwise.
+    """
+    pers: dict[str, dict] = {}
+    for r in rows:
+        for g, p in personnel.get((team_id, r["week"]), {}).items():
+            acc = pers.setdefault(g, {"plays": 0.0, "epa": 0.0, "successes": 0.0})
+            for k in acc:
+                acc[k] += p[k]
+    if pers:
+        total = sum(p["plays"] for p in pers.values())
+        for p in pers.values():
+            p["share"] = p["plays"] / total if total else None
+        return pers, None
+    if snapshot and snapshot["weeks"] and snapshot["weeks"] <= {r["week"] for r in rows}:
+        return {g: dict(p) for g, p in snapshot["groups"].items()}, snapshot["through_week"]
+    return {}, None
+
+
+def _sum_side(rows: list[dict], side: str, personnel: dict, fantasy: dict, team_id: int, snapshot: dict | None = None) -> dict:
     s: dict = {c: None for c in SUM_COLUMNS}
     for r in rows:
         for col in SUM_COLUMNS:
@@ -290,14 +338,7 @@ def _sum_side(rows: list[dict], side: str, personnel: dict, fantasy: dict, team_
             for pos, pts in f[side].items():
                 fp[pos] = fp.get(pos, 0.0) + pts
     s.update(fp=fp, fp_games=fp_games)
-    pers: dict[str, dict] = {}
-    if side == "o":
-        for r in rows:
-            for g, p in personnel.get((team_id, r["week"]), {}).items():
-                acc = pers.setdefault(g, {"plays": 0.0, "epa": 0.0, "successes": 0.0, "dropbacks": 0.0})
-                for k in acc:
-                    acc[k] += p[k]
-    s["pers"] = pers
+    s["pers"], s["pers_through_week"] = _personnel(rows, personnel, snapshot, team_id) if side == "o" else ({}, None)
     return s
 
 
@@ -308,7 +349,7 @@ def _windows(data: dict, weeks: set[int], fantasy: dict) -> dict[int, dict]:
             by_team.setdefault(r["team_id"], {"o": [], "d": []})[r["side"]].append(r)
     windows = {}
     for team_id, sides in by_team.items():
-        o = _sum_side(sides["o"], "o", data["personnel"], fantasy, team_id)
+        o = _sum_side(sides["o"], "o", data["personnel"], fantasy, team_id, data.get("personnel_season", {}).get(team_id))
         d = _sum_side(sides["d"], "d", data["personnel"], fantasy, team_id)
         scored = [r for r in sides["o"] if r.get("pf") is not None]
         windows[team_id] = {"team_id": team_id, "o": o, "d": d, "games": len(sides["o"]), "rows": sides,
@@ -325,6 +366,12 @@ def _windows(data: dict, weeks: set[int], fantasy: dict) -> dict[int, dict]:
                     vals.append(z["epa"] / z["plays"])
             w[side]["sos"] = sum(vals) / len(vals) if vals else None
     return windows
+
+
+def _personnel_through_week(windows: dict) -> int | None:
+    """The week hand-supplied personnel runs to, if any window used it."""
+    weeks = [w["o"]["pers_through_week"] for w in windows.values() if w["o"]["pers_through_week"] is not None]
+    return min(weeks) if weeks else None
 
 
 def _value(metric: TeamMetric, window: dict, side: str):
@@ -373,6 +420,7 @@ def team_board(db: Session, season: int, season_type: str, weeks_raw: str | None
         teams = [{**data["teams"][t], "record": {"wins": w["wins"], "losses": w["losses"], "ties": w["ties"]}, "games": w["games"]}
                  for t, w in windows.items()]
         return {"season": season, "season_type": season_type, "played_weeks": data["weeks"], "weeks": sorted(weeks),
+                "personnel_through_week": _personnel_through_week(windows),
                 "teams": sorted(teams, key=lambda t: t["abbreviation"]), "metrics": [m.as_dict() for m in METRICS], "values": values}
 
     return _BOARDS.get_or_compute(db, ("board", season, season_type, tuple(sorted(weeks)), config.model_dump_json()), compute)
@@ -464,23 +512,21 @@ def _personnel_cards(windows: dict, team_id: int) -> list[dict]:
     me = windows.get(team_id)
     if not me or not me["o"]["pers"]:
         return []
-    totals = {t: sum(p["plays"] for p in w["o"]["pers"].values()) for t, w in windows.items()}
-    league_total = sum(totals.values())
     mine = me["o"]["pers"]
     cards = []
     for g, p in sorted(mine.items(), key=lambda kv: -kv[1]["plays"]):
-        share = p["plays"] / totals[team_id]
-        if share < 0.03:
+        share = p["share"]
+        if share is None or share < 0.03:
             continue
-        shares = {t: (w["o"]["pers"].get(g, {}).get("plays", 0) / totals[t]) for t, w in windows.items() if totals[t]}
-        epa = {t: w["o"]["pers"][g]["epa"] / w["o"]["pers"][g]["plays"] for t, w in windows.items()
-               if g in w["o"]["pers"] and w["o"]["pers"][g]["plays"] >= PERSONNEL_MIN_PLAYS}
+        # The league figure is the mean of the teams' shares, like the rank table's.
+        shares = {t: (w["o"]["pers"].get(g, {}).get("share") or 0.0) for t, w in windows.items() if w["o"]["pers"]}
+        epa = {t: pp["epa"] / pp["plays"] for t, w in windows.items()
+               if (pp := w["o"]["pers"].get(g)) and pp["plays"] >= PERSONNEL_MIN_PLAYS and pp["epa"] is not None}
         sr, er = _rank(shares, 0), _rank(epa, 1)
-        lg_plays = sum(w["o"]["pers"].get(g, {}).get("plays", 0) for w in windows.values())
         cards.append({"grouping": g, "plays": p["plays"], "share": _r(share), "share_rank": sr.get(team_id), "share_teams": len(shares),
-                      "league_share": _r(lg_plays / league_total) if league_total else None,
+                      "league_share": _r(sum(shares.values()) / len(shares)) if shares else None,
                       "epa": _r(epa.get(team_id)), "epa_rank": er.get(team_id), "epa_teams": len(epa),
-                      "success": _r(p["successes"] / p["plays"]) if p["plays"] else None})
+                      "success": _r(p["successes"] / p["plays"]) if p["plays"] and p["successes"] is not None else None})
         if len(cards) == 5:
             break
     return cards
@@ -498,6 +544,7 @@ def team_breakdown(db: Session, team_id: int, season: int, season_type: str, wee
         "run_lanes": _zone(windows, team_id, "lane", LANES, "runs", ("successes", "yards")),
         "run_groups": _lane_groups(windows, team_id),
         "personnel": _personnel_cards(windows, team_id),
+        "personnel_through_week": _personnel_through_week(windows),
         "staff": [{"season": s.season, "head_coach": s.head_coach, "offensive_coordinator": s.offensive_coordinator,
                    "defensive_coordinator": s.defensive_coordinator} for s in staff],
     }

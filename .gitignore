@@ -35,6 +35,9 @@ dist-ssr/
 # holds its README only; the files are loaded from a local copy and never committed.
 pipeline/data/routes/*
 !pipeline/data/routes/README.md
+# Season-to-date personnel files are hand-supplied charting data too, kept the same way.
+pipeline/data/personnel/*
+!pipeline/data/personnel/README.md
 
 # --- Docker ---
 # Postgres data lives in a named volume, not the tree, but ignore any local dumps

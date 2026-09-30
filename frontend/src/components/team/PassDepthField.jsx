@@ -26,7 +26,7 @@ export function PassDepthField({ depth, weeksLabel }) {
   return (
     <section className="glass-card p-4">
       <h2 className="text-[15px] font-semibold tracking-tight text-fg">Passing by depth</h2>
-      <p className="mb-2 text-[11.5px] text-faint">{weeksLabel} {"·"} where the throws go</p>
+      <p className="mb-2 text-[11.5px] text-faint">{weeksLabel}</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Passing by depth on a field">
         <rect x={x0} y={Y(35)} width={x1 - x0} height={Y(-5) - Y(35)} rx="10" fill="color-mix(in srgb, var(--series-3) 12%, transparent)" />
         {lines.map((yards) => (
@@ -60,10 +60,7 @@ export function PassDepthField({ depth, weeksLabel }) {
         })}
         <line x1={x0} x2={x1} y1={Y(0)} y2={Y(0)} stroke="var(--accent)" strokeWidth="2" opacity="0.75" />
       </svg>
-      <div className="mt-1 flex flex-wrap gap-x-4 text-[11px] text-faint">
-        <span>Colour: how often they throw to that depth, ranked against the league, green is the most</span>
-        <span>Right: EPA per attempt and its rank</span>
-      </div>
+      <p className="mt-1 text-[11px] text-faint">Color represents how often they throw to that depth, green is more often, red is less often (compared to league average). EPA data on throws to that depth on the right.</p>
     </section>
   );
 }

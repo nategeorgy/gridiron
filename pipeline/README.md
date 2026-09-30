@@ -36,6 +36,7 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_expert_boards.py               # 8c. expert CSV boards (M9)
 .venv/bin/python ingest_depth_charts.py                # 9. depth charts (M6)
 .venv/bin/python ingest_team_stats.py --seasons 2024   # 10. team sums + personnel (team pages)
+.venv/bin/python ingest_personnel.py                   # 10b. in-season personnel (hand-loaded)
 .venv/bin/python ingest_staff.py                       # 11. coaching staff (from a CSV)
 .venv/bin/python ingest_plays.py --seasons 2024        # 12. every target + run lanes (Explore)
 ```
@@ -75,6 +76,11 @@ export goes in `data/routes/` — gitignored, because it is licensed and the rep
 public — and production is loaded by running `ingest_routes.py` locally against it. The
 format, naming, and how the numbers differ from 2016–2025 are in
 [`data/routes/README.md`](data/routes/README.md).
+
+Step 10b is the same arrangement for **in-season personnel**: participation trails a
+season, so season-to-date usage, EPA and success per grouping arrive by hand in
+`data/personnel/` (gitignored) and `ingest_personnel.py` loads the newest file per season
+into `team_personnel_season`. See [`data/personnel/README.md`](data/personnel/README.md).
 
 Full backfill (project scope starts at **2009** and runs to the current season). Each
 script clamps to its own feed's window, so the same range can be passed to all of them:

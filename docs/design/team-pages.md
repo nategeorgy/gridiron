@@ -67,6 +67,7 @@ each value.
 | EPA, success, drives, downs, depth and lanes (play-by-play) | 2009 |
 | Snaps | 2013 |
 | Coverage and personnel (participation) | 2016, one season behind |
+| Personnel, season in progress (hand-supplied season totals, `team_personnel_season`) | 2026; full-season windows only |
 | Play action, RPO, screens, motion, huddle, box counts, blitz (FTN charting) | 2022 |
 | Staff | 2022 |
 
@@ -74,8 +75,5 @@ A stat outside its window shows a dash and says which season it starts in.
 
 ## Open
 
-- **2026 personnel.** Participation trails a season, so the season in progress has no
-  personnel. Nate will supply usage, EPA and success per grouping by hand; the format
-  is not settled, and an importer will write it to `team_personnel`.
 - The old `GET /teams/leaderboard` endpoint is no longer called by the frontend and can
   be removed.

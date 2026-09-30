@@ -17,7 +17,7 @@ import { useScoring } from "../hooks/useScoring";
 import { useSeasons } from "../hooks/useSeasons";
 import { useTeamStats } from "../hooks/useTeamStats";
 import { useUrlState } from "../hooks/useUrlState";
-import { formatTeamStat, rankedCount, rankInk, recordText } from "../utils/teamStats";
+import { formatTeamStat, personnelLagWeek, rankedCount, rankInk, recordText } from "../utils/teamStats";
 
 const ACTIVE_STYLE = {
   background: "var(--surface-solid)",
@@ -102,6 +102,8 @@ export function TeamLeaderboards() {
   const sideNote = tab.sided && side === "d"
     ? tab.id === "fantasy" ? "What each defense allowed. 1st allowed the fewest." : "What opponents did against each team. 1st is the best defense."
     : "";
+  const personnelLag = flat.some((column) => column.metric.group === "pers") ? personnelLagWeek(board?.personnel_through_week, board?.weeks) : null;
+  const notes = [sideNote, personnelLag && `Personnel runs through Week ${personnelLag}.`].filter(Boolean);
   const tabHref = (id) => `/teams/leaderboards/${id}${search}`;
   if (!TEAM_BOARD_TAB_IDS.includes(tabId)) return <Navigate to={tabHref("overview")} replace />;
 
@@ -153,7 +155,7 @@ export function TeamLeaderboards() {
           <h2 className="text-[15px] font-semibold tracking-tight text-fg">{tab.label}{sideWord ? ` · ${sideWord}` : ""}</h2>
           <p className="text-[11.5px] text-faint">
             {season} {"·"} {weeksLabel} {"·"} click a column to sort; the number under each value is its rank of 32
-            {sideNote ? `. ${sideNote}` : ""}
+            {notes.length ? `. ${notes.join(" ")}` : ""}
           </p>
         </div>
         {isError && <p className="py-8 text-center text-sm text-muted">Could not load team stats for this season.</p>}

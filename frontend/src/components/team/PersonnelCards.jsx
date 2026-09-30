@@ -28,12 +28,12 @@ function Formation({ grouping }) {
   );
 }
 
-export function PersonnelCards({ cards, season, weeksLabel }) {
+export function PersonnelCards({ cards, season, weeksLabel, lagWeek }) {
   const maxShare = Math.max(...(cards ?? []).map((card) => Math.max(card.share ?? 0, card.league_share ?? 0)), 0.01);
   return (
     <section className="glass-card p-4">
       <h2 className="text-[15px] font-semibold tracking-tight text-fg">Personnel</h2>
-      <p className="mb-3 text-[11.5px] text-faint">{weeksLabel} {"·"} usage, EPA and success in each grouping</p>
+      <p className="mb-3 text-[11.5px] text-faint">{lagWeek ? `Through Week ${lagWeek}` : weeksLabel} {"·"} usage, EPA and success in each grouping</p>
       {cards?.length ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
           {cards.map((card) => (
@@ -65,7 +65,6 @@ export function PersonnelCards({ cards, season, weeksLabel }) {
           {season >= 2016 ? "Personnel for this season is not loaded yet." : "Personnel data starts in 2016."}
         </p>
       )}
-      <p className="mt-2.5 text-[11px] text-faint">EPA is ranked only with 20 or more plays in a grouping.</p>
     </section>
   );
 }

@@ -31,7 +31,7 @@ import { useScoring } from "../hooks/useScoring";
 import { useSeasons } from "../hooks/useSeasons";
 import { useTeam, useTeamBreakdown, useTeamPlayers, useTeamStats } from "../hooks/useTeamStats";
 import { useUrlState } from "../hooks/useUrlState";
-import { divisionPlace, recordText } from "../utils/teamStats";
+import { divisionPlace, personnelLagWeek, recordText } from "../utils/teamStats";
 
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"];
 const VIEWS = ["pg", "tot"];
@@ -166,7 +166,7 @@ export function TeamProfile() {
     targets: <TeamTargetCard teamId={teamId} teamName={team.name} season={seasonNumber} weeks={weeks} weeksLabel={weeksLabel} />,
     run: <RunLaneColumns lanes={breakdown?.run_lanes} groups={breakdown?.run_groups} weeksLabel={weeksLabel} />,
     rank: <TeamRankTable board={board} abbreviation={abbreviation} weeksLabel={weeksLabel} season={seasonNumber} />,
-    personnel: <PersonnelCards cards={breakdown?.personnel} season={seasonNumber} weeksLabel={weeksLabel} />,
+    personnel: <PersonnelCards cards={breakdown?.personnel} season={seasonNumber} weeksLabel={weeksLabel} lagWeek={personnelLagWeek(breakdown?.personnel_through_week, breakdown?.weeks)} />,
     schedule: (
       <TeamSchedule
         schedule={teamData?.schedule}

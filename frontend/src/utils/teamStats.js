@@ -11,6 +11,15 @@ const signed = (value, digits) => {
   return `${rounded > 0 ? "+" : rounded < 0 ? MINUS : ""}${Math.abs(rounded).toFixed(digits)}`;
 };
 
+/**
+ * The season in progress's personnel comes from a hand-supplied season total, which can
+ * run a week behind the stats. Returns the week it runs to when it does, else null.
+ */
+export function personnelLagWeek(throughWeek, weeks) {
+  if (!throughWeek || !weeks?.length) return null;
+  return throughWeek < Math.max(...weeks) ? throughWeek : null;
+}
+
 /** Format a team metric value by the API's format code. */
 export function formatTeamStat(value, code) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
