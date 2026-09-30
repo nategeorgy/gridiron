@@ -15,6 +15,7 @@ export const TEAM_STAT_LABEL = {
   n_pass: "Neutral pass %", proe: "Pass rate over exp.", gun: "Shotgun %", under: "Under center %", empty: "Empty backfield %",
   motion: "Motion %", nohud: "No huddle %", pa: "Play action %", rpo: "RPO %", screen: "Screen %", blitz: "Blitz %",
   rushers: "Pass rushers", man: "Man coverage %",
+  two_back: "2-back rate", back_play: "Backs per play", te_play: "Tight ends per play", wr_play: "Receivers per play",
   pers_11_share: "11 personnel %", pers_12_share: "12 personnel %", pers_13_share: "13 personnel %",
   pers_21_share: "21 personnel %", pers_22_share: "22 personnel %",
 };
@@ -32,7 +33,7 @@ export const TEAM_TABLE_GROUPS = [
   { name: "Pace and tendencies", rows: ["plays_g", "snaps_g", "sec_snap", "db_g", "pass_rate", "n_pass", "proe"] },
   {
     name: "Personnel, play type and formation",
-    rows: ["pers_11_share", "pers_12_share", "pers_13_share", "pers_21_share", "pers_22_share",
+    rows: ["two_back", "te_play", "wr_play", "pers_11_share", "pers_12_share", "pers_13_share", "pers_21_share", "pers_22_share",
       "gun", "under", "empty", "motion", "nohud", "pa", "rpo", "screen", "blitz", "rushers", "man"],
   },
 ];
@@ -103,9 +104,13 @@ export const TEAM_BOARD_TABS = [
     sections: [["Fantasy points per game", [["fp", null, "All"], ["fp_QB", null, "QB"], ["fp_RB", null, "RB"], ["fp_WR", null, "WR"], ["fp_TE", null, "TE"]]], ["Market", ["imp", "vs_imp"]], ["Volume", ["plays_g", "rz_g"]]],
   },
   {
-    id: "personnel", label: "Personnel", sided: false, sort: ["pers_11_share", "o"],
-    description: "Usage, EPA and success by grouping.",
-    sections: ["11", "12", "13", "21", "22"].map((g) => [`${g} personnel`, [[`pers_${g}_share`, "o", "Usage"], [`pers_${g}_epa`, "o", "EPA/play"], [`pers_${g}_suc`, "o", "Success"]]]),
+    id: "personnel", label: "Personnel", sided: false, sort: ["te_play", "o"],
+    description: "Average players on the field, and usage, EPA and success by grouping.",
+    sections: [
+      ["Average on the field", [["back_play", "o", "RB"], ["te_play", "o", "TE"], ["wr_play", "o", "WR"]]],
+      ["Backfield", [["two_back", "o", "2-back %"]]],
+      ...["11", "12", "13", "21", "22"].map((g) => [`${g} personnel`, [[`pers_${g}_share`, "o", "Usage"], [`pers_${g}_epa`, "o", "EPA/play"], [`pers_${g}_suc`, "o", "Success"]]]),
+    ],
   },
 ];
 export const TEAM_BOARD_CUSTOM = { id: "custom", label: "Custom" };

@@ -451,6 +451,9 @@ team_game_stats (
   opponent_id  INT REFERENCES teams(team_id),
   season INT, week INT, season_type VARCHAR(20),
   plays FLOAT, dropbacks FLOAT, designed_runs FLOAT, epa FLOAT, successes FLOAT, ...
+  -- from snap counts (2013+): snaps, and the snaps backs, tight ends and receivers
+  -- played, plus backs' snaps beyond one per snap (the snaps with a second back)
+  snaps FLOAT, back_snaps FLOAT, te_snaps FLOAT, wr_snaps FLOAT, two_back_snaps FLOAT,
   PRIMARY KEY (team_id, game_id, side)
 )
 
@@ -1289,7 +1292,18 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `pipeline/ingest_personnel.py` (files in the gitignored `data/personnel/`, loaded
       locally like routes, never by CI). `app/team_stats.py` uses it for any window holding
       every game it counts, and every personnel surface says "through Week N" when it runs
-      behind the stats
+      behind the stats. ⚠️ **The file is from Sharp Football Analysis and is not loaded in
+      production** until Nate confirms it may be shown; keep the path either way
+- [x] Personnel from snap counts (September 2026). Free and weekly, 2013 on: backs, tight
+      ends and receivers per play and the 2-back rate, from four sums on `team_game_stats`
+      (migration `cc1003cfc34f`), filled by `ingest_team_stats.py` and backfilled with its
+      `--snaps-only` mode (one small feed per season, no play-by-play). The Personnel card
+      leads with a lineup bar (five skill spots split by position, against the league) and
+      the three ranked rows; the rank table and the Personnel leaderboard tab carry them
+      too, and hide the 11/12/13 rows and columns for a season that has none. ⚠️ **Averages
+      only, never the grouping split**: checked against 2025 participation, the averages
+      and the 2-back rate are within about a point for every team, while the best model of
+      the 11/12/13 split missed the heavy-13 Rams by 16 to 26 points
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com

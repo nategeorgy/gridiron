@@ -40,6 +40,7 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_depth_charts.py                # 9. depth charts (M6)
 .venv/bin/python ingest_team_stats.py --seasons 2024   # 10. team sums + personnel (team pages)
 .venv/bin/python ingest_personnel.py                   # 10b. in-season personnel (hand-loaded)
+.venv/bin/python ingest_team_stats.py --snaps-only --seasons 2013 2014  # 10c. snap-count columns only
 .venv/bin/python ingest_staff.py                       # 11. coaching staff (from a CSV)
 .venv/bin/python ingest_plays.py --seasons 2024        # 12. every target + run lanes (Explore)
 ```

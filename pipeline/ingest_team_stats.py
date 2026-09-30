@@ -13,7 +13,8 @@ Sources, and where each one stops:
 - ``load_pbp`` (2009+): efficiency, passing, rushing, drives, situations, pass depth,
   run lanes, neutral pass rate over expected and pace.
 - ``load_team_stats`` (weekly): penalties, giveaways, takeaways.
-- ``load_snap_counts`` (2013+): offensive snaps.
+- ``load_snap_counts`` (2013+): offensive snaps, and the snaps played by backs, tight
+  ends and receivers (``snap_sums``).
 - ``load_ftn_charting`` (2022+): formation, motion, play action, RPO, screens, blitzes,
   box counts, catchable throws, drops.
 - ``load_participation`` (2016 to the season before last): personnel groupings and
@@ -26,7 +27,9 @@ Team codes: play-by-play normalises every franchise to today's code (``LA``), wh
 ``games`` table uses the code of the day (``STL``). Rows are resolved onto the
 schedule's code with ``franchises.py`` so they join to the same ``teams`` row as the game.
 
-Idempotent: ``INSERT ... ON CONFLICT DO UPDATE`` on each table's key.
+Idempotent: ``INSERT ... ON CONFLICT DO UPDATE`` on each table's key. ``--snaps-only``
+refreshes just the snap-count columns on rows that already exist, which a backfill of
+those columns needs no play-by-play for.
 """
 
 import argparse
@@ -47,6 +50,8 @@ c = pl.col
 OFFENSE_PLAY_TYPES = ["pass", "run", "punt", "field_goal", "qb_kneel", "qb_spike"]
 DEPTHS = {"behind": (None, 0), "short": (0, 10), "intermediate": (10, 20), "deep": (20, None)}
 LANES = ("left_end", "left_tackle", "left_guard", "middle", "right_guard", "right_tackle", "right_end")
+BACKS = ("RB", "FB", "HB")
+SNAP_COLUMNS = ("snaps", "back_snaps", "te_snaps", "wr_snaps", "two_back_snaps")
 
 
 def _plays(pbp: pl.DataFrame) -> pl.DataFrame:
@@ -177,6 +182,37 @@ def _personnel_code(col: str) -> pl.Expr:
     return pl.format("{}{}", n("RB") + n("FB"), n("TE"))
 
 
+def snap_sums(season: int) -> pl.DataFrame:
+    """Per team and game: offensive snaps, and the snaps backs, tight ends and receivers played.
+
+    Summed over a window and divided by the team's snaps, each gives the average number of
+    those players on the field, which snap counts give exactly: against 2025 participation
+    every team came within 0.01 of a back and 0.03 of a tight end. How those players were
+    grouped (11 vs 12 vs 13) they cannot give, since two tight ends rotating in 11 look the
+    same as a real 12 set. The one split they can give is the second back: a team almost
+    never has zero or three backs on the field, so backs' snaps beyond one per snap are the
+    snaps with two (within a point of participation's 21 + 22 share for every team in 2025).
+    """
+    sc = nfl.load_snap_counts([season]).filter(c("offense_snaps") > 0)
+    snaps = sc.filter(c("offense_pct") > 0.5).group_by(["game_id", "team"]).agg(
+        (c("offense_snaps") / c("offense_pct")).max().round(0).alias("snaps"))
+    by_position = sc.group_by(["game_id", "team"]).agg(
+        c("offense_snaps").filter(c("position").is_in(BACKS)).sum().cast(pl.Float64).alias("back_snaps"),
+        c("offense_snaps").filter(c("position") == "TE").sum().cast(pl.Float64).alias("te_snaps"),
+        c("offense_snaps").filter(c("position") == "WR").sum().cast(pl.Float64).alias("wr_snaps"))
+    return snaps.join(by_position, on=["game_id", "team"], how="inner").with_columns(
+        (c("back_snaps") - c("snaps")).clip(lower_bound=0).alias("two_back_snaps"))
+
+
+def _join_sides(out: pl.DataFrame, sums: pl.DataFrame, keys: list[str]) -> pl.DataFrame:
+    """Attach snap sums to both sides: the team's own on ``o``, its opponent's on ``d``."""
+    own = sums.select("game_id", "team", *[c(k).alias(f"own_{k}") for k in SNAP_COLUMNS])
+    opp = sums.select("game_id", c("team").alias("opponent"), *[c(k).alias(f"opp_{k}") for k in SNAP_COLUMNS])
+    return out.join(own, on=keys, how="left").join(opp, on=["game_id", "opponent"], how="left").with_columns(
+        [pl.when(c("side") == "o").then(c(f"own_{k}")).otherwise(c(f"opp_{k}")).alias(k) for k in SNAP_COLUMNS]
+    ).drop([f"{prefix}_{k}" for prefix in ("own", "opp") for k in SNAP_COLUMNS])
+
+
 def collect_season(season: int) -> tuple[pl.DataFrame, pl.DataFrame | None]:
     """Team-game-side sums and team-game-grouping personnel rows for one season."""
     pbp = nfl.load_pbp([season])
@@ -222,12 +258,7 @@ def collect_season(season: int) -> tuple[pl.DataFrame, pl.DataFrame | None]:
     out = out.join(ts, on=keys, how="left")
 
     if clamp_seasons([season], SNAPS):
-        sc = nfl.load_snap_counts([season]).filter(c("offense_pct") > 0.5).group_by(["game_id", "team"]).agg(
-            (c("offense_snaps") / c("offense_pct")).max().round(0).alias("snaps_raw"))
-        own = sc.rename({"snaps_raw": "own_snaps"})
-        opp = sc.rename({"team": "opponent", "snaps_raw": "opp_snaps"})
-        out = out.join(own, on=keys, how="left").join(opp, on=["game_id", "opponent"], how="left").with_columns(
-            pl.when(c("side") == "o").then(c("own_snaps")).otherwise(c("opp_snaps")).alias("snaps")).drop("own_snaps", "opp_snaps")
+        out = _join_sides(out, snap_sums(season), keys)
 
     personnel = None
     if part is not None:
@@ -279,8 +310,47 @@ def ingest_team_stats(seasons: list[int]) -> int:
     return written
 
 
+def ingest_snap_sums(seasons: list[int]) -> int:
+    """Refresh only the snap-count columns, on team rows that already exist.
+
+    For backfilling those columns: one small feed per season and five narrow columns per
+    row, instead of every season's play-by-play and every column. Rows the full ingest has
+    not written yet are left for it. Returns rows written.
+    """
+    seasons = clamp_seasons(seasons, SNAPS)
+    if not seasons:
+        logger.info("nothing to ingest: no requested season has snap counts")
+        return 0
+    team_ids = load_team_id_map()
+    codes = contemporary_code_map(seasons)
+    written = 0
+    for season in seasons:
+        with get_engine().connect() as connection:
+            existing = connection.execute(text(
+                "SELECT team_id, game_id, side, opponent_id FROM team_game_stats WHERE season = :s"), {"s": season}).all()
+        sums = {}
+        for r in snap_sums(season).iter_rows(named=True):
+            team = team_ids.get(resolve(codes, season, r["team"]))
+            if team is not None:
+                sums[(r["game_id"], team)] = {k: r[k] for k in SNAP_COLUMNS}
+        rows = []
+        for team_id, game_id, side, opponent_id in existing:
+            values = sums.get((game_id, team_id if side == "o" else opponent_id))
+            if values:
+                rows.append({"team_id": team_id, "game_id": game_id, "side": side, **values})
+        written += upsert("team_game_stats", rows, conflict_columns=["team_id", "game_id", "side"])
+        logger.info("snap sums %d: %d team-game-side rows sent (%d with no snap counts)", season, len(rows), len(existing) - len(rows))
+    return written
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest team-level sums for the team pages and team leaderboards.")
     parser.add_argument("--seasons", type=int, nargs="+", default=default_seasons(PBP),
                         help="Seasons to ingest (default: 2009 through the latest played season).")
-    ingest_team_stats(parser.parse_args().seasons)
+    parser.add_argument("--snaps-only", action="store_true",
+                        help="Refresh only the snap-count columns on existing rows (no play-by-play).")
+    args = parser.parse_args()
+    if args.snaps_only:
+        ingest_snap_sums(args.seasons)
+    else:
+        ingest_team_stats(args.seasons)

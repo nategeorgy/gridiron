@@ -166,7 +166,7 @@ export function TeamProfile() {
     targets: <TeamTargetCard teamId={teamId} teamName={team.name} season={seasonNumber} weeks={weeks} weeksLabel={weeksLabel} />,
     run: <RunLaneColumns lanes={breakdown?.run_lanes} groups={breakdown?.run_groups} weeksLabel={weeksLabel} />,
     rank: <TeamRankTable board={board} abbreviation={abbreviation} weeksLabel={weeksLabel} season={seasonNumber} />,
-    personnel: <PersonnelCards cards={breakdown?.personnel} season={seasonNumber} weeksLabel={weeksLabel} lagWeek={personnelLagWeek(breakdown?.personnel_through_week, breakdown?.weeks)} />,
+    personnel: <PersonnelCards cards={breakdown?.personnel} season={seasonNumber} weeksLabel={weeksLabel} lagWeek={personnelLagWeek(breakdown?.personnel_through_week, breakdown?.weeks)} board={board} abbreviation={abbreviation} />,
     schedule: (
       <TeamSchedule
         schedule={teamData?.schedule}

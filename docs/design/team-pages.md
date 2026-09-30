@@ -23,7 +23,7 @@ top, and every number follows them except the record, the schedule and the depth
 | Rank table | Offense only: pace and tendencies, then personnel, play type and formation, with a rank and the league average |
 | Passing by depth | A field, one band per depth, coloured by how often the team throws there against the league; EPA per attempt and its rank on the right |
 | Running by direction | Seven lane columns sized by share of designed runs, coloured by EPA rank, with inside / off tackle / outside totals |
-| Personnel | A formation card per grouping used on 3% of plays or more: usage and rank, EPA and rank, success |
+| Personnel | A lineup bar (the five skill spots split into backs, tight ends and receivers, against the league) and the 2-back rate, tight ends and receivers per play with ranks, from snap counts; then, where the season has groupings, a formation card per grouping used on 3% of plays or more: usage and rank, EPA and rank, success |
 | Depth chart | The listed chart drawn as a formation, snap share and fantasy points per game under each starter |
 | Schedule | Fixtures with results or lines, and fantasy strength of schedule by position |
 | Coaching staff | Head coach and coordinators by season |
@@ -68,6 +68,7 @@ each value.
 | Snaps | 2013 |
 | Coverage and personnel (participation) | 2016, one season behind |
 | Personnel, season in progress (hand-supplied season totals, `team_personnel_season`) | 2026; full-season windows only |
+| Players on the field per play, 2-back rate (snap counts) | 2013, weekly |
 | Play action, RPO, screens, motion, huddle, box counts, blitz (FTN charting) | 2022 |
 | Staff | 2022 |
 

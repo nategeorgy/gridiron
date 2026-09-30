@@ -9,6 +9,11 @@ export function TeamRankTable({ board, abbreviation, weeksLabel, season }) {
   const metrics = Object.fromEntries((board?.metrics ?? []).map((metric) => [metric.id, metric]));
   const values = board?.values ?? {};
   const lagWeek = personnelLagWeek(board?.personnel_through_week, board?.weeks);
+  // A personnel row with nothing in it this season (the 11/12/13 split for the season in
+  // progress, or anything before its feed starts) is left out rather than shown as dashes.
+  const shown = (id) => metrics[id]?.group !== "pers" || Object.keys(values[id]?.o ?? {}).length > 0;
+  const groups = TEAM_TABLE_GROUPS.map((group) => ({ ...group, rows: group.rows.filter(shown) })).filter((group) => group.rows.length);
+  const hasGroupings = groups.some((group) => group.rows.some((id) => id.startsWith("pers_")));
   return (
     <section className="glass-card p-4">
       <h2 className="text-[15px] font-semibold tracking-tight text-fg">Pace, tendencies and personnel</h2>
@@ -23,7 +28,7 @@ export function TeamRankTable({ board, abbreviation, weeksLabel, season }) {
           </tr>
         </thead>
         <tbody>
-          {TEAM_TABLE_GROUPS.map((group) => [
+          {groups.map((group) => [
             <tr key={group.name}>
               <td colSpan={4} className="border-t-2 px-2 pb-1 pt-3 text-[11px] font-bold uppercase tracking-[0.08em] text-fg" style={{ borderColor: "var(--border-strong)" }}>{group.name}</td>
             </tr>,
@@ -49,7 +54,7 @@ export function TeamRankTable({ board, abbreviation, weeksLabel, season }) {
           ])}
         </tbody>
       </table>
-      <p className="mt-2.5 text-[11px] text-faint">Personnel is the share of the offense's plays in each grouping{lagWeek ? `, through Week ${lagWeek}` : ""}.</p>
+      {hasGroupings && <p className="mt-2.5 text-[11px] text-faint">Personnel is the share of the offense's plays in each grouping{lagWeek ? `, through Week ${lagWeek}` : ""}.</p>}
     </section>
   );
 }

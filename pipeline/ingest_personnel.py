@@ -162,7 +162,7 @@ def ingest_file(path: Path, season: int, through_week: int, dry_run: bool = Fals
         logger.info("dry run: would write %d rows from %s", len(rows), path.name)
         return 0
     written = replace_scoped("team_personnel_season", rows, scope_columns=["team_id", "season", "season_type"])
-    logger.info("personnel %d through week %d: wrote %d rows from %s", season, through_week, written, path.name)
+    logger.info("personnel %d through week %d: %d rows sent from %s", season, through_week, written, path.name)
     return written
 
 
