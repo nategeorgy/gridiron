@@ -10,13 +10,22 @@
 // (`MarginTable`): both values either side of the metric, with the margin pill on the
 // leader's side in his colour. It replaced a tug-of-war of percentile bars, which made
 // the reader compare two bar lengths to find who led a row.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
 import { MarginTable } from "../player/MarginTable";
 import { SIDES } from "../player/sides";
-import { MATCHUP_METRICS } from "../../constants/signals";
+import { useDebounce } from "../../hooks/useDebounce";
+import { usePlayerSearch } from "../../hooks/usePlayerSearch";
+import { MATCHUP_METRICS, MATCHUP_METRICS_BY_POSITION } from "../../constants/signals";
 import { formatStat } from "../../utils/format";
+
+const SKILL = ["QB", "RB", "WR", "TE"];
+
+/** The radar's axes for a position; receivers' eight when the position is not known yet. */
+export function matchupMetrics(position) {
+  return MATCHUP_METRICS_BY_POSITION[position] ?? MATCHUP_METRICS;
+}
 
 const VIEWS = [
   { value: "radar", label: "Radar" },
@@ -45,7 +54,7 @@ function Face({ player, side, align }) {
       <span className="min-w-0">
         <Link
           to={`/players/${player.player_id}`}
-          className="block truncate text-[15.5px] font-bold tracking-tight hover:underline"
+          className="block text-[15.5px] font-bold leading-tight tracking-tight [overflow-wrap:anywhere] hover:underline"
           style={{ color: side.color }}
         >
           {player.name}
@@ -58,11 +67,11 @@ function Face({ player, side, align }) {
   );
 }
 
-function Radar({ players }) {
+function Radar({ players, metrics }) {
   const size = 440;
   const centre = size / 2;
   const radius = 150;
-  const count = MATCHUP_METRICS.length;
+  const count = metrics.length;
 
   const angle = (index) => -Math.PI / 2 + index * ((2 * Math.PI) / count);
   const point = (index, value) => [
@@ -70,11 +79,11 @@ function Radar({ players }) {
     centre + Math.sin(angle(index)) * radius * (value / 100),
   ];
   const polygon = (player) =>
-    MATCHUP_METRICS.map((metric, index) =>
+    metrics.map((metric, index) =>
       point(index, player.percentiles?.[metric.id] ?? 0).map((n) => n.toFixed(1)).join(","),
     ).join(" ");
   const ring = (value) =>
-    MATCHUP_METRICS.map((_, index) => point(index, value).map((n) => n.toFixed(1)).join(",")).join(" ");
+    metrics.map((_, index) => point(index, value).map((n) => n.toFixed(1)).join(",")).join(" ");
 
   return (
     <div className="flex justify-center pt-1.5">
@@ -96,7 +105,7 @@ function Radar({ players }) {
               strokeWidth="1"
             />
           ))}
-          {MATCHUP_METRICS.map((metric, index) => {
+          {metrics.map((metric, index) => {
             const [x, y] = point(index, 100);
             return (
               <line
@@ -121,7 +130,7 @@ function Radar({ players }) {
                 strokeWidth="2.5"
                 strokeLinejoin="round"
               />
-              {MATCHUP_METRICS.map((metric, index) => {
+              {metrics.map((metric, index) => {
                 const [x, y] = point(index, players[which].percentiles?.[metric.id] ?? 0);
                 return <circle key={metric.id} cx={x.toFixed(1)} cy={y.toFixed(1)} r="3.2" fill="currentColor" />;
               })}
@@ -131,7 +140,7 @@ function Radar({ players }) {
 
         {/* Axis labels are HTML over the SVG so the winner's badge is a real styled
             chip rather than hand-placed <rect> maths. */}
-        {MATCHUP_METRICS.map((metric, index) => {
+        {metrics.map((metric, index) => {
           const [x, y] = point(index, 100);
           const left = centre + (x - centre) * 1.3;
           const top = centre + (y - centre) * 1.26;
@@ -177,10 +186,10 @@ function Radar({ players }) {
   );
 }
 
-function Table({ players }) {
+function Table({ players, metrics }) {
   return (
     <MarginTable
-      rows={MATCHUP_METRICS.map((metric) => ({
+      rows={metrics.map((metric) => ({
         id: metric.id,
         label: metric.label,
         format: metric.format,
@@ -190,10 +199,104 @@ function Table({ players }) {
   );
 }
 
-export function HeadToHeadCard({ caption, result, isLoading, isError }) {
+/**
+ * Search for one side of the matchup. The second player is held to the first one's
+ * position, because every axis is a percentile within a position pool (the player page's
+ * picker makes the same call, for the same reason).
+ */
+function PlayerPicker({ side, position, current, onPick }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const debounced = useDebounce(query, 250);
+  const { data, isFetching } = usePlayerSearch(debounced);
+  const results = (data?.data ?? []).filter(
+    (player) => (position ? player.position === position : SKILL.includes(player.position)) && player.player_id !== current,
+  );
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const choose = (player) => {
+    onPick(player);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div ref={containerRef} className="relative min-w-0">
+      <span className="pointer-events-none absolute left-2.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" style={{ background: side.color }} />
+      <input
+        id={`h2h-pick-${side.color.replace(/[^a-z0-9]/gi, "")}`}
+        type="text"
+        value={query}
+        aria-label={position ? `Search ${position}s` : "Search players"}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+          if (event.key === "Enter" && results.length > 0) choose(results[0]);
+        }}
+        placeholder={position ? `Change ${position}…` : "Change player…"}
+        className="glass-input w-full py-1.5 pl-7 pr-3 text-[12.5px]"
+      />
+      {open && debounced.trim().length >= 2 && (
+        <div className="glass-popover absolute z-30 mt-1 w-full overflow-hidden">
+          {isFetching && results.length === 0 && <div className="px-3 py-2 text-xs text-muted">Searching…</div>}
+          {!isFetching && results.length === 0 && (
+            <div className="px-3 py-2 text-xs text-muted">No {position ? `${position}s` : "players"} found.</div>
+          )}
+          {results.map((player) => (
+            <button
+              key={player.player_id}
+              type="button"
+              onClick={() => choose(player)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-surface-2"
+            >
+              <span className="truncate text-fg">{player.name}</span>
+              <span className="stat-num flex-none text-xs text-faint">
+                {player.position} {"·"} {player.team_abbreviation ?? "FA"}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Head to Head, now with the pair chosen by the reader (October 2026). The radar is the
+ * production card's own; its axes follow the position (`MATCHUP_METRICS_BY_POSITION`).
+ *
+ * @param ids      the two player ids, from the page's `?h2h=` (a missing second id is a
+ *                 half-built matchup, shown as a prompt rather than an error)
+ * @param position the first player's position, which the second is held to
+ * @param onChange receives the new pair of ids
+ */
+export function HeadToHeadCard({ caption, ids, position, result, isLoading, isError, onChange }) {
   const [view, setView] = useState("radar");
-  const players = result?.data ?? [];
+  const metrics = matchupMetrics(position);
+  const byId = Object.fromEntries((result?.data ?? []).map((player) => [player.player_id, player]));
+  const players = ids.map((id) => byId[id]).filter(Boolean);
   const ready = players.length === 2;
+
+  const pickFirst = (player) => {
+    // A new position empties the second slot: the old opponent would be measured in a
+    // different pool, so the card asks for one at the new position instead.
+    const second = player.position === position ? ids[1] : "";
+    onChange([player.player_id, second === player.player_id ? "" : second]);
+  };
+  const pickSecond = (player) => onChange([ids[0], player.player_id]);
+  const compareLink = `/explore/compare?players=${ids.filter(Boolean).join(",")}`;
 
   return (
     <Card>
@@ -201,7 +304,18 @@ export function HeadToHeadCard({ caption, result, isLoading, isError }) {
         {ready && <Tabs options={VIEWS} value={view} onChange={setView} label="Comparison view" />}
       </CardHead>
 
-      <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} empty="Couldn't load this matchup." rows={6} />
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <PlayerPicker side={SIDES[0]} position={null} current={ids[1]} onPick={pickFirst} />
+        <PlayerPicker side={SIDES[1]} position={position} current={ids[0]} onPick={pickSecond} />
+      </div>
+
+      {!ids[1] ? (
+        <p className="py-8 text-center text-xs text-muted">
+          Pick a second {position ?? "player"} to compare with {players[0]?.name ?? "the first"}.
+        </p>
+      ) : (
+        <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} empty="Couldn't load this matchup." rows={6} />
+      )}
 
       {ready && (
         <>
@@ -211,22 +325,16 @@ export function HeadToHeadCard({ caption, result, isLoading, isError }) {
             <Face player={players[1]} side={SIDES[1]} align="right" />
           </div>
 
-          {view === "radar" ? <Radar players={players} /> : <Table players={players} />}
+          {view === "radar" ? <Radar players={players} metrics={metrics} /> : <Table players={players} metrics={metrics} />}
 
           <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
             {view === "radar"
               ? "Shape is percentile within qualified players at the position; the numbers beside each axis are the real values. The badged one leads that category."
               : "The badge marks who leads each row, and by how much."}
           </p>
-          {/* This was "Open in Compare" until Explore was hidden for launch. It
-              points at a player page rather than carrying the matchup in a query
-              param: the player page's own head-to-head picker is component state,
-              not URL state, so a ?compare= here would be silently ignored. */}
-          <CardLink to={`/players/${players[0].player_id}`}>
-            Open {players[0].name ?? "player"}&apos;s page
-          </CardLink>
         </>
       )}
+      <CardLink to={compareLink}>Open in Player Comparison</CardLink>
     </Card>
   );
 }

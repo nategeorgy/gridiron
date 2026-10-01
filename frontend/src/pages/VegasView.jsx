@@ -35,53 +35,12 @@ import { useScoring } from "../hooks/useScoring";
 import { useUrlState } from "../hooks/useUrlState";
 import { useSeasons } from "../hooks/useSeasons";
 import { POSITIONS } from "../constants";
+import { offensesFrom } from "../utils/vegas";
 
 /** How many players to show per offense. Enough for a lineup decision, not a roster. */
 const CHIPS_PER_TEAM = 6;
 /** The endpoint's ceiling; a full week of charted players runs to roughly 370. */
 const PLAYER_LIMIT = 400;
-
-/**
- * One row per offense, from the week's fixtures.
- *
- * Unpriced games are kept rather than dropped — a team with no line is still playing,
- * and hiding it would make the board quietly incomplete — but they sort last, because
- * "no line" is not "a low total".
- */
-function offensesFrom(games) {
-  const rows = [];
-  for (const game of games) {
-    const shared = {
-      gameId: game.game_id,
-      total: game.total_line,
-      divGame: game.div_game,
-    };
-    rows.push({
-      ...shared,
-      abbreviation: game.away_abbreviation,
-      teamId: game.away_team_id,
-      logoUrl: game.away_logo_url,
-      opponent: game.home_abbreviation,
-      isHome: false,
-      implied: game.away_implied,
-    });
-    rows.push({
-      ...shared,
-      abbreviation: game.home_abbreviation,
-      teamId: game.home_team_id,
-      logoUrl: game.home_logo_url,
-      opponent: game.away_abbreviation,
-      isHome: true,
-      implied: game.home_implied,
-    });
-  }
-  return rows.sort((a, b) => {
-    if (a.implied == null && b.implied == null) return 0;
-    if (a.implied == null) return 1;
-    if (b.implied == null) return -1;
-    return b.implied - a.implied;
-  });
-}
 
 export function VegasView({ board }) {
   const { seasons, currentSeason } = useSeasons({ statsOnly: false });

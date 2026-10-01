@@ -378,6 +378,10 @@ class Search:
     first_season: int | None = None
     last_season: int | None = None
     season_type: str = "REG"
+    # Only weeks up to and including this one in each season. With grain "seasons" it
+    # turns a season into "the season through Week N", which is how an early-season
+    # pace is compared with every other year's first N weeks.
+    last_week: int | None = None
     team_id: int | None = None
     rookies: str = "any"
     conditions: tuple[Condition, ...] = ()
@@ -425,6 +429,8 @@ def _scope(frame: Frame, search: Search) -> np.ndarray:
         mask &= ~frame.post
     elif search.season_type == "POST":
         mask &= frame.post
+    if search.last_week is not None:
+        mask &= frame.week <= search.last_week
     if search.team_id is not None:
         mask &= frame.team == search.team_id
     if search.rookies == "only":

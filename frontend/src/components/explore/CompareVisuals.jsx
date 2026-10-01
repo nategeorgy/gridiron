@@ -313,11 +313,11 @@ const LANE_SHORT = ["LE", "LT", "LG", "Mid", "RG", "RT", "RE"];
 const LANE_NAMES = ["Left end", "Left tackle", "Left guard", "Middle", "Right guard", "Right tackle", "Right end"];
 const LANE_X = [34, 78, 120, 165, 210, 252, 296];
 
-function laned(run) {
+export function laned(run) {
   return run.lanes.reduce((sum, lane) => sum + lane.carries, 0);
 }
 
-function LaneChart({ slot, run, maxShare, tip, nested }) {
+export function LaneChart({ slot, run, maxShare, tip, nested }) {
   const width = 330;
   const height = 230;
   const line = 150;
@@ -413,7 +413,7 @@ function RunLanes({ slots, runs, loading }) {
   );
 }
 
-const OUTCOMES = [
+export const OUTCOMES = [
   { key: "stuffed", label: "Stuffed", note: "0 or less", color: "color-mix(in srgb, var(--neg) 62%, var(--surface-solid))" },
   { key: "short", label: "1–3 yds", color: "color-mix(in srgb, var(--fg) 24%, var(--surface-solid))" },
   { key: "medium", label: "4–9 yds", color: "color-mix(in srgb, var(--pos) 42%, var(--surface-solid))" },
