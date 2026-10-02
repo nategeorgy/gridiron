@@ -2,11 +2,12 @@
 //
 // Four bands, top to bottom (constants/homeLayout.js):
 //
-//   1. the week's scores as a ticker, then the Chart of the Week, a large Explore chart;
-//   2. a row of Explore cards: air yards, run lanes, the team landscape, the record book;
+//   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
+//      Explore chart;
+//   2. a row of Explore cards: the team landscape, air yards, the record book;
 //   3. the week's players: Trending Players, the watchlist and Expected vs Actual on the
 //      left, Last Week's Scoring and a reader-picked Head to Head on the right;
-//   4. the week ahead: matchups by position and implied team totals.
+//   4. the Week N Preview: the slate, then matchups by position and implied team totals.
 //
 // **Two seasons are in play from January to September.** The fantasy cards describe the
 // last season *played*; the ticker and the week-ahead cards describe the schedule, which
@@ -17,9 +18,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useGames, useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
-import { useCompare, useNetwork, usePlayerRuns, usePlayersById, useScatter, useTargetBoard } from "../hooks/useExplore";
+import { useCompare, useNetwork, usePlayersById, useScatter, useTargetBoard } from "../hooks/useExplore";
 import { useSos } from "../hooks/useDraftBoard";
-import { useTeamStats } from "../hooks/useTeamStats";
+import { useTeamsList, useTeamStats } from "../hooks/useTeamStats";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
 import { useScoring } from "../hooks/useScoring";
@@ -31,11 +32,10 @@ import { useUrlState } from "../hooks/useUrlState";
 import { getPlayers } from "../services/players";
 import { parseLeague } from "../constants/league";
 import {
-  CHART_OF_THE_WEEK,
   EXPECTED_VS_ACTUAL,
   FEATURED_MATCHUP,
+  HIGHLIGHTED_VIZ,
   RECORD_BOOK,
-  RUN_LANES_PLAYER,
   SIGNALS_SEASON,
   TRENDING_BASIS,
   TRENDING_PLAYERS,
@@ -44,9 +44,8 @@ import { HOME_LAYOUT } from "../constants/homeLayout";
 import { shapeNetwork } from "../components/explore/NetworkChart";
 
 import { ScoreTicker } from "../components/home/ScoreTicker";
-import { ChartOfTheWeekCard } from "../components/home/ChartOfTheWeekCard";
+import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
 import { AirYardsCard } from "../components/home/AirYardsCard";
-import { RunLanesCard } from "../components/home/RunLanesCard";
 import { TeamLandscapeCard } from "../components/home/TeamLandscapeCard";
 import { RecordBookCard } from "../components/home/RecordBookCard";
 import { TrendingPlayersCard } from "../components/home/TrendingPlayersCard";
@@ -54,6 +53,9 @@ import { HeadToHeadCard, matchupMetrics } from "../components/home/HeadToHeadCar
 import { ExpectedActualCard } from "../components/home/ExpectedActualCard";
 import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
 import { EnvironmentsCard } from "../components/home/EnvironmentsCard";
+import { SlateCard } from "../components/home/SlateCard";
+import { BandHeading } from "../components/home/BandHeading";
+import { dateParts } from "../components/schedule/kickoff";
 import { MyPlayersCard, WEEKLY_TAB_POSITIONS, WeeklyScoringCard } from "../components/home/BoardCards";
 
 // The same fixed-PPR fallback the leaderboard uses when the backend cannot score yet.
@@ -80,6 +82,24 @@ function byPlayerId(rows) {
   return Object.fromEntries((rows ?? []).map((row) => [row.player_id, row]));
 }
 
+const WEEKDAY_NAMES = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
+
+/** "Thursday Oct 1 through Monday Oct 5 · No byes", the line under the preview heading. */
+function previewSub(games, teams) {
+  const dates = games.map((game) => game.game_date).filter(Boolean).sort();
+  if (!dates.length) return "";
+  const day = (iso) => {
+    const parts = dateParts(iso);
+    return `${WEEKDAY_NAMES[parts.dow]} ${parts.mon} ${parts.day}`;
+  };
+  const span = dates.length > 1 && dates[0] !== dates[dates.length - 1] ? `${day(dates[0])} through ${day(dates[dates.length - 1])}` : day(dates[0]);
+  // Byes need all 32 teams to subtract from, so they wait for the teams list.
+  if (!teams?.length) return span;
+  const playing = new Set(games.flatMap((game) => [game.home_abbreviation, game.away_abbreviation]));
+  const byes = teams.map((team) => team.abbreviation).filter((abbreviation) => !playing.has(abbreviation)).sort();
+  return `${span} · ${byes.length ? `Byes: ${byes.join(", ")}` : "No byes"}`;
+}
+
 export function Home() {
   const [scoring, setScoring] = useScoring();
   const [league] = useLeague();
@@ -96,19 +116,17 @@ export function Home() {
   const lastPlayed = scoreboard.data?.last;
   const upcoming = scoreboard.data?.next;
 
-  // --- Chart of the Week. ---
+  // --- Highlighted Viz of the Week. ---
   const network = useNetwork({
-    season: CHART_OF_THE_WEEK.season,
-    weeks: CHART_OF_THE_WEEK.weeks || undefined,
-    passer_id: CHART_OF_THE_WEEK.passerId,
-    team: CHART_OF_THE_WEEK.team,
+    season: HIGHLIGHTED_VIZ.season,
+    weeks: HIGHLIGHTED_VIZ.weeks || undefined,
+    passer_id: HIGHLIGHTED_VIZ.passerId,
+    team: HIGHLIGHTED_VIZ.team,
   });
   const networkShape = useMemo(() => shapeNetwork(network.data, 7, 1), [network.data]);
 
   // --- The Explore row. ---
   const airYards = useTargetBoard({ season, positions: "WR", min_targets: AIR_YARDS_MIN_TARGETS });
-  const runs = usePlayerRuns(RUN_LANES_PLAYER.playerId, { season: RUN_LANES_PLAYER.season });
-  const runner = usePlayersById([RUN_LANES_PLAYER.playerId])[RUN_LANES_PLAYER.playerId];
   const teamBoard = useTeamStats({ season, scoring });
 
   // --- Trending Players: one week of usage for a hand-picked few, each with his own
@@ -298,6 +316,13 @@ export function Home() {
     WR: useSos(sosParams("WR"), { enabled: Boolean(upcoming) }),
     TE: useSos(sosParams("TE"), { enabled: Boolean(upcoming) }),
   };
+  // The slate's team colours and the preview's byes. The header's Teams menu already
+  // loads this list, so it is a cache hit on every page.
+  const teamsList = useTeamsList();
+  const teamColors = useMemo(
+    () => Object.fromEntries((teamsList.data ?? []).map((team) => [team.abbreviation, team.color])),
+    [teamsList.data],
+  );
   const logos = useMemo(() => {
     const out = {};
     for (const game of [...(upcoming?.games ?? []), ...(lastPlayed?.games ?? [])]) {
@@ -311,9 +336,9 @@ export function Home() {
   // that has nothing to show returns null here and the layout skips it.
   const cards = {
     ticker: <ScoreTicker scoreboard={scoreboard.data} isLoading={scoreboard.isLoading} />,
-    chartOfWeek: (
-      <ChartOfTheWeekCard
-        pick={CHART_OF_THE_WEEK}
+    highlightedViz: (
+      <HighlightedVizCard
+        pick={HIGHLIGHTED_VIZ}
         network={network.data}
         shape={networkShape}
         isLoading={network.isLoading}
@@ -329,7 +354,6 @@ export function Home() {
         isError={airYards.isError}
       />
     ),
-    runLanes: <RunLanesCard player={runner} run={runs.data} isLoading={runs.isLoading} isError={runs.isError} />,
     landscape: (
       <TeamLandscapeCard board={teamBoard.data} season={season} isLoading={teamBoard.isLoading} isError={teamBoard.isError} />
     ),
@@ -392,6 +416,12 @@ export function Home() {
         onChange={(next) => setPairText(next.join(","))}
       />
     ),
+    previewHeading: upcoming?.games?.length ? (
+      <BandHeading eyebrow={upcoming.label} title="Preview" sub={previewSub(upcoming.games, teamsList.data)} />
+    ) : null,
+    slate: (
+      <SlateCard upcoming={upcoming} colors={teamColors} isLoading={scoreboard.isLoading} isError={scoreboard.isError} />
+    ),
     matchups: (
       <MatchupsCard
         week={upcoming?.week}
@@ -432,9 +462,20 @@ export function Home() {
         {HOME_LAYOUT.bands.map((band, index) => {
           if (band.kind === "full") return <div key={index} className="grid min-w-0 gap-4">{present(band.cards)}</div>;
           if (band.kind === "grid") {
+            // Each card sits in a one-cell grid so it stretches to the row's height, and an
+            // odd last card spans both columns in the two-across range instead of leaving
+            // half a row empty.
+            const contents = present(band.cards);
             return (
-              <div key={index} className="grid items-stretch gap-4 sm:grid-cols-2 min-[1440px]:grid-cols-4">
-                {present(band.cards)}
+              <div key={index} className="grid items-stretch gap-4 md:grid-cols-2 min-[1100px]:grid-cols-3">
+                {contents.map((card, position) => (
+                  <div
+                    key={card.key}
+                    className={`grid min-w-0 ${contents.length % 2 && position === contents.length - 1 ? "md:col-span-2 min-[1100px]:col-span-1" : ""}`}
+                  >
+                    {card}
+                  </div>
+                ))}
               </div>
             );
           }

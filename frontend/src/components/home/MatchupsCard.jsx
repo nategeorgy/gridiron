@@ -73,7 +73,7 @@ export function MatchupsCard({ week, season, boards, logos, isLoading, isError }
           {lists.map(({ position, rows }) => (
             <div key={position} className="min-w-0">
               <PositionTag position={position} />
-              {[["Softest", rows.slice(0, SHOWN), "--pos"], ["Toughest", rows.slice(-SHOWN).reverse(), "--neg"]].map(([label, entries, token]) => (
+              {[["Easiest", rows.slice(0, SHOWN), "--pos"], ["Toughest", rows.slice(-SHOWN).reverse(), "--neg"]].map(([label, entries, token]) => (
                 <div key={label} className="mt-2">
                   <div className="pb-1 text-[9.5px] font-bold uppercase tracking-[0.07em]" style={{ color: `color-mix(in srgb, var(${token}) 60%, var(--fg))` }}>
                     {label}
@@ -87,7 +87,7 @@ export function MatchupsCard({ week, season, boards, logos, isLoading, isError }
       )}
       {ready && (
         <p className="mt-3 text-[10.5px] text-faint">
-          Points allowed per game to the position, then difficulty from 0 (softest) to 100 (toughest). {basisText(basis, season)}.
+          Points allowed per game to the position, then difficulty from 0 (easiest) to 100 (toughest). {basisText(basis, season)}.
         </p>
       )}
       <CardLink to="/insight/sos">Strength of schedule</CardLink>

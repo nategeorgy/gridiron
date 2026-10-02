@@ -111,8 +111,11 @@ export function explainGap(row) {
  * wider than the circle — reserving only the circle put one player's points-over-
  * expected on top of his neighbour's face.
  */
-function placePhotos(points, box, { radius = 20, leaders = [50, 68, 86], pad = 4 } = {}) {
-  const angles = [-90, -50, -130, 0, 180, 40, 140, 90];
+function placePhotos(points, box, { radius = 20, leaders = [50, 68, 86, 108, 132, 160], pad = 4 } = {}) {
+  // Twelve angles, nearest-to-straight-up first. Six picks packed into one corner (four
+  // receivers between 20 and 40 expected points) ran out of the original eight spots at
+  // three distances, and the fallback put two labels on top of each other.
+  const angles = [-90, -60, -120, -30, -150, 0, 180, 30, 150, 60, 120, 90];
   const rectOf = (cx, cy) => ({ x0: cx - 34, x1: cx + 34, y0: cy - radius - 1, y1: cy + 48 });
   const overlaps = (a, b) =>
     a.x0 < b.x1 + pad && b.x0 < a.x1 + pad && a.y0 < b.y1 + pad && b.y0 < a.y1 + pad;
@@ -143,6 +146,9 @@ function placePhotos(points, box, { radius = 20, leaders = [50, 68, 86], pad = 4
 
   return placed;
 }
+
+// "Deebo Samuel Sr." -> "Samuel": the label is one word, and a suffix is not the word.
+const surname = (name) => name.split(" ").filter((part) => !/^(Jr\.?|Sr\.?|II|III|IV|V)$/.test(part)).slice(-1)[0];
 
 const WIDTH = 620;
 const HEIGHT = 470;
@@ -262,7 +268,7 @@ export function ExpectedActualCard({ season, scoring, rows, cloud = [], headshot
                           style={{ fill: tone, stroke: "var(--surface-solid)", strokeWidth: 1.2 }} />
                   <text x={cx} y={cy + 33} textAnchor="middle"
                         style={{ fill: "var(--fg)", font: "600 10.5px Inter, sans-serif" }}>
-                    {row.name.split(" ").slice(-1)[0]}
+                    {surname(row.name)}
                   </text>
                   <text x={cx} y={cy + 44} textAnchor="middle"
                         style={{ fill: tone, font: "700 10px 'JetBrains Mono', monospace" }}>

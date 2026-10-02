@@ -3,11 +3,12 @@
 // The page reads top to bottom in four bands, chosen from mockups built on 2026 Week 3
 // data (https://claude.ai/artifact/556KvBCx8M7HNvYyy2RNbb):
 //
-//   1. a score ticker and the Chart of the Week, full width;
-//   2. a row of Explore cards (air yards, run lanes, team landscape, record book);
+//   1. a score ticker and the Highlighted Viz of the Week, full width;
+//   2. a row of Explore cards (team landscape, air yards, record book);
 //   3. the two familiar columns: the week's players on the left, scoring and the
 //      head-to-head on the right;
-//   4. next week: matchups and implied totals.
+//   4. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
+//      and implied totals side by side.
 //
 // The arrangement is data rather than JSX for the same reason it always was: it is
 // chosen by measuring, and a config is cheaper to rearrange than a page.
@@ -31,11 +32,13 @@ export const HOME_LAYOUT = {
   ],
   bands: [
     { kind: "full", cards: ["ticker"] },
-    { kind: "full", cards: ["chartOfWeek"] },
-    // Four across from 1,440px, two across below, one on a phone. Each card is built to
-    // read at about 340px, the narrowest it gets in four columns.
-    { kind: "grid", cards: ["airYards", "runLanes", "landscape", "recordBook"] },
+    { kind: "full", cards: ["highlightedViz"] },
+    // Three across from 1,100px (about 345px each there, the width each card is built to
+    // read at), two across with the odd one out spanning both below that, one on a phone.
+    { kind: "grid", cards: ["landscape", "airYards", "recordBook"] },
     { kind: "columns", cards: [["trending", "myPlayers", "expected"], ["weekly", "headToHead"]] },
+    { kind: "full", cards: ["previewHeading"] },
+    { kind: "full", cards: ["slate"] },
     { kind: "columns", cards: [["matchups"], ["environments"]] },
   ],
 };

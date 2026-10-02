@@ -47,32 +47,28 @@ export const TRENDING_PLAYERS = {
   week: 3,
   players: [
     {
-      // Achane played 5% of the snaps, and Gordon took the backfield. The split against
-      // him is the story; Gordon's own Week 2 (three carries) would only say "more".
-      playerId: "00-0040198", // Ollie Gordon II
-      basis: TRENDING_BASIS.TEAMMATE,
-      against: "00-0039040", // De'Von Achane
-      stats: ["snap_share", "carries", "rush_attempt_share", "opportunity_share"],
+      // The Giants' backfield moved his way: snaps 59% to 77%, opportunity share 30% to 44%.
+      playerId: "00-0040715", // Cam Skattebo
+      stats: ["snap_share", "rush_attempt_share", "opportunity_share", "carries"],
     },
     {
-      playerId: "00-0038994", // Jordan Addison
-      stats: ["targets", "target_share", "air_yards", "snap_share"],
+      // Target share dipped (11.5% to 10.0%) even as his targets rose, so targets stand
+      // in for it: the card is about the work he gained.
+      playerId: "00-0041027", // Jeremiyah Love
+      stats: ["snap_share", "rush_attempt_share", "routes_run", "targets"],
+    },
+    {
+      // Yards per route run slipped (2.40 to 2.33); the air yards are the bigger story.
+      playerId: "00-0038997", // Josh Downs
+      stats: ["target_share", "targets_per_route_run", "air_yards", "targets"],
     },
     {
       playerId: "00-0039067", // Rashee Rice
-      stats: ["targets", "target_share", "receiving_yards", "air_yards"],
+      stats: ["target_share", "yards_per_route_run", "targets_per_route_run", "air_yards"],
     },
     {
-      playerId: "00-0037228", // Jaylen Warren
-      stats: ["snap_share", "carries", "rush_attempt_share", "opportunity_share"],
-    },
-    {
-      // Higbee has no Week 2 line to compare with; Ferguson, last week's pick, is the
-      // tight end he took the work from.
-      playerId: "00-0033110", // Tyler Higbee
-      basis: TRENDING_BASIS.TEAMMATE,
-      against: "00-0040737", // Terrance Ferguson
-      stats: ["snap_share", "targets", "target_share", "receiving_yards"],
+      playerId: "00-0037238", // Drake London
+      stats: ["target_share", "yards_per_route_run", "targets_per_route_run", "air_yards"],
     },
   ],
 };
@@ -87,11 +83,12 @@ export const TRENDING_PLAYERS = {
  * instead of appearing under a heading that has stopped being true.
  */
 export const EXPECTED_VS_ACTUAL = [
-  "00-0038543", // Jaxon Smith-Njigba
-  "00-0037834", // Brock Purdy
-  "00-0039851", // Drake Maye
+  "00-0030506", // Travis Kelce
   "00-0040122", // Ashton Jeanty
   "00-0040124", // Tetairoa McMillan
+  "00-0037240", // Jameson Williams
+  "00-0034960", // Jakobi Meyers
+  "00-0035719", // Deebo Samuel Sr.
 ];
 
 /**
@@ -99,28 +96,23 @@ export const EXPECTED_VS_ACTUAL = [
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0038543", "00-0037238"], // Jaxon Smith-Njigba, Drake London
+  players: ["00-0038124", "00-0040667"], // Christian Watson, Matthew Golden
   caption: String(SIGNALS_SEASON),
 };
 
 /**
- * Chart of the Week (October 2026): one Explore chart, large, at the top of the page.
- * `kind` names the chart so a later week can feature something other than a passing
- * network; today "network" is the only kind the card draws. As with the picks above,
- * only the selection is written here: every number in the headline is read live.
+ * Highlighted Viz of the Week (October 2026): one Explore chart, large, at the top of the
+ * page. `kind` names the chart so a later week can feature something other than a
+ * passing network; today "network" is the only kind the card draws. As with the picks
+ * above, only the selection is written here: every number in the headline is read live.
  */
-export const CHART_OF_THE_WEEK = {
+export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
-  weeks: "3",
-  passerId: "00-0034869", // Sam Darnold
-  team: "SEA",
-};
-
-/** The back whose run lanes the Explore row draws. */
-export const RUN_LANES_PLAYER = {
-  playerId: "00-0038542", // Bijan Robinson
-  season: 2026,
+  // Empty for the whole season so far.
+  weeks: "",
+  passerId: "00-0036264", // Jordan Love
+  team: "GB",
 };
 
 /**
@@ -150,11 +142,10 @@ export const RECORD_BOOK = {
       line: (row) => `${row.receiving_yards} yards on ${row.targets} targets`,
     },
     {
-      kind: "count",
-      playerId: "00-0038542", // Bijan Robinson
-      title: "190+ rushing yards",
-      query: { grain: "games", where: "rushing_yards:190:", sort: "rushing_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.rushing_yards} rushing yards`,
+      kind: "leaders",
+      playerId: "00-0041032", // Kenyon Sadiq
+      title: "Most fantasy points by a rookie tight end through Week 3",
+      query: { grain: "seasons", positions: "TE", rookies: "only", last_week: 3, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
     },
   ],
 };

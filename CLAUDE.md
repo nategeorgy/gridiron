@@ -864,10 +864,10 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**,
   *not* the leaderboard. Rebuilt in October 2026 as **"Option C"** (it was M10's two-column
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
-  **Chart of the Week**; a row of Explore cards (air-yard distribution, run lanes, team
-  landscape, record book); the week's players (Trending Players, Expected vs Actual, last
-  week's scoring, a reader-picked head-to-head); and the week ahead (matchups by position,
-  implied totals). The arrangement is data, in `constants/homeLayout.js`.
+  **Highlighted Viz of the Week**; a row of Explore cards (team landscape, air-yard
+  distribution, record book); the week's players (Trending Players, Expected vs Actual, last
+  week's scoring, a reader-picked head-to-head); and a **Week N Preview** (the slate,
+  matchups by position, implied totals). The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
   in the code and in these docs. The nav holds **five dropdowns**: **Insight**
   (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
@@ -1307,13 +1307,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       and the 2-back rate are within about a point for every team, while the best model of
       the 11/12/13 split missed the heavy-13 Rams by 16 to 26 points
 - [x] Home page rebuilt as "Option C" (October 2026), picked from mockups built on 2026
-      Week 3 data. A score ticker, a **Chart of the Week** (Explore's passing network,
-      large, headline built from the response), an Explore row (air-yard distributions for
-      WRs with 25+ targets, one back's run lanes, offense-vs-defense EPA for every team, and
-      a **Record Book** answered live by the Query Builder), Trending Players and Expected
-      vs Actual beside last week's scoring and a **head-to-head the reader picks** (`?h2h=`,
-      second player held to the first's position, radar axes by position), then the week
-      ahead: matchups by position from the SOS boards and implied team totals. The
+      Week 3 data. A score ticker, a **Highlighted Viz of the Week** (Explore's passing
+      network, large, headline built from the response), an Explore row (pass rate against
+      neutral pass rate for every team, air-yard distributions for WRs with 25+ targets, and a **Record
+      Book** answered live by the Query Builder), Trending Players and Expected vs Actual
+      beside last week's scoring and a **head-to-head the reader picks** (`?h2h=`, second
+      player held to the first's position, radar axes by position), then a **Week N
+      Preview** from mockup B: the slate (by kickoff slot or by total, team-coloured implied
+      splits), matchups by position from the SOS boards and implied team totals. The
       selections are `constants/signals.js`, the arrangement `constants/homeLayout.js`. One
       backend change: the Query Builder's `last_week`, so a seasons search compares the
       first N weeks of every year

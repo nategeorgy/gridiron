@@ -22,23 +22,23 @@ function LeadersEntry({ entry, scoring }) {
   const floor = top * 0.6;
 
   return (
-    <div className="grid gap-1.5">
-      <div className="flex items-center gap-2.5">
-        <Headshot url={(featured ?? rows[0])?.headshot_url} name={(featured ?? rows[0])?.name ?? ""} size={34} />
-        <div className="min-w-0 text-[12.5px] leading-snug text-fg">
+    <div className="grid gap-2">
+      <div className="flex items-center gap-3">
+        <Headshot url={(featured ?? rows[0])?.headshot_url} name={(featured ?? rows[0])?.name ?? ""} size={46} />
+        <div className="min-w-0 text-[14px] leading-snug text-fg">
           <b>{entry.title}</b>
-          <span className="block text-[11px] text-faint">Any season since {FIRST_SEASON} {"·"} {scoringLabel(scoring)}</span>
+          <span className="block text-[11.5px] text-faint">Any season since {FIRST_SEASON} {"·"} {scoringLabel(scoring)}</span>
         </div>
       </div>
       {search.isLoading && <CardState isLoading rows={3} />}
       {rows.map((row) => {
         const mine = row.player_id === entry.playerId;
         return (
-          <div key={`${row.player_id}-${row.season}`} className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_40px] items-center gap-2">
-            <Link to={`/players/${row.player_id}`} className={`truncate text-[12px] hover:text-accent ${mine ? "font-bold text-fg" : "text-muted"}`}>
-              {row.name} <span className="stat-num text-[10.5px] font-normal text-faint">{row.season}</span>
+          <div key={`${row.player_id}-${row.season}`} className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_46px] items-center gap-2.5">
+            <Link to={`/players/${row.player_id}`} className={`truncate text-[13.5px] hover:text-accent ${mine ? "font-bold text-fg" : "text-muted"}`}>
+              {row.name} <span className="stat-num text-[11.5px] font-normal text-faint">{row.season}</span>
             </Link>
-            <span className="relative h-2 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--fg) 8%, transparent)" }}>
+            <span className="relative h-2.5 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--fg) 8%, transparent)" }}>
               <span
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{
@@ -47,7 +47,7 @@ function LeadersEntry({ entry, scoring }) {
                 }}
               />
             </span>
-            <span className={`stat-num text-right text-[12px] ${mine ? "font-bold text-fg" : "text-muted"}`}>
+            <span className={`stat-num text-right text-[13.5px] ${mine ? "font-bold text-fg" : "text-muted"}`}>
               {formatStat(row.fantasy_points, 1)}
             </span>
           </div>
@@ -67,14 +67,14 @@ function CountEntry({ entry, season, week }) {
   const seasonTotal = thisSeason.data?.total;
 
   return (
-    <div className="flex gap-2.5 border-t border-line pt-3">
-      <Headshot url={featured?.headshot_url} name={featured?.name ?? ""} size={34} />
+    <div className="flex gap-3">
+      <Headshot url={featured?.headshot_url} name={featured?.name ?? ""} size={46} />
       <div className="min-w-0 leading-snug">
-        <div className="text-[12.5px]">
+        <div className="text-[14px]">
           <b className="text-fg">{featured?.name ?? "…"}</b>{" "}
-          {featured && <span className="stat-num text-[11.5px] font-semibold text-accent">{entry.line(featured)}</span>}
+          {featured && <span className="stat-num text-[12.5px] font-semibold text-accent">{entry.line(featured)}</span>}
         </div>
-        <div className="mt-0.5 text-[12px] text-muted">
+        <div className="mt-1 text-[13px] text-muted">
           {total === undefined ? "…" : (
             <>
               One of {total} games since {FIRST_SEASON} with {entry.title.charAt(0).toLowerCase() + entry.title.slice(1)}
@@ -91,14 +91,16 @@ export function RecordBookCard({ book, scoring }) {
   return (
     <Card>
       <CardHead title="Record Book" sub={`Week ${book.week}, against every season`} />
-      <div className="grid gap-3">
-        {book.entries.map((entry) =>
-          entry.kind === "leaders" ? (
-            <LeadersEntry key={entry.title} entry={entry} scoring={scoring} />
-          ) : (
-            <CountEntry key={entry.title} entry={entry} season={book.season} week={book.week} />
-          ),
-        )}
+      <div className="grid gap-3.5">
+        {book.entries.map((entry, index) => (
+          <div key={entry.title} className={index ? "border-t border-line pt-3.5" : ""}>
+            {entry.kind === "leaders" ? (
+              <LeadersEntry entry={entry} scoring={scoring} />
+            ) : (
+              <CountEntry entry={entry} season={book.season} week={book.week} />
+            )}
+          </div>
+        ))}
       </div>
       <CardLink to="/explore/query">Search it in Query Builder</CardLink>
     </Card>
