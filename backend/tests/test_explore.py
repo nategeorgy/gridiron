@@ -277,6 +277,17 @@ def test_a_season_range_filters_the_season_not_its_games(client: TestClient, lin
         ("Receiver One", SEASON), ("Bronco Receiver", SEASON)}
 
 
+def test_last_week_cuts_every_season_at_the_same_week(client: TestClient, lines: dict) -> None:
+    """The home page's Record Book compares a season's first N weeks with every other year's."""
+    result = _query(client, grain="seasons", positions="WR", last_week=1, where="targets::")
+    receiver = {row["season"]: row for row in result["rows"] if row["name"] == "Receiver One"}
+    assert receiver[SEASON]["games"] == 1 and receiver[SEASON]["targets"] == 10  # week 2's two targets are cut
+    assert receiver[SEASON - 1]["targets"] == 11  # last season's week 1 is still in
+    assert result["last_week"] == 1
+    games = _query(client, positions="WR", last_week=1, where="targets::")
+    assert {row["week"] for row in games["rows"]} == {1}
+
+
 def test_count_of_games_by_player(client: TestClient, lines: dict) -> None:
     result = _query(client, positions="WR", where="receiving_yards:40:", mode="count")
     receiver = next(row for row in result["rows"] if row["name"] == "Receiver One")

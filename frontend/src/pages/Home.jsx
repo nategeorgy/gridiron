@@ -1,23 +1,26 @@
-// Command Center — the app's home (rebuilt in M10 as the "Fantasy Desk" layout).
+// Command Center: the app's home (rebuilt October 2026 as "Option C").
 //
-// Two columns, not a bento. The wide column is the reading order a manager actually
-// follows — who is gaining work, what happened last week, who is worth arguing about —
-// and the narrow rail is reference they glance at: the scoreboard, their own players,
-// and the two signal cards. A sticky rail means the scores stay on screen while they
-// scroll the boards.
+// Four bands, top to bottom (constants/homeLayout.js):
 //
-// **Two seasons are in play from January to September.** The fantasy tiles describe the
-// last season *played*; the scoreboard describes the schedule, which runs a year ahead.
-// Every card names its own season rather than the page claiming one, for the same
-// reason the M6.2 team page does.
+//   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
+//      Explore chart;
+//   2. a row of Explore cards: the team landscape, air yards, the record book;
+//   3. the week's players: Trending Players, the watchlist and Expected vs Actual on the
+//      left, Last Week's Scoring and a reader-picked Head to Head on the right;
+//   4. the Week N Preview: the slate, then matchups by position and implied team totals.
+//
+// **Two seasons are in play from January to September.** The fantasy cards describe the
+// last season *played*; the ticker and the week-ahead cards describe the schedule, which
+// runs a year ahead. Every card names its own season rather than the page claiming one.
 import { cloneElement, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useLeaderboard } from "../hooks/useLeaderboard";
-import { useTrending } from "../hooks/useTrending";
 import { useGames, useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
-import { useCompare, useScatter } from "../hooks/useExplore";
+import { useCompare, useNetwork, usePlayersById, useScatter, useTargetBoard } from "../hooks/useExplore";
+import { useSos } from "../hooks/useDraftBoard";
+import { useTeamsList, useTeamStats } from "../hooks/useTeamStats";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
 import { useScoring } from "../hooks/useScoring";
@@ -25,33 +28,41 @@ import { ScoringPill } from "../components/ScoringPill";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
+import { useUrlState } from "../hooks/useUrlState";
 import { getPlayers } from "../services/players";
 import { parseLeague } from "../constants/league";
 import {
   EXPECTED_VS_ACTUAL,
   FEATURED_MATCHUP,
+  HIGHLIGHTED_VIZ,
+  RECORD_BOOK,
   SIGNALS_SEASON,
   TRENDING_BASIS,
   TRENDING_PLAYERS,
 } from "../constants/signals";
-import { scaledMinGames, weeksPlayed } from "../utils/qualify";
 import { HOME_LAYOUT } from "../constants/homeLayout";
+import { shapeNetwork } from "../components/explore/NetworkChart";
 
-import { ScoreboardCard } from "../components/home/ScoreboardCard";
+import { ScoreTicker } from "../components/home/ScoreTicker";
+import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
+import { AirYardsCard } from "../components/home/AirYardsCard";
+import { TeamLandscapeCard } from "../components/home/TeamLandscapeCard";
+import { RecordBookCard } from "../components/home/RecordBookCard";
 import { TrendingPlayersCard } from "../components/home/TrendingPlayersCard";
-import { TrendingCard } from "../components/home/TrendingCard";
-import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
+import { HeadToHeadCard, matchupMetrics } from "../components/home/HeadToHeadCard";
 import { ExpectedActualCard } from "../components/home/ExpectedActualCard";
-import {
-  MyPlayersCard,
-  OpportunityCard,
-  QuarterbackCard,
-  WEEKLY_TAB_POSITIONS,
-  WeeklyScoringCard,
-} from "../components/home/BoardCards";
+import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
+import { EnvironmentsCard } from "../components/home/EnvironmentsCard";
+import { SlateCard } from "../components/home/SlateCard";
+import { BandHeading } from "../components/home/BandHeading";
+import { dateParts } from "../components/schedule/kickoff";
+import { MyPlayersCard, WEEKLY_TAB_POSITIONS, WeeklyScoringCard } from "../components/home/BoardCards";
 
 // The same fixed-PPR fallback the leaderboard uses when the backend cannot score yet.
 const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
+
+// The air-yard card's floor: Target Analysis's own 25-target minimum.
+const AIR_YARDS_MIN_TARGETS = 25;
 
 // The watchlist card's seven stat columns, ranked within each player's own position for
 // the season (M12's `percentiles=`). The pool is the whole league at that position, not
@@ -71,6 +82,24 @@ function byPlayerId(rows) {
   return Object.fromEntries((rows ?? []).map((row) => [row.player_id, row]));
 }
 
+const WEEKDAY_NAMES = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
+
+/** "Thursday Oct 1 through Monday Oct 5 · No byes", the line under the preview heading. */
+function previewSub(games, teams) {
+  const dates = games.map((game) => game.game_date).filter(Boolean).sort();
+  if (!dates.length) return "";
+  const day = (iso) => {
+    const parts = dateParts(iso);
+    return `${WEEKDAY_NAMES[parts.dow]} ${parts.mon} ${parts.day}`;
+  };
+  const span = dates.length > 1 && dates[0] !== dates[dates.length - 1] ? `${day(dates[0])} through ${day(dates[dates.length - 1])}` : day(dates[0]);
+  // Byes need all 32 teams to subtract from, so they wait for the teams list.
+  if (!teams?.length) return span;
+  const playing = new Set(games.flatMap((game) => [game.home_abbreviation, game.away_abbreviation]));
+  const byes = teams.map((team) => team.abbreviation).filter((abbreviation) => !playing.has(abbreviation)).sort();
+  return `${span} · ${byes.length ? `Byes: ${byes.join(", ")}` : "No byes"}`;
+}
+
 export function Home() {
   const [scoring, setScoring] = useScoring();
   const [league] = useLeague();
@@ -80,29 +109,25 @@ export function Home() {
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
   const [weekPosition, setWeekPosition] = useState("ALL");
-  const [oppPosition, setOppPosition] = useState("RB");
 
-  // --- The rail's scoreboard. Which two weeks it shows is the server's call. ---
+  // --- The scoreboard: the ticker's finals, and the week ahead for the bottom band.
+  //     Which two weeks those are is the server's call. ---
   const scoreboard = useScoreboard();
   const lastPlayed = scoreboard.data?.last;
+  const upcoming = scoreboard.data?.next;
 
-  // The season boards' game floors are written for a full season and scaled to the
-  // weeks played, or both cards sit empty until October. They wait for the scoreboard
-  // to say how far in we are rather than asking twice; an error falls back to the floor.
-  const weeks = weeksPlayed(season, lastPlayed);
-  const seasonBoardsReady = !scoreboard.isLoading;
+  // --- Highlighted Viz of the Week. ---
+  const network = useNetwork({
+    season: HIGHLIGHTED_VIZ.season,
+    weeks: HIGHLIGHTED_VIZ.weeks || undefined,
+    passer_id: HIGHLIGHTED_VIZ.passerId,
+    team: HIGHLIGHTED_VIZ.team,
+  });
+  const networkShape = useMemo(() => shapeNetwork(network.data, 7, 1), [network.data]);
 
-  // --- Trending usage, in the reader's own scoring. ---
-  const trending = useTrending({ season, season_type: "REG", direction: "up", scoring, limit: 6 });
-
-  // The card renders only once the season has produced something to measure. Two ways
-  // it has not: the newest scheduled season has not kicked off at all (so `season` is
-  // still last year's, and last year's "last three weeks" is history, not news), or it
-  // has kicked off but there is no trailing window yet — which the endpoint reports for
-  // itself rather than making the client guess.
-  const { seasons: scheduled } = useSeasons({ statsOnly: false });
-  const seasonUnderway = scheduled[0] === season;
-  const trendingLive = seasonUnderway && (trending.data?.data?.length ?? 0) > 0;
+  // --- The Explore row. ---
+  const airYards = useTargetBoard({ season, positions: "WR", min_targets: AIR_YARDS_MIN_TARGETS });
+  const teamBoard = useTeamStats({ season, scoring });
 
   // --- Trending Players: one week of usage for a hand-picked few, each with his own
   //     four stats and his own basis for the change beneath them (constants/signals.js).
@@ -113,8 +138,10 @@ export function Home() {
     ],
     [],
   );
+  // Fantasy points are always ranked: the finish chip beside each pick's points reads it,
+  // whether or not any pick shows fantasy points as one of its four stats.
   const trendingMetrics = useMemo(
-    () => [...new Set(TRENDING_PLAYERS.players.flatMap((pick) => pick.stats))].join(","),
+    () => [...new Set(["fantasy_points", ...TRENDING_PLAYERS.players.flatMap((pick) => pick.stats)])].join(","),
     [],
   );
   // Which extra windows the picks actually need. A card of quarterbacks ranked on the
@@ -230,40 +257,27 @@ export function Home() {
   );
   const weekly = useLeaderboard(weeklyParams, { enabled: Boolean(lastPlayed?.week) });
 
-  // --- Opportunity leaders: carries for backs, targets for pass catchers. ---
-  const opportunity = useLeaderboard(
+  // --- Head to Head: the reader's pair rides in the URL, so a matchup is shareable. The
+  //     radar's axes follow the first player's position, which the request has to know
+  //     before it asks, so it waits for the players' positions. ---
+  const [pairText, setPairText] = useUrlState("h2h", FEATURED_MATCHUP.players.join(","));
+  const pair = useMemo(() => {
+    const [first = "", second = ""] = pairText.split(",").map((id) => id.trim());
+    return [first, second];
+  }, [pairText]);
+  const pairPeople = usePlayersById(pair.filter(Boolean));
+  const pairPosition = pairPeople[pair[0]]?.position;
+  const matchup = useCompare(
     useMemo(
       () => ({
-        season,
+        players: pairPosition ? pair.filter(Boolean).join(",") : "",
+        metrics: matchupMetrics(pairPosition).map((metric) => metric.id).join(","),
+        season: SIGNALS_SEASON,
         season_type: "REG",
-        position: oppPosition,
-        metric: oppPosition === "RB" ? "carries" : "targets",
         scoring,
-        order: "desc",
-        min_games: scaledMinGames(4, weeks),
-        limit: 10,
       }),
-      [season, oppPosition, scoring, weeks],
+      [pair, pairPosition, scoring],
     ),
-    { enabled: seasonBoardsReady },
-  );
-
-  // --- Quarterbacks by EPA, with the per-play rate beside it. ---
-  const quarterbacks = useLeaderboard(
-    useMemo(
-      () => ({
-        season,
-        season_type: "REG",
-        position: "QB",
-        metric: "epa",
-        scoring,
-        order: "desc",
-        min_games: scaledMinGames(8, weeks),
-        limit: 10,
-      }),
-      [season, scoring, weeks],
-    ),
-    { enabled: seasonBoardsReady },
   );
 
   // --- Watchlist. Rendered only once signed in *and* something is starred: an empty
@@ -293,17 +307,57 @@ export function Home() {
     { enabled: isSignedIn && favoriteIds.length > 0 },
   );
 
-  // --- The featured matchup. ---
-  const matchup = useCompare(
-    useMemo(
-      () => ({ players: FEATURED_MATCHUP.players.join(","), season: SIGNALS_SEASON, season_type: "REG", scoring }),
-      [scoring],
-    ),
+  // --- The week ahead: one strength-of-schedule board per position, read for the
+  //     coming week only. Four requests, each cached server-side per scoring. ---
+  const sosParams = (position) => ({ season: upcoming?.season, position, window: "full", scoring });
+  const sosBoards = {
+    QB: useSos(sosParams("QB"), { enabled: Boolean(upcoming) }),
+    RB: useSos(sosParams("RB"), { enabled: Boolean(upcoming) }),
+    WR: useSos(sosParams("WR"), { enabled: Boolean(upcoming) }),
+    TE: useSos(sosParams("TE"), { enabled: Boolean(upcoming) }),
+  };
+  // The slate's team colours and the preview's byes. The header's Teams menu already
+  // loads this list, so it is a cache hit on every page.
+  const teamsList = useTeamsList();
+  const teamColors = useMemo(
+    () => Object.fromEntries((teamsList.data ?? []).map((team) => [team.abbreviation, team.color])),
+    [teamsList.data],
   );
+  const logos = useMemo(() => {
+    const out = {};
+    for (const game of [...(upcoming?.games ?? []), ...(lastPlayed?.games ?? [])]) {
+      out[game.home_abbreviation] = game.home_logo_url;
+      out[game.away_abbreviation] = game.away_logo_url;
+    }
+    return out;
+  }, [upcoming, lastPlayed]);
 
   // The cards, keyed so the arrangement can be a config rather than fixed JSX. A card
   // that has nothing to show returns null here and the layout skips it.
   const cards = {
+    ticker: <ScoreTicker scoreboard={scoreboard.data} isLoading={scoreboard.isLoading} />,
+    highlightedViz: (
+      <HighlightedVizCard
+        pick={HIGHLIGHTED_VIZ}
+        network={network.data}
+        shape={networkShape}
+        isLoading={network.isLoading}
+        isError={network.isError}
+      />
+    ),
+    airYards: (
+      <AirYardsCard
+        season={season}
+        minTargets={AIR_YARDS_MIN_TARGETS}
+        players={airYards.data?.players}
+        isLoading={airYards.isLoading}
+        isError={airYards.isError}
+      />
+    ),
+    landscape: (
+      <TeamLandscapeCard board={teamBoard.data} season={season} isLoading={teamBoard.isLoading} isError={teamBoard.isError} />
+    ),
+    recordBook: <RecordBookCard book={RECORD_BOOK} scoring={scoring} />,
     trending: (
       <TrendingPlayersCard
         picks={TRENDING_PLAYERS.players}
@@ -319,8 +373,6 @@ export function Home() {
         isError={trendingNow.isError}
       />
     ),
-    // Rendered only once signed in *and* something is starred: an empty card here
-    // would be a permanent advert for a feature rather than a useful panel.
     myPlayers:
       isSignedIn && favorites.length > 0 ? (
         <MyPlayersCard
@@ -331,20 +383,6 @@ export function Home() {
           isError={watchlist.isError}
         />
       ) : null,
-    trendingUsage: trendingLive ? (
-      <TrendingCard result={trending.data} isLoading={trending.isLoading} isError={trending.isError} />
-    ) : null,
-    weekly: (
-      <WeeklyScoringCard
-        week={lastPlayed?.week}
-        scoring={scoring}
-        position={weekPosition}
-        onPositionChange={setWeekPosition}
-        result={weekly.data}
-        isLoading={scoreboard.isLoading || weekly.isLoading}
-        isError={weekly.isError}
-      />
-    ),
     expected: (
       <ExpectedActualCard
         season={SIGNALS_SEASON}
@@ -356,46 +394,52 @@ export function Home() {
         isError={expected.isError}
       />
     ),
-    opportunity: (
-      <OpportunityCard
-        season={season}
-        position={oppPosition}
-        onPositionChange={setOppPosition}
-        result={opportunity.data}
-        isLoading={scoreboard.isLoading || opportunity.isLoading}
-        isError={opportunity.isError}
-      />
-    ),
-    quarterbacks: (
-      <QuarterbackCard
-        season={season}
-        result={quarterbacks.data}
-        isLoading={scoreboard.isLoading || quarterbacks.isLoading}
-        isError={quarterbacks.isError}
+    weekly: (
+      <WeeklyScoringCard
+        week={lastPlayed?.week}
+        scoring={scoring}
+        position={weekPosition}
+        onPositionChange={setWeekPosition}
+        result={weekly.data}
+        isLoading={scoreboard.isLoading || weekly.isLoading}
+        isError={weekly.isError}
       />
     ),
     headToHead: (
       <HeadToHeadCard
         caption={FEATURED_MATCHUP.caption}
+        ids={pair}
+        position={pairPosition}
         result={matchup.data}
-        isLoading={matchup.isLoading}
+        isLoading={!pairPosition || matchup.isLoading}
         isError={matchup.isError}
+        onChange={(next) => setPairText(next.join(","))}
       />
     ),
-    scoreboard: (
-      <ScoreboardCard
-        scoreboard={scoreboard.data}
-        isLoading={scoreboard.isLoading}
-        isError={scoreboard.isError}
+    previewHeading: upcoming?.games?.length ? (
+      <BandHeading eyebrow={upcoming.label} title="Preview" sub={previewSub(upcoming.games, teamsList.data)} />
+    ) : null,
+    slate: (
+      <SlateCard upcoming={upcoming} colors={teamColors} isLoading={scoreboard.isLoading} isError={scoreboard.isError} />
+    ),
+    matchups: (
+      <MatchupsCard
+        week={upcoming?.week}
+        season={upcoming?.season}
+        boards={Object.fromEntries(MATCHUP_POSITIONS.map((position) => [position, sosBoards[position].data]))}
+        logos={logos}
+        isLoading={scoreboard.isLoading || MATCHUP_POSITIONS.some((position) => sosBoards[position].isLoading)}
+        isError={MATCHUP_POSITIONS.every((position) => sosBoards[position].isError)}
       />
+    ),
+    environments: (
+      <EnvironmentsCard upcoming={upcoming} isLoading={scoreboard.isLoading} isError={scoreboard.isError} />
     ),
   };
 
   // Each card carries its own key so React can follow it across a layout change rather
-  // than re-mounting the column, which would refetch nothing but would lose each card's
-  // own tab state (the position pickers on the weekly and opportunity boards).
-  const column = (keys) =>
-    keys.filter((key) => cards[key]).map((key) => cloneElement(cards[key], { key }));
+  // than re-mounting the column, which would lose each card's own tab state.
+  const present = (keys) => keys.filter((key) => cards[key]).map((key) => cloneElement(cards[key], { key }));
 
   return (
     <div className="space-y-5">
@@ -404,26 +448,47 @@ export function Home() {
         <ScoringPill scoring={scoring} onChange={setScoring} />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4" data-home-columns="">
-        {/* The column template has to come from data and a Tailwind class cannot carry a
-            runtime value, so it ships as scoped rules rather than an inline style: inline
-            styles have no media query, and each template applies only above its own
-            width. The widths are the tables' (see homeLayout.js), not Tailwind's. */}
-        <style>
-          {HOME_LAYOUT.columns
-            .map((step) => `@media (min-width:${step.from}px){[data-home-columns]{grid-template-columns:${step.template}}}`)
-            .join("")}
-        </style>
-        {HOME_LAYOUT.assign.map((keys, index) => {
-          const contents = column(keys);
-          if (contents.length === 0) return <div key={index} className="hidden" />;
-          const sticky = HOME_LAYOUT.sticky === index;
+      {/* The column template has to come from data and a Tailwind class cannot carry a
+          runtime value, so it ships as scoped rules rather than an inline style: inline
+          styles have no media query, and each template applies only above its own
+          width. The widths are the tables' (see homeLayout.js), not Tailwind's. */}
+      <style>
+        {HOME_LAYOUT.columns
+          .map((step) => `@media (min-width:${step.from}px){[data-home-columns]{grid-template-columns:${step.template}}}`)
+          .join("")}
+      </style>
+
+      <div className="grid gap-4">
+        {HOME_LAYOUT.bands.map((band, index) => {
+          if (band.kind === "full") return <div key={index} className="grid min-w-0 gap-4">{present(band.cards)}</div>;
+          if (band.kind === "grid") {
+            // Each card sits in a one-cell grid so it stretches to the row's height, and an
+            // odd last card spans both columns in the two-across range instead of leaving
+            // half a row empty.
+            const contents = present(band.cards);
+            return (
+              <div key={index} className="grid items-stretch gap-4 md:grid-cols-2 min-[1100px]:grid-cols-3">
+                {contents.map((card, position) => (
+                  <div
+                    key={card.key}
+                    className={`grid min-w-0 ${contents.length % 2 && position === contents.length - 1 ? "md:col-span-2 min-[1100px]:col-span-1" : ""}`}
+                  >
+                    {card}
+                  </div>
+                ))}
+              </div>
+            );
+          }
           return (
-            <div
-              key={index}
-              className={`grid min-w-0 gap-4 ${sticky ? "lg:sticky lg:top-[76px]" : ""}`}
-            >
-              {contents}
+            <div key={index} className="grid grid-cols-1 items-start gap-4" data-home-columns="">
+              {band.cards.map((keys, column) => {
+                const contents = present(keys);
+                return contents.length ? (
+                  <div key={column} className="grid min-w-0 gap-4">{contents}</div>
+                ) : (
+                  <div key={column} className="hidden" />
+                );
+              })}
             </div>
           );
         })}

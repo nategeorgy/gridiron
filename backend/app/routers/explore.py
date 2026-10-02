@@ -268,6 +268,8 @@ def query(
     first_season: int | None = Query(None, description="First season searched. Defaults to the first held."),
     last_season: int | None = Query(None, description="Last season searched. Defaults to the newest."),
     season_type: str = Query("REG", pattern=f"^({'|'.join(SEASON_TYPES)})$", description="REG, POST or ALL"),
+    last_week: int | None = Query(None, ge=1, le=22, description="Only weeks up to and including this one in "
+                                  "each season, so a seasons search compares the first N weeks of every year"),
     team: str = Query("", description="Team abbreviation: only games played for that team"),
     rookies: str = Query("any", pattern=f"^({'|'.join(ROOKIE_FILTERS)})$", description="any, only or exclude"),
     where: str = Query("", description="Stat ranges as field:min:max, comma-separated; either bound may be "
@@ -291,7 +293,7 @@ def query(
         first_season, last_season = last_season, first_season
     search = Search(
         grain=grain, mode=mode if grain == "games" else "list", positions=position_list,
-        first_season=first_season, last_season=last_season, season_type=season_type,
+        first_season=first_season, last_season=last_season, season_type=season_type, last_week=last_week,
         team_id=_team_id(db, team), rookies=rookies, conditions=conditions,
         sort=sort or None, order=order or None,
     )
@@ -300,4 +302,5 @@ def query(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {**result, "positions": list(position_list), "first_season": first_season, "last_season": last_season,
+            "last_week": last_week,
             "team": team.strip().upper() or None, "rookies": rookies, "scoring": config.model_dump()}
