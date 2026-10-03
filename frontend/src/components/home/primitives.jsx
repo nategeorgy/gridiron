@@ -87,23 +87,30 @@ export function CardLink({ to, children }) {
   );
 }
 
-/** A table that scrolls sideways rather than crushing its columns in a narrow rail. */
-export function ScrollTable({ minWidth = 430, children }) {
+/**
+ * A table that scrolls sideways rather than crushing its columns in a narrow rail.
+ * `phoneMinWidth` overrides the floor below sm, for a table that restacks itself to fit
+ * a phone instead of scrolling there.
+ */
+export function ScrollTable({ minWidth = 430, phoneMinWidth = minWidth, children }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm" style={{ minWidth }}>
+      <table
+        className="w-full min-w-[var(--table-min-phone)] text-left text-sm sm:min-w-[var(--table-min)]"
+        style={{ "--table-min": `${minWidth}px`, "--table-min-phone": `${phoneMinWidth}px` }}
+      >
         {children}
       </table>
     </div>
   );
 }
 
-export function Th({ children, align = "right" }) {
+export function Th({ children, align = "right", className = "" }) {
   return (
     <th
       className={`whitespace-nowrap pb-2 text-[9.5px] font-bold uppercase tracking-[0.07em] text-faint ${
         align === "left" ? "text-left" : "text-right"
-      }`}
+      } ${className}`}
     >
       {children}
     </th>

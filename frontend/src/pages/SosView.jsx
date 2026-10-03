@@ -12,6 +12,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { ScoringControl } from "../components/ScoringControl";
 import { ExportButton } from "../components/ExportButton";
 import { SaveViewButton } from "../components/SaveViewButton";
@@ -20,6 +21,7 @@ import { useScoring } from "../hooks/useScoring";
 import { useUrlState } from "../hooks/useUrlState";
 import { useSeasons } from "../hooks/useSeasons";
 import { formatStat } from "../utils/format";
+import { scoringLabel } from "../constants/scoring";
 
 const SOS_POSITIONS = [
   { value: "QB", label: "QB" },
@@ -124,10 +126,16 @@ export function SosView({ board }) {
         <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
       </div>
 
-      <div className="glass-card flex flex-wrap gap-3 p-4">
+      <FilterBar
+        summary={summarize(position, season, WINDOWS.find((entry) => entry.value === windowKey)?.label, scoringLabel(scoring))}
+      >
         <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
         <Select label="Position" value={position} onChange={setPosition} options={SOS_POSITIONS} />
         <Select label="Window" value={windowKey} onChange={setWindowKey} options={WINDOWS} />
+        {/* On a phone the scoring folds in with the filters; desktop keeps its own card. */}
+        <div className="md:hidden">
+          <ScoringControl scoring={scoring} onChange={setScoring} label="Scoring" bare />
+        </div>
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
           <ExportButton
@@ -147,19 +155,28 @@ export function SosView({ board }) {
             ]}
           />
         </div>
-      </div>
+      </FilterBar>
 
-      <ScoringControl scoring={scoring} onChange={setScoring} />
+      <div className="hidden md:block">
+        <ScoringControl scoring={scoring} onChange={setScoring} />
+      </div>
 
       <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
 
       <div className="glass-card overflow-x-auto">
-        <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left text-sm">
+        {/* On a phone the rank, team and difficulty share one pinned cell, so the weeks
+            scroll beside the number they add up to. */}
+        <table className="w-full border-separate border-spacing-0 text-left text-sm md:min-w-[980px]">
           <thead>
             <tr className="text-xs uppercase tracking-wide text-faint">
-              <th className="sticky left-0 z-10 border-b border-line bg-surface px-3 py-3 text-right">#</th>
-              <th className="border-b border-line px-3 py-3">Team</th>
-              <th className="border-b border-line px-2 py-3 text-right" title="Average difficulty of the opponents in the selected window. 0–100, higher is harder.">
+              <th className="sticky left-0 z-10 hidden border-b border-line bg-surface px-3 py-3 text-right md:table-cell">#</th>
+              <th className="pin-col border-b border-line px-3 py-3">
+                <span className="flex items-center justify-between gap-3">
+                  Team
+                  <span className="md:hidden">Diff</span>
+                </span>
+              </th>
+              <th className="hidden border-b border-line px-2 py-3 text-right md:table-cell" title="Average difficulty of the opponents in the selected window. 0–100, higher is harder.">
                 Diff
               </th>
               {weeks.map((week) => (
@@ -190,18 +207,28 @@ export function SosView({ board }) {
             )}
             {rows.map((row) => (
               <tr key={row.team_id} className="hover:bg-surface-2">
-                <td className="sticky left-0 z-10 border-b border-line bg-surface px-3 py-1.5 text-right">
+                <td className="sticky left-0 z-10 hidden border-b border-line bg-surface px-3 py-1.5 text-right md:table-cell">
                   <span className="stat-num text-xs text-faint">{row.rank ?? "—"}</span>
                 </td>
-                <td className="whitespace-nowrap border-b border-line px-3 py-1.5">
-                  <Link
-                    to={`/teams/${row.team_id}`}
-                    className="stat-num text-xs font-semibold text-fg hover:text-accent hover:underline"
-                  >
-                    {row.abbreviation}
-                  </Link>
+                <td className="pin-col whitespace-nowrap border-b border-line px-3 py-1.5 max-md:pl-2">
+                  {/* A box only on a phone; on desktop the link sits in the cell as it always did. */}
+                  <span className="flex items-center gap-2 md:contents">
+                    <span className="stat-num w-5 text-right text-[11px] text-faint md:hidden">{row.rank ?? "—"}</span>
+                    <Link
+                      to={`/teams/${row.team_id}`}
+                      className="stat-num w-9 text-xs font-semibold text-fg hover:text-accent hover:underline"
+                    >
+                      {row.abbreviation}
+                    </Link>
+                    <span
+                      className="stat-num rounded px-1.5 py-0.5 text-xs text-fg md:hidden"
+                      style={{ backgroundColor: cellTint(row.difficulty) }}
+                    >
+                      {formatStat(row.difficulty, 0)}
+                    </span>
+                  </span>
                 </td>
-                <td className="border-b border-line px-2 py-1.5 text-right">
+                <td className="hidden border-b border-line px-2 py-1.5 text-right md:table-cell">
                   <span
                     className="stat-num rounded px-1.5 py-0.5 text-xs text-fg"
                     style={{ backgroundColor: cellTint(row.difficulty) }}

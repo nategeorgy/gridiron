@@ -7,8 +7,9 @@
 // opposite ways. The tint is the board's too (green easy, red hard, stronger with
 // distance from an average matchup), and the basis is stated, since in the first weeks
 // of a season the defensive numbers are last season's.
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, CardHead, CardLink, CardState } from "./primitives";
+import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
 import { PositionTag } from "../PositionTag";
 import { formatStat } from "../../utils/format";
 
@@ -59,19 +60,29 @@ function basisText(basis, scheduleSeason) {
   return `Defenses from ${basis.season} until ${scheduleSeason} has ${basis.min_weeks ?? 4} weeks`;
 }
 
+const POSITION_TABS = MATCHUP_POSITIONS.map((value) => ({ value, label: value }));
+
 export function MatchupsCard({ week, season, boards, logos, isLoading, isError }) {
   const lists = MATCHUP_POSITIONS.map((position) => ({ position, rows: weekMatchups(boards[position], week) }));
   const ready = lists.some((list) => list.rows.length);
   const basis = boards.WR?.basis ?? boards.RB?.basis;
+  // A phone shows one position at a time: all four stacked ran about 1,100px.
+  const [phonePosition, setPhonePosition] = useState("WR");
 
   return (
     <Card>
-      <CardHead title={week ? `Week ${week} Matchups` : "Matchups"} sub="Strength of schedule, this week only" />
+      <CardHead title={week ? `Week ${week} Matchups` : "Matchups"} sub="Strength of schedule, this week only">
+        {ready && (
+          <span className="sm:hidden">
+            <Tabs options={POSITION_TABS} value={phonePosition} onChange={setPhonePosition} label="Position" />
+          </span>
+        )}
+      </CardHead>
       <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} empty="No priced matchups for this week yet." rows={6} />
       {ready && (
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
           {lists.map(({ position, rows }) => (
-            <div key={position} className="min-w-0">
+            <div key={position} className={`min-w-0 ${position === phonePosition ? "" : "max-sm:hidden"}`}>
               <PositionTag position={position} />
               {[["Easiest", rows.slice(0, SHOWN), "--pos"], ["Toughest", rows.slice(-SHOWN).reverse(), "--neg"]].map(([label, entries, token]) => (
                 <div key={label} className="mt-2">

@@ -166,7 +166,7 @@ export function QueryBuilderView({ board }) {
 
       <section className="glass-card grid gap-2 px-4 py-3">
         <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-faint">Start from an example</span>
-        <Chips label="Examples" value={activeExample} onChange={loadExample}
+        <Chips label="Examples" value={activeExample} onChange={loadExample} scroll
           options={QUERY_EXAMPLES.map((example) => ({ value: example.id, label: example.label }))} />
       </section>
 
@@ -375,12 +375,14 @@ function ResultsTable({ data, offset, league, onSort }) {
   const count = data.mode === "count";
 
   return (
+    // On a phone the player is pinned (with his rank) while the stats scroll, and the
+    // header sits above the pinned cells (z-2) when the list scrolls under it.
     <div className="max-h-[900px] overflow-auto">
-      <table className="w-full min-w-[640px] border-collapse text-[13px]">
-        <thead className="sticky top-0 z-[1]" style={{ background: "var(--surface-solid)" }}>
+      <table className="w-full border-collapse text-[13px] md:min-w-[640px]">
+        <thead className="sticky top-0 z-[2]" style={{ background: "var(--surface-solid)" }}>
           <tr>
-            <th className="w-8 px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint">#</th>
-            <th className="px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Player</th>
+            <th className="hidden w-8 px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint md:table-cell">#</th>
+            <th className="pin-col px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint max-md:!bg-[color:var(--surface-solid)] max-md:pl-8">Player</th>
             {!count && <th className="px-2 pb-2 text-right text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Season</th>}
             {games && <th className="px-2 pb-2 text-right text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Wk</th>}
             {games && <th className="px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Game</th>}
@@ -394,9 +396,12 @@ function ResultsTable({ data, offset, league, onSort }) {
             const best = count ? gameText(row.best) : null;
             return (
               <tr key={`${row.player_id}-${row.season ?? ""}-${row.week ?? ""}-${index}`} className="border-t border-line">
-                <td className="stat-num px-2 py-1.5 text-xs text-faint">{offset + index + 1}</td>
-                <td className="px-2 py-1.5">
-                  <Link to={`/players/${row.player_id}`} className="hover:text-accent"><PlayerLine player={row} size={24} /></Link>
+                <td className="stat-num hidden px-2 py-1.5 text-xs text-faint md:table-cell">{offset + index + 1}</td>
+                <td className="pin-col px-2 py-1.5 max-md:max-w-[170px]">
+                  <span className="flex items-center gap-1.5">
+                    <span className="stat-num w-5 shrink-0 text-right text-[11px] text-faint md:hidden">{offset + index + 1}</span>
+                    <Link to={`/players/${row.player_id}`} className="min-w-0 hover:text-accent"><PlayerLine player={row} size={24} /></Link>
+                  </span>
                 </td>
                 {!count && <td className="stat-num px-2 py-1.5 text-right">{row.season}</td>}
                 {games && <td className="stat-num px-2 py-1.5 text-right">{row.week_label}</td>}

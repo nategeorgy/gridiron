@@ -3,6 +3,7 @@
 // pages use most of them.
 import { useState } from "react";
 import { PositionTag } from "../PositionTag";
+import { ScrollRow } from "../ui/ScrollRow";
 import { initials } from "../../utils/explore";
 
 /** The page header every Explore page opens with. */
@@ -23,9 +24,11 @@ export function ExploreHeader({ title, description, children }) {
  * A row of pill chips, one pressed: the scatter's questions, the Query Builder's
  * examples. `options` is [{ value, label, hint? }].
  */
-export function Chips({ options, value, onChange, label }) {
-  return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+/** `scroll`: one sideways-scrolling line on a phone instead of wrapping (for shortcuts,
+ *  like the example searches, that should not push the page's real controls down). */
+export function Chips({ options, value, onChange, label, scroll = false }) {
+  const group = (
+    <div role="group" aria-label={label} className={`flex gap-1.5 ${scroll ? "max-md:w-max md:flex-wrap" : "flex-wrap"}`}>
       {options.map((option) => {
         const on = option.value === value;
         return (
@@ -35,7 +38,7 @@ export function Chips({ options, value, onChange, label }) {
             aria-pressed={on}
             title={option.hint}
             onClick={() => onChange(option.value)}
-            className={`rounded-full border px-3 py-1 text-xs transition ${
+            className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs transition ${
               on ? "text-fg" : "border-edge text-muted hover:text-fg"
             }`}
             style={on ? {
@@ -49,6 +52,7 @@ export function Chips({ options, value, onChange, label }) {
       })}
     </div>
   );
+  return scroll ? <ScrollRow className="max-w-full">{group}</ScrollRow> : group;
 }
 
 /** A labelled control for the filter bars, matching ui/Select's label. */

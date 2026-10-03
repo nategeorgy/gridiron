@@ -17,6 +17,9 @@ const SPOTS = [
 ];
 const ROW_Y = [90, 116, 250];
 const LINE = [37, 43.5, 50, 56.5, 63];
+// The same spots as a list, for a phone, where the 660px field would scroll sideways and
+// show two of the six starters at a time.
+const LIST_ORDER = ["QB", "RB", "WR-1", "WR-2", "WR-8", "TE"];
 
 function spotsFrom(chart) {
   const bySpot = {};
@@ -40,8 +43,59 @@ export function DepthChartField({ chart, asOf, stats, season, weeksLabel, topPer
       <p className="mb-3 text-[11.5px] text-faint">
         {asOf ? `Listed as of ${new Date(asOf).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No chart published"} {"·"} numbers from {season} {weeksLabel}
       </p>
+      {hasChart && (
+        <div className="grid grid-cols-1 gap-2 sm:hidden">
+          {topPersonnel && (
+            <span className="justify-self-start rounded-lg border border-line px-2 py-1 text-[11px] text-muted" style={{ background: "color-mix(in srgb, var(--fg) 6%, transparent)" }}>
+              {topPersonnel.grouping} personnel <b className="stat-num text-fg">{formatTeamStat(topPersonnel.share, "pct0")}</b> of plays
+            </span>
+          )}
+          {LIST_ORDER.map((key) => {
+            const list = bySpot[key] ?? [];
+            const starter = list[0];
+            if (!starter) return null;
+            const position = key.split("-")[0];
+            const line = stats?.[starter.player_id];
+            const ring = `var(--position-${position.toLowerCase()})`;
+            const backups = list.slice(1, 4);
+            return (
+              <div key={key} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5" style={{ background: "color-mix(in srgb, var(--fg) 3%, transparent)" }}>
+                <Link
+                  to={`/players/${starter.player_id}`}
+                  className="relative h-11 w-11 shrink-0 rounded-full bg-surface-2 bg-cover bg-center"
+                  style={{ backgroundImage: starter.headshot_url ? `url('${starter.headshot_url}')` : undefined, boxShadow: `0 0 0 2px ${ring}` }}
+                  aria-label={starter.name}
+                >
+                  <span className="absolute -bottom-[6px] left-1/2 -translate-x-1/2 rounded px-1 py-px text-[9px] font-bold leading-none text-white" style={{ background: `color-mix(in srgb, ${ring} 80%, var(--surface-solid))` }}>
+                    {position}{starter.pos_rank}
+                  </span>
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Link to={`/players/${starter.player_id}`} className="truncate text-[13.5px] font-semibold text-fg hover:text-accent">{starter.name}</Link>
+                    <span className="stat-num shrink-0 text-[11.5px] text-muted">
+                      {line ? `${snaps(starter.player_id)} · ${formatStat(line.fantasy_ppg, 1)}` : "No snaps"}
+                    </span>
+                  </div>
+                  {backups.length > 0 && (
+                    <div className="mt-0.5 truncate text-[11px] text-faint">
+                      {backups.map((backup, index) => (
+                        <span key={backup.player_id}>
+                          {index > 0 && " · "}
+                          <Link to={`/players/${backup.player_id}`} className="hover:text-accent">{backup.name}</Link>{" "}
+                          <b className="stat-num font-medium text-muted">{stats?.[backup.player_id] ? snaps(backup.player_id) : "—"}</b>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {hasChart ? (
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto sm:block">
           <div
             className="relative h-[430px] min-w-[660px] overflow-hidden rounded-[14px] border border-line"
             style={{ background: "repeating-linear-gradient(to bottom, transparent 0 39px, color-mix(in srgb, var(--fg) 8%, transparent) 39px 40px), color-mix(in srgb, var(--series-3) 10%, transparent)" }}

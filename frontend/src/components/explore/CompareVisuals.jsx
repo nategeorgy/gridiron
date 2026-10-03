@@ -18,6 +18,7 @@ import { EveryTargetField, EveryTargetLegend, HeatField, HeatLegend, ZonesChart,
 import { SCATTER_PRESETS, scatterPreset } from "../../constants/scatters";
 import { useIntelligence } from "../../hooks/useInsight";
 import { useUrlState } from "../../hooks/useUrlState";
+import { usePhone } from "../../hooks/useMediaQuery";
 import { getPlayerRuns, getPlayerTargets } from "../../services/explore";
 import { formatStat } from "../../utils/format";
 import {
@@ -81,6 +82,7 @@ function CompareScatter({ slots, kind, weeks, scoring, league, metrics }) {
   const [presetId, setPresetId] = useUrlState("scatter", SCATTER_PRESETS[presetPosition][0].id);
   const preset = scatterPreset(presetPosition, presetId);
   const tip = useChartTooltip();
+  const phone = usePhone();
   const season = slots[0].season;
   // The league behind them: the 60 with the most fantasy points at their positions, as on
   // the Scatter page, so a one-target outlier cannot stretch the axes.
@@ -106,7 +108,8 @@ function CompareScatter({ slots, kind, weeks, scoring, league, metrics }) {
   const plot = (forExport = false) => (
     <ScatterPlot points={points} context={context} xMetric={metrics[preset.x]} yMetric={metrics[preset.y]}
       identity={preset.identity} corners={preset.corners} display="heads" fixedRadius={20} labels outliers={false}
-      always={points.map((point) => point.id)} height={520} tip={forExport ? undefined : tip} tipFor={tipFor} />
+      always={points.map((point) => point.id)} height={520} tip={forExport ? undefined : tip} tipFor={tipFor}
+      compact={phone && !forExport} />
   );
   return (
     <section className="glass-card p-4">

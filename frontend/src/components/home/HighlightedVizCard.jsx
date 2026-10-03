@@ -12,6 +12,7 @@ import { Headshot } from "../explore/common";
 import { NetworkChart, NetworkLegend } from "../explore/NetworkChart";
 import { ExportImageButton } from "../explore/ExportImageButton";
 import { lastName, signed } from "../../utils/explore";
+import { usePhone } from "../../hooks/useMediaQuery";
 
 const shortName = (name) => `${name.split(" ")[0][0]}. ${lastName(name)}`;
 
@@ -42,6 +43,7 @@ function lede(shown, total) {
 }
 
 export function HighlightedVizCard({ pick, network, shape, isLoading, isError }) {
+  const phone = usePhone();
   const ready = network && shape.shown.length > 0;
   const passer = network?.passer;
   const totals = network?.totals;
@@ -80,33 +82,34 @@ export function HighlightedVizCard({ pick, network, shape, isLoading, isError })
       {ready && (
         // The chart is square, so its width is also its height. Two fifths of the card
         // (about 590px at full width), with the type on the right sized up to match it.
+        // Stacked, the headline leads: the chart answers it, so it reads after it.
         <div className="grid items-start gap-6 min-[1100px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <div className="min-w-0">
-            <NetworkChart passer={passer} shown={shape.shown} />
+          <div className="min-w-0 max-[1099px]:order-2">
+            <NetworkChart passer={passer} shown={shape.shown} compact={phone} />
             <NetworkLegend layout="field" />
           </div>
 
-          <div className="grid min-w-0 gap-5">
-            <div>
-              <h2 className="text-[28px] font-bold leading-tight tracking-tight text-fg [text-wrap:balance]">
+          <div className="contents min-[1100px]:grid min-[1100px]:min-w-0 min-[1100px]:gap-5">
+            <div className="max-[1099px]:order-1">
+              <h2 className="text-[22px] font-bold leading-tight tracking-tight text-fg [text-wrap:balance] sm:text-[28px]">
                 Where {passer.name}&apos;s {totals.targets} targets went
               </h2>
-              <p className="mt-2 max-w-[70ch] text-[15px] leading-relaxed text-muted">{lede(shape.shown, totals.targets)}</p>
+              <p className="mt-2 max-w-[70ch] text-[14px] leading-relaxed text-muted sm:text-[15px]">{lede(shape.shown, totals.targets)}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 max-[1099px]:order-3 sm:grid-cols-4">
               <Stat label="Targets" value={totals.targets} />
               <Stat label="Cmp/Att" value={`${passer.completions}/${passer.attempts}`} />
               <Stat label="aDOT" value={totals.adot?.toFixed(1) ?? "—"} />
               <Stat label="EPA/target" value={signed(totals.epa_per_target, 2)} />
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-[1099px]:order-4">
               <table className="w-full min-w-[460px] border-collapse text-[14px]">
                 <thead>
                   <tr>
                     {COLUMNS.map((label, index) => (
-                      <th key={label} className={`pb-2 text-[10.5px] font-bold uppercase tracking-[0.07em] text-faint ${index ? "text-right" : "text-left"}`}>
+                      <th key={label} className={`pb-2 text-[10.5px] font-bold uppercase tracking-[0.07em] text-faint ${index ? "text-right" : "pin-col text-left"}`}>
                         {label}
                       </th>
                     ))}
@@ -115,12 +118,12 @@ export function HighlightedVizCard({ pick, network, shape, isLoading, isError })
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.player_id ?? "others"} className={`border-t border-line ${row.others ? "text-muted" : ""}`}>
-                      <td className="py-2.5 text-left">
+                      <td className="pin-col py-2.5 text-left max-md:pr-2">
                         {row.others ? row.name : (
                           <span className="flex items-center gap-2">
                             <Headshot url={row.headshot_url} name={row.name} size={30} />
                             <Link to={`/players/${row.player_id}`} className="truncate font-semibold text-fg hover:text-accent">{shortName(row.name)}</Link>
-                            {row.position && <PositionTag position={row.position} variant="quiet" />}
+                            {row.position && <PositionTag position={row.position} variant="quiet" className="max-sm:hidden" />}
                           </span>
                         )}
                       </td>

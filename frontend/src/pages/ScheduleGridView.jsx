@@ -104,7 +104,7 @@ export function ScheduleGridView({ board }) {
             <table className="border-collapse text-left text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-[color:var(--surface-solid)] pb-2 pr-3 text-left text-[9.5px] font-bold uppercase tracking-[0.07em] text-faint">
+                  <th className="sticky left-0 z-10 bg-[color:var(--surface-pinned)] pb-2 pr-3 text-left text-[9.5px] font-bold uppercase tracking-[0.07em] text-faint">
                     Team
                   </th>
                   {weeks.map((week) => (
@@ -120,7 +120,7 @@ export function ScheduleGridView({ board }) {
               <tbody>
                 {rows.map((team) => (
                   <tr key={team.teamId} className="border-t border-line">
-                    <td className="sticky left-0 z-10 bg-[color:var(--surface-solid)] py-1.5 pr-3">
+                    <td className="sticky left-0 z-10 bg-[color:var(--surface-pinned)] py-1.5 pr-3">
                       <Link
                         to={`/teams/${team.teamId}`}
                         className="text-[12px] font-semibold text-fg hover:text-accent"

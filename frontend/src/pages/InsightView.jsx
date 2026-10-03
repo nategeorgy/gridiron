@@ -7,11 +7,12 @@
 // games threshold, replacement level) rather than presenting a bare number.
 import { useMemo, useState } from "react";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
 import { TeamFilter } from "../components/TeamFilter";
 import { PositionFilter } from "../components/PositionFilter";
-import { TimeframeFilter } from "../components/TimeframeFilter";
+import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
 import { SaveViewButton } from "../components/SaveViewButton";
@@ -29,6 +30,7 @@ import {
   unavailableColumns,
 } from "../utils/availability";
 import { SEASON_TYPES } from "../constants";
+import { scoringLabel } from "../constants/scoring";
 
 const PAGE_SIZE = 50;
 
@@ -124,7 +126,16 @@ export function InsightView({ board }) {
         )}
       </div>
 
-      <div className="glass-card flex flex-wrap gap-3 p-4">
+      <FilterBar
+        summary={summarize(
+          season,
+          weeks ? formatWeeks(weeks.split(",").map(Number)) : "Full season",
+          !board.fixedPosition && (positions ? positions.split(",").join("/") : "All positions"),
+          seasonType === "POST" && "Playoffs",
+          team,
+          board.scoring && scoringLabel(scoring),
+        )}
+      >
         <Select label="Season" value={season} onChange={withReset(setSeason)} options={seasonOptions} />
         <TimeframeFilter
           weeks={weeks}
@@ -137,6 +148,12 @@ export function InsightView({ board }) {
         )}
         <Select label="Type" value={seasonType} onChange={withReset(setSeasonType)} options={SEASON_TYPES} />
         <TeamFilter value={team} onChange={withReset(setTeam)} />
+        {/* On a phone the scoring folds in with the filters; desktop keeps its own card. */}
+        {board.scoring && (
+          <div className="md:hidden">
+            <ScoringControl scoring={scoring} onChange={withReset(setScoring)} label="Scoring" bare />
+          </div>
+        )}
         <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
         <div className="ml-auto flex items-end gap-2">
           <SaveViewButton defaultName={board.title} />
@@ -154,10 +171,12 @@ export function InsightView({ board }) {
             ]}
           />
         </div>
-      </div>
+      </FilterBar>
 
       {board.scoring && (
-        <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />
+        <div className="hidden md:block">
+          <ScoringControl scoring={scoring} onChange={withReset(setScoring)} />
+        </div>
       )}
 
       {board.lede && (

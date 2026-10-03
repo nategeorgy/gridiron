@@ -1,9 +1,9 @@
 // Head coach and coordinators by season. An empty role usually means the head coach
 // called it, which the note on that person says when the source does.
 const ROLES = [
-  ["head_coach", "Head coach"],
-  ["offensive_coordinator", "Offensive coord."],
-  ["defensive_coordinator", "Defensive coord."],
+  ["head_coach", "Head coach", "HC"],
+  ["offensive_coordinator", "Offensive coord.", "OC"],
+  ["defensive_coordinator", "Defensive coord.", "DC"],
 ];
 
 export function CoachingStaff({ staff, season }) {
@@ -15,11 +15,17 @@ export function CoachingStaff({ staff, season }) {
       {rows.length === 0 ? (
         <p className="text-sm text-muted">No staff listed.</p>
       ) : (
-        <table className="w-full border-collapse text-[12.5px]">
+        <table className="w-full border-collapse text-[12px] sm:text-[12.5px]">
           <thead>
             <tr className="text-[11px] text-faint">
               <th className="pb-1.5 pr-2 text-left font-medium" />
-              {ROLES.map(([key, label]) => <th key={key} className="pb-1.5 pr-2 text-left font-medium">{label}</th>)}
+              {/* The short labels on a phone, where three full ones wrapped to two lines. */}
+              {ROLES.map(([key, label, short]) => (
+                <th key={key} className="pb-1.5 pr-2 text-left font-medium">
+                  <span className="sm:hidden">{short}</span>
+                  <span className="hidden sm:inline">{label}</span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>

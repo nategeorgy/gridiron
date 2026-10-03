@@ -6,18 +6,20 @@ import { POSITION_GROUPS } from "../../constants/leaderboards";
 
 export function PositionGroupPicker({ value, onChange }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 max-md:!basis-full">
       <span className="text-xs font-medium uppercase tracking-wide text-muted">Position</span>
+      {/* On a phone a four-column grid: the singles on one row, the groups under them,
+          rather than seven pills wrapping wherever they happen to break. */}
       <div
         role="radiogroup"
         aria-label="Position group"
-        className="flex flex-wrap items-center gap-0.5 rounded-xl border border-edge bg-surface-2 p-1"
+        className="grid grid-cols-4 gap-0.5 rounded-xl border border-edge bg-surface-2 p-1 md:flex md:flex-wrap md:items-center"
       >
         {POSITION_GROUPS.map((group) => {
           const active = group.value === value;
           return (
-            <span key={group.value} className="flex items-center">
-              {group.divider && <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />}
+            <span key={group.value} className="flex items-center max-md:[&>button]:w-full">
+              {group.divider && <span aria-hidden="true" className="mx-1 hidden h-5 w-px bg-line md:block" />}
               <button
                 type="button"
                 role="radio"

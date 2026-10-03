@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { Segmented } from "../components/team/Segmented";
 import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
 import { ExportButton } from "../components/ExportButton";
@@ -18,6 +19,7 @@ import { NETWORK_SIZE, NetworkChart, NetworkLegend, shapeNetwork } from "../comp
 import { useNetwork, usePassers } from "../hooks/useExplore";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
+import { usePhone } from "../hooks/useMediaQuery";
 import { DEPTHS, SIDES, lastName, signed } from "../utils/explore";
 
 const SITUATIONS = [
@@ -29,6 +31,7 @@ const SITUATION_NOTE = { all: "", red_zone: " · red zone", late_downs: " · 3rd
 const TOPS = ["6", "9", "12"];
 
 export function PassingNetworkView({ board }) {
+  const phone = usePhone();
   const { seasonOptions, currentSeason } = useSeasons();
   const [season, setSeason] = useUrlState("season", String(currentSeason));
   const [weeks, setWeeks] = useUrlState("weeks", "");
@@ -100,10 +103,28 @@ export function PassingNetworkView({ board }) {
     <div className="space-y-4">
       <ExploreHeader title={board.title} description={board.description} />
 
-      <div className="glass-card flex flex-wrap items-end gap-3 p-4">
-        <Field label="Quarterback">
-          <PasserPicker passers={passers} value={passer} onChange={choosePasser} />
-        </Field>
+      {/* On a phone the quarterback stays out of the fold: he is what the page is about. */}
+      <FilterBar
+        className="flex flex-wrap items-end gap-3 p-4"
+        summary={summarize(
+          season,
+          weeksLabel,
+          situation === "all" ? "All plays" : SITUATIONS.find((entry) => entry.value === situation)?.label,
+          `Top ${top}`,
+        )}
+        footer={
+          <div className="border-t border-line px-4 py-3 md:hidden">
+            <Field label="Quarterback">
+              <PasserPicker passers={passers} value={passer} onChange={choosePasser} />
+            </Field>
+          </div>
+        }
+      >
+        <div className="max-md:hidden">
+          <Field label="Quarterback">
+            <PasserPicker passers={passers} value={passer} onChange={choosePasser} />
+          </Field>
+        </div>
         <Select label="Season" value={season} options={seasonOptions}
           onChange={(value) => { setSeason(value); setWeeks(""); setPasserId(""); setPasserTeam(""); setVersusId(""); setSelected(""); }} />
         <TimeframeFilter weeks={weeks} season={season} onChange={setWeeks} />
@@ -123,7 +144,7 @@ export function PassingNetworkView({ board }) {
             context={[`Second Level: ${passer?.name ?? ""} passing network`, subtitle]}
           />
         </div>
-      </div>
+      </FilterBar>
 
       {main.data && passer && (
         <QuarterbackCard
@@ -166,7 +187,7 @@ export function PassingNetworkView({ board }) {
                         </div>
                       </div>
                       <NetworkChart layout={layout} passer={network.passer} shown={shape.shown} selected={selected}
-                        onSelect={(id) => setSelected(selected === id ? "" : id)} />
+                        onSelect={(id) => setSelected(selected === id ? "" : id)} compact={phone} />
                     </>
                   ) : (
                     <ChartState isLoading height={480} />
@@ -177,7 +198,7 @@ export function PassingNetworkView({ board }) {
           ) : (
             <div className="mx-auto max-w-[760px]">
               <NetworkChart layout={layout} passer={main.data.passer} shown={mainShape.shown} selected={selected}
-                onSelect={(id) => setSelected(selected === id ? "" : id)} />
+                onSelect={(id) => setSelected(selected === id ? "" : id)} compact={phone} />
             </div>
           )}
           {main.data && <NetworkLegend layout={layout} />}
@@ -212,7 +233,9 @@ function PasserPicker({ passers, value, onChange }) {
   useLayoutEffect(() => {
     if (!open || !button.current) return;
     const rect = button.current.getBoundingClientRect();
-    setAnchor({ top: rect.bottom + 4, left: rect.left });
+    // Kept on screen: the 300px menu from the trigger's left edge can overrun a phone.
+    const viewport = document.documentElement.clientWidth || window.innerWidth || 1280;
+    setAnchor({ top: rect.bottom + 4, left: Math.min(rect.left, Math.max(12, viewport - 312)) });
   }, [open]);
 
   useEffect(() => {
@@ -236,7 +259,7 @@ function PasserPicker({ passers, value, onChange }) {
   return (
     <>
       <button ref={button} type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open}
-        className="glass-input flex min-w-[250px] items-center gap-2 px-2.5 py-1.5 text-left text-sm">
+        className="glass-input flex min-w-[250px] items-center gap-2 px-2.5 py-1.5 text-left text-sm max-md:w-full max-md:min-w-0">
         {value ? (
           <>
             <Headshot url={value.headshot_url} name={value.name} size={22} />
@@ -280,7 +303,7 @@ function PasserPicker({ passers, value, onChange }) {
 
 function Stat({ label, value }) {
   return (
-    <div className="min-w-[70px]">
+    <div className="min-w-0 sm:min-w-[70px]">
       <div className="text-[10px] font-bold uppercase tracking-[0.07em] text-faint">{label}</div>
       <div className="stat-num text-base font-semibold text-fg">{value}</div>
     </div>
@@ -291,16 +314,24 @@ function QuarterbackCard({ network, season, weeksLabel, teammates, versus, onVer
   const { passer, totals } = network;
   return (
     <section className="glass-card flex flex-wrap items-center gap-x-5 gap-y-3 p-4">
-      <Headshot url={passer.headshot_url} name={passer.name} size={64} ring="var(--position-qb)" />
+      <span className="contents max-sm:hidden">
+        <Headshot url={passer.headshot_url} name={passer.name} size={64} ring="var(--position-qb)" />
+      </span>
       <div className="grid min-w-0 flex-1 gap-2.5">
-        <div>
-          <Link to={`/players/${passer.player_id}`} className="text-xl font-bold tracking-tight text-fg hover:text-accent">{passer.name}</Link>
-          <div className="stat-num mt-0.5 flex items-center gap-1.5 text-xs text-faint">
-            <PositionTag position="QB" variant="quiet" />
-            {passer.team} · {passer.games} games · {season} · {weeksLabel}
+        {/* On a phone the face sits beside the name, so the stats get the card's width. */}
+        <div className="flex items-center gap-3 sm:block">
+          <span className="sm:hidden">
+            <Headshot url={passer.headshot_url} name={passer.name} size={48} ring="var(--position-qb)" />
+          </span>
+          <div className="min-w-0">
+            <Link to={`/players/${passer.player_id}`} className="text-xl font-bold tracking-tight text-fg hover:text-accent">{passer.name}</Link>
+            <div className="stat-num mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-faint">
+              <PositionTag position="QB" variant="quiet" />
+              {passer.team} · {passer.games} games · {season} · {weeksLabel}
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <div className="grid grid-cols-4 gap-x-3 gap-y-2 sm:flex sm:flex-wrap sm:gap-x-5">
           <Stat label="Cmp/Att" value={`${passer.completions}/${passer.attempts}`} />
           <Stat label="Pass yds" value={passer.passing_yards.toLocaleString()} />
           <Stat label="TD" value={passer.passing_tds} />
@@ -344,7 +375,7 @@ function ReceiverTable({ network, shape, selected, onSelect }) {
           <thead>
             <tr>
               {head.map((label, index) => (
-                <th key={label} className={`pb-1.5 text-[10px] font-bold uppercase tracking-[0.07em] text-faint ${index ? "text-right" : "text-left"}`}>{label}</th>
+                <th key={label} className={`pb-1.5 text-[10px] font-bold uppercase tracking-[0.07em] text-faint ${index ? "text-right" : "pin-col text-left"}`}>{label}</th>
               ))}
             </tr>
           </thead>
@@ -352,12 +383,12 @@ function ReceiverTable({ network, shape, selected, onSelect }) {
             {rows.map((row) => (
               <tr key={row.player_id ?? "others"} onClick={row.others ? undefined : () => onSelect(row.player_id)}
                 className={`border-t border-line ${row.others ? "text-muted" : "cursor-pointer hover:bg-surface-2/60"} ${row.player_id && row.player_id === selected ? "bg-surface-2" : ""}`}>
-                <td className="py-1.5 text-left">
+                <td className="pin-col py-1.5 text-left max-md:pr-2">
                   {row.others ? row.name : (
                     <span className="flex items-center gap-2">
                       <Headshot url={row.headshot_url} name={row.name} size={24} />
                       <span className="truncate font-semibold text-fg">{row.name.split(" ")[0][0]}. {lastName(row.name)}</span>
-                      <PositionTag position={row.position} variant="quiet" />
+                      <PositionTag position={row.position} variant="quiet" className="max-sm:hidden" />
                     </span>
                   )}
                 </td>
@@ -373,7 +404,7 @@ function ReceiverTable({ network, shape, selected, onSelect }) {
           </tbody>
           <tfoot>
             <tr className="border-t border-line font-semibold text-fg">
-              <td className="py-1.5 text-left">All targets</td>
+              <td className="pin-col py-1.5 text-left">All targets</td>
               <td className="stat-num py-1.5 text-right">{totals.targets}</td>
               <td className="stat-num py-1.5 text-right">100%</td>
               <td className="stat-num py-1.5 text-right">{totals.receptions}</td>

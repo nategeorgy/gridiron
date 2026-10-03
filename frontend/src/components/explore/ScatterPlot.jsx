@@ -12,6 +12,11 @@ import { lastName, median, niceTicks, positionColor } from "../../utils/explore"
 
 const MARGIN = { left: 64, right: 26, top: 20, bottom: 52 };
 
+// A phone draws the plot in a box near its own width rather than shrinking the desktop
+// one, which set an 11.5px name at about 3px. Marks shrink with it, and fewer players
+// are named, so the labels that are drawn have room.
+const COMPACT = { width: 380, height: 440, margin: { left: 46, right: 10, top: 16, bottom: 42 }, radius: 0.62, named: 6 };
+
 function tickText(metric, value) {
   if (metric?.format === "pct") return `${Math.round(value * 100)}%`;
   if (metric?.format === "int" || Math.abs(value) >= 100 || Number.isInteger(value)) return Math.round(value).toLocaleString();
@@ -25,14 +30,20 @@ function tickText(metric, value) {
  * @param lit      ids to emphasise (the rest dim) when non-empty
  * @param always   ids whose names are always drawn
  * @param tip      a useChartTooltip() instance, with tipFor(point); omit for exports
+ * @param compact  the phone box (see COMPACT); never for an export
  */
 export function ScatterPlot({
   points, context = [], xMetric, yMetric, sizeMetric, identity = false, corners, display = "heads",
-  labels = true, outliers = true, always = [], lit, fixedRadius, width = 1180, height = 600,
-  tip, tipFor, onPick,
+  labels = true, outliers = true, always = [], lit, fixedRadius: fixedRadiusProp, width: widthProp = 1180, height: heightProp = 600,
+  tip, tipFor, onPick, compact = false,
 }) {
   const clipId = useClipId();
   const heads = display !== "dots";
+  const width = compact ? COMPACT.width : widthProp;
+  const height = compact ? COMPACT.height : heightProp;
+  const margin = compact ? COMPACT.margin : MARGIN;
+  const scale = compact ? COMPACT.radius : 1;
+  const fixedRadius = fixedRadiusProp ? fixedRadiusProp * scale : fixedRadiusProp;
 
   const layout = useMemo(() => {
     const everyone = [...points, ...context];
@@ -45,8 +56,8 @@ export function ScatterPlot({
     const padX = (x1 - x0 || 1) * 0.06;
     const padY = (y1 - y0 || 1) * 0.08;
     x0 -= padX; x1 += padX; y0 -= padY; y1 += padY;
-    const X = (value) => MARGIN.left + ((value - x0) / (x1 - x0)) * (width - MARGIN.left - MARGIN.right);
-    const Y = (value) => height - MARGIN.bottom - ((value - y0) / (y1 - y0)) * (height - MARGIN.top - MARGIN.bottom);
+    const X = (value) => margin.left + ((value - x0) / (x1 - x0)) * (width - margin.left - margin.right);
+    const Y = (value) => height - margin.bottom - ((value - y0) / (y1 - y0)) * (height - margin.top - margin.bottom);
     const medianX = median(everyone.map((p) => p.x));
     const medianY = median(everyone.map((p) => p.y));
 
@@ -54,9 +65,9 @@ export function ScatterPlot({
     const [z0, z1] = [Math.min(...sizes), Math.max(...sizes)];
     const radius = (p) => {
       if (fixedRadius) return fixedRadius;
-      if (!sizeMetric || p.z === null || p.z === undefined) return heads ? 16 : 5.5;
+      if (!sizeMetric || p.z === null || p.z === undefined) return (heads ? 16 : 5.5) * scale;
       const k = Math.sqrt((p.z - z0) / (z1 - z0 || 1));
-      return heads ? 11 + 15 * k : 3.5 + 7.5 * k;
+      return (heads ? 11 + 15 * k : 3.5 + 7.5 * k) * scale;
     };
 
     // Fan out exact ties around the shared point.
@@ -95,9 +106,9 @@ export function ScatterPlot({
         [...points]
           .map((p) => ({ p, distance: Math.hypot(span(p.x, x0, x1) - span(medianX, x0, x1), span(p.y, y0, y1) - span(medianY, y0, y1)) }))
           .sort((a, b) => b.distance - a.distance)
-          .slice(0, heads ? 9 : 12)
+          .slice(0, compact ? COMPACT.named : heads ? 9 : 12)
           .forEach(({ p }) => picked.add(p.id));
-        if (!heads) [...points].sort((a, b) => a.rank - b.rank).slice(0, 8).forEach((p) => picked.add(p.id));
+        if (!heads) [...points].sort((a, b) => a.rank - b.rank).slice(0, compact ? 4 : 8).forEach((p) => picked.add(p.id));
       }
       const boxes = [];
       const ordered = marks.filter((mark) => picked.has(mark.point.id))
@@ -111,7 +122,7 @@ export function ScatterPlot({
         for (const [tx, ty, anchor] of spots) {
           const bx = anchor === "start" ? tx : anchor === "end" ? tx - textWidth : tx - textWidth / 2;
           const box = { x: bx, y: ty - 10, w: textWidth, h: 13 };
-          if (box.x < MARGIN.left || box.x + textWidth > width - MARGIN.right || box.y < MARGIN.top) continue;
+          if (box.x < margin.left || box.x + textWidth > width - margin.right || box.y < margin.top) continue;
           const hitsLabel = boxes.some((b) => box.x < b.x + b.w && box.x + box.w > b.x && box.y < b.y + b.h && box.y + box.h > b.y);
           const hitsMark = marks.some((other) => other.point.id !== mark.point.id
             && other.cx + other.r > box.x && other.cx - other.r < box.x + box.w && other.cy + other.r > box.y && other.cy - other.r < box.y + box.h);
@@ -125,10 +136,10 @@ export function ScatterPlot({
 
     return {
       X, Y, x0, x1, y0, y1, medianX, medianY, marks, hubs, placedLabels,
-      xTicks: niceTicks(x0, x1, 8).filter((tick) => xMetric?.format !== "int" || Number.isInteger(tick)),
-      yTicks: niceTicks(y0, y1, 6).filter((tick) => yMetric?.format !== "int" || Number.isInteger(tick)),
+      xTicks: niceTicks(x0, x1, compact ? 5 : 8).filter((tick) => xMetric?.format !== "int" || Number.isInteger(tick)),
+      yTicks: niceTicks(y0, y1, compact ? 5 : 6).filter((tick) => yMetric?.format !== "int" || Number.isInteger(tick)),
     };
-  }, [points, context, identity, width, height, sizeMetric, heads, fixedRadius, labels, outliers, always, xMetric, yMetric]);
+  }, [points, context, identity, width, height, sizeMetric, heads, fixedRadius, labels, outliers, always, xMetric, yMetric, compact, scale, margin]);
 
   const { X, Y, x0, x1, y0, y1 } = layout;
   const litSet = lit && lit.size ? lit : null;
@@ -141,21 +152,21 @@ export function ScatterPlot({
       <defs><ClipDef id={clipId} /></defs>
       {layout.xTicks.map((tick) => (
         <g key={`x${tick}`}>
-          <line className="grid" x1={X(tick)} x2={X(tick)} y1={MARGIN.top} y2={height - MARGIN.bottom} />
-          <text className="axis-t" x={X(tick)} y={height - MARGIN.bottom + 16} textAnchor="middle">{tickText(xMetric, tick)}</text>
+          <line className="grid" x1={X(tick)} x2={X(tick)} y1={margin.top} y2={height - margin.bottom} />
+          <text className="axis-t" x={X(tick)} y={height - margin.bottom + 16} textAnchor="middle">{tickText(xMetric, tick)}</text>
         </g>
       ))}
       {layout.yTicks.map((tick) => (
         <g key={`y${tick}`}>
-          <line className="grid" x1={MARGIN.left} x2={width - MARGIN.right} y1={Y(tick)} y2={Y(tick)} />
-          <text className="axis-t" x={MARGIN.left - 8} y={Y(tick) + 3.5} textAnchor="end">{tickText(yMetric, tick)}</text>
+          <line className="grid" x1={margin.left} x2={width - margin.right} y1={Y(tick)} y2={Y(tick)} />
+          <text className="axis-t" x={margin.left - 8} y={Y(tick) + 3.5} textAnchor="end">{tickText(yMetric, tick)}</text>
         </g>
       ))}
-      <text className="axis-l" x={MARGIN.left + (width - MARGIN.left - MARGIN.right) / 2} y={height - 10} textAnchor="middle">
+      <text className="axis-l" x={margin.left + (width - margin.left - margin.right) / 2} y={height - 10} textAnchor="middle">
         {xMetric?.label} →
       </text>
       <text className="axis-l" textAnchor="middle"
-        transform={`translate(16 ${MARGIN.top + (height - MARGIN.top - MARGIN.bottom) / 2}) rotate(-90)`}>
+        transform={`translate(${compact ? 11 : 16} ${margin.top + (height - margin.top - margin.bottom) / 2}) rotate(-90)`}>
         {yMetric?.label} →
       </text>
       {identity ? (() => {
@@ -169,14 +180,14 @@ export function ScatterPlot({
         );
       })() : (
         <g>
-          <line className="med" x1={X(layout.medianX)} x2={X(layout.medianX)} y1={MARGIN.top} y2={height - MARGIN.bottom} />
-          <line className="med" x1={MARGIN.left} x2={width - MARGIN.right} y1={Y(layout.medianY)} y2={Y(layout.medianY)} />
+          <line className="med" x1={X(layout.medianX)} x2={X(layout.medianX)} y1={margin.top} y2={height - margin.bottom} />
+          <line className="med" x1={margin.left} x2={width - margin.right} y1={Y(layout.medianY)} y2={Y(layout.medianY)} />
         </g>
       )}
-      {corners?.topLeft && <text className="corner" x={MARGIN.left + inset} y={MARGIN.top + 14}>{corners.topLeft}</text>}
-      {corners?.topRight && <text className="corner" x={width - MARGIN.right - inset} y={MARGIN.top + 14} textAnchor="end">{corners.topRight}</text>}
-      {corners?.bottomLeft && <text className="corner" x={MARGIN.left + inset} y={height - MARGIN.bottom - 10}>{corners.bottomLeft}</text>}
-      {corners?.bottomRight && <text className="corner" x={width - MARGIN.right - inset} y={height - MARGIN.bottom - 10} textAnchor="end">{corners.bottomRight}</text>}
+      {corners?.topLeft && <text className="corner" x={margin.left + inset} y={margin.top + 14}>{corners.topLeft}</text>}
+      {corners?.topRight && <text className="corner" x={width - margin.right - inset} y={margin.top + 14} textAnchor="end">{corners.topRight}</text>}
+      {corners?.bottomLeft && <text className="corner" x={margin.left + inset} y={height - margin.bottom - 10}>{corners.bottomLeft}</text>}
+      {corners?.bottomRight && <text className="corner" x={width - margin.right - inset} y={height - margin.bottom - 10} textAnchor="end">{corners.bottomRight}</text>}
       {context.map((p, index) => (
         <circle key={`c${index}`} cx={X(p.x)} cy={Y(p.y)} r={4} fill="color-mix(in srgb, var(--fg) 22%, transparent)" />
       ))}

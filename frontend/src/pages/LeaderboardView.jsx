@@ -14,12 +14,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { ScoringControl } from "../components/ScoringControl";
 import { StatTable, TablePager } from "../components/StatTable";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
 import { TeamFilter } from "../components/TeamFilter";
-import { TimeframeFilter } from "../components/TimeframeFilter";
+import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
+import { scoringLabel } from "../constants/scoring";
 import { SaveViewButton } from "../components/SaveViewButton";
 import { AvailabilityNotice } from "../components/AvailabilityNotice";
 import { ColumnEditor } from "../components/leaderboard/ColumnEditor";
@@ -244,7 +246,7 @@ function Leaderboard({ tab }) {
           onClick={() => setEditorOpen(true)}
           aria-haspopup="dialog"
           aria-expanded={editorOpen}
-          className="ml-auto inline-flex items-center gap-2 rounded-full border bg-surface-2 px-4 py-1.5 text-[13px] font-semibold text-fg transition hover:text-accent"
+          className="ml-auto hidden items-center gap-2 rounded-full border bg-surface-2 px-4 py-1.5 text-[13px] font-semibold text-fg transition hover:text-accent md:inline-flex"
           style={{ borderColor: "color-mix(in srgb, var(--accent) 55%, transparent)" }}
         >
           <EditIcon />
@@ -252,7 +254,31 @@ function Leaderboard({ tab }) {
         </button>
       </div>
 
-      <div className="glass-card flex flex-wrap gap-3 p-4">
+      {/* On a phone Edit Columns rides in the folded filter row rather than taking a row
+          of its own under the tabs. */}
+      <FilterBar
+        summary={summarize(
+          groupLabel,
+          season,
+          weeks ? formatWeeks(weeks.split(",").map(Number)) : "Full season",
+          seasonType === "POST" && "Playoffs",
+          team,
+          supportsScoring && scoringLabel(scoring),
+        )}
+        aside={
+          <button
+            type="button"
+            onClick={() => setEditorOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={editorOpen}
+            className="inline-flex items-center gap-1.5 rounded-full border bg-surface-2 px-3 py-1.5 text-xs font-semibold text-fg"
+            style={{ borderColor: "color-mix(in srgb, var(--accent) 55%, transparent)" }}
+          >
+            <EditIcon />
+            Columns
+          </button>
+        }
+      >
         <PositionGroupPicker value={group} onChange={changeGroup} />
         <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
         <TimeframeFilter weeks={weeks} season={season} seasonType={seasonType} onChange={setWeeks} />
@@ -273,7 +299,7 @@ function Leaderboard({ tab }) {
             ]}
           />
         </div>
-      </div>
+      </FilterBar>
 
       <AvailabilityNotice
         columns={columns}

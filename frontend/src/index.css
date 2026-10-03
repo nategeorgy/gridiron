@@ -25,6 +25,10 @@
     --surface: rgba(44, 46, 54, 0.55);   /* frosted card fill */
     --surface-2: rgba(74, 76, 86, 0.45); /* raised / hover fill */
     --surface-solid: #16171c;            /* opaque popovers (dropdowns, menus) */
+    /* A table column pinned while the rest scrolls under it (phones). Opaque, or the
+       scrolled cells show through, and close to what a glass card composites to over
+       the environment, so the pinned column reads as part of the card. */
+    --surface-pinned: #1f2028;
     --border: rgba(255, 255, 255, 0.14); /* glass edge */
     --border-strong: rgba(255, 255, 255, 0.24);
     --divider: rgba(255, 255, 255, 0.08);/* table/row hairlines */
@@ -108,6 +112,7 @@
     --surface: rgba(255, 255, 255, 0.55);
     --surface-2: rgba(255, 255, 255, 0.72);
     --surface-solid: #ffffff;
+    --surface-pinned: #f3f5f8;
     --border: rgba(255, 255, 255, 0.80);
     --border-strong: rgba(255, 255, 255, 0.95);
     --divider: rgba(20, 30, 50, 0.10);
@@ -172,6 +177,17 @@
     background-image: var(--env);
     background-attachment: fixed;
     background-size: cover;
+  }
+
+  /* iOS Safari zooms the page into any field set below 16px the moment it is focused,
+     and leaves it zoomed. On a phone every field is 16px, which is also the size a
+     thumb-sized control wants. */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 
   /* Tabular numbers keep stat columns aligned. */
@@ -291,6 +307,49 @@
   .btn-ghost:disabled {
     opacity: 0.4;
   }
+}
+
+/* A table's first column, pinned on a phone while the stats scroll sideways under it.
+   Opaque, or the scrolled cells show through, with a hairline on the edge they pass. */
+@media (max-width: 767px) {
+  .pin-col {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface-pinned);
+    box-shadow: inset -1px 0 0 var(--divider);
+  }
+  /* A selected row's tint, which the opaque cell would otherwise hide. */
+  .pin-col.is-selected {
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface-pinned));
+  }
+}
+
+/* The controls inside an open FilterBar on a phone: each one grows to share its row,
+   two to a row at 375px, so the dropdowns line up instead of ragging to their labels. */
+@media (max-width: 767px) {
+  .filter-fields > * {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+  .filter-fields select,
+  .filter-fields .glass-input {
+    width: 100%;
+    max-width: none;
+  }
+  .filter-fields > .ml-auto {
+    justify-content: flex-end;
+  }
+}
+
+/* A row that scrolls sideways without a scrollbar (tab strips on a phone). */
+.scroll-row {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.scroll-row::-webkit-scrollbar {
+  display: none;
 }
 
 /* Thin scrollbars that follow the theme. */

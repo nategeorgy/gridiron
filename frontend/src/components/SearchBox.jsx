@@ -1,10 +1,15 @@
 // Header search: type a name, pick a player, jump to their profile.
+//
+// Two shapes. `header` is the fixed-width box in the desktop nav. `row` fills the phone
+// search row under the header (Layout): focused on open, and `onDone` closes the row
+// once a player is picked or Escape is pressed.
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDebounce } from "../hooks/useDebounce";
 import { usePlayerSearch } from "../hooks/usePlayerSearch";
 
-export function SearchBox() {
+export function SearchBox({ variant = "header", onDone }) {
+  const row = variant === "row";
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
@@ -29,21 +34,29 @@ export function SearchBox() {
     navigate(`/players/${playerId}`);
     setQuery("");
     setOpen(false);
+    onDone?.();
   };
 
   const handleKeyDown = (event) => {
-    if (event.key === "Escape") setOpen(false);
+    if (event.key === "Escape") {
+      setOpen(false);
+      onDone?.();
+    }
     if (event.key === "Enter" && results.length > 0) selectPlayer(results[0].player_id);
   };
 
   const showDropdown = open && debounced.trim().length >= 2;
 
-  // The width steps back down between sm and xl so the header still fits on one line
-  // once the account control is present (M5 added ~70px to the right cluster).
+  // The header box steps down with the window so the desktop nav fits on one line from
+  // 1024px, where it first appears: there, with the Sign in button, it ends 16px short of
+  // the edge, and the old 192px box would have run 4px past it.
   return (
-    <div ref={containerRef} className="relative hidden w-44 sm:block sm:w-48 xl:w-64">
+    <div ref={containerRef} className={row ? "relative w-full" : "relative w-40 min-[1080px]:w-48 xl:w-64"}>
       <input
-        type="text"
+        type={row ? "search" : "text"}
+        autoFocus={row}
+        aria-label="Search players"
+        enterKeyHint="go"
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
@@ -52,7 +65,7 @@ export function SearchBox() {
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder="Search players…"
-        className="glass-input w-full px-3 py-1.5 text-sm"
+        className={`glass-input w-full px-3 ${row ? "py-2.5" : "py-1.5"} text-sm`}
       />
 
       {showDropdown && (

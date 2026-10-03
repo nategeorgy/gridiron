@@ -32,20 +32,26 @@ const VIEWS = [
   { value: "table", label: "Table" },
 ];
 
+// On a phone the face stacks over the name: side by side, a 96px headshot left the name
+// about 40px, and it broke a letter at a time.
 function Face({ player, side, align }) {
   const right = align === "right";
   return (
-    <div className={`flex min-w-0 items-center gap-2.5 ${right ? "flex-row-reverse text-right" : ""}`}>
+    <div
+      className={`flex min-w-0 flex-col items-center gap-2 text-center sm:flex-row sm:gap-2.5 ${
+        right ? "sm:flex-row-reverse sm:text-right" : "sm:text-left"
+      }`}
+    >
       {player.headshot_url ? (
         <img
           src={player.headshot_url}
           alt=""
-          className="h-24 w-24 shrink-0 rounded-full object-cover object-top"
+          className="h-[72px] w-[72px] shrink-0 rounded-full object-cover object-top sm:h-24 sm:w-24"
           style={{ border: `2px solid ${side.color}`, background: "var(--surface-2)" }}
         />
       ) : (
         <span
-          className="grid h-24 w-24 shrink-0 place-items-center rounded-full text-2xl font-bold"
+          className="grid h-[72px] w-[72px] shrink-0 place-items-center rounded-full text-2xl font-bold sm:h-24 sm:w-24"
           style={{ border: `2px solid ${side.color}`, color: side.color }}
         >
           {player.name?.[0]}
@@ -86,7 +92,9 @@ function Radar({ players, metrics }) {
     metrics.map((_, index) => point(index, value).map((n) => n.toFixed(1)).join(",")).join(" ");
 
   return (
-    <div className="flex justify-center pt-1.5">
+    // Narrower than the card on a phone: the axis labels sit outside the radar's own box,
+    // and at full width the ones on the left and right ran off the card.
+    <div className="flex justify-center px-7 pt-1.5 sm:px-0">
       <div className="relative aspect-square w-full max-w-[430px]">
         <svg
           viewBox={`0 0 ${size} ${size}`}

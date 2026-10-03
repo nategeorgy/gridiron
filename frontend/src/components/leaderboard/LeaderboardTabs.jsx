@@ -3,6 +3,7 @@
 // flipping from Usage to Efficiency keeps the same players on screen. The player page's
 // tables pass `onSelect` instead, since their tab is a query param rather than a path.
 import { Link } from "react-router-dom";
+import { ScrollRow } from "../ui/ScrollRow";
 import { CUSTOM_TAB, LEADERBOARD_TABS } from "../../constants/leaderboards";
 
 const TAB_SIZE = {
@@ -85,15 +86,18 @@ export function LeaderboardTabs({
     );
   };
 
+  // One line that scrolls on a phone; wrapping inside the rounded track made a blob.
   return (
-    <div
-      role="tablist"
-      aria-label="Leaderboard"
-      className="inline-flex flex-wrap items-center gap-0.5 rounded-full border border-edge bg-surface-2 p-1"
-    >
-      {LEADERBOARD_TABS.map((entry) => tab(entry, entry.label))}
-      <span aria-hidden="true" className={`mx-1 w-px bg-line ${size === "sm" ? "h-4" : "h-5"}`} />
-      {tab(CUSTOM_TAB, customCount ? `${CUSTOM_TAB.label} (${customCount})` : CUSTOM_TAB.label)}
-    </div>
+    <ScrollRow className="max-w-full">
+      <div
+        role="tablist"
+        aria-label="Leaderboard"
+        className="inline-flex items-center gap-0.5 rounded-full border border-edge bg-surface-2 p-1 md:flex-wrap"
+      >
+        {LEADERBOARD_TABS.map((entry) => tab(entry, entry.label))}
+        <span aria-hidden="true" className={`mx-1 w-px shrink-0 bg-line ${size === "sm" ? "h-4" : "h-5"}`} />
+        {tab(CUSTOM_TAB, customCount ? `${CUSTOM_TAB.label} (${customCount})` : CUSTOM_TAB.label)}
+      </div>
+    </ScrollRow>
   );
 }

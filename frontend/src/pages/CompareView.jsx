@@ -9,6 +9,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
+import { ScrollRow } from "../components/ui/ScrollRow";
 import { Segmented } from "../components/team/Segmented";
 import { ScoringControl } from "../components/ScoringControl";
 import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
@@ -177,14 +179,17 @@ export function CompareView({ board }) {
   return (
     <div className="space-y-4">
       <ExploreHeader title={board.title} description={board.description}>
-        <div className="flex items-center gap-2">
-          <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-faint">Examples</span>
-          <Chips label="Examples" value={null} onChange={loadExample}
+        <div className="flex min-w-0 max-w-full items-center gap-2">
+          <span className="shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-faint">Examples</span>
+          <Chips label="Examples" value={null} onChange={loadExample} scroll
             options={COMPARE_EXAMPLES.map((example) => ({ value: example.id, label: example.label }))} />
         </div>
       </ExploreHeader>
 
-      <div className="glass-card flex flex-wrap items-end gap-3 p-4">
+      <FilterBar
+        className="flex flex-wrap items-end gap-3 p-4"
+        summary={summarize(sameSeason ? String(firstSeason) : "Mixed seasons", weeksLabel, scoringLabel(scoring))}
+      >
         <Select label="Season for everyone" value={sameSeason ? String(firstSeason) : ""}
           onChange={(value) => value && setChosen(chosen.map((slot) => ({ ...slot, season: Number(value) })))}
           options={[...(sameSeason ? [] : [{ value: "", label: "Mixed" }]), ...seasonOptions]} />
@@ -195,7 +200,7 @@ export function CompareView({ board }) {
           <ExportButton filename={`second-level-compare-${activeTab}`} rows={csvRows} columns={csvColumns}
             context={[`Second Level: Player Comparison · ${LEADERBOARD_TABS.find((entry) => entry.id === activeTab)?.label}`, `${weeksLabel} · scoring: ${scoring}`]} />
         </div>
-      </div>
+      </FilterBar>
 
       <div className="grid gap-3 sm:grid-cols-2 min-[1100px]:grid-cols-5">
         {slots.map((slot) => (
@@ -207,8 +212,12 @@ export function CompareView({ board }) {
 
       {slots.length > 0 && (
         <>
-          <Segmented label="Stat tab" value={activeTab} onChange={setTab}
-            options={tabs.map((entry) => ({ value: entry.id, label: entry.label }))} />
+          <ScrollRow className="max-w-full">
+            <div className="inline-flex md:block">
+              <Segmented label="Stat tab" value={activeTab} onChange={setTab}
+                options={tabs.map((entry) => ({ value: entry.id, label: entry.label }))} />
+            </div>
+          </ScrollRow>
           <section className="glass-card min-w-0 p-4">
             <CardTitle title={LEADERBOARD_TABS.find((entry) => entry.id === activeTab)?.label}
               sub={new Set(positions).size > 1
@@ -341,16 +350,18 @@ function StatTable({ slots, sections, metrics }) {
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-[12.5px]">
+        {/* On a phone the stat names stay pinned while the players scroll, and each
+            player's face stacks over his name to keep the columns narrow. */}
+        <table className="w-full border-collapse text-[12.5px] md:min-w-[720px]">
           <thead>
             <tr>
-              <th className="px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint">Stat</th>
+              <th className="pin-col px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint">Stat</th>
               {slots.map((slot) => (
                 <th key={slot.key} className="px-2 py-1.5 text-center">
-                  <span className="inline-flex items-center gap-2">
-                    <Swatch color={slot.color} />
+                  <span className="inline-flex flex-col items-center gap-1 sm:flex-row sm:gap-2">
+                    <span className="contents max-sm:hidden"><Swatch color={slot.color} /></span>
                     <Headshot url={slot.headshot_url} name={slot.name} size={30} ring={slot.color} />
-                    <span className="grid text-left leading-tight">
+                    <span className="grid text-center leading-tight sm:text-left">
                       <b className="text-[12.5px] font-bold text-fg">{lastName(slot.name)}</b>
                       <small className="stat-num text-[11px] font-medium text-faint">{slot.season}</small>
                     </span>
@@ -364,12 +375,13 @@ function StatTable({ slots, sections, metrics }) {
             {body.map((section) => [
               section.name ? (
                 <tr key={`section-${section.name}`}>
-                  <td colSpan={slots.length + 2} className="px-2 pb-1 pt-3.5 text-left text-[11px] font-bold text-fg">{section.name}</td>
+                  <td className="pin-col px-2 pb-1 pt-3.5 text-left text-[11px] font-bold text-fg max-md:!shadow-none">{section.name}</td>
+                  <td colSpan={slots.length + 1} />
                 </tr>
               ) : null,
               ...section.lines.map(({ id, metric, leader }) => (
                 <tr key={id}>
-                  <td className="border-t border-line px-2 py-1.5 text-left text-muted" title={metric?.description}>{metric?.label ?? id}</td>
+                  <td className="pin-col min-w-[96px] border-t border-line px-2 py-1.5 text-left text-muted max-md:max-w-[120px]" title={metric?.description}>{metric?.label ?? id}</td>
                   {slots.map((slot) => {
                     const value = slot.row?.[id];
                     const percentile = slot.row?.percentiles?.[id];

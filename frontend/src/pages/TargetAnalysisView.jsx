@@ -8,6 +8,8 @@
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
+import { ScrollRow } from "../components/ui/ScrollRow";
 import { Segmented } from "../components/team/Segmented";
 import { TeamFilter } from "../components/TeamFilter";
 import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
@@ -120,8 +122,27 @@ export function TargetAnalysisView({ board }) {
     <div className="space-y-4">
       <ExploreHeader title={board.title} description={board.description} />
 
-      <div className="glass-card flex flex-wrap items-end gap-3 p-4">
-        <div className="flex flex-col gap-1">
+      {/* On a phone the position group stays out of the fold, as on the scatter. */}
+      <FilterBar
+        className="flex flex-wrap items-end gap-3 p-4"
+        summary={summarize(
+          season,
+          weeks ? formatWeeks(weeks.split(",").map(Number)) : "Full season",
+          team,
+          `${minimum}+ targets`,
+        )}
+        footer={
+          <div className="border-t border-line px-4 py-2.5 md:hidden">
+            <ScrollRow className="max-w-full">
+              <div className="inline-flex">
+                <Segmented label="Position" value={group} onChange={(value) => { setGroup(value); setSelected(""); }}
+                  options={GROUPS.map(({ value, label }) => ({ value, label }))} />
+              </div>
+            </ScrollRow>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-1 max-md:hidden">
           <span className="text-xs font-medium uppercase tracking-wide text-muted">Position</span>
           <Segmented label="Position" value={group} onChange={(value) => { setGroup(value); setSelected(""); }}
             options={GROUPS.map(({ value, label }) => ({ value, label }))} />
@@ -139,7 +160,7 @@ export function TargetAnalysisView({ board }) {
             context={[`Second Level: Target Analysis · ${groupInfo.noun}`, listSubtitle]}
           />
         </div>
-      </div>
+      </FilterBar>
 
       <div className="grid items-start gap-4 min-[1100px]:grid-cols-[minmax(0,1fr)_470px]">
         <section className={`glass-card min-w-0 p-4 transition ${isPlaceholderData ? "opacity-70" : ""}`}>
@@ -165,12 +186,13 @@ export function TargetAnalysisView({ board }) {
             <ChartState isLoading={isLoading} isError={isError} isEmpty={!players.length} height={520}
               empty={`No ${groupInfo.noun} have ${minimum} targets in these weeks.`} />
           ) : (
+            // On a phone the player is pinned (with his rank) while the rest scrolls.
             <div className="max-h-[760px] overflow-auto">
-              <table className="w-full min-w-[640px] border-collapse text-sm">
-                <thead className="sticky top-0 z-[1]" style={{ background: "var(--surface-solid)" }}>
+              <table className="w-full min-w-[560px] border-collapse text-sm md:min-w-[640px]">
+                <thead className="sticky top-0 z-[2]" style={{ background: "var(--surface-solid)" }}>
                   <tr>
-                    <th className="w-8 px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint">#</th>
-                    <th className="px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Player</th>
+                    <th className="hidden w-8 px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint md:table-cell">#</th>
+                    <th className="pin-col px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint max-md:!bg-[color:var(--surface-solid)] max-md:pl-8">Player</th>
                     {header("targets", "TGT")}
                     {header("adot", "aDOT")}
                     <th className="px-2 pb-2 text-left text-[10px] font-bold uppercase tracking-[0.07em] text-faint">
@@ -195,8 +217,13 @@ export function TargetAnalysisView({ board }) {
                         className={`cursor-pointer border-t border-line transition ${active ? "bg-surface-2" : "hover:bg-surface-2/60"}`}
                         style={active ? { boxShadow: "inset 3px 0 0 var(--accent)" } : undefined}
                       >
-                        <td className="stat-num px-2 py-1.5 text-xs text-faint">{index + 1}</td>
-                        <td className="px-2 py-1.5"><PlayerLine player={entry} size={24} /></td>
+                        <td className="stat-num hidden px-2 py-1.5 text-xs text-faint md:table-cell">{index + 1}</td>
+                        <td className="pin-col px-2 py-1.5 max-md:max-w-[160px]">
+                          <span className="flex items-center gap-1.5">
+                            <span className="stat-num w-5 shrink-0 text-right text-[11px] text-faint md:hidden">{index + 1}</span>
+                            <PlayerLine player={entry} size={24} />
+                          </span>
+                        </td>
                         <td className="stat-num px-2 py-1.5 text-right">{entry.targets}</td>
                         <td className="stat-num px-2 py-1.5 text-right font-semibold text-fg">{entry.adot?.toFixed(1) ?? "—"}</td>
                         <td className="w-[36%] px-2 py-1.5">

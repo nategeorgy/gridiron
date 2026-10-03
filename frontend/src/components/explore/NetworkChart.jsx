@@ -12,6 +12,21 @@ import { DEPTHS, SIDES, epaColor, lastName, positionColor, signed } from "../../
 
 const SIZE = 640;
 
+// The field layout's box. The full one is square, with the depth bands named down the
+// right. A phone draws the compact one, narrower and taller with no room for the band
+// names, so its type renders near the size it is set at: the square one shrunk to a
+// phone's width set an 11.5px name at under 6px. Exports always draw the full one.
+const FIELD = {
+  full: {
+    width: SIZE, height: SIZE, top: 30, bottom: 22, left: 28, right: SIZE - 104,
+    radius: [13, 19], passerRadius: 27, edge: [2, 11], name: 11.5, sub: 10.5, lineGap: 12, char: 6.6,
+  },
+  compact: {
+    width: 360, height: 430, top: 10, bottom: 18, left: 26, right: 356,
+    radius: [10, 13], passerRadius: 19, edge: [1.5, 8], name: 13, sub: 11.5, lineGap: 13, char: 7.4,
+  },
+};
+
 /**
  * Receivers as the network draws them: the top `limit` by targets (each needing
  * `floor` targets), the rest folded into one "others" row, and a lean from left (-1) to
@@ -77,21 +92,28 @@ function receiverTip(receiver, passer) {
  * @param selected     a receiver id to ring
  * @param interactive  hover focus, tooltips and clicks (off for exports)
  * @param nested       { x, y, width, height } to render inside another SVG
+ * @param compact      the phone geometry for the field layout (see FIELD)
  */
-export function NetworkChart({ layout = "field", passer, shown, selected, onSelect, interactive = true, nested }) {
+export function NetworkChart({ layout = "field", passer, shown, selected, onSelect, interactive = true, nested, compact = false }) {
   const clipId = useClipId();
   const tip = useChartTooltip();
   const [focus, setFocus] = useState(null);
-  const placed = useMemo(() => (layout === "radial" ? placeRadial(shown) : placeField(shown)), [layout, shown]);
+  // The radial layout has one geometry; only the field one has a phone version.
+  const geometry = layout === "radial" || !compact ? FIELD.full : FIELD.compact;
+  const placed = useMemo(
+    () => (layout === "radial" ? placeRadial(shown) : placeField(shown, geometry)),
+    [layout, shown, geometry],
+  );
   const label = `${passer.name} passing network`;
+  const viewBox = `0 0 ${geometry.width} ${geometry.height}`;
   const root = nested
-    ? { ...nested, viewBox: `0 0 ${SIZE} ${SIZE}` }
-    : { className: `chart${focus ? " is-focused" : ""}`, viewBox: `0 0 ${SIZE} ${SIZE}`, role: "img", "aria-label": label };
+    ? { ...nested, viewBox }
+    : { className: `chart${focus ? " is-focused" : ""}`, viewBox, role: "img", "aria-label": label };
 
   if (!shown.length) {
     return (
       <svg {...root}>
-        <text x={SIZE / 2} y={SIZE / 2} textAnchor="middle">No targets in this selection</text>
+        <text x={geometry.width / 2} y={geometry.height / 2} textAnchor="middle">No targets in this selection</text>
       </svg>
     );
   }
@@ -111,7 +133,7 @@ export function NetworkChart({ layout = "field", passer, shown, selected, onSele
     <>
       <svg {...root}>
         <defs><ClipDef id={clipId} /></defs>
-        {layout === "radial" ? <RadialFrame /> : <FieldFrame />}
+        {layout === "radial" ? <RadialFrame /> : <FieldFrame geometry={geometry} />}
         <g>
           {placed.nodes.map((node) => (
             <path
@@ -140,11 +162,11 @@ export function NetworkChart({ layout = "field", passer, shown, selected, onSele
         <g style={{ pointerEvents: "none" }}>
           {placed.nodes.map((node) => (
             <g key={`label-${node.receiver.player_id}`} className={itemClass(node.receiver)}>
-              <text x={node.labelX} y={node.labelY} textAnchor={node.anchor} style={{ fontSize: 11.5, fontWeight: 600, fill: "var(--fg)", ...halo }}>
+              <text x={node.labelX} y={node.labelY} textAnchor={node.anchor} style={{ fontSize: geometry.name, fontWeight: 600, fill: "var(--fg)", ...halo }}>
                 {lastName(node.receiver.name)}
               </text>
-              <text x={node.labelX} y={node.labelY + 12} textAnchor={node.anchor} className="mono"
-                style={{ fontSize: 10.5, fill: "var(--muted)", ...halo }}>
+              <text x={node.labelX} y={node.labelY + geometry.lineGap} textAnchor={node.anchor} className="mono"
+                style={{ fontSize: geometry.sub, fill: "var(--muted)", ...halo }}>
                 {node.receiver.targets} · {(node.receiver.share * 100).toFixed(0)}%
               </text>
             </g>
@@ -154,8 +176,8 @@ export function NetworkChart({ layout = "field", passer, shown, selected, onSele
           <SvgHeadshot url={passer.headshot_url} name={passer.name} r={placed.passer.r} ring={positionColor("QB")} ringWidth={3} clipId={clipId} />
         </g>
         {layout !== "radial" && (
-          <text x={placed.passer.x} y={placed.passer.y + placed.passer.r + 15} textAnchor="middle"
-            style={{ fontSize: 11.5, fontWeight: 700, fill: "var(--fg)", ...halo }}>
+          <text x={placed.passer.x} y={placed.passer.y + placed.passer.r + geometry.name + 3.5} textAnchor="middle"
+            style={{ fontSize: geometry.name, fontWeight: 700, fill: "var(--fg)", ...halo }}>
             {lastName(passer.name)}
           </text>
         )}
@@ -167,56 +189,77 @@ export function NetworkChart({ layout = "field", passer, shown, selected, onSele
 
 // --- field -------------------------------------------------------------------------------
 
-const F = { near: -7, far: 26, top: 30, bottom: 22, left: 28, right: SIZE - 104 };
-const fieldY = (depth) => SIZE - F.bottom - (depth - F.near) * ((SIZE - F.top - F.bottom) / (F.far - F.near));
+const NEAR = -7;
+const FAR = 26;
+const fieldY = (geometry, depth) =>
+  geometry.height - geometry.bottom - (depth - NEAR) * ((geometry.height - geometry.top - geometry.bottom) / (FAR - NEAR));
 
-function FieldFrame() {
-  const bands = [[F.near, 0, DEPTHS[0]], [0, 10, DEPTHS[1]], [10, 20, DEPTHS[2]], [20, F.far, DEPTHS[3]]];
+function FieldFrame({ geometry }) {
+  const g = geometry;
+  const compact = g.right > g.width - 20;
+  const bands = [[NEAR, 0, DEPTHS[0]], [0, 10, DEPTHS[1]], [10, 20, DEPTHS[2]], [20, FAR, DEPTHS[3]]];
   return (
     <g>
       {bands.map(([from, to, depth], index) => (
         <g key={depth.key}>
-          <rect x={F.left} y={fieldY(to)} width={F.right - F.left} height={fieldY(from) - fieldY(to)}
+          <rect x={g.left} y={fieldY(g, to)} width={g.right - g.left} height={fieldY(g, from) - fieldY(g, to)}
             fill={`color-mix(in srgb, var(--fg) ${index % 2 ? 3.5 : 1.5}%, transparent)`} />
-          <text x={F.right + 10} y={(fieldY(from) + fieldY(to)) / 2 - 2}
-            style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", fill: "var(--muted)" }}>
-            {depth.short.toUpperCase()}
-          </text>
-          <text x={F.right + 10} y={(fieldY(from) + fieldY(to)) / 2 + 11} className="mono" style={{ fontSize: 10, fill: "var(--faint)" }}>
-            {depth.range}
-          </text>
+          {/* No room beside the field on a phone. The yard lines carry the depth there,
+              and band names inside the field only collided with the faces. */}
+          {!compact && (
+            <>
+              <text x={g.right + 10} y={(fieldY(g, from) + fieldY(g, to)) / 2 - 2}
+                style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", fill: "var(--muted)" }}>
+                {depth.short.toUpperCase()}
+              </text>
+              <text x={g.right + 10} y={(fieldY(g, from) + fieldY(g, to)) / 2 + 11} className="mono" style={{ fontSize: 10, fill: "var(--faint)" }}>
+                {depth.range}
+              </text>
+            </>
+          )}
         </g>
       ))}
       {[-5, 5, 10, 15, 20, 25].map((yards) => (
         <g key={yards}>
-          <line x1={F.left} x2={F.right} y1={fieldY(yards)} y2={fieldY(yards)} stroke="var(--divider)" />
-          <text className="axis-t" x={20} y={fieldY(yards) + 3.5} textAnchor="end">{yards > 0 ? `+${yards}` : yards}</text>
+          <line x1={g.left} x2={g.right} y1={fieldY(g, yards)} y2={fieldY(g, yards)} stroke="var(--divider)" />
+          <text className="axis-t" x={g.left - 8} y={fieldY(g, yards) + 3.5} textAnchor="end">{yards > 0 ? `+${yards}` : yards}</text>
         </g>
       ))}
-      <line x1={F.left} x2={F.right} y1={fieldY(0)} y2={fieldY(0)} stroke="var(--plot-rule)" strokeWidth={1.5} />
-      <text className="axis-t" x={20} y={fieldY(0) + 3.5} textAnchor="end" style={{ fontWeight: 700, fill: "var(--muted)" }}>LOS</text>
+      <line x1={g.left} x2={g.right} y1={fieldY(g, 0)} y2={fieldY(g, 0)} stroke="var(--plot-rule)" strokeWidth={1.5} />
+      <text className="axis-t" x={g.left - 8} y={fieldY(g, 0) + 3.5} textAnchor="end" style={{ fontWeight: 700, fill: "var(--muted)" }}>LOS</text>
     </g>
   );
 }
 
 /** Spread layout: order by lean, space evenly, then push apart any faces or labels that touch. */
-function placeField(shown) {
+function placeField(shown, geometry) {
+  const g = geometry;
+  // The curves were drawn for the square box; a shorter one bends them less.
+  const bend = g.height / SIZE;
+  const labelDepth = 2 * g.lineGap + 2;
   const most = Math.max(...shown.map((receiver) => receiver.targets), 1);
-  const passer = { x: (F.left + F.right) / 2, y: fieldY(-4.6), r: 27 };
-  const depthOf = (receiver) => Math.max(-3, Math.min(F.far - 1.5, receiver.adot ?? 0));
+  const passer = { x: (g.left + g.right) / 2, y: fieldY(g, -4.6), r: g.passerRadius };
+  const depthOf = (receiver) => Math.max(-3, Math.min(FAR - 1.5, receiver.adot ?? 0));
   const order = [...shown].sort((a, b) => a.lean - b.lean);
-  const left = 50;
-  const right = F.right - 22;
+  const left = g.left + 22;
+  const right = g.right - 22;
   const nodes = order.map((receiver, index) => ({
     receiver,
     x: left + (index + 0.5) * ((right - left) / order.length),
-    y: fieldY(depthOf(receiver)),
-    r: 13 + 19 * Math.sqrt(receiver.targets / most),
-    width: 2 + 11 * (receiver.targets / most),
+    y: fieldY(g, depthOf(receiver)),
+    r: g.radius[0] + g.radius[1] * Math.sqrt(receiver.targets / most),
+    width: g.edge[0] + g.edge[1] * (receiver.targets / most),
   }));
+  // A label is two lines, the name and "targets · share" in the mono face, and either
+  // can be the wider one: "Kraft" over "17 · 14%" is wider underneath.
+  const subChars = (receiver) => `${receiver.targets} · ${Math.round(receiver.share * 100)}%`.length;
   const box = (node) => {
-    const labelWidth = Math.max(2 * node.r, lastName(node.receiver.name).length * 6.6 + 8);
-    return { x0: node.x - labelWidth / 2, x1: node.x + labelWidth / 2, y0: node.y - node.r, y1: node.y + node.r + 26, half: labelWidth / 2 };
+    const labelWidth = Math.max(
+      2 * node.r,
+      lastName(node.receiver.name).length * g.char + 8,
+      subChars(node.receiver) * g.sub * 0.6 + 8,
+    );
+    return { x0: node.x - labelWidth / 2, x1: node.x + labelWidth / 2, y0: node.y - node.r, y1: node.y + node.r + labelDepth, half: labelWidth / 2 };
   };
   for (let pass = 0; pass < 300; pass += 1) {
     let moved = false;
@@ -236,8 +279,8 @@ function placeField(shown) {
     }
     for (const node of nodes) {
       const half = box(node).half;
-      node.x = Math.max(32 + half, Math.min(F.right - 4 - half, node.x));
-      if (Math.abs(node.x - passer.x) < node.r + passer.r + 6 && Math.abs(node.y - passer.y) < node.r + passer.r + 26) {
+      node.x = Math.max(g.left + 4 + half, Math.min(g.right - 4 - half, node.x));
+      if (Math.abs(node.x - passer.x) < node.r + passer.r + 6 && Math.abs(node.y - passer.y) < node.r + passer.r + labelDepth) {
         node.x += node.x < passer.x ? -3 : 3;
         moved = true;
       }
@@ -246,13 +289,14 @@ function placeField(shown) {
   }
   for (const node of nodes) {
     node.labelX = node.x;
-    node.labelY = node.y + node.r + 14;
+    node.labelY = node.y + node.r + g.lineGap + 2;
     node.anchor = "middle";
   }
   return {
     nodes,
     passer,
-    edge: (node) => `M ${passer.x} ${passer.y - passer.r} C ${passer.x} ${passer.y - 110}, ${node.x} ${node.y + 120}, ${node.x} ${node.y}`,
+    edge: (node) =>
+      `M ${passer.x} ${passer.y - passer.r} C ${passer.x} ${passer.y - 110 * bend}, ${node.x} ${node.y + 120 * bend}, ${node.x} ${node.y}`,
   };
 }
 
@@ -323,11 +367,14 @@ export function NetworkLegend({ layout }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px] text-muted">
       <span>Line width: targets</span>
-      <span className="inline-flex items-center gap-1.5">
+      {/* The scale never breaks from its ramp, so a narrow screen wraps before it. */}
+      <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
         Line colour: EPA per target
-        <span className="inline-block h-2 w-24 rounded"
-          style={{ background: `linear-gradient(90deg, ${epaColor(-0.5, 0.5)}, ${epaColor(0, 0.5)}, ${epaColor(0.5, 0.5)})` }} />
-        <span className="stat-num">{"−"}0.5 · 0 · +0.5</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <span className="inline-block h-2 w-24 rounded"
+            style={{ background: `linear-gradient(90deg, ${epaColor(-0.5, 0.5)}, ${epaColor(0, 0.5)}, ${epaColor(0.5, 0.5)})` }} />
+          <span className="stat-num">{"−"}0.5 · 0 · +0.5</span>
+        </span>
       </span>
       <span>
         {layout === "radial"

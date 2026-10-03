@@ -15,15 +15,18 @@
     />
   </head>
   <body>
-    <!-- Set the saved theme before first paint so there's no flash. Default: dark. -->
+    <!-- Set the saved theme before first paint so there's no flash. Default: dark. The
+         theme-color (Safari's toolbar tint) follows it; the two colours are mirrored in
+         src/hooks/useTheme.js, which keeps it in step when the theme is switched. -->
     <script>
       (function () {
+        var t = "dark";
         try {
-          var t = localStorage.getItem("gridiron.theme") || "dark";
-          document.documentElement.setAttribute("data-theme", t);
-        } catch (e) {
-          document.documentElement.setAttribute("data-theme", "dark");
-        }
+          t = localStorage.getItem("gridiron.theme") || "dark";
+        } catch (e) {}
+        document.documentElement.setAttribute("data-theme", t);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", t === "light" ? "#eef1f6" : "#0d0f11");
       })();
     </script>
     <div id="root"></div>

@@ -51,11 +51,13 @@ export function WeeklyScoringCard({ week, scoring, position, onPositionChange, r
       </CardHead>
       <CardState isLoading={isLoading} isError={isError} isEmpty={rows.length === 0} empty="No games scored in this week." rows={6} />
       {rows.length > 0 && (
-        <ScrollTable minWidth={400}>
+        // On a phone the stat line moves under the name, so the points stay on screen
+        // instead of scrolling off behind a 400px table.
+        <ScrollTable minWidth={400} phoneMinWidth={0}>
           <thead>
             <tr>
               <Th align="left">Player</Th>
-              <Th>Stat line</Th>
+              <Th className="hidden sm:table-cell">Stat line</Th>
               <Th>FPTS</Th>
             </tr>
           </thead>
@@ -70,8 +72,9 @@ export function WeeklyScoringCard({ week, scoring, position, onPositionChange, r
                     team={row.team_abbreviation}
                     rank={index + 1}
                   />
+                  <div className="stat-num mt-0.5 pl-[18px] text-[11px] text-muted sm:hidden">{statLine(row)}</div>
                 </td>
-                <td className="stat-num py-2 text-right text-[11px] text-muted">{statLine(row)}</td>
+                <td className="stat-num hidden py-2 text-right text-[11px] text-muted sm:table-cell">{statLine(row)}</td>
                 <td className="stat-num py-2 text-right font-semibold text-accent">
                   {formatStat(row.fantasy_points, 1)}
                 </td>
