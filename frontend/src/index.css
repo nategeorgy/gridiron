@@ -323,6 +323,33 @@
   }
 }
 
+/* The home score ticker changing weeks: the new week slides in from the side it sits
+   on in the switch (the slate from the right, the finals from the left). */
+@keyframes ticker-from-right {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+}
+@keyframes ticker-from-left {
+  from {
+    transform: translateX(-32px);
+    opacity: 0;
+  }
+}
+.ticker-from-right {
+  animation: ticker-from-right 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ticker-from-left {
+  animation: ticker-from-left 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-from-right,
+  .ticker-from-left {
+    animation: none;
+  }
+}
+
 /* =========================================================================
    Explore charts (the Explore tab and the target maps on player and team pages).
    SVG defaults, so every chart reads the same: axis ticks in the mono face, grid

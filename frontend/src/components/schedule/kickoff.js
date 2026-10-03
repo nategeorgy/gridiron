@@ -45,6 +45,21 @@ export function formatKickoffShort(time) {
   return `${hour12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
 }
 
+/** "8:15 ET", or "9:30 AM ET" for a morning kickoff. For a one-line strip, where every
+ *  game but an international one is plainly afternoon or evening. */
+export function formatKickoffCompact(time) {
+  if (!time) return "";
+  const [hours, minutes] = time.split(":").map(Number);
+  const hour12 = ((hours + 11) % 12) + 1;
+  return `${hour12}:${String(minutes).padStart(2, "0")}${hours < 12 ? " AM" : ""} ET`;
+}
+
+/** Today's date in Eastern time as "YYYY-MM-DD", comparable with a game's `game_date`.
+ *  Eastern because that is the calendar the schedule is published in. */
+export function todayEastern() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+}
+
 // The named windows a week is actually read in. A reader parses a slate as Thursday /
 // Sunday early / Sunday late / Sunday night / Monday, and a flat list by date makes
 // them reconstruct that from timestamps.
