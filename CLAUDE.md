@@ -1389,13 +1389,22 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   spread across most of the table
 - **Whole responses are cached too, where the URL is the whole question.**
   `cached_response` in `app/cache.py` stores the encoded body of `/stats/leaderboard`,
-  `/stats/scatter` and `/stats/compare`, keyed on the query string plus the data
-  version, because the home page sends them the same URLs on every visit and they were
-  ~110 MB of pages a visit with every engine cache warm. It suits an endpoint whose
-  answer is a function of its query parameters and nothing else: no auth dependency, no
-  clock. A `player_ids` filter is fine, since the ids are in the key and the value holds
-  only public stats. Adding one is a decorator and a `request: Request` parameter; size
-  the store from measured bodies (the largest leaderboard a request can ask for is 718 kB)
+  `/stats/scatter`, `/stats/compare` and `/stats/sos` (plus the Explore endpoints),
+  keyed on the query string plus the data version, because the home page sends them the
+  same URLs on every visit and they were ~110 MB of pages a visit with every engine cache
+  warm (SOS alone was ~45 MB, four calls from the matchups card, until October 2026). It
+  suits an endpoint whose answer is a function of its query parameters and nothing else:
+  no auth dependency, no clock. A `player_ids` filter is fine, since the ids are in the
+  key and the value holds only public stats. Adding one is a decorator and a
+  `request: Request` parameter; size the store from measured bodies (the largest
+  leaderboard a request can ask for is 718 kB)
+- **Requests missing the same cache entry at once share one computation** (October
+  2026). `VersionedCache` lets the first compute and the rest wait for its answer, or
+  its error. They used to all compute, which on a cold process (every restart, and every
+  time Render's free instance wakes from sleep) doubled what the home page read: ~500 MB
+  against ~250 MB, measured locally. A request never waits on a computation it is itself
+  running, and one waiting past `WAIT_SECONDS` computes on its own, so the waiting cannot
+  deadlock. A waiter holds its pooled connection while it waits
 - ⚠️ **`MIN(week)/MAX(week) WHERE season = …` is the most expensive cheap-looking query
   in the app.** With accurate statistics Postgres answers it by walking the `week` index
   from each end and discarding other seasons' rows — and the season in progress holds

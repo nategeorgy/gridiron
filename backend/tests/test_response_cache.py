@@ -1,9 +1,11 @@
-"""The response cache on the leaderboard, the scatter and the comparison.
+"""The response cache on the leaderboard, the scatter, the comparison and strength of
+schedule.
 
-These three went behind ``cached_response`` (app/cache.py) because the home page asks
-each of them for the same URLs on every visit, and every one of those requests
-re-aggregated ``player_stats``: about 110 MB of pages a visit on a warm process, on a
-database whose Disk IO budget had already run out once (September 2026). Pinned here:
+These went behind ``cached_response`` (app/cache.py) because the home page asks each of
+them for the same URLs on every visit, and every one of those requests re-aggregated
+``player_stats``: about 110 MB of pages a visit on a warm process, on a database whose
+Disk IO budget had already run out once (September 2026). Strength of schedule followed
+in October 2026, when the matchups card made it four calls a visit (~45 MB). Pinned here:
 
 - a repeat request is served without recomputing, whatever order its parameters are in
 - the key is the whole query string, so two watchlists never share an answer
@@ -32,11 +34,13 @@ SEASON = 2025
 LEADERBOARD = "/api/v1/stats/leaderboard"
 SCATTER = "/api/v1/stats/scatter"
 COMPARE = "/api/v1/stats/compare"
+SOS = "/api/v1/stats/sos"
 
 _STORES = (
     stats_router._LEADERBOARD_RESPONSES,
     stats_router._SCATTER_RESPONSES,
     stats_router._COMPARE_RESPONSES,
+    stats_router._SOS_RESPONSES,
     _WEEK_BOUNDS, _SUMMARY, _CAREER_TOTALS, _SCORED_WINDOWS,
 )
 
@@ -123,6 +127,21 @@ def test_a_repeat_request_is_served_without_recomputing(
     assert calls["count"] == 1
 
 
+def test_a_repeat_strength_of_schedule_request_is_served_without_recomputing(
+    client: TestClient, receivers: dict, version: dict, monkeypatch
+) -> None:
+    calls = _count_calls(monkeypatch, "build_sos")
+    params = {"season": SEASON, "position": "WR", "scoring": "ppr"}
+
+    first = client.get(SOS, params=params)
+    second = client.get(SOS, params=params)
+    other_position = client.get(SOS, params={**params, "position": "TE"})
+
+    assert first.status_code == second.status_code == other_position.status_code == 200
+    assert first.content == second.content
+    assert calls["count"] == 2  # WR once, TE once
+
+
 def test_a_different_query_is_a_different_entry(
     client: TestClient, receivers: dict, version: dict
 ) -> None:
@@ -186,6 +205,7 @@ def test_an_error_is_never_stored(
         (LEADERBOARD, {"season": SEASON, "percentiles": "receptions,receiving_yards"}),
         (SCATTER, {"season": SEASON, "x": "targets", "y": "fantasy_points", "min_games": 1}),
         (COMPARE, {"players": "00-0000031,00-0000032", "season": SEASON}),
+        (SOS, {"season": SEASON, "position": "WR", "window": "full"}),
     ],
 )
 def test_a_hit_sends_the_same_bytes_as_the_uncached_endpoint(
