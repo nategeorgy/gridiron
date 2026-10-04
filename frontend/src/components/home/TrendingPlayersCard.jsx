@@ -50,7 +50,7 @@ function StatCell({ metricId, metric, value, previous, rank, position, league, s
   return (
     <div className="min-w-0">
       <div className="truncate text-[9px] font-bold uppercase tracking-[0.06em] text-faint">{label}</div>
-      <div className="stat-num mt-1 text-[16.5px] font-semibold leading-none text-fg">
+      <div className="stat-num mt-1 text-[15px] font-semibold leading-none text-fg sm:text-[16.5px]">
         {formatStat(value, metric?.format)}
       </div>
       <div className="mt-1.5 h-[17px]">
@@ -58,7 +58,7 @@ function StatCell({ metricId, metric, value, previous, rank, position, league, s
           <FinishChip rank={rank} position={position} league={league} />
         ) : change == null ? null : (
           <span
-            className="stat-num text-[11px] font-bold"
+            className="stat-num whitespace-nowrap text-[10.5px] font-bold sm:text-[11px]"
             style={{ color: improved ? "var(--accent)" : "var(--neg)" }}
           >
             {improved ? "▲" : "▼"} {formatDelta(change, metric?.format)}
@@ -130,7 +130,9 @@ function TrendingRow({ pick, row, previousRow, seasonRow, headshot, games, leagu
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-2.5">
+      {/* Four across even on a phone: each cell is a label, a number and a delta, about
+          70px of type, and two across doubled every pick's height for nothing. */}
+      <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
         {pick.stats.map((metricId) => (
           <StatCell
             key={metricId}

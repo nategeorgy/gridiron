@@ -5,7 +5,15 @@
 // Defense EPA is plotted with the axis flipped so up is always better.
 import { useState } from "react";
 import { formatTeamStat } from "../../utils/teamStats";
+import { usePhone } from "../../hooks/useMediaQuery";
 import { Segmented } from "./Segmented";
+
+// The chart's box. A phone draws one near its own width, rather than the 900px desktop
+// box at a third of its size, where the week numbers rendered at 3px.
+const BOX = {
+  full: { W: 900, H: 280, ml: 46, mr: 64, mt: 16, mb: 46, tick: 10, end: 12, logo: 16 },
+  compact: { W: 380, H: 250, ml: 36, mr: 48, mt: 14, mb: 44, tick: 11, end: 12.5, logo: 14 },
+};
 
 const METRICS = [
   { key: "net", label: "Net EPA", title: "Net EPA per play" },
@@ -24,7 +32,8 @@ export function SeasonTrend({ trend, abbreviation, logos, selectedWeeks }) {
   const [metricKey, setMetricKey] = useState("net");
   const metric = METRICS.find((m) => m.key === metricKey);
   const points = trend?.[metricKey] ?? [];
-  const W = 900, H = 280, ml = 46, mr = 64, mt = 16, mb = 46;
+  const box = usePhone() ? BOX.compact : BOX.full;
+  const { W, H, ml, mr, mt, mb } = box;
   const values = points.flatMap((p) => [p.value, p.to_date, p.league_to_date, p.league_q25, p.league_q75]).filter((v) => v !== null && v !== undefined);
   let lo = values.length ? Math.min(...values) : -0.2, hi = values.length ? Math.max(...values) : 0.2;
   const pad = (hi - lo) * 0.08 || 0.1; lo -= pad; hi += pad;
@@ -52,7 +61,7 @@ export function SeasonTrend({ trend, abbreviation, logos, selectedWeeks }) {
         {ticks(lo, hi).map((v) => (
           <g key={v}>
             <line x1={ml} x2={W - mr} y1={Y(v)} y2={Y(v)} stroke="var(--divider)" />
-            <text x={ml - 8} y={Y(v) + 3} textAnchor="end" fontSize="10" fill="var(--faint)">{Math.abs(v) < 1e-9 ? "0" : formatTeamStat(v, "sgn2")}</text>
+            <text x={ml - 8} y={Y(v) + 3} textAnchor="end" fontSize={box.tick} fill="var(--faint)">{Math.abs(v) < 1e-9 ? "0" : formatTeamStat(v, "sgn2")}</text>
           </g>
         ))}
         {selected && (
@@ -74,20 +83,20 @@ export function SeasonTrend({ trend, abbreviation, logos, selectedWeeks }) {
         {last && (
           <g>
             <circle cx={X(last.i)} cy={Y(last.to_date)} r="4.5" fill="var(--fg)" stroke="var(--surface-solid)" strokeWidth="1.6" />
-            <text x={X(last.i) + 10} y={Y(last.to_date) + 4} fontSize="12" fontWeight="700" fill="var(--fg)">{formatTeamStat(last.to_date, "sgn2")}</text>
+            <text x={X(last.i) + 10} y={Y(last.to_date) + 4} fontSize={box.end} fontWeight="700" fill="var(--fg)">{formatTeamStat(last.to_date, "sgn2")}</text>
             <text x={X(last.i) + 10} y={Y(last.to_date) + 16} fontSize="9.5" fill="var(--faint)">to date</text>
           </g>
         )}
-        <text x="4" y={H - mb + 14} fontSize="10" fill="var(--faint)">Wk</text>
+        <text x="4" y={H - mb + 14} fontSize={box.tick} fill="var(--faint)">Wk</text>
         {points.map((p, i) => (
           <g key={p.week}>
-            <text x={X(i)} y={H - mb + 14} textAnchor="middle" fontSize="10" fill="var(--faint)">{p.week}</text>
+            <text x={X(i)} y={H - mb + 14} textAnchor="middle" fontSize={box.tick} fill="var(--faint)">{p.week}</text>
             {p.opponent && logos?.[p.opponent] ? (
-              <image href={logos[p.opponent]} x={X(i) - 8} y={H - mb + 19} width="16" height="16" opacity="0.85"><title>{`Week ${p.week} ${p.home ? "vs" : "at"} ${p.opponent}`}</title></image>
+              <image href={logos[p.opponent]} x={X(i) - box.logo / 2} y={H - mb + 19} width={box.logo} height={box.logo} opacity="0.85"><title>{`Week ${p.week} ${p.home ? "vs" : "at"} ${p.opponent}`}</title></image>
             ) : p.value === null ? <text x={X(i)} y={H - mb + 31} textAnchor="middle" fontSize="9" fill="var(--faint)">bye</text> : null}
           </g>
         ))}
-        {metric.invert && <text x={W - mr} y={mt - 4} textAnchor="end" fontSize="10" fill="var(--faint)">Axis flipped: up is better</text>}
+        {metric.invert && <text x={W - mr} y={mt - 4} textAnchor="end" fontSize={box.tick} fill="var(--faint)">Axis flipped: up is better</text>}
       </svg>
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-faint">
         <span className="flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-accent" />{abbreviation} each game</span>

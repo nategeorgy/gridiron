@@ -44,6 +44,12 @@ export const TOKEN_GROUPS = [
         type: "color",
         hint: "Dropdowns and menus, which need to stay readable over arbitrary content.",
       },
+      {
+        name: "--surface-pinned",
+        label: "Pinned column fill",
+        type: "color",
+        hint: "A table column pinned on a phone while the rest scrolls under it. Opaque, close to what a card composites to.",
+      },
     ],
   },
   {

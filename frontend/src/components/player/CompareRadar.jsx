@@ -34,7 +34,9 @@ export function CompareRadar({ axes, players, metrics }) {
         Shape is each player's percentile within the position, not against each other
       </p>
 
-      <div className="mt-1 flex justify-center">
+      {/* Inset on a phone: the axis labels sit outside the radar's own box, and at full
+          width the ones on the left and right ran past the card. */}
+      <div className="mt-1 flex justify-center px-7 sm:px-0">
         <div className="relative aspect-square w-full max-w-[430px]">
           <svg
             viewBox={`0 0 ${SIZE} ${SIZE}`}

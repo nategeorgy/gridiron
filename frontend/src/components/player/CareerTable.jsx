@@ -39,13 +39,17 @@ export function CareerTable({ seasons, position, sections, controls, metrics, le
       ) : seasons.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted">No regular-season history for this player.</p>
       ) : (
+        // On a phone the season is pinned while the rest scrolls (it is also the
+        // page's season picker, so it should not scroll away).
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px] text-left">
+          <table className="w-full text-left md:min-w-[780px]">
             <thead>
               <tr className="text-[9.5px] uppercase tracking-[0.08em] text-fg">
-                <th colSpan={7} className="border-b-2 border-edge px-2 pb-0.5 pt-1 font-bold">
+                <th colSpan={7} className="hidden border-b-2 border-edge px-2 pb-0.5 pt-1 font-bold md:table-cell">
                   Fantasy
                 </th>
+                <th className="pin-col border-b-2 border-edge px-2 pb-0.5 pt-1 font-bold md:hidden">Fantasy</th>
+                <th colSpan={6} className="border-b-2 border-edge md:hidden" />
                 {/* Keyed by position: a custom table can repeat a section name. */}
                 {sections.map((section, index) => (
                   <th
@@ -61,7 +65,7 @@ export function CareerTable({ seasons, position, sections, controls, metrics, le
                 {["Season", "Team", "G", "Pts", "PPG", "Finish", "Snap%"].map((head, index) => (
                   <th
                     key={head}
-                    className={`whitespace-nowrap px-2 py-1 font-semibold ${index === 0 ? "text-left" : "text-right"}`}
+                    className={`whitespace-nowrap px-2 py-1 font-semibold ${index === 0 ? "pin-col text-left" : "text-right"}`}
                   >
                     {head}
                   </th>
@@ -88,7 +92,7 @@ export function CareerTable({ seasons, position, sections, controls, metrics, le
                     key={season.season}
                     className={`border-b border-line last:border-0 ${selected ? "bg-[color:color-mix(in_srgb,var(--accent)_7%,transparent)]" : "hover:bg-surface-2"}`}
                   >
-                    <td className="px-2 py-1">
+                    <td className={`pin-col px-2 py-1 ${selected ? "is-selected" : ""}`}>
                       {/* Clicking a season drives the rest of the page — the career
                           table doubles as the season picker. */}
                       <button

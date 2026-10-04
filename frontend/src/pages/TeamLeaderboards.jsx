@@ -8,6 +8,9 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
+import { ScrollRow } from "../components/ui/ScrollRow";
+import { scoringLabel } from "../constants/scoring";
 import { ScoringPill } from "../components/ScoringPill";
 import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
 import { Segmented } from "../components/team/Segmented";
@@ -119,11 +122,12 @@ export function TeamLeaderboards() {
         <p className="mt-1 text-sm text-muted">{tab.description}</p>
       </div>
 
-      <div role="tablist" aria-label="Team leaderboard" className="inline-flex flex-wrap items-center gap-0.5 self-start rounded-full border border-edge bg-surface-2 p-1">
+      <ScrollRow className="max-w-full">
+      <div role="tablist" aria-label="Team leaderboard" className="inline-flex items-center gap-0.5 rounded-full border border-edge bg-surface-2 p-1 md:flex md:flex-wrap">
         {[...TEAM_BOARD_TABS, TEAM_BOARD_CUSTOM].map((entry, index) => {
           const on = entry.id === tab.id;
           return [
-            index === TEAM_BOARD_TABS.length && <span key="divider" aria-hidden="true" className="mx-1 h-5 w-px bg-line" />,
+            index === TEAM_BOARD_TABS.length && <span key="divider" aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-line" />,
             <Link
               key={entry.id}
               to={tabHref(entry.id)}
@@ -138,22 +142,35 @@ export function TeamLeaderboards() {
           ];
         })}
       </div>
+      </ScrollRow>
 
-      <div className="glass-card flex flex-wrap items-end gap-3 px-4 py-3">
+      {/* On a phone the side switch stays out of the fold, beside the summary: it decides
+          which numbers the table shows, so it is closer to a tab than a filter. */}
+      <FilterBar
+        className="flex flex-wrap items-end gap-3 px-4 py-3"
+        summary={summarize(season, weeksLabel, (tab.id === "fantasy" || tab.id === "custom") && scoringLabel(scoring))}
+        aside={
+          tab.sided ? (
+            <Segmented options={[{ value: "o", label: sideLabels[0] }, { value: "d", label: sideLabels[1] }]} value={side} onChange={setSide} label="Side" />
+          ) : tab.id === "custom" ? (
+            <button type="button" onClick={() => setEditing(true)} className="glass-pill px-3 py-1.5 text-xs font-semibold text-fg">Edit Columns</button>
+          ) : null
+        }
+      >
         {tab.sided && (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 max-md:hidden">
             <span className="text-[11px] font-medium text-faint">Side</span>
             <Segmented options={[{ value: "o", label: sideLabels[0] }, { value: "d", label: sideLabels[1] }]} value={side} onChange={setSide} label="Side" />
           </div>
         )}
         <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
         <TimeframeFilter weeks={weeks} season={season} onChange={setWeeks} />
-        <span className="flex-1" />
+        <span className="flex-1 max-md:hidden" />
         {tab.id === "custom" && (
-          <button type="button" onClick={() => setEditing(true)} className="glass-pill px-3.5 py-1.5 text-sm font-semibold text-fg">Edit Columns</button>
+          <button type="button" onClick={() => setEditing(true)} className="glass-pill px-3.5 py-1.5 text-sm font-semibold text-fg max-md:hidden">Edit Columns</button>
         )}
         {(tab.id === "fantasy" || tab.id === "custom") && <ScoringPill scoring={scoring} onChange={setScoring} />}
-      </div>
+      </FilterBar>
 
       <section className="glass-card p-4">
         <div className="mb-3">
@@ -168,17 +185,19 @@ export function TeamLeaderboards() {
         {board && flat.length === 0 && <p className="py-8 text-center text-sm text-muted">No columns yet. Use Edit Columns to add some.</p>}
         {board && flat.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[12.5px]" style={{ minWidth: 260 + flat.length * 78 }}>
+            {/* A phone pins the team (rank, logo, nickname) and lets the stats scroll. */}
+            <table className="w-full border-collapse text-[12.5px] md:min-w-[var(--table-min)]" style={{ "--table-min": `${260 + flat.length * 78}px` }}>
               <thead>
                 <tr className="text-[10.5px] uppercase tracking-[0.08em]">
-                  <th colSpan={2} />
+                  <th colSpan={2} className="hidden md:table-cell" />
+                  <th className="pin-col md:hidden" />
                   {sections.map(([name, columns]) => (
                     <th key={name} colSpan={columns.length} className="border-l border-line px-2 pb-1 text-center font-bold text-fg">{name}</th>
                   ))}
                 </tr>
                 <tr className="border-b border-line text-[11px]">
-                  <th className="w-8 px-2 py-1.5 text-right font-semibold text-faint">#</th>
-                  <th className="px-2 py-1.5 text-left font-semibold text-faint">Team</th>
+                  <th className="hidden w-8 px-2 py-1.5 text-right font-semibold text-faint md:table-cell">#</th>
+                  <th className="pin-col px-2 py-1.5 text-left font-semibold text-faint max-md:pl-9">Team</th>
                   {flat.map((column) => {
                     const on = column.key === sortKey;
                     const unavailable = column.metric.first_season && seasonNumber < column.metric.first_season;
@@ -198,12 +217,13 @@ export function TeamLeaderboards() {
               <tbody>
                 {rows.map((team, index) => (
                   <tr key={team.team_id} className="border-b border-line hover:bg-surface-2">
-                    <td className="stat-num px-2 py-1.5 text-right text-faint">{index + 1}</td>
-                    <td className="px-2 py-1.5">
+                    <td className="stat-num hidden px-2 py-1.5 text-right text-faint md:table-cell">{index + 1}</td>
+                    <td className="pin-col px-2 py-1.5">
                       <Link to={`/teams/${team.team_id}${season !== String(currentSeason) ? `?season=${season}` : ""}`} className="flex items-center gap-2 whitespace-nowrap hover:text-accent">
+                        <span className="stat-num w-5 shrink-0 text-right text-[11px] text-faint md:hidden">{index + 1}</span>
                         {team.logo_url && <img src={team.logo_url} alt="" className="h-6 w-6 object-contain" />}
                         <b className="text-fg">{team.name.split(" ").pop()}</b>
-                        <small className="stat-num text-[11px] text-faint">{recordText(team.record)}</small>
+                        <small className="stat-num hidden text-[11px] text-faint md:inline">{recordText(team.record)}</small>
                       </Link>
                     </td>
                     {flat.map((column) => {
@@ -222,8 +242,8 @@ export function TeamLeaderboards() {
                   </tr>
                 ))}
                 <tr className="text-muted">
-                  <td />
-                  <td className="px-2 py-2 text-left text-[12px]">League average</td>
+                  <td className="hidden md:table-cell" />
+                  <td className="pin-col px-2 py-2 text-left text-[12px] max-md:pl-9">League average</td>
                   {flat.map((column) => (
                     <td key={column.key} className={`stat-num px-2 py-2 text-right ${firstOfSection.has(column.key) ? "border-l border-line" : ""}`}>
                       {column.id === "record" ? "" : formatTeamStat(board.values?.[column.id]?.[`${column.side}_mean`], column.metric.fmt)}

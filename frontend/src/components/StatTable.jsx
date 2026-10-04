@@ -24,7 +24,7 @@
 import { Link } from "react-router-dom";
 import { FavoriteStar } from "./FavoriteStar";
 import { PositionTag } from "./PositionTag";
-import { formatStat } from "../utils/format";
+import { formatStat, shortName } from "../utils/format";
 import { StatTooltip, useStatTooltip } from "./StatTooltip";
 
 /** Tailwind-free tint for a percentile, diverging around the median. */
@@ -131,15 +131,21 @@ export function StatTable({
     );
   };
 
+  // On a phone the identity block is one pinned column (rank, short name, then position,
+  // team and games beneath), so the stats start on the first screen rather than after
+  // ~330px of name and team. From md up it is the four columns it has always been.
   return (
     <div className="glass-card overflow-x-auto">
       <StatTooltip tip={tooltip.tip} />
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className="w-full text-left text-sm md:min-w-[720px]">
         <thead>
           {sections && (
             <tr className="border-b border-line text-[10px] uppercase tracking-[0.11em] text-faint">
-              {/* Rank, player, team, games — the identity block the sections sit beside. */}
-              <th colSpan={4} className="px-3 py-1.5" />
+              {/* Rank, player, team and games: the identity block the sections sit beside.
+                  Two cells, because a span cannot shrink when three of its columns are
+                  hidden: it would push every section header three columns right. */}
+              <th colSpan={4} className="hidden px-3 py-1.5 md:table-cell" />
+              <th className="pin-col px-3 py-1.5 md:hidden" />
               {/* Keyed by position: a custom board can repeat a section name (two runs
                   of Usage columns either side of a dragged one), and FPPG's is empty. */}
               {sections.map((section, index) => (
@@ -156,19 +162,42 @@ export function StatTable({
             </tr>
           )}
           <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
-            <th className="px-3 py-2.5 text-right">#</th>
-            <th className="px-3 py-2.5">Player</th>
-            <th className="px-3 py-2.5">Team</th>
-            <th className="px-3 py-2.5 text-center">G</th>
+            <th className="hidden px-3 py-2.5 text-right md:table-cell">#</th>
+            <th className="pin-col px-3 py-2.5 max-md:pl-10">Player</th>
+            <th className="hidden px-3 py-2.5 md:table-cell">Team</th>
+            <th className="hidden px-3 py-2.5 text-center md:table-cell">G</th>
             {columns.map(headerCell)}
           </tr>
         </thead>
         <tbody className={dimmed ? "opacity-60 transition" : "transition"}>
           {rows.map((row, index) => (
             <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
-              <td className="stat-num px-3 py-2 text-right text-faint">{offset + index + 1}</td>
-              <td className="px-3 py-2 font-medium">
-                <span className="flex items-center gap-1.5">
+              <td className="stat-num hidden px-3 py-2 text-right text-faint md:table-cell">{offset + index + 1}</td>
+              <td className="pin-col px-3 py-2 font-medium max-md:pl-2 max-md:pr-2.5">
+                {/* Phone: rank, then the name over position, team and games. */}
+                <span className="flex items-start gap-2 md:hidden">
+                  <span className="stat-num w-6 shrink-0 pt-px text-right text-[11px] text-faint">
+                    {offset + index + 1}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1">
+                      <FavoriteStar playerId={row.player_id} size="h-3.5 w-3.5" />
+                      <Link
+                        to={`/players/${row.player_id}`}
+                        className="block max-w-[118px] truncate text-[13px] font-semibold text-fg"
+                      >
+                        {shortName(row.name)}
+                      </Link>
+                    </span>
+                    <span className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted">
+                      <PositionTag position={row.position} />
+                      <span className="stat-num">
+                        {row.team_abbreviation ?? "FA"} · {row.games_played}G
+                      </span>
+                    </span>
+                  </span>
+                </span>
+                <span className="hidden items-center gap-1.5 md:flex">
                   {/* Renders nothing when signed out, so the column keeps its
                       pre-M5 width for a signed-out visitor. */}
                   <FavoriteStar playerId={row.player_id} size="h-3.5 w-3.5" />
@@ -185,7 +214,7 @@ export function StatTable({
                   every team code on the same left edge down the column — and the
                   position colours (shared with the draft room) make a mixed-position
                   board scannable by shape rather than by reading. */}
-              <td className="whitespace-nowrap px-3 py-2">
+              <td className="hidden whitespace-nowrap px-3 py-2 md:table-cell">
                 <span className="flex items-center gap-2">
                   <PositionTag position={row.position} />
                   <span className="stat-num text-xs text-muted">
@@ -193,7 +222,7 @@ export function StatTable({
                   </span>
                 </span>
               </td>
-              <td className="stat-num px-3 py-2 text-center text-muted">{row.games_played}</td>
+              <td className="stat-num hidden px-3 py-2 text-center text-muted md:table-cell">{row.games_played}</td>
               {columns.map((key) => {
                 const value = row[columnKey(key)];
                 const percentile = showPercentiles ? row.percentiles?.[key] : undefined;

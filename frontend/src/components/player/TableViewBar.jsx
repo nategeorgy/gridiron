@@ -24,7 +24,9 @@ export function TableViewBar({ view, title, player, metrics }) {
   const [editorOpen, setEditorOpen] = useState(false);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    // min-w-0: a flex item's minimum is otherwise its content, and the tabs' content is
+    // wider than a phone, which pushed the whole card header off the screen.
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <LeaderboardTabs
         size="sm"
         active={view.tab}

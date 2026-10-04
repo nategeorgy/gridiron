@@ -28,8 +28,10 @@ export function OffenseCard({ team, players }) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface-2">
-      <div className="grid items-center gap-3 px-3 py-2.5 sm:grid-cols-[minmax(150px,1fr)_minmax(170px,1.2fr)_62px]">
-        <span className="flex items-center gap-2">
+      {/* On a phone the team and its total share the first line and the split bar runs
+          under them, so the total no longer takes a block of its own. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_62px] items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:grid-cols-[minmax(150px,1fr)_minmax(170px,1.2fr)_62px] sm:gap-y-3">
+        <span className="flex min-w-0 items-center gap-2">
           {team.logoUrl ? (
             <img src={team.logoUrl} alt="" loading="lazy" className="h-[22px] w-[22px] flex-none object-contain" />
           ) : (
@@ -52,7 +54,7 @@ export function OffenseCard({ team, players }) {
           )}
         </span>
 
-        <span className="flex items-center gap-2.5">
+        <span className="col-span-2 row-start-2 flex items-center gap-2.5 sm:col-span-1 sm:row-start-auto">
           <span
             className="flex h-2 flex-1 overflow-hidden rounded-full bg-surface"
             title={
@@ -80,7 +82,7 @@ export function OffenseCard({ team, players }) {
           </span>
         </span>
 
-        <span className="text-right">
+        <span className="col-start-2 row-start-1 text-right sm:col-start-auto sm:row-start-auto">
           {team.implied != null ? (
             <>
               <span className="stat-num block text-[15px] font-bold leading-none text-fg">

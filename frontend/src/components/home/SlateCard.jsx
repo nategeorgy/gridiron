@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
-import { dateParts, formatKickoff, slotOf, SLOT_ORDER } from "../schedule/kickoff";
+import { dateParts, formatKickoff, formatKickoffCompact, slotOf, SLOT_ORDER } from "../schedule/kickoff";
 import { formatStat } from "../../utils/format";
 
 const VIEWS = [
@@ -60,16 +60,20 @@ function dateSpan(games) {
 // a few teams use sitting invisibly on a dark card.
 const teamFill = (color) => (color ? `color-mix(in srgb, ${color} 72%, var(--fg))` : "var(--muted)");
 
+// On a phone the slate runs two games across, so the record tucks under the team code
+// rather than beside it: a 150px card has no room for both in one line.
 function TeamRow({ teamId, abbreviation, logoUrl, record, spread, implied, score, played, won }) {
   return (
-    <div className="flex h-6 items-center gap-2">
-      {logoUrl ? <img src={logoUrl} alt="" loading="lazy" className="h-5 w-5 flex-none object-contain" /> : <span className="h-5 w-5 flex-none" />}
-      <Link to={`/teams/${teamId}`} className={`w-[38px] text-[13px] font-bold hover:text-accent ${played && !won ? "text-muted" : "text-fg"}`}>
-        {abbreviation}
-      </Link>
-      {record && <span className="stat-num text-[10.5px] text-faint">{record}</span>}
-      <span className="stat-num ml-auto text-[11px] text-muted">{!played && spread != null ? formatStat(spread, 1) : ""}</span>
-      <span className={`stat-num w-[38px] text-right text-[13px] font-bold ${played && !won ? "text-faint" : "text-fg"}`}>
+    <div className="flex h-8 items-center gap-1 sm:h-6 sm:gap-2">
+      {logoUrl ? <img src={logoUrl} alt="" loading="lazy" className="h-[18px] w-[18px] flex-none object-contain sm:h-5 sm:w-5" /> : <span className="h-[18px] w-[18px] flex-none sm:h-5 sm:w-5" />}
+      <span className="flex flex-col max-sm:leading-none sm:contents">
+        <Link to={`/teams/${teamId}`} className={`w-[34px] text-[13px] font-bold hover:text-accent max-sm:leading-tight sm:w-[38px] ${played && !won ? "text-muted" : "text-fg"}`}>
+          {abbreviation}
+        </Link>
+        {record && <span className="stat-num text-[9.5px] text-faint sm:text-[10.5px]">{record}</span>}
+      </span>
+      <span className="stat-num ml-auto text-[10px] text-muted sm:text-[11px]">{!played && spread != null ? formatStat(spread, 1) : ""}</span>
+      <span className={`stat-num w-[32px] text-right text-[12.5px] font-bold sm:w-[38px] sm:text-[13px] ${played && !won ? "text-faint" : "text-fg"}`}>
         {played ? score : implied != null ? formatStat(implied, 1) : ""}
       </span>
     </div>
@@ -93,9 +97,13 @@ function SlateGame({ game, records, colors }) {
   });
 
   return (
-    <div className="flex flex-col rounded-[14px] border border-line bg-surface-2 px-3 py-2.5">
-      <div className="mb-1.5 flex items-center justify-between text-[10px] text-faint">
-        <span className="font-semibold">{parts ? `${parts.dow} ` : ""}{formatKickoff(game.kickoff_time)}</span>
+    <div className="flex flex-col rounded-[14px] border border-line bg-surface-2 px-2 py-2 sm:px-3 sm:py-2.5">
+      <div className="mb-1 flex items-center justify-between gap-1.5 whitespace-nowrap text-[9.5px] text-faint sm:mb-1.5 sm:text-[10px]">
+        <span className="font-semibold">
+          {parts ? `${parts.dow} ` : ""}
+          <span className="sm:hidden">{formatKickoffCompact(game.kickoff_time)}</span>
+          <span className="hidden sm:inline">{formatKickoff(game.kickoff_time)}</span>
+        </span>
         <span className="stat-num">{game.played ? "Final" : game.total_line != null ? `O/U ${formatStat(game.total_line, 1)}` : "No line yet"}</span>
       </div>
       <TeamRow {...side("away")} />
@@ -119,9 +127,10 @@ function SlateGame({ game, records, colors }) {
 // One template for every grid in the card, so the one-game slots in the top row line up
 // with the columns of the multi-game blocks beneath them. Never more than four across (a
 // column is at least a quarter of the row, less the three 12px gaps), so a Sunday's eight
-// early games make two full rows rather than five and three.
-const GRID = "grid gap-3";
-const GRID_COLUMNS = { gridTemplateColumns: "repeat(auto-fill, minmax(max(250px, calc((100% - 36px) / 4)), 1fr))" };
+// early games make two full rows rather than five and three. A phone takes two across
+// (the 140px floor), which halves a slate that ran sixteen cards down the screen.
+const GRID = "grid gap-2.5 [--slate-min:140px] sm:gap-3 sm:[--slate-min:250px]";
+const GRID_COLUMNS = { gridTemplateColumns: "repeat(auto-fill, minmax(max(var(--slate-min), calc((100% - 36px) / 4)), 1fr))" };
 
 function SlotLabel({ children }) {
   return <div className="mb-1.5 font-mono text-[10.5px] font-bold uppercase tracking-[0.14em] text-faint">{children}</div>;

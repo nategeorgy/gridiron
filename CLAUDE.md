@@ -1318,6 +1318,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       selections are `constants/signals.js`, the arrangement `constants/homeLayout.js`. One
       backend change: the Query Builder's `last_week`, so a seasons search compares the
       first N weeks of every year
+- [x] Phones (October 2026). At 375px every page scrolled sideways and every table opened on
+      rank, name and team with no stat in view. Below 1024px the header is the lockup, search and
+      a **menu** listing every page (`components/MobileMenu.jsx`; a bottom tab bar was mocked up
+      beside it and passed over). Board filters fold to a one-line summary below md
+      (`components/ui/FilterBar.jsx`), tab strips scroll on one line (`components/ui/ScrollRow.jsx`),
+      tables pin their player or team column (`.pin-col`), and the SVG charts that were scaled down
+      from a desktop box draw a phone-sized one (`usePhone()`). Desktop was compared page by page at
+      1280px against main. Frontend only
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://gridiron-livid.vercel.app
   - Backend:  https://gridiron-api-t6hz.onrender.com
@@ -1997,6 +2005,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   untracked receiver with `name: None` and the pages fold him into "others". A
   **position average is every target to the position** in the same window, never the
   subset a page's minimum shows, so it does not move when the minimum does
+- **Check a new surface at 375px; phones are handled by four shared pieces.** A board's filter
+  card is a `FilterBar` (folds to a summary below md), a table's identity column takes `pin-col`
+  (sticky below md, on the opaque `--surface-pinned`), a tab strip goes in a `ScrollRow`, and an
+  SVG chart drawn in a fixed desktop box takes a phone box via `usePhone()`: shrunk to a phone's
+  width, a 640-1,180px box sets 11px labels at 3-6px. Two traps found doing it: a header cell that
+  spans columns hidden below md cannot shrink, so split it into a desktop cell and a phone cell
+  (see `StatTable`), and a flex item's minimum width is its content unless it has `min-w-0`, which
+  is how a tab row pushed a whole card off the screen
 - **An exported chart renders with no providers.** `utils/exportImage.js` renders the
   chart offscreen in a fresh React root, so a chart component must not need the router
   or React Query, and a chart placed inside a combined export takes `nested` (see

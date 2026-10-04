@@ -2,36 +2,40 @@
 // <html data-theme="..."> (also set pre-paint by an inline script in index.html)
 // and persisted in localStorage. Defaults to dark. Two themes: "dark" (smoked
 // graphite) and "light" ("clear").
-import { useCallback, useEffect, useState } from "react";
+//
+// The attribute is the state: `theme` is read from it (useThemeName), and setting the
+// theme writes it. It used to be component state mirrored onto the attribute, which
+// meant two toggles kept two copies, and the header has two now (the desktop button
+// and the phone menu's switch): flipping one left the other showing the old theme.
+import { useCallback } from "react";
+import { useThemeName } from "./useThemeName";
 
 const STORAGE_KEY = "gridiron.theme";
 
-function readStored() {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
+// Safari's toolbar tint (<meta name="theme-color">), per theme. Mirrored in index.html,
+// which sets it before first paint.
+const TOOLBAR = { dark: "#0d0f11", light: "#eef1f6" };
+
+const current = () => document.documentElement.getAttribute("data-theme") || "dark";
 
 export function useTheme() {
-  const [theme, setThemeState] = useState(
-    () => document.documentElement.getAttribute("data-theme") || readStored() || "dark",
-  );
+  const theme = useThemeName();
 
-  // Keep <html> and localStorage in sync with state.
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+  /** Takes a theme, or an updater from the current one. */
+  const setTheme = useCallback((next) => {
+    const value = typeof next === "function" ? next(current()) : next;
+    document.documentElement.setAttribute("data-theme", value);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", TOOLBAR[value] ?? TOOLBAR.dark);
     try {
-      localStorage.setItem(STORAGE_KEY, theme);
+      localStorage.setItem(STORAGE_KEY, value);
     } catch {
       // ignore storage failures (private mode, etc.)
     }
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
   }, []);
 
-  return { theme, setTheme: setThemeState, toggleTheme };
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  }, [setTheme]);
+
+  return { theme, setTheme, toggleTheme };
 }

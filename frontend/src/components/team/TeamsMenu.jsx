@@ -6,7 +6,8 @@ import { useHoverMenu } from "../../hooks/useHoverMenu";
 import { useTeamsList } from "../../hooks/useTeamStats";
 import { teamsByDivision } from "../../utils/teamStats";
 
-const ITEMS = [
+/** The two team surfaces. Exported for the phone menu (components/MobileMenu.jsx). */
+export const TEAM_ITEMS = [
   { path: "/teams/leaderboards", label: "Team Leaderboards", desc: "Rank all 32 offenses and defenses" },
   { path: "/teams", label: "Team Pages", desc: "One page for every team", end: true },
 ];
@@ -42,7 +43,7 @@ export function TeamsMenu() {
         <div className="absolute right-0 top-full z-30 w-[min(860px,calc(100vw-32px))] pt-1.5">
           <div role="menu" className="glass-popover grid gap-1.5 p-1.5 md:grid-cols-[230px_minmax(0,1fr)]">
             <div>
-              {ITEMS.map((item) => (
+              {TEAM_ITEMS.map((item) => (
                 <NavLink key={item.path} to={item.path} end={item.end} role="menuitem" onClick={closeNow} className={({ isActive }) => `block rounded-lg px-3 py-2 transition ${isActive ? "bg-surface-2" : "hover:bg-surface-2"}`}>
                   {({ isActive }) => (
                     <>

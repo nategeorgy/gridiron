@@ -23,6 +23,7 @@
 import { useMemo } from "react";
 
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { ScoringControl } from "../components/ScoringControl";
 import { ExportButton } from "../components/ExportButton";
 import { SaveViewButton } from "../components/SaveViewButton";
@@ -35,6 +36,7 @@ import { useScoring } from "../hooks/useScoring";
 import { useUrlState } from "../hooks/useUrlState";
 import { useSeasons } from "../hooks/useSeasons";
 import { POSITIONS } from "../constants";
+import { scoringLabel } from "../constants/scoring";
 import { offensesFrom } from "../utils/vegas";
 
 /** How many players to show per offense. Enough for a lineup decision, not a roster. */
@@ -117,45 +119,53 @@ export function VegasView({ board }) {
         <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
       </div>
 
-      <div className="glass-card space-y-4 p-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <Select
-            label="Season"
-            value={season}
-            onChange={setSeason}
-            options={seasons.map((year) => ({ value: String(year), label: String(year) }))}
-          />
-          <Select label="Position" value={position} onChange={setPosition} options={POSITIONS} />
-          <div className="ml-auto flex items-end gap-2">
-            <SaveViewButton defaultName={board.title} />
-            <ExportButton
-              filename={`second-level-vegas-${season}-wk${week}`}
-              rows={exportRows}
-              columns={[
-                { key: "team", label: "Team" },
-                { key: "matchup", label: "Matchup" },
-                { key: "implied_total", label: "Implied total" },
-                { key: "total_line", label: "Game total" },
-                { key: "players", label: "Players" },
-              ]}
-              context={[
-                "Second Level: Vegas Board",
-                `${season} week ${week} · scoring: ${scoring}`,
-                "Implied total = game total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
-              ]}
-            />
+      <FilterBar
+        className="flex flex-wrap items-end gap-4 p-4"
+        summary={summarize(season, POSITIONS.find((entry) => entry.value === position)?.label, scoringLabel(scoring))}
+        footer={
+          <div className="border-t border-line px-4 pb-4 pt-3 md:mx-4 md:px-0">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Week</div>
+            {/* No "All weeks": an implied total is a fact about one fixture, so a
+                season-wide view of them would be a list with no question behind it. */}
+            <WeekRail weeks={weeks} value={week} onChange={setWeek} allowAll={false} />
           </div>
+        }
+      >
+        <Select
+          label="Season"
+          value={season}
+          onChange={setSeason}
+          options={seasons.map((year) => ({ value: String(year), label: String(year) }))}
+        />
+        <Select label="Position" value={position} onChange={setPosition} options={POSITIONS} />
+        {/* On a phone the scoring folds in with the filters; desktop keeps its own card. */}
+        <div className="md:hidden">
+          <ScoringControl scoring={scoring} onChange={setScoring} label="Scoring" bare />
         </div>
+        <div className="ml-auto flex items-end gap-2">
+          <SaveViewButton defaultName={board.title} />
+          <ExportButton
+            filename={`second-level-vegas-${season}-wk${week}`}
+            rows={exportRows}
+            columns={[
+              { key: "team", label: "Team" },
+              { key: "matchup", label: "Matchup" },
+              { key: "implied_total", label: "Implied total" },
+              { key: "total_line", label: "Game total" },
+              { key: "players", label: "Players" },
+            ]}
+            context={[
+              "Second Level: Vegas Board",
+              `${season} week ${week} · scoring: ${scoring}`,
+              "Implied total = game total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
+            ]}
+          />
+        </div>
+      </FilterBar>
 
-        <div className="border-t border-line pt-3">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.07em] text-faint">Week</div>
-          {/* No "All weeks": an implied total is a fact about one fixture, so a
-              season-wide view of them would be a list with no question behind it. */}
-          <WeekRail weeks={weeks} value={week} onChange={setWeek} allowAll={false} />
-        </div>
+      <div className="hidden md:block">
+        <ScoringControl scoring={scoring} onChange={setScoring} />
       </div>
-
-      <ScoringControl scoring={scoring} onChange={setScoring} />
 
       <p className="max-w-3xl text-xs leading-relaxed text-muted">{board.lede}</p>
 

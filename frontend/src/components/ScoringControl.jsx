@@ -11,7 +11,7 @@ import { SCORING_PRESET_OPTIONS, normalizeScoring } from "../constants/scoring";
 export function ScoringControl({ scoring, onChange, bare = false, label = "League Scoring" }) {
   return (
     <div className={bare ? "" : "glass-card p-4"}>
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3 max-md:[&>*]:flex-1">
         <Select
           label={label}
           value={normalizeScoring(scoring)}

@@ -14,22 +14,26 @@
 // good — including for drops and interceptions.
 import { formatStat } from "../../utils/format";
 import { columnEntry, forPosition, RADAR_GROUPS } from "../../constants/playerPage";
+import { usePhone } from "../../hooks/useMediaQuery";
 
-const SIZE = 640;
-const CENTRE_X = 320;
-const CENTRE_Y = 285;
-const RADIUS = 160;
+// The chart's box. A phone draws a smaller one, closer to its own width, with the type
+// set a little larger: the desktop box shrunk to a phone set the labels at under 6px.
+const BOX = {
+  full: { width: 640, height: 575, centreX: 320, centreY: 285, radius: 160, label: 11.5, value: 10.5, number: 12.5, gap: 13, reach: 26 },
+  compact: { width: 420, height: 350, centreX: 210, centreY: 175, radius: 104, label: 13.5, value: 12, number: 13, gap: 14.5, reach: 18 },
+};
 // Enough of a gap that neighbouring wedges read as separate without the ring looking
 // dashed, and a floor so a 2nd-percentile wedge is still a visible mark rather than
 // nothing at all.
 const WEDGE_GAP = 0.02;
 const MIN_WEDGE = 10;
 
-function polar(angle, radius) {
-  return [CENTRE_X + radius * Math.cos(angle), CENTRE_Y + radius * Math.sin(angle)];
-}
-
 export function SeasonRadar({ row, metrics, position, season }) {
+  const box = usePhone() ? BOX.compact : BOX.full;
+  const { centreX: CENTRE_X, centreY: CENTRE_Y, radius: RADIUS } = box;
+  const polar = (angle, radius) => [CENTRE_X + radius * Math.cos(angle), CENTRE_Y + radius * Math.sin(angle)];
+  // Where a percentile sits: inside its wedge when the wedge is long, past the cap when not.
+  const inside = RADIUS * 0.8;
   const groups = forPosition(RADAR_GROUPS, position);
   const slices = groups.flatMap((group) =>
     group.columns.map((entry) => {
@@ -71,7 +75,7 @@ export function SeasonRadar({ row, metrics, position, season }) {
       </p>
 
       <svg
-        viewBox={`0 0 ${SIZE} 575`}
+        viewBox={`0 0 ${box.width} ${box.height}`}
         className="mt-1.5 block h-auto w-full"
         role="img"
         aria-label={`Percentile profile for ${season}`}
@@ -116,7 +120,7 @@ export function SeasonRadar({ row, metrics, position, season }) {
           if (slice.percentile == null) return null;
           const radius = Math.max((RADIUS * slice.percentile) / 100, MIN_WEDGE);
           const mid = start + (slice.index + 0.5) * step;
-          const [x, y] = polar(mid, radius > 128 ? radius - 18 : radius + 14);
+          const [x, y] = polar(mid, radius > inside ? radius - 18 : radius + 14);
           return (
             <text
               key={`num-${slice.column}`}
@@ -124,7 +128,7 @@ export function SeasonRadar({ row, metrics, position, season }) {
               y={y + 4}
               textAnchor="middle"
               className="stat-num"
-              fontSize="12.5"
+              fontSize={box.number}
               fontWeight="700"
               fill="var(--fg)"
               stroke="var(--surface-solid)"
@@ -140,7 +144,7 @@ export function SeasonRadar({ row, metrics, position, season }) {
 
         {ranked.map((slice) => {
           const mid = start + (slice.index + 0.5) * step;
-          const [x, y] = polar(mid, RADIUS + 26);
+          const [x, y] = polar(mid, RADIUS + box.reach);
           // Only labels near the poles centre themselves; the rest hang off their own
           // side, so near-vertical neighbours never collide over the top of the chart.
           const nearPole = Math.abs(Math.cos(mid)) < 0.22;
@@ -148,9 +152,9 @@ export function SeasonRadar({ row, metrics, position, season }) {
           const label = slice.label ?? metrics[slice.column]?.label ?? slice.column;
           const shifted = nearPole ? y + (Math.sin(mid) > 0 ? 14 : -16) : y;
           return (
-            <text key={`label-${slice.column}`} x={x} y={shifted} textAnchor={anchor} fontSize="11.5" fontWeight="600" fill="var(--fg)">
+            <text key={`label-${slice.column}`} x={x} y={shifted} textAnchor={anchor} fontSize={box.label} fontWeight="600" fill="var(--fg)">
               <tspan x={x}>{label}</tspan>
-              <tspan x={x} dy="13" fontSize="10.5" fontWeight="500" fill="var(--faint)" className="stat-num">
+              <tspan x={x} dy={box.gap} fontSize={box.value} fontWeight="500" fill="var(--faint)" className="stat-num">
                 {slice.percentile == null ? "not ranked" : formatStat(slice.value, metrics[slice.column]?.format)}
               </tspan>
             </text>

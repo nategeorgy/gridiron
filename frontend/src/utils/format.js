@@ -20,6 +20,15 @@ export function formatStat(value, format) {
 }
 
 /**
+ * "Jaxon Smith-Njigba" -> "J. Smith-Njigba": a name short enough for a phone's pinned
+ * table column. Everything after the first word is kept, so suffixes survive.
+ */
+export function shortName(name) {
+  const [first, ...rest] = String(name ?? "").split(" ");
+  return rest.length && first ? `${first[0]}. ${rest.join(" ")}` : String(name ?? "");
+}
+
+/**
  * Format a 0–1 percentile as an ordinal ("0.92" -> "92nd"). Used by the Insight
  * breakdown, where "92nd among receivers" is the sentence a manager can act on.
  */

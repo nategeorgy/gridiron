@@ -7,6 +7,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { Segmented } from "../components/team/Segmented";
 import { ScoringControl } from "../components/ScoringControl";
 import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
@@ -23,7 +24,9 @@ import { useMetrics } from "../hooks/useMetrics";
 import { useScoring } from "../hooks/useScoring";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
+import { usePhone } from "../hooks/useMediaQuery";
 import { formatStat } from "../utils/format";
+import { scoringLabel } from "../constants/scoring";
 import { percentileColor } from "../utils/explore";
 
 const CAPS = [
@@ -34,6 +37,7 @@ const CAPS = [
 ];
 
 export function ScatterView({ board }) {
+  const phone = usePhone();
   const { seasonOptions, currentSeason } = useSeasons();
   const [position, setPosition] = useUrlState("pos", "WR", SCATTER_POSITIONS);
   const [presetId, setPresetId] = useUrlState("q", SCATTER_PRESETS[position][0].id);
@@ -111,6 +115,7 @@ export function ScatterView({ board }) {
 
   const plot = (forExport = false) => (
     <ScatterPlot
+      compact={phone && !forExport}
       points={points}
       xMetric={xMetric}
       yMetric={yMetric}
@@ -137,11 +142,24 @@ export function ScatterView({ board }) {
     <div className="space-y-4">
       <ExploreHeader title={board.title} description={board.description} />
 
-      <div className="glass-card flex flex-wrap items-end gap-3 p-4">
-        <Field label="Position">
-          <Segmented label="Position" value={position} onChange={pickPosition}
-            options={SCATTER_POSITIONS.map((value) => ({ value, label: value }))} />
-        </Field>
+      {/* On a phone the position stays out of the fold: it decides which questions exist. */}
+      <FilterBar
+        className="flex flex-wrap items-end gap-3 p-4"
+        summary={summarize(when, CAPS.find((entry) => entry.value === cap)?.label, scoringLabel(scoring))}
+        footer={
+          <div className="flex items-center gap-3 border-t border-line px-4 py-2.5 md:hidden">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-faint">Position</span>
+            <Segmented label="Position" value={position} onChange={pickPosition}
+              options={SCATTER_POSITIONS.map((value) => ({ value, label: value }))} />
+          </div>
+        }
+      >
+        <div className="max-md:hidden">
+          <Field label="Position">
+            <Segmented label="Position" value={position} onChange={pickPosition}
+              options={SCATTER_POSITIONS.map((value) => ({ value, label: value }))} />
+          </Field>
+        </div>
         <Select label="Season" value={season} onChange={(value) => { setSeason(value); setWeeks(""); setPinned(""); }} options={seasonOptions} />
         <TimeframeFilter weeks={weeks} season={season} onChange={(value) => { setWeeks(value); setPinned(""); }} />
         <Select label="Players" value={cap} onChange={setCap} options={CAPS} />
@@ -158,7 +176,7 @@ export function ScatterView({ board }) {
             context={[`Second Level: ${preset.question}`, `${position}s · ${when} · scoring: ${scoring}`]}
           />
         </div>
-      </div>
+      </FilterBar>
 
       <div className="glass-card grid gap-2.5 px-4 py-3">
         <Chips label="Questions" value={preset.id} onChange={(value) => { setPresetId(value); setPinned(""); }}

@@ -35,7 +35,11 @@ function displayName(user) {
   return user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Signed in";
 }
 
-export function AccountMenu() {
+/**
+ * @param placement "down" under the avatar (the desktop header), or "up" above it (the
+ *                  foot of the phone menu, where there is no room below)
+ */
+export function AccountMenu({ placement = "down" }) {
   const { authConfigured, isSignedIn, ready, user, signOut } = useAuth();
   const { views, deleteView } = useSavedViews();
   const [open, setOpen] = useState(false);
@@ -97,7 +101,12 @@ export function AccountMenu() {
       </button>
 
       {open && (
-        <div role="menu" className="glass-popover absolute right-0 top-full z-30 mt-1.5 w-72 p-1.5">
+        <div
+          role="menu"
+          className={`glass-popover absolute right-0 z-30 w-72 max-w-[calc(100vw-32px)] p-1.5 ${
+            placement === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+          }`}
+        >
           <div className="flex items-center gap-2.5 px-3 py-2">
             <Avatar user={user} size="h-9 w-9" />
             <div className="min-w-0">

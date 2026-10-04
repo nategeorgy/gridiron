@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PositionTag } from "../PositionTag";
-import { formatStat } from "../../utils/format";
+import { formatStat, shortName } from "../../utils/format";
 import { Segmented } from "./Segmented";
 
 const col = (key, label, kind = "count") => ({ key, label, kind });
@@ -91,17 +91,20 @@ export function TeamPlayersTable({ rows, isLoading, season, weeksLabel, position
           <Segmented options={VIEW_OPTIONS} value={view} onChange={onView} label="Per game or totals" />
         </div>
       </div>
+      {/* On a phone the player is pinned while the stats scroll. */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-[12.5px]">
+        <table className="w-full border-collapse text-[12.5px] md:min-w-[760px]">
           <thead>
             <tr className="text-[10.5px] uppercase tracking-[0.08em] text-faint">
-              <th colSpan={2} />
+              <th colSpan={2} className="hidden md:table-cell" />
+              <th className="pin-col md:hidden" />
+              <th className="md:hidden" />
               {groups.map(([name, list]) => (
                 <th key={name} colSpan={list.length} className="border-l border-line px-2 pb-1 text-center font-bold text-fg">{name}</th>
               ))}
             </tr>
             <tr className="border-b border-line text-[11px]">
-              <th className={headerClass("name", "", "text-left")} onClick={() => sortBy("name")}>Player{arrow("name")}</th>
+              <th className={headerClass("name", "pin-col", "text-left")} onClick={() => sortBy("name")}>Player{arrow("name")}</th>
               <th className={headerClass("games_played")} onClick={() => sortBy("games_played")}>G{arrow("games_played")}</th>
               {columns.map((column) => (
                 <th key={column.key} className={headerClass(column.key, firstOfGroup.has(column.key) ? "border-l border-line" : "")} onClick={() => sortBy(column.key)}>
@@ -119,10 +122,12 @@ export function TeamPlayersTable({ rows, isLoading, season, weeksLabel, position
             )}
             {sorted.map((row) => (
               <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
-                <td className="px-2 py-1.5">
+                <td className="pin-col px-2 py-1.5">
                   <Link to={`/players/${row.player_id}`} className="flex items-center gap-2 whitespace-nowrap font-medium text-fg hover:text-accent">
-                    {row.headshot_url ? <img src={row.headshot_url} alt="" className="h-6 w-6 rounded-full bg-surface-2 object-cover" /> : <span className="h-6 w-6 rounded-full bg-surface-2" />}
-                    {row.name}
+                    {/* shrink-0: a shrinkable image let the cell size itself 24px short of its contents. */}
+                    {row.headshot_url ? <img src={row.headshot_url} alt="" className="h-6 w-6 shrink-0 rounded-full bg-surface-2 object-cover" /> : <span className="h-6 w-6 shrink-0 rounded-full bg-surface-2" />}
+                    <span className="md:hidden">{shortName(row.name)}</span>
+                    <span className="hidden md:inline">{row.name}</span>
                     <PositionTag position={row.position} variant="quiet" />
                   </Link>
                 </td>

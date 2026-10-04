@@ -22,6 +22,9 @@ const WEEKS = Array.from({ length: 18 }, (_, index) => index + 1);
 /** Trailing-window shortcuts, in weeks. */
 const SHORTCUTS = [4, 8];
 
+/** The popover's width (w-64), for keeping it on screen. */
+const POPOVER_WIDTH = 256;
+
 /**
  * "Week 2", "Weeks 1, 2", "Weeks 1–4, 7": the weeks themselves rather than a count, so
  * the control says what is selected. Runs of three or more collapse to a range.
@@ -90,11 +93,14 @@ export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange })
   };
 
   // Position from the trigger's viewport rect, since the popover no longer lives
-  // beside it in the tree.
+  // beside it in the tree. Clamped to the viewport: on a phone the trigger can sit in
+  // the right half of the screen, and a 256px popover from its left edge ran off it.
   useLayoutEffect(() => {
     if (!open || !button.current) return;
     const rect = button.current.getBoundingClientRect();
-    setAnchor({ top: rect.bottom + 4, left: rect.left });
+    const viewport = document.documentElement.clientWidth || window.innerWidth || 1280;
+    const left = Math.min(Math.max(12, rect.left), Math.max(12, viewport - POPOVER_WIDTH - 12));
+    setAnchor({ top: rect.bottom + 4, left });
   }, [open]);
 
   useEffect(() => {
@@ -129,7 +135,7 @@ export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange })
 
   return (
     <div className="flex items-end gap-2" ref={container}>
-      <div className="relative flex flex-col gap-1">
+      <div className="relative flex flex-col gap-1 max-md:flex-1">
         <span className="text-xs font-medium uppercase tracking-wide text-muted">Timeframe</span>
         <button
           type="button"

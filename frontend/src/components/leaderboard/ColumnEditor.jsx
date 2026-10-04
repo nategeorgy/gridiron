@@ -2,8 +2,9 @@
 // library below.
 //
 // **On your board** is the table's columns in order, under the table's own section
-// headers, dragged to reorder (mouse, pen or finger) or moved with the arrow keys, with
-// an × on each. **Add stats** is every stat the position group has, split by the page's
+// headers, dragged to reorder or moved with the arrow keys, with an × on each. A mouse
+// drags a row from anywhere on it; a finger drags it by the grip, so swiping the rest of
+// the row still scrolls the list. **Add stats** is every stat the position group has, split by the page's
 // five tabs, as chips that add or remove a column in one tap. Ordering and picking live
 // in one view, so there is no Reorder mode to find. A line at the bottom says what the
 // last stat hovered or focused measures.
@@ -19,7 +20,9 @@
 // them the containing block for anything `position: fixed` inside them.
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ScrollRow } from "../ui/ScrollRow";
 import { LEADERBOARD_TABS, groupFor, groupPool, poolColumns } from "../../constants/leaderboards";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 const TINT = (percent) => `color-mix(in srgb, var(--accent) ${percent}%, transparent)`;
 const CARD = "color-mix(in srgb, var(--fg) 3%, var(--surface-solid))";
@@ -85,6 +88,8 @@ function BoardList({ sections, metrics, onChange }) {
 
   const startDrag = (event, column) => {
     if (event.button !== 0 || event.target.closest("button")) return;
+    // A touch away from the grip is a scroll, not a drag.
+    if (event.pointerType !== "mouse" && !event.target.closest("[data-grip]")) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(column);
@@ -149,9 +154,12 @@ function BoardList({ sections, metrics, onChange }) {
         className={`flex select-none items-center gap-2 rounded-lg px-2 py-1 text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] ${
           dragging === column ? "cursor-grabbing shadow-lg" : "cursor-grab hover:bg-surface-2"
         }`}
-        style={{ touchAction: "none", ...(dragging === column ? { background: CARD_HI } : {}) }}
+        style={{ touchAction: "pan-y", ...(dragging === column ? { background: CARD_HI } : {}) }}
       >
-        <span className="text-faint"><GripIcon /></span>
+        {/* The grip takes the touch (no panning there), and is padded to a fingertip. */}
+        <span data-grip className="-my-1 -ml-1.5 px-1.5 py-1.5 text-faint" style={{ touchAction: "none" }}>
+          <GripIcon />
+        </span>
         <span className="min-w-0 flex-1 truncate">
           <span className="font-semibold text-fg">{metrics[column]?.short ?? column}</span>
           <span className="ml-1.5 text-xs text-faint">{metrics[column]?.label}</span>
@@ -208,6 +216,7 @@ export function ColumnEditor({
   const [info, setInfo] = useState(null);
   const searchRef = useRef(null);
   const libraryRef = useRef(null);
+  const canHover = useMediaQuery("(hover: hover)");
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
@@ -217,7 +226,10 @@ export function ColumnEditor({
     setQuery("");
     setInfo(null);
     setLibraryTab(initialTab);
-    const frame = requestAnimationFrame(() => searchRef.current?.focus());
+    // Not on a touch screen, where focusing the search opens the keyboard over the panel.
+    const frame = requestAnimationFrame(() => {
+      if (window.matchMedia?.("(pointer: fine)").matches) searchRef.current?.focus();
+    });
     const onKey = (event) => event.key === "Escape" && closeRef.current();
     document.addEventListener("keydown", onKey);
     return () => {
@@ -345,7 +357,8 @@ export function ColumnEditor({
             />
           </label>
           {!needle && (
-            <div role="tablist" aria-label="Stats by tab" className="flex gap-0.5 rounded-xl border border-line p-[3px]" style={{ background: CARD }}>
+            <ScrollRow className="flex-none">
+            <div role="tablist" aria-label="Stats by tab" className="flex w-max min-w-full gap-0.5 rounded-xl border border-line p-[3px]" style={{ background: CARD }}>
               {tabs.map((tab) => {
                 const on = tab.id === activeTab;
                 const count = onTab(tab.id);
@@ -377,6 +390,7 @@ export function ColumnEditor({
                 );
               })}
             </div>
+            </ScrollRow>
           )}
           <div ref={libraryRef} className="min-h-0 flex-1 overflow-y-auto pb-3">
             {library.length ? (
@@ -431,8 +445,10 @@ export function ColumnEditor({
               <br />
               {metrics[info]?.description}
             </>
-          ) : (
+          ) : canHover ? (
             "Hover a stat to see what it measures."
+          ) : (
+            "Tap a stat to add or remove it. What it measures shows here."
           )}
         </div>
 

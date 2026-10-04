@@ -24,6 +24,7 @@ import { GameCard } from "../components/schedule/GameCard";
 import { WeekRail, defaultWeek } from "../components/schedule/WeekRail";
 import { SLOT_ORDER, formatGameDateLong, slotOf } from "../components/schedule/kickoff";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { ExportButton } from "../components/ExportButton";
 import { SaveViewButton } from "../components/SaveViewButton";
 import { useGames, useGameWeeks } from "../hooks/useGames";
@@ -114,60 +115,62 @@ export function GamesView({ board }) {
         <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
       </div>
 
-      <div className="glass-card space-y-4 p-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <Select
-            label="Season"
-            value={season}
-            onChange={setSeason}
-            options={seasons.map((year) => ({ value: String(year), label: String(year) }))}
-          />
-          <Select
-            label="Team"
-            value={teamId}
-            onChange={setTeamId}
-            options={[
-              { value: "", label: "All teams" },
-              ...teams.map((team) => ({
-                value: String(team.team_id),
-                label: team.name ?? team.abbreviation,
-              })),
+      <FilterBar
+        className="flex flex-wrap items-end gap-4 p-4"
+        summary={summarize(season, teams.find((team) => String(team.team_id) === teamId)?.name ?? "All teams")}
+        footer={
+          <div className="border-t border-line px-4 pb-4 pt-3 md:mx-4 md:px-0">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.07em] text-faint">
+              Week
+            </div>
+            <WeekRail weeks={weeks} value={week} onChange={setWeek} />
+          </div>
+        }
+      >
+        <Select
+          label="Season"
+          value={season}
+          onChange={setSeason}
+          options={seasons.map((year) => ({ value: String(year), label: String(year) }))}
+        />
+        <Select
+          label="Team"
+          value={teamId}
+          onChange={setTeamId}
+          options={[
+            { value: "", label: "All teams" },
+            ...teams.map((team) => ({
+              value: String(team.team_id),
+              label: team.name ?? team.abbreviation,
+            })),
+          ]}
+        />
+        <div className="ml-auto flex items-end gap-2">
+          <SaveViewButton defaultName={board.title} />
+          <ExportButton
+            filename={`second-level-games-${season}${oneWeek ? `-wk${week}` : ""}`}
+            rows={exportRows}
+            columns={[
+              { key: "week", label: "Week" },
+              { key: "date", label: "Date" },
+              { key: "kickoff", label: "Kickoff (ET)" },
+              { key: "matchup", label: "Game" },
+              { key: "away_score", label: "Away score" },
+              { key: "home_score", label: "Home score" },
+              { key: "favorite", label: "Favorite" },
+              { key: "spread", label: "Spread" },
+              { key: "total_line", label: "Total" },
+              { key: "away_implied", label: "Away implied" },
+              { key: "home_implied", label: "Home implied" },
+            ]}
+            context={[
+              "Second Level: Games",
+              `${season} regular season${oneWeek ? `, week ${week}` : ""}`,
+              "Implied total = total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
             ]}
           />
-          <div className="ml-auto flex items-end gap-2">
-            <SaveViewButton defaultName={board.title} />
-            <ExportButton
-              filename={`second-level-games-${season}${oneWeek ? `-wk${week}` : ""}`}
-              rows={exportRows}
-              columns={[
-                { key: "week", label: "Week" },
-                { key: "date", label: "Date" },
-                { key: "kickoff", label: "Kickoff (ET)" },
-                { key: "matchup", label: "Game" },
-                { key: "away_score", label: "Away score" },
-                { key: "home_score", label: "Home score" },
-                { key: "favorite", label: "Favorite" },
-                { key: "spread", label: "Spread" },
-                { key: "total_line", label: "Total" },
-                { key: "away_implied", label: "Away implied" },
-                { key: "home_implied", label: "Home implied" },
-              ]}
-              context={[
-                "Second Level: Games",
-                `${season} regular season${oneWeek ? `, week ${week}` : ""}`,
-                "Implied total = total / 2 +/- spread / 2. Blank lines are games the market has not priced.",
-              ]}
-            />
-          </div>
         </div>
-
-        <div className="border-t border-line pt-3">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.07em] text-faint">
-            Week
-          </div>
-          <WeekRail weeks={weeks} value={week} onChange={setWeek} />
-        </div>
-      </div>
+      </FilterBar>
 
       {isError ? (
         <div className="glass-card p-10 text-center text-sm text-muted">

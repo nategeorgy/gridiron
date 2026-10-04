@@ -16,6 +16,7 @@ import { StatTooltip, useStatTooltip } from "../StatTooltip";
 import { Card, CardHead, CardState } from "./primitives";
 import { formatSigned, formatStat } from "../../utils/format";
 import { scoringLabel } from "../../constants/scoring";
+import { usePhone } from "../../hooks/useMediaQuery";
 
 const COLD = "var(--series-1)"; // below par: a buy
 const HOT = "var(--warn)"; // above par: a sell
@@ -111,12 +112,12 @@ export function explainGap(row) {
  * wider than the circle — reserving only the circle put one player's points-over-
  * expected on top of his neighbour's face.
  */
-function placePhotos(points, box, { radius = 20, leaders = [50, 68, 86, 108, 132, 160], pad = 4 } = {}) {
+function placePhotos(points, box, { radius = 20, leaders = [50, 68, 86, 108, 132, 160], pad = 4, labelHalf = 34 } = {}) {
   // Twelve angles, nearest-to-straight-up first. Six picks packed into one corner (four
   // receivers between 20 and 40 expected points) ran out of the original eight spots at
   // three distances, and the fallback put two labels on top of each other.
   const angles = [-90, -60, -120, -30, -150, 0, 180, 30, 150, 60, 120, 90];
-  const rectOf = (cx, cy) => ({ x0: cx - 34, x1: cx + 34, y0: cy - radius - 1, y1: cy + 48 });
+  const rectOf = (cx, cy) => ({ x0: cx - labelHalf, x1: cx + labelHalf, y0: cy - radius - 1, y1: cy + radius + 28 });
   const overlaps = (a, b) =>
     a.x0 < b.x1 + pad && b.x0 < a.x1 + pad && a.y0 < b.y1 + pad && b.y0 < a.y1 + pad;
   const placed = [];
@@ -150,13 +151,24 @@ function placePhotos(points, box, { radius = 20, leaders = [50, 68, 86, 108, 132
 // "Deebo Samuel Sr." -> "Samuel": the label is one word, and a suffix is not the word.
 const surname = (name) => name.split(" ").filter((part) => !/^(Jr\.?|Sr\.?|II|III|IV|V)$/.test(part)).slice(-1)[0];
 
-const WIDTH = 620;
-const HEIGHT = 470;
-const MARGIN = { left: 48, right: 18, top: 18, bottom: 42 };
+// The plot's box. A phone draws a smaller one, near its own width, rather than the
+// desktop box shrunk by half, which set the axis numbers at 5px.
+const PLOT = {
+  full: {
+    width: 620, height: 470, margin: { left: 48, right: 18, top: 18, bottom: 42 },
+    radius: 20, leaders: [50, 68, 86, 108, 132, 160], labelHalf: 34, tick: 10, name: 10.5, value: 10, axis: 10.5,
+  },
+  compact: {
+    width: 380, height: 440, margin: { left: 38, right: 10, top: 12, bottom: 38 },
+    radius: 14, leaders: [36, 50, 64, 80, 98, 118, 140, 164], labelHalf: 28, tick: 11, name: 11.5, value: 11, axis: 11,
+  },
+};
 
 export function ExpectedActualCard({ season, scoring, rows, cloud = [], headshots, isLoading, isError }) {
   const navigate = useNavigate();
   const { tip, show, hide } = useStatTooltip();
+  const plot = usePhone() ? PLOT.compact : PLOT.full;
+  const { width: WIDTH, height: HEIGHT, margin: MARGIN, radius } = plot;
 
   // One scale for both axes: par is the 45° line, which is only true when the two axes
   // share a domain.
@@ -180,6 +192,7 @@ export function ExpectedActualCard({ season, scoring, rows, cloud = [], headshot
       value: row.fantasy_points_over_expected,
     })),
     box,
+    { radius, leaders: plot.leaders, labelHalf: plot.labelHalf },
   );
 
   return (
@@ -207,16 +220,16 @@ export function ExpectedActualCard({ season, scoring, rows, cloud = [], headshot
                 <line x1={MARGIN.left} y1={y(tick)} x2={WIDTH - MARGIN.right} y2={y(tick)}
                       style={{ stroke: "var(--divider)", strokeWidth: 1 }} />
                 <text x={x(tick)} y={HEIGHT - MARGIN.bottom + 17} textAnchor="middle"
-                      style={{ fill: "var(--faint)", font: "500 10px Inter, sans-serif" }}>{tick}</text>
+                      style={{ fill: "var(--faint)", font: `500 ${plot.tick}px Inter, sans-serif` }}>{tick}</text>
                 <text x={MARGIN.left - 9} y={y(tick) + 3.5} textAnchor="end"
-                      style={{ fill: "var(--faint)", font: "500 10px Inter, sans-serif" }}>{tick}</text>
+                      style={{ fill: "var(--faint)", font: `500 ${plot.tick}px Inter, sans-serif` }}>{tick}</text>
               </g>
             ))}
 
             <line x1={x(0)} y1={y(0)} x2={x(max)} y2={y(max)}
                   style={{ stroke: "var(--plot-rule)", strokeWidth: 1.5, strokeDasharray: "5 4" }} />
             <text x={x(max) - 5} y={y(max) + 17} textAnchor="end"
-                  style={{ fill: "var(--muted)", font: "600 10px Inter, sans-serif" }}>par</text>
+                  style={{ fill: "var(--muted)", font: `600 ${plot.tick}px Inter, sans-serif` }}>par</text>
 
             {cloud.map((point) => (
               <circle key={point.player_id} cx={x(Math.min(point.x, max))} cy={y(Math.min(point.y, max))} r={2.5}
@@ -251,27 +264,27 @@ export function ExpectedActualCard({ season, scoring, rows, cloud = [], headshot
                 >
                   <defs>
                     <clipPath id={clipId}>
-                      <circle cx={cx} cy={cy} r={20} />
+                      <circle cx={cx} cy={cy} r={radius} />
                     </clipPath>
                   </defs>
                   {/* The leader to the photo, and a dashed drop to par so the gap is a length. */}
                   <line x1={px} y1={py} x2={cx} y2={cy} style={{ stroke: tone, strokeWidth: 1.3, opacity: 0.75 }} />
                   <line x1={px} y1={py} x2={px} y2={y(row.expected_fantasy_points)}
                         style={{ stroke: tone, strokeWidth: 1.3, strokeDasharray: "2 2", opacity: 0.85 }} />
-                  <circle cx={cx} cy={cy} r={20} style={{ fill: "var(--surface-solid)" }} />
+                  <circle cx={cx} cy={cy} r={radius} style={{ fill: "var(--surface-solid)" }} />
                   {headshots?.[row.player_id] && (
-                    <image href={headshots[row.player_id]} x={cx - 20} y={cy - 21} width={40} height={42}
+                    <image href={headshots[row.player_id]} x={cx - radius} y={cy - radius - 1} width={radius * 2} height={radius * 2 + 2}
                            clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMin slice" />
                   )}
-                  <circle cx={cx} cy={cy} r={20} style={{ fill: "none", stroke: tone, strokeWidth: 2.5 }} />
+                  <circle cx={cx} cy={cy} r={radius} style={{ fill: "none", stroke: tone, strokeWidth: 2.5 }} />
                   <circle cx={px} cy={py} r={3.5}
                           style={{ fill: tone, stroke: "var(--surface-solid)", strokeWidth: 1.2 }} />
-                  <text x={cx} y={cy + 33} textAnchor="middle"
-                        style={{ fill: "var(--fg)", font: "600 10.5px Inter, sans-serif" }}>
+                  <text x={cx} y={cy + radius + 13} textAnchor="middle"
+                        style={{ fill: "var(--fg)", font: `600 ${plot.name}px Inter, sans-serif` }}>
                     {surname(row.name)}
                   </text>
-                  <text x={cx} y={cy + 44} textAnchor="middle"
-                        style={{ fill: tone, font: "700 10px 'JetBrains Mono', monospace" }}>
+                  <text x={cx} y={cy + radius + 24} textAnchor="middle"
+                        style={{ fill: tone, font: `700 ${plot.value}px 'JetBrains Mono', monospace` }}>
                     {formatSigned(row.fantasy_points_over_expected, 1)}
                   </text>
                 </g>
@@ -279,10 +292,10 @@ export function ExpectedActualCard({ season, scoring, rows, cloud = [], headshot
             })}
 
             <text x={(MARGIN.left + WIDTH - MARGIN.right) / 2} y={HEIGHT - 6} textAnchor="middle"
-                  style={{ fill: "var(--muted)", font: "600 10.5px Inter, sans-serif" }}>Expected points</text>
-            <text transform={`translate(14 ${(MARGIN.top + HEIGHT - MARGIN.bottom) / 2}) rotate(-90)`}
+                  style={{ fill: "var(--muted)", font: `600 ${plot.axis}px Inter, sans-serif` }}>Expected points</text>
+            <text transform={`translate(${plot.axis + 3.5} ${(MARGIN.top + HEIGHT - MARGIN.bottom) / 2}) rotate(-90)`}
                   textAnchor="middle"
-                  style={{ fill: "var(--muted)", font: "600 10.5px Inter, sans-serif" }}>Actual points</text>
+                  style={{ fill: "var(--muted)", font: `600 ${plot.axis}px Inter, sans-serif` }}>Actual points</text>
           </svg>
 
           <div className="grid gap-2">

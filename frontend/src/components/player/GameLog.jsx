@@ -105,13 +105,17 @@ export function GameLog({ games, sections, controls, metrics, position, league, 
       ) : games.length === 0 ? (
         <p className="px-4 py-6 text-center text-xs text-muted">No games this season.</p>
       ) : (
+        // On a phone the week and opponent share one pinned cell, so a row still says
+        // which game it is while its stats scroll.
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left">
+          <table className="w-full text-left md:min-w-[720px]">
             <thead>
               <tr className="text-[9.5px] uppercase tracking-[0.08em] text-fg">
-                <th colSpan={5} className="border-b-2 border-edge px-2 pb-0.5 pt-1 pl-4 font-bold">
+                <th colSpan={5} className="hidden border-b-2 border-edge px-2 pb-0.5 pt-1 pl-4 font-bold md:table-cell">
                   Game
                 </th>
+                <th className="pin-col border-b-2 border-edge px-2 pb-0.5 pt-1 pl-4 font-bold md:hidden">Game</th>
+                <th colSpan={3} className="border-b-2 border-edge md:hidden" />
                 {/* Keyed by position: a custom table can repeat a section name. */}
                 {sections.map((section, index) => (
                   <th
@@ -124,8 +128,11 @@ export function GameLog({ games, sections, controls, metrics, position, league, 
                 ))}
               </tr>
               <tr className="border-b border-line text-[9.5px] uppercase tracking-[0.06em] text-faint">
-                <th className="px-2 py-1 pl-4 text-right font-semibold">WK</th>
-                <th className="px-2 py-1 text-left font-semibold">Opp</th>
+                <th className="pin-col px-2 py-1 pl-4 text-left font-semibold md:text-right">
+                  <span className="md:hidden">Wk · Opp</span>
+                  <span className="hidden md:inline">WK</span>
+                </th>
+                <th className="hidden px-2 py-1 text-left font-semibold md:table-cell">Opp</th>
                 <th className="px-2 py-1 text-right font-semibold">Pts</th>
                 <th
                   className="whitespace-nowrap px-2 py-1 text-right font-semibold"
@@ -156,15 +163,18 @@ export function GameLog({ games, sections, controls, metrics, position, league, 
                   <tr
                     key={game.game_id ?? `bye-${game.week}`}
                     className={`border-b border-line last:border-0 ${
-                      bye ? "text-faint opacity-60" : "hover:bg-surface-2"
+                      bye ? "text-faint md:opacity-60" : "hover:bg-surface-2"
                     }`}
                   >
                     <td
-                      className={`stat-num px-2 py-1 pl-4 text-right text-[12.5px] ${bye ? "" : "text-muted"}`}
+                      className={`pin-col stat-num whitespace-nowrap px-2 py-1 pl-4 text-[12.5px] md:text-right ${bye ? "" : "text-muted"}`}
                     >
-                      {game.week}
+                      <span className="inline-block w-5 text-right md:w-auto">{game.week}</span>
+                      <span className="ml-2 inline-block w-9 md:hidden">
+                        {bye ? "BYE" : game.opponent_abbreviation ?? "—"}
+                      </span>
                     </td>
-                    <td className={`stat-num px-2 py-1 text-[12.5px] ${bye ? "" : "text-muted"}`}>
+                    <td className={`stat-num hidden px-2 py-1 text-[12.5px] md:table-cell ${bye ? "" : "text-muted"}`}>
                       {bye ? "BYE" : game.opponent_abbreviation ?? "—"}
                     </td>
                     {kind === "played" ? (

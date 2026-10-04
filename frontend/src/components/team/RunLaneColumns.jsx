@@ -43,7 +43,8 @@ export function RunLaneColumns({ lanes, groups, weeksLabel }) {
           return (
             <div key={group.key} className="grid gap-0.5 rounded-xl border border-line px-2.5 py-2" style={{ background: "color-mix(in srgb, var(--fg) 4%, transparent)" }}>
               <b className="text-xs text-fg">{group.name} <span className="text-[10.5px] font-normal text-faint">{group.hint}</span></b>
-              <span className="flex items-center gap-1.5">
+              {/* Wraps on a phone, where a third of the card is about 100px. */}
+              <span className="flex flex-wrap items-center gap-1.5">
                 <span className="stat-num text-[15px] font-semibold" style={{ color: rankText(row?.epa_rank, row?.epa_teams) }}>{formatTeamStat(row?.epa, "sgn2")}</span>
                 <RankChip rank={row?.epa_rank} of={row?.epa_teams} />
               </span>

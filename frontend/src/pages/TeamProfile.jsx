@@ -12,6 +12,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
+import { FilterBar, summarize } from "../components/ui/FilterBar";
 import { ScoringPill } from "../components/ScoringPill";
 import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
 import { CoachingStaff } from "../components/team/CoachingStaff";
@@ -200,12 +201,12 @@ export function TeamProfile() {
         logos={logos}
       />
 
-      <div className="glass-card flex flex-wrap items-center gap-3 px-4 py-3">
+      <FilterBar className="flex flex-wrap items-center gap-3 px-4 py-3" summary={summarize(season, weeksLabel, scoringLabel(scoring))}>
         <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
         <TimeframeFilter weeks={weeks} season={season} onChange={setWeeks} />
-        <span className="flex-1" />
+        <span className="flex-1 max-md:hidden" />
         <ScoringPill scoring={scoring} onChange={setScoring} />
-      </div>
+      </FilterBar>
 
       {boardError && <div className="glass-card p-4 text-sm text-muted">Could not load team stats for this season.</div>}
 
