@@ -60,6 +60,13 @@ DATA_TABLES = ("player_stats", "players", "teams", "games", "team_game_stats", "
 # Backstop only. Correctness comes from the data version.
 MAX_AGE_SECONDS = 60 * 60
 
+# How long a request waits for another request already computing the same entry before
+# computing it itself, as every request did before entries were shared. A backstop
+# against a computation that never returns, not a tuning knob: on a starved database a
+# cold Insight board can take minutes, and waiting out the one already running is still
+# cheaper than starting a second beside it.
+WAIT_SECONDS = 5 * 60
+
 # Read at call time rather than bound at import, so a test can switch it on.
 ENABLED = settings.environment != "test"
 
@@ -86,24 +93,45 @@ def data_version(db: Session) -> int:
     return db.info["data_version"]
 
 
+class _InFlight:
+    """One computation of an entry, which other requests for the same entry wait on."""
+
+    __slots__ = ("done", "owner", "value", "error")
+
+    def __init__(self) -> None:
+        self.done = threading.Event()
+        self.owner = threading.get_ident()
+        self.value = None
+        self.error: BaseException | None = None
+
+
 class VersionedCache(Generic[T]):
     """A bounded LRU of computed values, each valid for one data version.
 
     Entries left behind by an older version are never served again; they fall out of
     the LRU as new ones arrive, so memory stays bounded by ``max_entries`` either way.
-    Two requests missing at the same moment both compute, which is wasted work rather
-    than a wrong answer, and keeps a slow query from holding a lock.
+
+    **Requests missing the same entry at once share one computation.** The first one
+    computes and the rest wait for its answer. They used to all compute: harmless on a
+    warm process, but a cold one (every restart, and every time Render's free instance
+    wakes from sleep) takes the home page's 23 requests at once, and duplicated work
+    doubled what that visit read from the database, ~500 MB against ~250 MB measured in
+    October 2026, on an instance whose Disk IO budget had run out. A failure is shared
+    too: a request waiting on a computation that raised raises the same error, rather
+    than repeating work that is likely to fail the same way. No lock is held while a
+    computation runs, and a request never waits on a computation it is itself running.
     """
 
     def __init__(self, max_entries: int) -> None:
         self._max_entries = max_entries
         self._entries: OrderedDict[Hashable, tuple[float, T]] = OrderedDict()
+        self._in_flight: dict[Hashable, _InFlight] = {}
         # FastAPI runs sync endpoints on a thread pool, so requests really do overlap.
         self._lock = threading.Lock()
 
     def get_or_compute(self, db: Session, key: Hashable, compute: Callable[[], T]) -> T:
         """Return the cached value for ``key`` at the current data version, computing
-        and storing it on a miss."""
+        and storing it on a miss, or waiting for a request already computing it."""
         if not ENABLED:
             return compute()
 
@@ -113,8 +141,36 @@ class VersionedCache(Generic[T]):
             if entry is not None and time.monotonic() - entry[0] < MAX_AGE_SECONDS:
                 self._entries.move_to_end(versioned_key)
                 return entry[1]
+            flight = self._in_flight.get(versioned_key)
+            leading = flight is None
+            if leading:
+                flight = _InFlight()
+                self._in_flight[versioned_key] = flight
 
-        value = compute()
+        if not leading:
+            # A computation calling back into its own entry would wait on itself.
+            if flight.owner != threading.get_ident() and flight.done.wait(WAIT_SECONDS):
+                if flight.error is not None:
+                    raise flight.error
+                return flight.value
+            # Re-entered, or the computation is stuck: compute alone, as before.
+            return self._store(versioned_key, compute())
+
+        try:
+            value = compute()
+            flight.value = value
+            return self._store(versioned_key, value)
+        except BaseException as error:
+            flight.error = error
+            raise
+        finally:
+            # Stored (or failed) before the waiters wake, so a request arriving now
+            # finds the entry rather than starting a computation of its own.
+            with self._lock:
+                self._in_flight.pop(versioned_key, None)
+            flight.done.set()
+
+    def _store(self, versioned_key: Hashable, value: T) -> T:
         with self._lock:
             self._entries[versioned_key] = (time.monotonic(), value)
             self._entries.move_to_end(versioned_key)
@@ -123,7 +179,7 @@ class VersionedCache(Generic[T]):
         return value
 
     def clear(self) -> None:
-        """Drop every entry."""
+        """Drop every entry. A computation still running finishes and stores its own."""
         with self._lock:
             self._entries.clear()
 

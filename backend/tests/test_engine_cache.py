@@ -5,6 +5,7 @@ The cache went in because the Insight engine was exhausting Supabase's Disk IO b
 one, and a row one request decorates shows up decorated on the next. Pinned here:
 
 - a repeat call is served without recomputing, and a write to the data forces a miss
+- requests missing the same entry at once share one computation, and its failure
 - the scored rows ``build_intelligence`` returns are copies, so a caller cannot
   change what the next request gets
 - the career baseline, now summed once and priced in Python, is still priced in the
@@ -14,6 +15,7 @@ The cache is off under ``ENVIRONMENT=test`` (see the module docstring for why), 
 tests that need it switch it on and clear it on both sides.
 """
 
+import threading
 from datetime import date
 
 import pytest
@@ -126,6 +128,156 @@ def test_the_data_version_is_read_once_per_session(db: Session) -> None:
 
     db.info["data_version"] = version + 1
     assert data_version(db) == version + 1
+
+
+# --- Requests missing at once share one computation ----------------------------------
+#
+# A cold process takes the home page's requests all at once, and before entries were
+# shared every request missing an entry computed it: ~500 MB read from the database for
+# one visit, against ~250 MB when nothing was repeated (October 2026). The tests below
+# know exactly when a request is waiting, rather than sleeping and hoping, by recording
+# every wait on a computation in progress.
+
+
+class _WaitRecordingEvent(threading.Event):
+    """An Event that says when somebody has started waiting on it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.waited_on = threading.Event()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        self.waited_on.set()
+        return super().wait(timeout)
+
+
+@pytest.fixture
+def flights(monkeypatch) -> list:
+    """Every computation started from here on, with a wait that can be observed."""
+    started: list = []
+
+    class RecordingFlight(cache._InFlight):
+        def __init__(self) -> None:
+            super().__init__()
+            self.done = _WaitRecordingEvent()
+            started.append(self)
+
+    monkeypatch.setattr(cache, "_InFlight", RecordingFlight)
+    return started
+
+
+def _in_thread(function) -> tuple[threading.Thread, dict]:
+    """Run ``function`` on a thread; its return value or error lands in the dict."""
+    outcome: dict = {}
+
+    def run() -> None:
+        try:
+            outcome["value"] = function()
+        except BaseException as error:  # noqa: BLE001 - the test inspects it
+            outcome["error"] = error
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    return thread, outcome
+
+
+def _blocking_compute(value, *, error: Exception | None = None):
+    """A computation that holds until released, then returns ``value`` or raises."""
+    running, release, calls = threading.Event(), threading.Event(), []
+
+    def compute():
+        calls.append(1)
+        running.set()
+        release.wait(5)
+        if error is not None:
+            raise error
+        return value
+
+    return compute, running, release, calls
+
+
+def test_requests_missing_at_once_share_one_computation(
+    fixed_version: dict, flights: list
+) -> None:
+    store: VersionedCache[object] = VersionedCache(max_entries=4)
+    answer = object()
+    compute, running, release, calls = _blocking_compute(answer)
+    second_compute = _Counter()
+
+    first, first_outcome = _in_thread(lambda: store.get_or_compute(None, "key", compute))
+    assert running.wait(5)
+    second, second_outcome = _in_thread(lambda: store.get_or_compute(None, "key", second_compute))
+    assert flights[0].done.waited_on.wait(5), "the second request never waited"
+    release.set()
+    first.join(5)
+    second.join(5)
+
+    assert first_outcome["value"] is answer
+    assert second_outcome["value"] is answer
+    assert len(calls) == 1
+    assert second_compute.calls == 0
+    # Stored, and nothing left in flight: the next request is a plain hit.
+    assert store.get_or_compute(None, "key", second_compute) is answer
+    assert store._in_flight == {}
+
+
+def test_a_failure_is_shared_and_not_stored(fixed_version: dict, flights: list) -> None:
+    store: VersionedCache[str] = VersionedCache(max_entries=4)
+    failure = RuntimeError("statement timeout")
+    compute, running, release, _ = _blocking_compute("never", error=failure)
+
+    first, first_outcome = _in_thread(lambda: store.get_or_compute(None, "key", compute))
+    assert running.wait(5)
+    second, second_outcome = _in_thread(lambda: store.get_or_compute(None, "key", lambda: "own"))
+    assert flights[0].done.waited_on.wait(5)
+    release.set()
+    first.join(5)
+    second.join(5)
+
+    assert first_outcome["error"] is failure
+    assert second_outcome["error"] is failure
+    # The failure is not an entry: the next request computes afresh.
+    assert store.get_or_compute(None, "key", lambda: "recovered") == "recovered"
+
+
+def test_different_entries_never_wait_on_each_other(fixed_version: dict) -> None:
+    store: VersionedCache[str] = VersionedCache(max_entries=4)
+    compute, running, release, _ = _blocking_compute("a")
+
+    first, first_outcome = _in_thread(lambda: store.get_or_compute(None, "a", compute))
+    assert running.wait(5)
+    # "b" is computed and returned while "a" is still running.
+    assert store.get_or_compute(None, "b", lambda: "b") == "b"
+    release.set()
+    first.join(5)
+    assert first_outcome["value"] == "a"
+
+
+def test_a_computation_reading_its_own_entry_does_not_wait_on_itself(
+    fixed_version: dict,
+) -> None:
+    store: VersionedCache[str] = VersionedCache(max_entries=4)
+
+    def outer() -> str:
+        return "outer:" + store.get_or_compute(None, "key", lambda: "inner")
+
+    assert store.get_or_compute(None, "key", outer) == "outer:inner"
+
+
+def test_a_stuck_computation_is_not_waited_on_forever(
+    fixed_version: dict, flights: list, monkeypatch
+) -> None:
+    store: VersionedCache[str] = VersionedCache(max_entries=4)
+    monkeypatch.setattr(cache, "WAIT_SECONDS", 0.05)
+    compute, running, release, _ = _blocking_compute("slow")
+
+    first, first_outcome = _in_thread(lambda: store.get_or_compute(None, "key", compute))
+    assert running.wait(5)
+    # Past the wait, the second request computes its own answer, as before sharing.
+    assert store.get_or_compute(None, "key", lambda: "own") == "own"
+    release.set()
+    first.join(5)
+    assert first_outcome["value"] == "slow"
 
 
 # --- Seed data -----------------------------------------------------------------------

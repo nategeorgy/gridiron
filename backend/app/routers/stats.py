@@ -106,6 +106,11 @@ ALLOWED_INSIGHT_METRICS = ALLOWED_METRICS | INSIGHT_METRICS
 _LEADERBOARD_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=64)
 _SCATTER_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=16)
 _COMPARE_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=32)
+# Strength of schedule re-aggregated a season of stat lines on every call (~11 MB of
+# pages), and the home page's matchups card asks for all four positions on every visit,
+# so ~45 MB a visit on a warm process (October 2026). A body is ~66 kB, so 48 entries
+# (every position, window and scoring preset for the current season) hold ~3 MB.
+_SOS_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=48)
 
 
 def _round(value: float | None, digits: int = 3) -> float | None:
@@ -1228,7 +1233,9 @@ def draft_board(
 
 
 @router.get("/sos")
+@cached_response(_SOS_RESPONSES)
 def strength_of_schedule(
+    request: Request,
     season: int | None = Query(
         None, description="Schedule season. Defaults to the newest season on the schedule."
     ),
@@ -1244,7 +1251,8 @@ def strength_of_schedule(
     Difficulty is fantasy points allowed per game by each defense, expressed as a 0–100
     percentile where **higher is harder**. Computed per request rather than stored: in a
     TE-premium league the tight ends a defense gives up are worth more, so the hardest
-    schedule for a tight end is a different list of teams.
+    schedule for a tight end is a different list of teams. The whole answer is a function
+    of the query string and the data, so it is cached on both (``cached_response``).
 
     The response always names its **basis** — which season's defensive numbers are
     behind the ratings. In August that is necessarily last season, and defenses change
