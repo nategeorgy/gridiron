@@ -44,31 +44,34 @@ export const TRENDING_BASIS = {
  */
 export const TRENDING_PLAYERS = {
   season: 2026,
-  week: 3,
+  week: 4,
   players: [
     {
-      // The Giants' backfield moved his way: snaps 59% to 77%, opportunity share 30% to 44%.
-      playerId: "00-0040715", // Cam Skattebo
-      stats: ["snap_share", "rush_attempt_share", "opportunity_share", "carries"],
+      // Took the Bears' backfield off Swift: 30 carries to 15, 54% of snaps to 35%.
+      playerId: "00-0040236", // Kyle Monangai
+      basis: TRENDING_BASIS.TEAMMATE,
+      against: "00-0036275", // D'Andre Swift
+      stats: ["carries", "snap_share", "rush_attempt_share", "opportunity_share"],
     },
     {
-      // Target share dipped (11.5% to 10.0%) even as his targets rose, so targets stand
-      // in for it: the card is about the work he gained.
-      playerId: "00-0041027", // Jeremiyah Love
-      stats: ["snap_share", "rush_attempt_share", "routes_run", "targets"],
+      // Jadarian Price sat Week 4: Wilson's opportunity share went 14% to 46%.
+      playerId: "00-0038797", // Emanuel Wilson
+      stats: ["snap_share", "rush_attempt_share", "opportunity_share", "targets"],
     },
     {
-      // Yards per route run slipped (2.40 to 2.33); the air yards are the bigger story.
-      playerId: "00-0038997", // Josh Downs
-      stats: ["target_share", "targets_per_route_run", "air_yards", "targets"],
+      // Rashee Rice left after two routes: target share 9% to 30%, air yards 20 to 140.
+      playerId: "00-0038104", // Tyquan Thornton
+      stats: ["target_share", "air_yards", "targets_per_route_run", "yards_per_route_run"],
     },
     {
-      playerId: "00-0039067", // Rashee Rice
-      stats: ["target_share", "yards_per_route_run", "targets_per_route_run", "air_yards"],
+      // Thirteen targets out of the backfield. Rush share and YPRR dipped, so they stay off.
+      playerId: "00-0037840", // Kyren Williams
+      stats: ["snap_share", "target_share", "targets", "opportunity_share"],
     },
     {
-      playerId: "00-0037238", // Drake London
-      stats: ["target_share", "yards_per_route_run", "targets_per_route_run", "air_yards"],
+      // Ja'Marr Chase played 20% of snaps: Meyers ran 54 routes, from 24. TPRR dipped.
+      playerId: "00-0040785", // Dohnte Meyers
+      stats: ["snap_share", "routes_run", "route_participation", "targets"],
     },
   ],
 };
@@ -83,12 +86,14 @@ export const TRENDING_PLAYERS = {
  * instead of appearing under a heading that has stopped being true.
  */
 export const EXPECTED_VS_ACTUAL = [
-  "00-0030506", // Travis Kelce
+  // Over par through Week 4, one per position.
+  "00-0039064", // Zay Flowers
+  "00-0036555", // Chuba Hubbard
+  "00-0033288", // George Kittle
+  // Under par, one per position.
+  "00-0034348", // Courtland Sutton
   "00-0040122", // Ashton Jeanty
-  "00-0040124", // Tetairoa McMillan
-  "00-0037240", // Jameson Williams
-  "00-0034960", // Jakobi Meyers
-  "00-0035719", // Deebo Samuel Sr.
+  "00-0040126", // Colston Loveland
 ];
 
 /**
@@ -96,7 +101,7 @@ export const EXPECTED_VS_ACTUAL = [
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0038124", "00-0040667"], // Christian Watson, Matthew Golden
+  players: ["00-0036410", "00-0036900"], // Tee Higgins, Ja'Marr Chase
   caption: String(SIGNALS_SEASON),
 };
 
@@ -109,10 +114,10 @@ export const FEATURED_MATCHUP = {
 export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
-  // Empty for the whole season so far.
-  weeks: "",
-  passerId: "00-0036264", // Jordan Love
-  team: "GB",
+  // One week: CeeDee Lamb's 21 targets in Week 4.
+  weeks: "4",
+  passerId: "00-0033077", // Dak Prescott
+  team: "DAL",
 };
 
 /**
@@ -126,26 +131,29 @@ export const HIGHLIGHTED_VIZ = {
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 3,
+  week: 4,
   entries: [
     {
+      // Second only to Wes Welker's 2011, with CeeDee Lamb third.
       kind: "leaders",
       playerId: "00-0038543", // Jaxon Smith-Njigba
-      title: "Most fantasy points by a receiver through Week 3",
-      query: { grain: "seasons", positions: "WR", last_week: 3, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
+      title: "Most fantasy points by a receiver through Week 4",
+      query: { grain: "seasons", positions: "WR", last_week: 4, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
     },
     {
       kind: "count",
-      playerId: "00-0037238", // Drake London
-      title: "190+ receiving yards on 10 targets or fewer",
-      query: { grain: "games", where: "receiving_yards:190:,targets::10", sort: "receiving_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.receiving_yards} yards on ${row.targets} targets`,
+      playerId: "00-0040124", // Tetairoa McMillan
+      title: "14+ catches, 190+ yards and 2+ touchdowns",
+      query: { grain: "games", where: "receptions:14:,receiving_yards:190:,receiving_tds:2:", sort: "receiving_yards", order: "desc", limit: 200 },
+      line: (row) => `${row.receptions} catches, ${row.receiving_yards} yards, ${row.receiving_tds} TDs`,
     },
     {
-      kind: "leaders",
-      playerId: "00-0041032", // Kenyon Sadiq
-      title: "Most fantasy points by a rookie tight end through Week 3",
-      query: { grain: "seasons", positions: "TE", rookies: "only", last_week: 3, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
+      // Receptions can't pass targets, so 13+ catches on 13 or fewer targets is exactly 13 of 13.
+      kind: "count",
+      playerId: "00-0035229", // T.J. Hockenson
+      title: "13 catches on 13 targets",
+      query: { grain: "games", where: "receptions:13:,targets::13,receiving_yards::", sort: "receiving_yards", order: "desc", limit: 200 },
+      line: (row) => `${row.receptions} of ${row.targets} targets for ${row.receiving_yards} yards`,
     },
   ],
 };
