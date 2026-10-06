@@ -24,12 +24,26 @@ export const SIGNALS_SEASON = 2026;
  * - `SEASON_RANK` — no change at all. The season value with its rank at the position,
  *   for a player who is not trending so much as simply playing well, and whose weekly
  *   deltas would understate that.
+ * - `RECENT_WEEKS`: the last few weeks against the same number before them (the card's
+ *   `window`, so weeks 3-4 against 1-2). For a role that changed a couple of weeks ago,
+ *   where this week against last would compare two weeks of the new role.
  */
 export const TRENDING_BASIS = {
   LAST_WEEK: "last-week",
   TEAMMATE: "teammate",
   SEASON_RANK: "season-rank",
+  RECENT_WEEKS: "recent-weeks",
 };
+
+/**
+ * The two windows a `RECENT_WEEKS` pick compares, ending at `week`: with a window of 2
+ * and Week 4, `{ recent: [3, 4], earlier: [1, 2] }`. The earlier window is cut at Week 1,
+ * so it can be shorter (or empty) early in a season.
+ */
+export function trendingWindows(week, size) {
+  const span = (last) => Array.from({ length: size }, (_, index) => last - size + 1 + index).filter((value) => value >= 1);
+  return { recent: span(week), earlier: span(week - size) };
+}
 
 /**
  * The card at the top of the page (renamed from Week Standouts, September 2026).
@@ -44,31 +58,37 @@ export const TRENDING_BASIS = {
  */
 export const TRENDING_PLAYERS = {
   season: 2026,
-  week: 3,
+  week: 4,
+  // Weeks per side for a RECENT_WEEKS pick.
+  window: 2,
   players: [
     {
-      // The Giants' backfield moved his way: snaps 59% to 77%, opportunity share 30% to 44%.
-      playerId: "00-0040715", // Cam Skattebo
-      stats: ["snap_share", "rush_attempt_share", "opportunity_share", "carries"],
+      // Weeks 3-4 against 1-2: target share 25% to 34%, air-yard share 36% to 58%.
+      playerId: "00-0041438", // Carnell Tate
+      basis: TRENDING_BASIS.RECENT_WEEKS,
+      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
     },
     {
-      // Target share dipped (11.5% to 10.0%) even as his targets rose, so targets stand
-      // in for it: the card is about the work he gained.
-      playerId: "00-0041027", // Jeremiyah Love
-      stats: ["snap_share", "rush_attempt_share", "routes_run", "targets"],
+      // Week 4 against 3. His points fell (17.0 to 11.1) while the role grew.
+      playerId: "00-0040719", // Bhayshul Tuten
+      stats: ["rush_attempt_share", "snap_share", "opportunity_share", "route_participation"],
     },
     {
-      // Yards per route run slipped (2.40 to 2.33); the air yards are the bigger story.
-      playerId: "00-0038997", // Josh Downs
-      stats: ["target_share", "targets_per_route_run", "air_yards", "targets"],
+      // Weeks 3-4 against 1-2: target share 23% to 36%, air-yard share 38% to 52%.
+      playerId: "00-0038559", // Michael Wilson
+      basis: TRENDING_BASIS.RECENT_WEEKS,
+      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
     },
     {
-      playerId: "00-0039067", // Rashee Rice
-      stats: ["target_share", "yards_per_route_run", "targets_per_route_run", "air_yards"],
+      // Weeks 3-4 against 1-2: snaps 60% to 77%, rush share 40% to 65%.
+      playerId: "00-0037840", // Kyren Williams
+      basis: TRENDING_BASIS.RECENT_WEEKS,
+      stats: ["snap_share", "rush_attempt_share", "opportunity_share", "target_share"],
     },
     {
-      playerId: "00-0037238", // Drake London
-      stats: ["target_share", "yards_per_route_run", "targets_per_route_run", "air_yards"],
+      // Week 4 against 3. Snap share and route participation fell, so they stay off.
+      playerId: "00-0037816", // Romeo Doubs
+      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
     },
   ],
 };
@@ -83,11 +103,11 @@ export const TRENDING_PLAYERS = {
  * instead of appearing under a heading that has stopped being true.
  */
 export const EXPECTED_VS_ACTUAL = [
-  "00-0030506", // Travis Kelce
+  "00-0036555", // Chuba Hubbard
+  "00-0038559", // Michael Wilson
+  "00-0040126", // Colston Loveland
   "00-0040122", // Ashton Jeanty
-  "00-0040124", // Tetairoa McMillan
-  "00-0037240", // Jameson Williams
-  "00-0034960", // Jakobi Meyers
+  "00-0029604", // Kirk Cousins
   "00-0035719", // Deebo Samuel Sr.
 ];
 
@@ -96,7 +116,7 @@ export const EXPECTED_VS_ACTUAL = [
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0038124", "00-0040667"], // Christian Watson, Matthew Golden
+  players: ["00-0040667", "00-0038124"], // Matthew Golden, Christian Watson
   caption: String(SIGNALS_SEASON),
 };
 
@@ -109,10 +129,10 @@ export const FEATURED_MATCHUP = {
 export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
-  // Empty for the whole season so far.
-  weeks: "",
-  passerId: "00-0036264", // Jordan Love
-  team: "GB",
+  // One week: CeeDee Lamb's 21 targets in Week 4.
+  weeks: "4",
+  passerId: "00-0033077", // Dak Prescott
+  team: "DAL",
 };
 
 /**
@@ -123,29 +143,35 @@ export const HIGHLIGHTED_VIZ = {
  *   featured player's season highlighted.
  * - `count`: how many games since 2009 match `where`, and how many of them this season;
  *   `playerId`/`week` pick the featured game out of the same search for its line.
+ *   `seasonCount: false` leaves the "this season" clause off.
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 3,
+  week: 4,
   entries: [
     {
+      // Second only to Wes Welker's 2011, with CeeDee Lamb third.
       kind: "leaders",
       playerId: "00-0038543", // Jaxon Smith-Njigba
-      title: "Most fantasy points by a receiver through Week 3",
-      query: { grain: "seasons", positions: "WR", last_week: 3, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
+      title: "Most fantasy points by a receiver through Week 4",
+      query: { grain: "seasons", positions: "WR", last_week: 4, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
     },
     {
       kind: "count",
-      playerId: "00-0037238", // Drake London
-      title: "190+ receiving yards on 10 targets or fewer",
-      query: { grain: "games", where: "receiving_yards:190:,targets::10", sort: "receiving_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.receiving_yards} yards on ${row.targets} targets`,
+      playerId: "00-0040124", // Tetairoa McMillan
+      title: "14+ catches, 190+ yards and 2+ touchdowns",
+      seasonCount: false,
+      query: { grain: "games", where: "receptions:14:,receiving_yards:190:,receiving_tds:2:", sort: "receiving_yards", order: "desc", limit: 200 },
+      line: (row) => `${row.receptions} catches, ${row.receiving_yards} yards, ${row.receiving_tds} TDs`,
     },
     {
-      kind: "leaders",
-      playerId: "00-0041032", // Kenyon Sadiq
-      title: "Most fantasy points by a rookie tight end through Week 3",
-      query: { grain: "seasons", positions: "TE", rookies: "only", last_week: 3, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
+      // Receptions can't pass targets, so 13+ catches on 13 or fewer targets is exactly 13 of 13.
+      kind: "count",
+      playerId: "00-0035229", // T.J. Hockenson
+      title: "13 catches on 13 targets",
+      seasonCount: false,
+      query: { grain: "games", where: "receptions:13:,targets::13,receiving_yards::", sort: "receiving_yards", order: "desc", limit: 200 },
+      line: (row) => `${row.receptions} of ${row.targets} targets for ${row.receiving_yards} yards`,
     },
   ],
 };

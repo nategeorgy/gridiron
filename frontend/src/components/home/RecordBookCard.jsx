@@ -58,8 +58,12 @@ function LeadersEntry({ entry, scoring }) {
 }
 
 function CountEntry({ entry, season, week }) {
+  const showSeason = entry.seasonCount !== false;
   const all = useQuerySearch(entry.query);
-  const thisSeason = useQuerySearch({ ...entry.query, first_season: season, last_season: season, limit: 1 });
+  const thisSeason = useQuerySearch(
+    { ...entry.query, first_season: season, last_season: season, limit: 1 },
+    { enabled: showSeason },
+  );
   const featured = (all.data?.rows ?? []).find(
     (row) => row.player_id === entry.playerId && row.season === season && row.week === week,
   );
@@ -78,7 +82,7 @@ function CountEntry({ entry, season, week }) {
           {total === undefined ? "…" : (
             <>
               One of {total} games since {FIRST_SEASON} with {entry.title.charAt(0).toLowerCase() + entry.title.slice(1)}
-              {seasonTotal ? `, ${seasonTotal === 1 ? "the only one" : seasonTotal} this season` : ""}.
+              {showSeason && seasonTotal ? `, ${seasonTotal === 1 ? "the only one" : seasonTotal} this season` : ""}.
             </>
           )}
         </div>

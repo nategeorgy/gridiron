@@ -39,6 +39,7 @@ import {
   SIGNALS_SEASON,
   TRENDING_BASIS,
   TRENDING_PLAYERS,
+  trendingWindows,
 } from "../constants/signals";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 import { shapeNetwork } from "../components/explore/NetworkChart";
@@ -153,6 +154,11 @@ export function Home() {
     .filter((pick) => pick.basis === TRENDING_BASIS.SEASON_RANK)
     .map((pick) => pick.playerId)
     .join(",");
+  const recentWeeksIds = TRENDING_PLAYERS.players
+    .filter((pick) => pick.basis === TRENDING_BASIS.RECENT_WEEKS)
+    .map((pick) => pick.playerId)
+    .join(",");
+  const windows = trendingWindows(TRENDING_PLAYERS.week, TRENDING_PLAYERS.window ?? 2);
 
   const trendingParams = useMemo(
     () => ({
@@ -182,6 +188,24 @@ export function Home() {
       [trendingParams, seasonRankIds],
     ),
     { enabled: Boolean(seasonRankIds) },
+  );
+  // A RECENT_WEEKS pick reads two windows (weeks 3-4 against 1-2), each one request for
+  // every such pick. Rates come back aggregated over the window, not averaged by week.
+  const recentWeeks = windows.recent.join(",");
+  const earlierWeeks = windows.earlier.join(",");
+  const trendingRecent = useIntelligence(
+    useMemo(
+      () => ({ ...trendingParams, player_ids: recentWeeksIds, limit: 10, weeks: recentWeeks }),
+      [trendingParams, recentWeeksIds, recentWeeks],
+    ),
+    { enabled: Boolean(recentWeeksIds) },
+  );
+  const trendingEarlier = useIntelligence(
+    useMemo(
+      () => ({ ...trendingParams, player_ids: recentWeeksIds, limit: 10, weeks: earlierWeeks }),
+      [trendingParams, recentWeeksIds, earlierWeeks],
+    ),
+    { enabled: Boolean(recentWeeksIds && earlierWeeks) },
   );
 
   // --- Expected vs Actual: the five picks, plus every other player as a faint dot. ---
@@ -365,11 +389,14 @@ export function Home() {
         rows={byPlayerId(trendingNow.data?.data)}
         previousRows={byPlayerId(trendingBefore.data?.data)}
         seasonRows={byPlayerId(trendingSeason.data?.data)}
+        recentRows={byPlayerId(trendingRecent.data?.data)}
+        earlierRows={byPlayerId(trendingEarlier.data?.data)}
+        windows={windows}
         headshots={headshots}
         games={trendingGames.data?.data}
         league={leagueConfig}
         metrics={metrics}
-        isLoading={trendingNow.isLoading}
+        isLoading={trendingNow.isLoading || trendingRecent.isLoading}
         isError={trendingNow.isError}
       />
     ),

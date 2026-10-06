@@ -69,21 +69,28 @@ function StatCell({ metricId, metric, value, previous, rank, position, league, s
   );
 }
 
-function TrendingRow({ pick, row, previousRow, seasonRow, headshot, games, league, metrics }) {
+/** "3–4" for a run of weeks, "4" for one. */
+const weekSpan = (weeks) => (weeks.length > 1 ? `${weeks[0]}–${weeks[weeks.length - 1]}` : String(weeks[0] ?? ""));
+
+function TrendingRow({ pick, row, previousRow, seasonRow, recentRow, windows, headshot, games, league, metrics }) {
   const context = gameLine(row.team_abbreviation, games);
   const basis = pick.basis ?? TRENDING_BASIS.LAST_WEEK;
   const seasonRanks = basis === TRENDING_BASIS.SEASON_RANK;
-  // A season-rank row shows the season's numbers, not the week's.
-  const source = seasonRanks ? seasonRow : row;
+  const recentWeeks = basis === TRENDING_BASIS.RECENT_WEEKS;
+  // A season-rank row shows the season's numbers, and a recent-weeks row its window's,
+  // not the week's. The points and finish beside the name stay the week's on both.
+  const source = seasonRanks ? seasonRow : recentWeeks ? recentRow : row;
 
   // What the change is measured against differs by pick, so say so on the rows where
-  // it is not simply "last week" — otherwise the arrows are comparing to nothing the
+  // it is not simply "last week", otherwise the arrows are comparing to nothing the
   // reader can name.
   const note = seasonRanks
     ? `Season ranks at ${row.position}`
-    : basis === TRENDING_BASIS.TEAMMATE && previousRow
-      ? `vs ${previousRow.name.split(" ").slice(-1)[0]}, same week`
-      : null;
+    : recentWeeks
+      ? `Weeks ${weekSpan(windows.recent)} vs ${weekSpan(windows.earlier)}`
+      : basis === TRENDING_BASIS.TEAMMATE && previousRow
+        ? `vs ${previousRow.name.split(" ").slice(-1)[0]}, same week`
+        : null;
 
   if (!source) return null;
 
@@ -156,6 +163,9 @@ export function TrendingPlayersCard({
   rows,
   previousRows,
   seasonRows,
+  recentRows = {},
+  earlierRows = {},
+  windows,
   headshots,
   games = [],
   league,
@@ -189,9 +199,13 @@ export function TrendingPlayersCard({
               previousRow={
                 pick.basis === TRENDING_BASIS.TEAMMATE
                   ? rows[pick.against]
-                  : previousRows[pick.playerId]
+                  : pick.basis === TRENDING_BASIS.RECENT_WEEKS
+                    ? earlierRows[pick.playerId]
+                    : previousRows[pick.playerId]
               }
               seasonRow={seasonRows[pick.playerId]}
+              recentRow={recentRows[pick.playerId]}
+              windows={windows}
               headshot={headshots?.[pick.playerId]}
               games={games}
               league={league}
