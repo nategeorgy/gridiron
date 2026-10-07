@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-10-06 (every query-string write builds on the live URL, which brought the Explore controls back)
+Last updated: 2026-10-06 (the site moves to secondlevel.app)
 
 ---
 
@@ -606,7 +606,7 @@ The template with all of these and copy instructions is [`.env.example`](.env.ex
 
 | Piece | Host | Config file | Notes |
 | --- | --- | --- | --- |
-| Frontend | **Vercel** | `frontend/vercel.json` | Auto-deploys on push to `main`. Live: https://gridiron-livid.vercel.app |
+| Frontend | **Vercel** | `frontend/vercel.json` | Auto-deploys on push to `main`. Live: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain and the old https://gridiron-livid.vercel.app redirect there). The `www` origin must be in Render's `CORS_ORIGINS` and in Supabase Auth's Site URL and Redirect URLs. |
 | Backend | **Render** | `render.yaml` | Auto-deploys on push to `main`. Live: https://gridiron-api-t6hz.onrender.com. Health check: `/api/v1/health`. |
 | Database | **Supabase** | — | Managed Postgres; connection string set as a Render secret. |
 
@@ -814,6 +814,10 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-10-06**: **The site moves to secondlevel.app.** It serves from `www.secondlevel.app`, and the
+  bare domain and the old `gridiron-livid.vercel.app` address redirect there. `SITE_URL` in `frontend/src/constants/brand.js` (printed on every exported chart),
+  the README, §9 and `.env.example` name the new domain. Outside the repo, the domain was added to
+  Render's `CORS_ORIGINS` and to Supabase Auth's Site URL and Redirect URLs.
 - **2026-10-06**: **The Explore controls work again.** Picking a quarterback or season on the passing
   network, a question or position on the scatter, and a team or position on Target Analysis all did
   nothing, because each handler makes two or more URL writes and React Router's setter built every one

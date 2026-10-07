@@ -4,7 +4,7 @@ Fantasy-first NFL analytics. Free advanced stats framed around fantasy value —
 every metric answers a fantasy question, recomputed in **your league's exact
 scoring and lineup** — in a clean, fast interface with light and dark themes.
 
-**Live:** [gridiron-livid.vercel.app](https://gridiron-livid.vercel.app) ·
+**Live:** [secondlevel.app](https://secondlevel.app) ·
 API [gridiron-api-t6hz.onrender.com](https://gridiron-api-t6hz.onrender.com/docs)
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full product spec, schema, and scope,
