@@ -9,7 +9,7 @@
 // Defaults are kept *out* of the URL so a clean view has a clean address bar, exactly
 // like useScoring/useLeague do with PPR and 12-team.
 import { useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLiveSearchParams } from "./useLiveSearchParams";
 
 /**
  * @param key       query-string parameter name
@@ -19,7 +19,7 @@ import { useSearchParams } from "react-router-dom";
  *                  API a metric this board does not have
  */
 export function useUrlState(key, fallback, allowed = null) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useLiveSearchParams();
 
   const raw = searchParams.get(key);
   const value = raw !== null && (!allowed || allowed.includes(raw)) ? raw : fallback;

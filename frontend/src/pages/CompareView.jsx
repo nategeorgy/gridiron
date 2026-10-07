@@ -6,7 +6,8 @@
 // line and every weekly finish. The comparison is the URL (constants/compare.js), so a
 // link reopens exactly these players, seasons, weeks and tab.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useLiveSearchParams } from "../hooks/useLiveSearchParams";
 import { useQueries } from "@tanstack/react-query";
 import { Select } from "../components/ui/Select";
 import { FilterBar, summarize } from "../components/ui/FilterBar";
@@ -61,7 +62,7 @@ function leaderOf(slots, id, metric) {
 
 export function CompareView({ board }) {
   const { seasonOptions, currentSeason } = useSeasons();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useLiveSearchParams();
   const [tab, setTab] = useUrlState("tab", "fantasy", TAB_IDS);
   const [weeks, setWeeks] = useUrlState("weeks", "");
   const [weekly, setWeekly] = useUrlState("weekly", "fantasy_points", WEEKLY_STATS.map((entry) => entry.value));

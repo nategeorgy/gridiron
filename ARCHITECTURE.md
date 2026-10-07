@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-10-04 (the cache shares one computation between simultaneous misses, and strength of schedule is cached whole)
+Last updated: 2026-10-06 (every query-string write builds on the live URL, which brought the Explore controls back)
 
 ---
 
@@ -267,6 +267,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/useAuth.jsx` | state | ⭐ **Auth state for the whole app (M5)** — `AuthProvider` + `useAuth`. Mirrors the Supabase session into React and drops cached `["account", …]` queries on any auth change, so one user's saved state can never flash in front of the next. Also tracks `isRecovering` (set by Supabase's `PASSWORD_RECOVERY` event) so the UI asks for a new password instead of behaving like a normal sign-in. Signed-out is a first-class state. |
 | `hooks/useAccount.js` | data | ⭐ **React Query over the account API (M5)**: `useAccount`, `useFavorites` (with an optimistic star toggle), `useSavedViews`. All disabled when signed out, so a visitor never fires a request that would 401. `useLeagueProfiles` was removed with the profiles feature; the `/me/league-profiles` endpoints still stand, uncalled. |
 | `hooks/useTableView.js` | state | ⭐ **One player-page table's view (September 2026)**: which leaderboard tab it shows, or its own custom column list, in the URL (`?career=expected&log_cols=...`) so a player link carries what each table showed, or in component state when the page is embedded in a dialog and the URL belongs to the page behind it. The leaderboard's model scaled to a table: editing a preset turns it Custom, an edit that lands back on the preset is that preset again, and Reset returns to the tab the custom list started from. `cols` is read raw so absent ("no custom table yet") and empty ("cleared") stay different. |
+| `hooks/useLiveSearchParams.js` | state | ⭐ **The one way to write the query string (October 2026).** React Router's `useSearchParams`, with a setter whose updater starts from `window.location` rather than the last render's params, so several writes in one click compose instead of the last erasing the rest. `useUrlState`, `useScoring`, `useTableView`, Compare and the Query Builder all write through it. |
 | `hooks/useUrlState.js` | state | ⭐ **A filter that lives in the query string (M5).** Keeps defaults out of the URL and validates against an optional whitelist, so a param carried over from another board falls back instead of wedging the view. Backfills the spine-C promise the 17 boards had never actually kept — and, since 2026-08-20, the Teams leaderboard and both Explore tools, which M5 had missed. **Every filter on every ranked view now lives here.** |
 | `hooks/useScoring.js` | state | The active league scoring, resolved **URL param > `localStorage` > PPR**, and **normalised to one of the four presets** so a custom spec in an old link resolves to its bare preset rather than to a scoring the picker cannot display. The URL outranks storage deliberately: a shared `?scoring=` link must show *that* scoring to whoever opens it, or every share link silently lies. |
 | `hooks/useLeague.js` | state | The **league context** (size + starting lineup) — now a constant returning `DEFAULT_LEAGUE`. It drove replacement level, which drove VORP; with VORP retired nothing on screen responds to it, but the API still takes a league spec. Kept as a hook so reinstating an editor is a change here and nowhere else. |
@@ -813,6 +814,13 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-10-06**: **The Explore controls work again.** Picking a quarterback or season on the passing
+  network, a question or position on the scatter, and a team or position on Target Analysis all did
+  nothing, because each handler makes two or more URL writes and React Router's setter built every one
+  from the same pre-click params, so the last write (usually a reset) erased the rest. New
+  `hooks/useLiveSearchParams.js` builds each write on the live URL; `useUrlState`, `useScoring`,
+  `useTableView`, `CompareView` and `QueryBuilderView` use it. Fixing that exposed a crash on the passing
+  network's season change (the old season's network rendered with no quarterback), now guarded.
 - **2026-10-04**: **Less database reading per visit**, after production slowed and the pipeline failed
   four days running on statement timeouts. `VersionedCache` (`backend/app/cache.py`) makes requests
   missing the same entry at once share one computation, and `/stats/sos` is cached whole

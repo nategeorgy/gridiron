@@ -14,12 +14,12 @@
 // old link or in a returning visitor's localStorage resolves to its bare preset
 // rather than to a scoring the picker cannot display.
 import { useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLiveSearchParams } from "./useLiveSearchParams";
 import { DEFAULT_SCORING, normalizeScoring } from "../constants/scoring";
 import { SCORING_STORAGE_KEY, readStored, writeStored } from "../constants/storage";
 
 export function useScoring() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useLiveSearchParams();
 
   const scoring = normalizeScoring(
     searchParams.get("scoring") || readStored(SCORING_STORAGE_KEY) || DEFAULT_SCORING,
