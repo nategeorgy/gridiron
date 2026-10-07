@@ -1327,7 +1327,10 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       from a desktop box draw a phone-sized one (`usePhone()`). Desktop was compared page by page at
       1280px against main. Frontend only
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
-  - Frontend: https://gridiron-livid.vercel.app
+  - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
+    and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is
+    the `www` one, so that is what Render's `CORS_ORIGINS` and Supabase's Site URL and
+    Redirect URLs must hold. A future move changes all three
   - Backend:  https://gridiron-api-t6hz.onrender.com
   - Auto-deploys on push to main
 

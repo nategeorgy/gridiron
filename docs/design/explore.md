@@ -78,5 +78,4 @@ an interactive screener asking Postgres would read the whole table on every chan
 `frontend/src/utils/exportImage.js` renders the chart offscreen in the theme asked for,
 inlines computed paint and remote images, and frames it: title, subtitle, the 2L mark,
 a faint mark inside the plot, and a footer with the wordmark, the URL and
-`@SecondLevelFF`. The URL is `constants/brand.js`, `gridiron-livid.vercel.app` until
-the domain moves.
+`@SecondLevelFF`. The URL is `constants/brand.js`, `secondlevel.app`.
