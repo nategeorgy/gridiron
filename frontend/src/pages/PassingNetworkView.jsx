@@ -52,12 +52,15 @@ export function PassingNetworkView({ board }) {
 
   const common = { season: Number(season), weeks: weeks || undefined, situation };
   const main = useNetwork({ ...common, passer_id: passer?.player_id, team: passer?.team });
-  const teammates = main.data?.teammates ?? [];
+  // A changed season empties the quarterback list until the new one loads, while the
+  // query above still holds the old season's network. Show nothing until both agree.
+  const mainNetwork = passer ? main.data : undefined;
+  const teammates = mainNetwork?.teammates ?? [];
   const versus = teammates.find((entry) => entry.player_id === versusId) ? versusId : "";
   const other = useNetwork({ ...common, passer_id: versus || undefined, team: passer?.team }, { enabled: Boolean(versus && passer) });
 
-  const floor = situation === "all" && !weeks && (main.data?.totals.games ?? 0) >= 8 ? 3 : 1;
-  const mainShape = useMemo(() => shapeNetwork(main.data, Number(top), floor), [main.data, top, floor]);
+  const floor = situation === "all" && !weeks && (mainNetwork?.totals.games ?? 0) >= 8 ? 3 : 1;
+  const mainShape = useMemo(() => shapeNetwork(mainNetwork, Number(top), floor), [mainNetwork, top, floor]);
   const otherShape = useMemo(() => shapeNetwork(versus ? other.data : null, Number(top), floor), [other.data, versus, top, floor]);
 
   const choosePasser = (entry) => {
@@ -73,13 +76,13 @@ export function PassingNetworkView({ board }) {
 
   const exportChart = () => {
     if (!secondPasser || !other.data) {
-      return <NetworkChart layout={layout} passer={main.data.passer} shown={mainShape.shown} interactive={false} />;
+      return <NetworkChart layout={layout} passer={mainNetwork.passer} shown={mainShape.shown} interactive={false} />;
     }
     const width = 1300;
     const height = 700;
     return (
       <svg className="chart" viewBox={`0 0 ${width} ${height}`}>
-        {[[main.data, mainShape], [other.data, otherShape]].map(([network, shape], index) => (
+        {[[mainNetwork, mainShape], [other.data, otherShape]].map(([network, shape], index) => (
           <g key={network.passer.player_id}>
             <text x={index * 660 + 20} y={28} style={{ fontSize: 18, fontWeight: 700, fill: "var(--fg)" }}>
               {network.passer.name} · {network.totals.targets} targets in {network.totals.games} games
@@ -146,9 +149,9 @@ export function PassingNetworkView({ board }) {
         </div>
       </FilterBar>
 
-      {main.data && passer && (
+      {mainNetwork && (
         <QuarterbackCard
-          network={main.data}
+          network={mainNetwork}
           season={season}
           weeksLabel={weeksLabel}
           teammates={teammates}
@@ -162,7 +165,7 @@ export function PassingNetworkView({ board }) {
           <CardTitle title="Targets by receiver">
             <Segmented label="Layout" value={layout} onChange={setLayout}
               options={[{ value: "field", label: "Field" }, { value: "radial", label: "Radial" }]} />
-            {main.data && (
+            {mainNetwork && (
               <ExportImageButton
                 title={secondPasser ? `${passer.team} targets: ${lastName(passer.name)} and ${lastName(secondPasser.name)}` : `${passer.name}'s passing network`}
                 subtitle={subtitle}
@@ -171,11 +174,11 @@ export function PassingNetworkView({ board }) {
               />
             )}
           </CardTitle>
-          {!main.data ? (
+          {!mainNetwork ? (
             <ChartState isLoading={main.isLoading || !passers.length} isError={main.isError} height={560} />
           ) : secondPasser ? (
             <div className="grid gap-4 min-[900px]:grid-cols-2">
-              {[[main.data, mainShape], [other.data, otherShape]].map(([network, shape], index) => (
+              {[[mainNetwork, mainShape], [other.data, otherShape]].map(([network, shape], index) => (
                 <div key={index} className="min-w-0">
                   {network ? (
                     <>
@@ -197,22 +200,22 @@ export function PassingNetworkView({ board }) {
             </div>
           ) : (
             <div className="mx-auto max-w-[760px]">
-              <NetworkChart layout={layout} passer={main.data.passer} shown={mainShape.shown} selected={selected}
+              <NetworkChart layout={layout} passer={mainNetwork.passer} shown={mainShape.shown} selected={selected}
                 onSelect={(id) => setSelected(selected === id ? "" : id)} compact={phone} />
             </div>
           )}
-          {main.data && <NetworkLegend layout={layout} />}
+          {mainNetwork && <NetworkLegend layout={layout} />}
         </section>
 
-        {main.data && (
+        {mainNetwork && (
           <div className="grid min-w-0 gap-4">
             {secondPasser && other.data ? (
-              <PairTable first={main.data} firstShape={mainShape} second={other.data} secondShape={otherShape} team={passer.team} />
+              <PairTable first={mainNetwork} firstShape={mainShape} second={other.data} secondShape={otherShape} team={passer.team} />
             ) : (
               <>
-                <ReceiverTable network={main.data} shape={mainShape} selected={selected}
+                <ReceiverTable network={mainNetwork} shape={mainShape} selected={selected}
                   onSelect={(id) => setSelected(selected === id ? "" : id)} />
-                <ZoneCard network={main.data} shape={mainShape} selected={selected} />
+                <ZoneCard network={mainNetwork} shape={mainShape} selected={selected} />
               </>
             )}
           </div>

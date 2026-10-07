@@ -11,7 +11,7 @@
 // Embedded in a dialog (the draft room opens a player page that way), the URL belongs to
 // the page behind it, so the same state lives in component state instead.
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLiveSearchParams } from "./useLiveSearchParams";
 import {
   CUSTOM_TAB,
   LEADERBOARD_TABS,
@@ -34,7 +34,7 @@ const sameList = (a, b) => a.length === b.length && a.every((entry, index) => en
 export function useTableView({ key, defaultTab, exclude, presets = {} }, position, embedded = false) {
   const group = presetPosition(position);
   const colsKey = `${key}_cols`;
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useLiveSearchParams();
   const [local, setLocal] = useState({ [key]: null, [colsKey]: null });
   // The preset a custom table started from, for "Reset to Usage".
   const [origin, setOrigin] = useState(defaultTab);

@@ -6,7 +6,8 @@
 // link or a saved view reopens it exactly. The engine is app/query_builder.py; the table
 // shows only the columns the search is about, and sorts only by those.
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useLiveSearchParams } from "../hooks/useLiveSearchParams";
 import { Select } from "../components/ui/Select";
 import { Segmented } from "../components/team/Segmented";
 import { ScoringControl } from "../components/ScoringControl";
@@ -40,7 +41,7 @@ const PAGE_SIZE = 100;
 const GROUP_ORDER = ["Fantasy", "Passing", "Rushing", "Receiving", "Usage"];
 
 export function QueryBuilderView({ board }) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useLiveSearchParams();
   const { seasons, currentSeason } = useSeasons();
   const [scoring, setScoring] = useScoring();
   const [leagueSpec] = useLeague();

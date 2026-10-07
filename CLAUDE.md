@@ -1701,11 +1701,16 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   "you clicked here" — on a 30-column board that is a meaningless green stripe. Section
   headings use `text-fg` for the same reason: they are structure, not data
 - ⚠️ **`useUrlState`'s setter takes an updater function**, and any control deriving its
-  next state from its current one must use it — a multi-select computing `next` from a
-  captured prop loses every click landing before the re-render. Note the limit: React
-  Router's `setSearchParams` is not a reducer queue, so several updates in the *same
-  tick* still collapse. That is fine for click-driven controls and would not be for a
-  programmatic one
+  next state from its current one must use it: a multi-select computing `next` from a
+  captured prop loses every click landing before the re-render
+- ⚠️ **Write the query string through `useLiveSearchParams`, never React Router's
+  `useSearchParams` directly.** The router's setter hands an updater the params from the
+  last render, so two writes in one click both start from the same old URL and the second
+  erases the first. That left most of the Explore tab dead from launch until October 2026:
+  every handler that changes one thing and resets another (`setSeason(v); setWeeks("")`)
+  did nothing. The live hook reads `window.location`, which `BrowserRouter` updates
+  synchronously, so any number of writes in one tick compose. `useUrlState`, `useScoring`,
+  `useTableView`, Compare and the Query Builder all go through it
 - **A percentile pool is never narrowed by a filter.** `app/percentiles.py` builds one
   pool per (position, season) from the whole league, deliberately ignoring the team
   filter, the watchlist and the caller's `min_games`. "84th percentile" is a claim
