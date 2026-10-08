@@ -16,6 +16,10 @@
 // carry every stat, so adding or dragging a column is drawn in the browser (see
 // LeaderboardView).
 //
+// The library is the leaderboard's by default (the position group's stats, under the five
+// tabs). Another table can hand it its own (`library`), which is how the Query Builder
+// offers its searchable stats, and pin columns it will not let be moved (`locked`).
+//
 // Portalled to document.body: the page's glass cards use backdrop-filter, which makes
 // them the containing block for anything `position: fixed` inside them.
 import { useEffect, useRef, useState } from "react";
@@ -36,6 +40,15 @@ function SearchIcon() {
     <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
       <circle cx="7" cy="7" r="4.8" />
       <path d="m10.6 10.6 3.4 3.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 12 14" className="h-3.5 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <rect x="1.5" y="6" width="9" height="6.5" rx="1.5" />
+      <path d="M3.5 6V4.2a2.5 2.5 0 0 1 5 0V6" />
     </svg>
   );
 }
@@ -196,6 +209,9 @@ function BoardList({ sections, metrics, onChange }) {
  *                    player page's tables have a fixed lead block)
  * @param boardTitle  heading over the column list ("On your board", "In this table")
  * @param subtitle    optional line under the panel title
+ * @param library     another table's stats in place of the leaderboard's:
+ *                    { tabs: [{ id, label }], pool: { [tabId]: [{ name, columns }] }, label }
+ * @param locked      columns shown first and fixed there: [{ id, note }]
  */
 export function ColumnEditor({
   open,
@@ -210,6 +226,8 @@ export function ColumnEditor({
   exclude = [],
   boardTitle = "On your board",
   subtitle = null,
+  library = null,
+  locked = [],
 }) {
   const [query, setQuery] = useState("");
   const [libraryTab, setLibraryTab] = useState(initialTab);
@@ -244,17 +262,22 @@ export function ColumnEditor({
   if (!open) return null;
 
   const columns = sections.flatMap((entry) => entry.columns);
-  const members = groupFor(group).positions;
-  const excluded = new Set(exclude);
+  // Positions only matter to the leaderboard's library, where a stat some of the group
+  // lacks is dimmed.
+  const members = library ? [] : groupFor(group).positions;
+  const excluded = new Set([...exclude, ...locked.map((entry) => entry.id)]);
   const pool = Object.fromEntries(
-    Object.entries(groupPool(group)).map(([tab, entries]) => [
+    Object.entries(library ? library.pool : groupPool(group)).map(([tab, entries]) => [
       tab,
       entries
         .map((entry) => ({ name: entry.name, columns: entry.columns.filter((id) => !excluded.has(id)) }))
         .filter((entry) => entry.columns.length),
     ]),
   );
-  const tabs = LEADERBOARD_TABS.filter((tab) => pool[tab.id]?.length);
+  const tabs = (library ? library.tabs : LEADERBOARD_TABS).filter((tab) => pool[tab.id]?.length);
+  const poolSize = library
+    ? new Set(Object.values(pool).flatMap((entries) => entries.flatMap((entry) => entry.columns))).size
+    : poolColumns(group).filter((id) => !excluded.has(id)).length;
   const activeTab = pool[libraryTab] ? libraryTab : tabs[0]?.id;
   const chosen = new Set(columns);
   const needle = query.trim().toLowerCase();
@@ -272,7 +295,7 @@ export function ColumnEditor({
   const toggle = (id) => onChange(chosen.has(id) ? columns.filter((entry) => entry !== id) : [...columns, id]);
 
   // Searching looks across every tab; browsing shows one.
-  const library = (needle ? tabs : tabs.filter((tab) => tab.id === activeTab)).flatMap((tab) =>
+  const shelf = (needle ? tabs : tabs.filter((tab) => tab.id === activeTab)).flatMap((tab) =>
     pool[tab.id]
       .map((entry) => ({ tab, name: entry.name, columns: entry.columns.filter(matches) }))
       .filter((entry) => entry.columns.length),
@@ -324,7 +347,7 @@ export function ColumnEditor({
               {boardTitle}
             </h3>
             <span className="text-xs text-faint">
-              {columns.length} column{columns.length === 1 ? "" : "s"}
+              {locked.length + columns.length} column{locked.length + columns.length === 1 ? "" : "s"}
             </span>
             <button type="button" onClick={() => onChange([])} disabled={!columns.length} className={`${smallButton} disabled:opacity-40`}>
               Clear
@@ -334,6 +357,20 @@ export function ColumnEditor({
             </button>
           </div>
           <div className="min-h-0 overflow-y-auto px-1.5 pb-2">
+            {locked.length > 0 && (
+              <ul aria-label="Fixed columns" className="mb-1">
+                {locked.map((entry) => (
+                  <li key={entry.id} className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted">
+                    <span className="px-0.5 text-faint"><LockIcon /></span>
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-semibold">{metrics[entry.id]?.short ?? entry.id}</span>
+                      <span className="ml-1.5 text-xs text-faint">{metrics[entry.id]?.label}</span>
+                    </span>
+                    {entry.note && <span className="text-[11px] text-faint">{entry.note}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
             <BoardList sections={sections} metrics={metrics} onChange={onChange} />
           </div>
         </section>
@@ -393,8 +430,8 @@ export function ColumnEditor({
             </ScrollRow>
           )}
           <div ref={libraryRef} className="min-h-0 flex-1 overflow-y-auto pb-3">
-            {library.length ? (
-              library.map((entry) => (
+            {shelf.length ? (
+              shelf.map((entry) => (
                 <div key={`${entry.tab.id}-${entry.name}`}>
                   <div className="mb-1.5 mt-2.5">
                     <Label>{needle ? `${entry.tab.label} · ${entry.name}` : entry.name}</Label>
@@ -454,8 +491,7 @@ export function ColumnEditor({
 
         <footer className="flex flex-none items-center gap-3 border-t border-line px-5 py-3">
           <span className="text-xs text-faint">
-            {columns.length} of {poolColumns(group).filter((id) => !excluded.has(id)).length} stats ·{" "}
-            {groupFor(group).label}
+            {columns.length} of {poolSize} stats · {library ? library.label : groupFor(group).label}
           </span>
           <span className="flex-1" />
           <button type="button" onClick={onClose} className="btn-accent-solid px-6 py-2 text-sm">

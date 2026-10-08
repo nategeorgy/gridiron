@@ -307,6 +307,30 @@ def test_sorting_is_only_by_what_the_table_shows(client: TestClient, lines: dict
     assert points == sorted(points)
 
 
+def test_filtered_stats_lead_and_the_rest_are_the_callers(client: TestClient, lines: dict) -> None:
+    keys = lambda result: [column["key"] for column in result["columns"]]  # noqa: E731
+    seasons = _query(client, grain="seasons", positions="WR", where="target_share:0.1:,games:1:")
+    assert keys(seasons) == ["target_share", "games", "fantasy_points", "fantasy_ppg", "top_12_weeks"]
+    assert seasons["default_columns"] == ["games", "fantasy_points", "fantasy_ppg", "top_12_weeks"]
+    assert seasons["sort"] == "target_share"
+
+    chosen = _query(client, positions="WR", where="targets:10:", columns="receptions,targets,receiving_yards")
+    assert keys(chosen) == ["targets", "receptions", "receiving_yards"]
+    assert chosen["default_columns"] == ["fantasy_points", "weekly_finish"]
+    assert set(chosen["rows"][0]) >= {"targets", "receptions", "receiving_yards"}
+    assert "fantasy_points" not in chosen["rows"][0]
+    by_receptions = _query(client, positions="WR", where="targets:10:", columns="receptions", sort="receptions")
+    assert by_receptions["sort"] == "receptions"
+    assert [row["receptions"] for row in by_receptions["rows"]] == [9, 8, 5]
+
+    # A column the grain cannot show is skipped, and an empty list shows only the filters.
+    assert keys(_query(client, grain="seasons", positions="WR", where="targets:1:",
+                       columns="weekly_finish,targets,receptions")) == ["targets", "receptions"]
+    bare = _query(client, positions="WR", where="", columns="")
+    assert bare["columns"] == [] and bare["total"] == 5
+    assert client.get("/api/v1/explore/query", params={"columns": "nonsense"}).status_code == 400
+
+
 def test_a_missing_value_never_matches_a_range(client: TestClient, lines: dict) -> None:
     result = _query(client, positions="WR", where="routes_run:0:")
     assert result["total"] == 1  # only the one line with routes charted

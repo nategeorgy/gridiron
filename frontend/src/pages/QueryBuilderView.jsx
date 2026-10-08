@@ -4,7 +4,10 @@
 // A screener on the left (what to search, who, when, and stat ranges each drawn over its
 // own distribution) and the results on the right. The whole search is the URL, so a
 // link or a saved view reopens it exactly. The engine is app/query_builder.py; the table
-// shows only the columns the search is about, and sorts only by those.
+// leads with the filtered stats, follows them with columns the reader can edit (the
+// leaderboard's Edit Columns slide-out, fed the engine's stats), and sorts only by what
+// it shows. Top N cuts the result to its first rows, and the export image draws them
+// (QueryResultsImage), up to IMAGE_MAX_ROWS.
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLiveSearchParams } from "../hooks/useLiveSearchParams";
@@ -17,16 +20,25 @@ import { TablePager } from "../components/StatTable";
 import { FinishChip } from "../components/player/FinishChip";
 import { ChartState, Chips, ExploreHeader, PlayerLine } from "../components/explore/common";
 import { QueryFilterCard } from "../components/explore/QueryFilterCard";
-import { DownloadIcon } from "../components/explore/ExportImageButton";
+import { DownloadIcon, ExportImageButton } from "../components/explore/ExportImageButton";
+import { QueryResultsImage } from "../components/explore/QueryResultsImage";
+import { ColumnEditor } from "../components/leaderboard/ColumnEditor";
 import {
   DEFAULT_EXAMPLE,
+  FIELD_GROUPS,
+  IMAGE_MAX_ROWS,
   QUERY_EXAMPLES,
   QUERY_POSITIONS,
   ROOKIE_OPTIONS,
   SEASON_TYPE_OPTIONS,
+  TOP_OPTIONS,
   formatWhere,
   parseWhere,
+  rangeText,
+  searchSubtitle,
+  searchTitle,
 } from "../constants/queryBuilder";
+import { scoringLabel } from "../constants/scoring";
 import { FIRST_SEASON } from "../constants";
 import { useQueryFields, useQuerySearch } from "../hooks/useExplore";
 import { useLeague } from "../hooks/useLeague";
@@ -38,7 +50,8 @@ import { downloadCsv, toCsv } from "../utils/csv";
 import { formatStat } from "../utils/format";
 
 const PAGE_SIZE = 100;
-const GROUP_ORDER = ["Fantasy", "Passing", "Rushing", "Receiving", "Usage"];
+// Keys whose empty value means something ("no ranges", "no columns") rather than "default".
+const RAW_KEYS = ["where", "cols"];
 
 export function QueryBuilderView({ board }) {
   const [searchParams, setSearchParams] = useLiveSearchParams();
@@ -51,13 +64,17 @@ export function QueryBuilderView({ board }) {
   const [offset, setOffset] = useState(0);
   const [pending, setPending] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const { data: fieldData } = useQueryFields();
   const fields = useMemo(() => Object.fromEntries((fieldData?.fields ?? []).map((field) => [field.id, field])), [fieldData]);
 
   const firstHeld = Math.min(...(seasons.length ? seasons : [FIRST_SEASON]));
   const lastHeld = Number(currentSeason);
   // `where` is read raw: absent means "the opening example", empty means "no ranges".
+  // `cols` likewise: absent means the grain's default columns, empty means none.
   const read = (key, fallback) => searchParams.get(key) ?? fallback;
+  const top = TOP_OPTIONS.some((option) => option.value === searchParams.get("top")) ? searchParams.get("top") : "all";
+  const cols = searchParams.has("cols") ? searchParams.get("cols") : null;
   const search = {
     grain: read("grain", "games"),
     mode: read("mode", "list"),
@@ -80,7 +97,7 @@ export function QueryBuilderView({ board }) {
       const next = new URLSearchParams(previous);
       if (!next.has("where")) next.set("where", DEFAULT_EXAMPLE.search.where);
       for (const [key, value] of Object.entries(changes)) {
-        if (value === null || value === undefined || (key !== "where" && value === "")) next.delete(key);
+        if (value === null || value === undefined || (!RAW_KEYS.includes(key) && value === "")) next.delete(key);
         else next.set(key, String(value));
       }
       return next;
@@ -93,8 +110,9 @@ export function QueryBuilderView({ board }) {
     const next = new URLSearchParams();
     for (const [key, value] of Object.entries(example.search)) next.set(key, value);
     if (!next.has("where")) next.set("where", "");
-    const keepScoring = searchParams.get("scoring");
-    if (keepScoring) next.set("scoring", keepScoring);
+    for (const key of ["scoring", "top"]) {
+      if (searchParams.get(key)) next.set(key, searchParams.get(key));
+    }
     setSearchParams(next, { replace: true });
     setOffset(0);
     setPending([]);
@@ -116,13 +134,18 @@ export function QueryBuilderView({ board }) {
     team: search.team || undefined,
     rookies: search.rookies,
     where: search.where,
+    columns: cols ?? undefined,
     sort: search.sort || undefined,
     order: search.order || undefined,
     scoring,
-    limit: PAGE_SIZE,
-    offset,
-  }), [search.grain, search.mode, search.pos, search.from, search.to, search.type, search.team, search.rookies, search.where, search.sort, search.order, scoring, offset]); // eslint-disable-line react-hooks/exhaustive-deps
+    limit: top === "all" ? PAGE_SIZE : Number(top),
+    offset: top === "all" ? offset : 0,
+  }), [search.grain, search.mode, search.pos, search.from, search.to, search.type, search.team, search.rookies, search.where, cols, search.sort, search.order, scoring, top, offset]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data, isLoading, isError, error, isPlaceholderData } = useQuerySearch(params);
+  // The image draws the first rows, whatever page the table is on. On the first page
+  // (or with a Top N) these are the same params, so React Query serves one request.
+  const imageParams = { ...params, offset: 0, limit: top === "all" ? IMAGE_MAX_ROWS : Number(top) };
+  const { data: imageData, isPlaceholderData: imageStale } = useQuerySearch(imageParams);
 
   // A filter added without a range starts at the value the API suggests (the top fifth
   // of the scope, or the bottom fifth for a stat where lower is better).
@@ -148,11 +171,30 @@ export function QueryBuilderView({ board }) {
     update({ pos: QUERY_POSITIONS.filter((entry) => set.has(entry)).join(",") });
   };
   const setGrain = (grain) => {
-    const kept = conditions.filter((condition) => !fields[condition.field] || fields[condition.field].grains.includes(grain));
-    update({ grain: grain === "games" ? null : grain, mode: null, sort: null, order: null, where: formatWhere(kept) });
+    const fits = (id) => !fields[id] || fields[id].grains.includes(grain);
+    const kept = conditions.filter((condition) => fits(condition.field));
+    update({
+      grain: grain === "games" ? null : grain, mode: null, sort: null, order: null, where: formatWhere(kept),
+      ...(cols === null ? {} : { cols: cols.split(",").filter((id) => id && fits(id)).join(",") }),
+    });
   };
 
-  const addable = GROUP_ORDER.map((group) => ({
+  // The columns after the filtered stats, read from the URL rather than the last
+  // response so two quick edits both build on the newest list. The API drops any the
+  // grain cannot show; so does this. The library is every stat the grain has, by group.
+  const filteredIds = new Set(conditions.map((condition) => condition.field));
+  const chosenColumns = (cols !== null ? cols.split(",") : data?.default_columns ?? []).filter((id, index, list) =>
+    id && list.indexOf(id) === index && fields[id]?.grains.includes(search.grain) && !filteredIds.has(id));
+  const library = useMemo(() => ({
+    label: search.grain === "games" ? "Games" : "Seasons",
+    tabs: FIELD_GROUPS.map((group) => ({ id: group, label: group })),
+    pool: Object.fromEntries(FIELD_GROUPS.map((group) => [group, [{
+      name: group,
+      columns: Object.values(fields).filter((field) => field.group === group && field.grains.includes(search.grain)).map((field) => field.id),
+    }]])),
+  }), [fields, search.grain]);
+
+  const addable = FIELD_GROUPS.map((group) => ({
     group,
     options: Object.values(fields).filter((field) => field.group === group && field.grains.includes(search.grain)
       && !conditions.some((condition) => condition.field === field.id)),
@@ -160,6 +202,18 @@ export function QueryBuilderView({ board }) {
 
   const noun = search.grain === "games" ? "games" : "seasons";
   const seasonChoices = [...seasons].sort((a, b) => a - b);
+  const listMode = !data || data.mode === "list";
+
+  // Export image: the first rows, drawn as a table, titled and captioned from the search.
+  const imageRows = imageData?.rows?.slice(0, IMAGE_MAX_ROWS) ?? [];
+  const imageTotal = imageData ? (imageData.mode === "count" ? imageData.players : imageData.total) : 0;
+  const showsFantasy = imageData?.mode === "count"
+    || imageData?.columns?.some((column) => fields[column.key]?.group === "Fantasy");
+  const image = imageData && imageRows.length ? {
+    title: searchTitle({ search, data: imageData, conditions, fields, example: QUERY_EXAMPLES.find((example) => example.id === activeExample) }),
+    subtitle: searchSubtitle({ search, positions, conditions, fields, scoring: showsFantasy ? scoringLabel(scoring) : null }),
+    note: imageRows.length === imageTotal ? `All ${imageTotal.toLocaleString()}` : `Top ${imageRows.length} of ${imageTotal.toLocaleString()}`,
+  } : null;
 
   return (
     <div className="space-y-4">
@@ -274,7 +328,18 @@ export function QueryBuilderView({ board }) {
               })} className="btn-ghost px-3 py-1.5 text-[13px] transition hover:!text-accent">
                 {copied ? "Link copied" : "Copy link"}
               </button>
-              <ExportAllButton params={params} data={data} />
+              <ExportImageButton
+                title={image?.title ?? "Query Builder"}
+                subtitle={image?.subtitle}
+                note={image?.note}
+                render={() => <QueryResultsImage data={imageData} rows={imageRows} league={league} />}
+                disabled={!image || imageStale}
+                sizes={["fit"]}
+                fitScale={1}
+                watermark={false}
+                editableTitle
+              />
+              <ExportAllButton params={params} data={data} limit={top === "all" ? 5000 : Number(top)} />
             </div>
           </div>
 
@@ -291,6 +356,11 @@ export function QueryBuilderView({ board }) {
               <Segmented label="Show" value={search.mode} onChange={(value) => update({ mode: value === "list" ? null : value, sort: null, order: null })}
                 options={[{ value: "list", label: "Every game" }, { value: "count", label: "Count of games by player" }]} />
             )}
+            <span className="inline-flex items-center gap-2">
+              Top
+              <Segmented label="Top" value={top} onChange={(value) => update({ top: value === "all" ? null : value })}
+                options={TOP_OPTIONS} />
+            </span>
             {data?.columns && (
               <label className="inline-flex items-center gap-2">
                 Sorted by
@@ -302,6 +372,19 @@ export function QueryBuilderView({ board }) {
                 </select>
               </label>
             )}
+            {listMode && (
+              <button
+                type="button"
+                onClick={() => setEditorOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={editorOpen}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full border bg-surface-2 px-3 py-1 text-xs font-semibold text-fg transition hover:text-accent"
+                style={{ borderColor: "color-mix(in srgb, var(--accent) 55%, transparent)" }}
+              >
+                <EditColumnsIcon />
+                Edit Columns
+              </button>
+            )}
           </div>
 
           {isLoading || isError || !data?.rows?.length ? (
@@ -312,7 +395,7 @@ export function QueryBuilderView({ board }) {
               onSort={(key) => update(data.sort === key ? { order: data.order === "desc" ? "asc" : "desc" } : { sort: key, order: null })} />
           )}
 
-          {data?.rows?.length > 0 && (
+          {data?.rows?.length > 0 && top === "all" && (
             <div className="mt-3">
               <TablePager offset={offset} pageSize={PAGE_SIZE} total={data.mode === "count" ? data.players : data.total} onOffsetChange={setOffset} />
             </div>
@@ -323,7 +406,31 @@ export function QueryBuilderView({ board }) {
           </p>
         </section>
       </div>
+
+      <ColumnEditor
+        open={editorOpen && listMode}
+        onClose={() => setEditorOpen(false)}
+        sections={[{ name: "", columns: chosenColumns }]}
+        onChange={(next) => update({ cols: next.join(",") })}
+        onReset={() => update({ cols: null })}
+        resetLabel="Reset to the default columns"
+        initialTab="Fantasy"
+        metrics={fields}
+        library={library}
+        locked={conditions.filter((condition) => fields[condition.field]).map((condition) => ({ id: condition.field, note: "Filtered" }))}
+        boardTitle="In this table"
+        subtitle="Filtered stats come first. Every column after them is yours."
+      />
     </div>
+  );
+}
+
+function EditColumnsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+      <path d="M6 2.5v11M10.5 2.5v11" />
+    </svg>
   );
 }
 
@@ -337,14 +444,6 @@ function ScreenerSection({ title, note, children }) {
       {children}
     </div>
   );
-}
-
-function rangeText(condition, field) {
-  const show = (value) => (field?.format === "pct" ? `${+(value * 100).toFixed(1)}%` : formatStat(value, field?.format === "int" ? "int" : 1).replace(/\.0$/, ""));
-  if (condition.min !== null && condition.max !== null) return `${show(condition.min)}–${show(condition.max)}`;
-  if (condition.min !== null) return `≥ ${show(condition.min)}`;
-  if (condition.max !== null) return `≤ ${show(condition.max)}`;
-  return "any";
 }
 
 function gameText(row) {
@@ -432,13 +531,13 @@ function ResultMark({ result }) {
   return <span className="font-semibold" style={{ color }}>{result}</span>;
 }
 
-/** Every matching row as a CSV (up to the API's 5,000), fetched on click. */
-function ExportAllButton({ params, data }) {
+/** Every matching row as a CSV (the Top N, or up to the API's 5,000), fetched on click. */
+function ExportAllButton({ params, data, limit }) {
   const [busy, setBusy] = useState(false);
   const run = async () => {
     setBusy(true);
     try {
-      const all = await runQuery({ ...params, limit: 5000, offset: 0 });
+      const all = await runQuery({ ...params, limit, offset: 0 });
       const count = all.mode === "count";
       const games = all.grain === "games" && !count;
       const columns = [

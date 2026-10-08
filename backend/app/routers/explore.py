@@ -38,6 +38,7 @@ from app.query_builder import (
     SEASON_TYPES,
     Search,
     field_catalog,
+    parse_columns,
     parse_conditions,
     run_search,
 )
@@ -274,6 +275,9 @@ def query(
     rookies: str = Query("any", pattern=f"^({'|'.join(ROOKIE_FILTERS)})$", description="any, only or exclude"),
     where: str = Query("", description="Stat ranges as field:min:max, comma-separated; either bound may be "
                                        "empty. Shares are fractions (0.25, not 25)."),
+    columns: str | None = Query(None, description="The columns shown after the filtered stats, comma-separated "
+                                "field ids. Absent for the grain's defaults, empty for none; a field the grain "
+                                "cannot show is skipped. Ignored by mode=count."),
     sort: str = Query("", description="A column the result shows. Defaults to the first filtered stat."),
     order: str = Query("", pattern="^(asc|desc|)$", description="Defaults to the column's better direction"),
     scoring: str = Query("ppr", description="League scoring as preset[:overrides]"),
@@ -285,6 +289,7 @@ def query(
     try:
         config = parse_scoring(scoring)
         conditions = parse_conditions(where)
+        chosen = parse_columns(columns, grain)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     wanted = {part.strip().upper() for part in positions.split(",") if part.strip()}
@@ -294,7 +299,7 @@ def query(
     search = Search(
         grain=grain, mode=mode if grain == "games" else "list", positions=position_list,
         first_season=first_season, last_season=last_season, season_type=season_type, last_week=last_week,
-        team_id=_team_id(db, team), rookies=rookies, conditions=conditions,
+        team_id=_team_id(db, team), rookies=rookies, conditions=conditions, columns=chosen,
         sort=sort or None, order=order or None,
     )
     try:
