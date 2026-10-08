@@ -50,6 +50,15 @@ chart says so.
 result, betting line, opponent or team total filters. "Every game" or "Count of games
 by player". Sorting only by columns the table shows.
 
+October 2026 (mockup: https://claude.ai/artifact/8qYQTaqqGwvAZs9YyFAHfk, Option A
+picked): the filtered stats lead the table, locked, and every column after them is the
+reader's, edited in the leaderboard's Edit Columns slide-out (`cols=`). **Top** 5 / 10 /
+25 / 50 / 100 / All (`top=`), which CSV follows too. **Export image** draws the table as
+it reads on screen, sorted column shaded, at most **100 rows** (with All, the first 100,
+and the dialog says "Top 100 of N"). Its title starts from the search ("Rookie seasons
+by Target Share", or the example's name) and can be rewritten in the dialog; the
+subtitle is always the search itself. A count of games keeps its own columns.
+
 ## Data
 
 Two tables from play-by-play, 2009 on (`backend/app/models/plays.py`,
@@ -77,5 +86,7 @@ an interactive screener asking Postgres would read the whole table on every chan
 
 `frontend/src/utils/exportImage.js` renders the chart offscreen in the theme asked for,
 inlines computed paint and remote images, and frames it: title, subtitle, the 2L mark,
-a faint mark inside the plot, and a footer with the wordmark, the URL and
-`@SecondLevelFF`. The URL is `constants/brand.js`, `secondlevel.app`.
+a faint mark inside the plot (not on a table, where it would sit on the numbers), and a
+footer with the wordmark, the URL and `@SecondLevelFF`. The URL is `constants/brand.js`,
+`secondlevel.app`. Every export dialog has **Copy image** beside Download PNG, shown only
+where the browser has the async clipboard and `ClipboardItem`.

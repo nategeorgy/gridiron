@@ -1,5 +1,5 @@
-// Chart export: any chart on the Explore tab (and the target maps elsewhere) as a
-// branded PNG.
+// Chart export: any chart on the Explore tab (and the target maps elsewhere), or the
+// Query Builder's results table, as a branded PNG.
 //
 // A chart is drawn by a React component into an SVG styled with CSS variables. None of
 // that survives outside the page: an SVG rasterised through an <img> cannot see the
@@ -11,7 +11,8 @@
 //   3. restores the theme, all in one synchronous block, so the page never paints in
 //      the other theme,
 //   4. swaps each headshot and logo URL for a data URI (both CDNs send
-//      Access-Control-Allow-Origin: *), which keeps the canvas untainted,
+//      Access-Control-Allow-Origin: *), shrunk to the size a chart draws it, which
+//      keeps the canvas untainted and the SVG small,
 //   5. draws the result into a frame: title, subtitle, the 2L mark top right, a faint
 //      mark inside the plot so a crop still says where it came from, and a footer with
 //      the wordmark, the site URL, the handle and the data credit.
@@ -24,6 +25,10 @@ import { DATA_CREDIT, SITE_HANDLE, SITE_URL } from "../constants/brand";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SCALE = 2;
+// iOS Safari refuses a canvas over about 16.7 million pixels and draws nothing, without
+// an error. A 100-row Query Builder table at 2x is ~28 million, so a frame that large
+// is drawn at the highest scale that stays under the limit.
+const MAX_PIXELS = 16_000_000;
 const FONT_SANS = "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 const FONT_MONO = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
 
@@ -107,8 +112,6 @@ function renderInTheme(element, theme) {
     const clone = svg.cloneNode(true);
     inlinePaint(svg, clone);
     clone.setAttribute("xmlns", SVG_NS);
-    clone.setAttribute("width", box.width * SCALE);
-    clone.setAttribute("height", box.height * SCALE);
     clone.removeAttribute("class");
     clone.removeAttribute("style");
     return { clone, width: box.width, height: box.height, palette: readPalette() };
@@ -122,19 +125,59 @@ function renderInTheme(element, theme) {
 
 const dataUris = new Map();
 
-/** A remote image as a data URI, cached; null when it cannot be fetched. */
+// The NFL CDN serves headshots as PNGs up to 3,400px wide and 4 MB, and a chart draws
+// them at most ~64px across (x1.8 for a small chart, x2 for the canvas). Inlined at full
+// size, a 100-row table carried ~100 MB of images in its SVG and took 13 seconds to
+// draw. Each image is shrunk so its short side (what a circular crop shows) is this.
+const MAX_IMAGE_SIDE = 256;
+
+function readAsDataUri(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function shrunkDataUri(blob) {
+  const bitmap = await createImageBitmap(blob);
+  const ratio = MAX_IMAGE_SIDE / Math.min(bitmap.width, bitmap.height);
+  if (ratio >= 1) {
+    bitmap.close();
+    return readAsDataUri(blob);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * ratio);
+  canvas.height = Math.round(bitmap.height * ratio);
+  const context = canvas.getContext("2d");
+  context.imageSmoothingQuality = "high";
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  // WebP keeps the cut-out's transparency at a fraction of PNG's size; a browser that
+  // cannot encode it (Safari) hands back a PNG instead, which is still small at this size.
+  return canvas.toDataURL("image/webp", 0.92);
+}
+
+// The NFL CDN resizes on request: every headshot URL carries `f_auto,q_auto`, and adding
+// a width there returns a ~12 kB WebP in place of the original's 0.3 to 4 MB. Headshots
+// are about 1.4:1, so asking for 1.5x the side keeps the short side above it.
+const NFL_HEADSHOT = /^(https:\/\/static\.www\.nfl\.com\/image\/(?:upload|private)\/f_auto,q_auto)\//;
+
+function fetchBlob(url) {
+  return fetch(url, { mode: "cors" })
+    .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(response.statusText))));
+}
+
+/** A remote image as a small data URI, cached; null when it cannot be fetched. */
 function toDataUri(url) {
   if (!dataUris.has(url)) {
+    const small = url.replace(NFL_HEADSHOT, `$1,w_${MAX_IMAGE_SIDE * 1.5}/`);
     dataUris.set(
       url,
-      fetch(url, { mode: "cors" })
-        .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(response.statusText))))
-        .then((blob) => new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        }))
+      fetchBlob(small)
+        .catch(() => (small === url ? Promise.reject() : fetchBlob(url)))
+        .then((blob) => shrunkDataUri(blob).catch(() => readAsDataUri(blob)))
         .catch(() => null),
     );
   }
@@ -153,7 +196,9 @@ async function inlineImages(svg) {
   }));
 }
 
-async function loadImage(svg) {
+async function loadImage(svg, width, height) {
+  svg.setAttribute("width", Math.round(width));
+  svg.setAttribute("height", Math.round(height));
   const xml = new XMLSerializer().serializeToString(svg);
   const image = new Image();
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`;
@@ -182,22 +227,25 @@ function drawMark(context, x, y, height, palette, alpha = 1) {
  *   outermost node is, or contains, one <svg> with a viewBox). Rendered with no
  *   providers, so it must not need the router or React Query.
  * @param {"fit"|"wide"|"square"} size  "fit" sizes the frame to the chart, enlarging it
- *   at most 1.8x so a narrow chart keeps readable type
+ *   at most `fitScale` times so a narrow chart keeps readable type
  * @param {"dark"|"light"} theme
- * @returns {Promise<{url: string, width: number, height: number}>}
+ * @param {number} fitScale  the most "fit" enlarges a chart (1.8 by default). A table is
+ *   drawn at its final type size and passes 1.
+ * @param {boolean} watermark  the faint mark inside the plot. A table leaves it out,
+ *   because there it sits on top of the last rows' numbers.
+ * @returns {Promise<{url: string, blob: Blob, width: number, height: number}>}
  */
-export async function composeImage({ render, title, subtitle, size = "fit", theme = "dark" }) {
+export async function composeImage({ render, title, subtitle, size = "fit", theme = "dark", fitScale = 1.8, watermark = true }) {
   // Always yields before rendering, so the offscreen flushSync never runs inside a React
   // lifecycle (a caller in an effect would otherwise trip React's warning).
   await (document.fonts?.ready ?? Promise.resolve());
   const { clone, width, height, palette } = renderInTheme(render(), theme);
   await inlineImages(clone);
-  const chart = await loadImage(clone);
 
   const pad = 48;
   const head = subtitle ? 104 : 80;
   const foot = 76;
-  const fitWidth = Math.min(1600 - pad * 2, width * 1.8);
+  const fitWidth = Math.min(1600 - pad * 2, width * fitScale);
   const frameWidth = size === "square" ? 1080 : size === "wide" ? 1600 : Math.max(900, Math.round(fitWidth + pad * 2));
   let chartWidth = size === "fit" ? fitWidth : frameWidth - pad * 2;
   let chartHeight = chartWidth * (height / width);
@@ -208,11 +256,13 @@ export async function composeImage({ render, title, subtitle, size = "fit", them
     chartWidth = chartHeight * (width / height);
   }
 
+  const scale = Math.min(SCALE, Math.sqrt(MAX_PIXELS / (frameWidth * frameHeight)));
+  const chart = await loadImage(clone, chartWidth * scale, chartHeight * scale);
   const canvas = document.createElement("canvas");
-  canvas.width = frameWidth * SCALE;
-  canvas.height = frameHeight * SCALE;
+  canvas.width = Math.round(frameWidth * scale);
+  canvas.height = Math.round(frameHeight * scale);
   const context = canvas.getContext("2d");
-  context.scale(SCALE, SCALE);
+  context.scale(scale, scale);
   context.fillStyle = palette.background;
   context.fillRect(0, 0, frameWidth, frameHeight);
   context.fillStyle = palette.accent;
@@ -232,8 +282,10 @@ export async function composeImage({ render, title, subtitle, size = "fit", them
   const left = (frameWidth - chartWidth) / 2;
   const top = head + pad / 2;
   context.drawImage(chart, left, top, chartWidth, chartHeight);
-  const watermark = Math.min(120, chartHeight * 0.16);
-  drawMark(context, left + chartWidth - watermark * MARK_ASPECT - 14, top + chartHeight - watermark - 14, watermark, palette, 0.07);
+  if (watermark) {
+    const markHeight = Math.min(120, chartHeight * 0.16);
+    drawMark(context, left + chartWidth - markHeight * MARK_ASPECT - 14, top + chartHeight - markHeight - 14, markHeight, palette, 0.07);
+  }
 
   const footTop = frameHeight - foot;
   context.fillStyle = palette.rule;
@@ -256,5 +308,8 @@ export async function composeImage({ render, title, subtitle, size = "fit", them
   context.fillText(DATA_CREDIT, frameWidth - pad, footTop + 58);
   context.textAlign = "left";
 
-  return { url: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height };
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((result) => (result ? resolve(result) : reject(new Error("The image is too large to draw."))), "image/png");
+  });
+  return { url: URL.createObjectURL(blob), blob, width: canvas.width, height: canvas.height };
 }

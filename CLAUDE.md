@@ -819,7 +819,9 @@ GET /api/v1/explore/teams/{id}/targets       ← every target a team threw, + le
 GET /api/v1/explore/players/{id}/runs        ← designed runs by lane, how each ended
 GET /api/v1/explore/query                    ← the Query Builder: grain=games|seasons,
                                                mode=list|count, where=field:min:max,...
-                                               last_week= cuts every season at one week
+                                               last_week= cuts every season at one week,
+                                               columns= the columns after the filtered
+                                               stats (absent = defaults, empty = none)
 GET /api/v1/explore/query/fields             ← its searchable stats
 
 # M5 — accounts. All require a verified Supabase token; none takes a user id.

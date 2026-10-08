@@ -25,6 +25,11 @@ log (``_weekly_finishes`` in ``routers/players.py``).
 **A range filters on the grain being searched.** In a games search "targets 10+" is a
 game with ten targets; in a seasons search it is a season with ten. Histograms show the
 scope before any stat range is applied, so a card never hides the values it filters out.
+
+**The table shows the filtered stats first, then the caller's columns.** The filtered
+stats are what the search is about, so they always lead and the default sort is the
+first of them. What follows is ``DEFAULT_COLUMNS`` for the grain unless the request
+names its own, and only shown columns can be sorted by.
 """
 
 from __future__ import annotations
@@ -57,6 +62,7 @@ PLAYOFF_ROUNDS = {1: "WC", 2: "DIV", 3: "CONF", 4: "SB"}
 
 HISTOGRAM_BINS = 26
 MAX_CONDITIONS = 8
+MAX_COLUMNS = 16
 MAX_LIMIT = 5000
 CHUNK_ROWS = 5000
 
@@ -370,6 +376,13 @@ class Condition:
         return mask
 
 
+# What a table shows after the filtered stats when the request does not say.
+DEFAULT_COLUMNS: dict[str, tuple[str, ...]] = {
+    "games": ("fantasy_points", "weekly_finish"),
+    "seasons": ("games", "fantasy_points", "fantasy_ppg", "top_12_weeks"),
+}
+
+
 @dataclass(frozen=True)
 class Search:
     grain: str = "games"
@@ -385,6 +398,8 @@ class Search:
     team_id: int | None = None
     rookies: str = "any"
     conditions: tuple[Condition, ...] = ()
+    # The columns after the filtered stats, in order. None means DEFAULT_COLUMNS.
+    columns: tuple[QueryField, ...] | None = None
     sort: str | None = None
     order: str | None = None
 
@@ -416,6 +431,30 @@ def parse_conditions(raw: str) -> tuple[Condition, ...]:
     if len(conditions) > MAX_CONDITIONS:
         raise ValueError(f"A search takes at most {MAX_CONDITIONS} stat filters.")
     return tuple(conditions)
+
+
+def parse_columns(raw: str | None, grain: str) -> tuple[QueryField, ...] | None:
+    """Parse ``field,field``: the columns a table shows after its filtered stats.
+
+    None (the parameter absent) means the grain's defaults; an empty string means none.
+    A field the grain cannot show is skipped rather than refused, since switching a
+    search between games and seasons keeps its columns. Raises ValueError (the router's
+    400) on an unknown field or more columns than a table takes.
+    """
+    if raw is None:
+        return None
+    columns: dict[str, QueryField] = {}
+    for name in (part.strip() for part in raw.split(",")):
+        if not name:
+            continue
+        field = FIELDS_BY_ID.get(name)
+        if field is None:
+            raise ValueError(f"Unknown column '{name}'.")
+        if grain in field.grains:
+            columns[field.id] = field
+    if len(columns) > MAX_COLUMNS:
+        raise ValueError(f"A table takes at most {MAX_COLUMNS} columns.")
+    return tuple(columns.values())
 
 
 def _scope(frame: Frame, search: Search) -> np.ndarray:
@@ -598,16 +637,14 @@ def _column(field: QueryField, condition_ids: set[str]) -> dict:
 
 
 def _stat_columns(search: Search) -> list[QueryField]:
-    """What the table shows, in order. Only these can be sorted by."""
-    filtered = [condition.field for condition in search.conditions]
-    if search.grain == "games":
-        fixed = ("fantasy_points", "weekly_finish")
-        return [*dict.fromkeys(field for field in filtered if field.id not in fixed),
-                *(FIELDS_BY_ID[name] for name in fixed)]
-    lead, fixed = ("games",), ("fantasy_points", "fantasy_ppg", "top_12_weeks")
-    return [FIELDS_BY_ID["games"],
-            *dict.fromkeys(field for field in filtered if field.id not in lead + fixed),
-            *(FIELDS_BY_ID[name] for name in fixed)]
+    """What the table shows, in order: the filtered stats, then the chosen columns.
+
+    Only these can be sorted by.
+    """
+    chosen = search.columns
+    if chosen is None:
+        chosen = tuple(FIELDS_BY_ID[name] for name in DEFAULT_COLUMNS[search.grain])
+    return list(dict.fromkeys([*(condition.field for condition in search.conditions), *chosen]))
 
 
 def _sort_rows(values: np.ndarray, descending: bool, tiebreak: np.ndarray) -> np.ndarray:
@@ -626,15 +663,16 @@ def run_search(db: Session, search: Search, config: ScoringConfig, limit: int = 
     scored = get_scored(db, config)
     rows = _scope(frame, search)
     condition_ids = {condition.field.id for condition in search.conditions}
+    columns = _stat_columns(search)
+    # Fantasy points break every tie, so they are computed even when not shown.
+    needed = dict.fromkeys([*columns, FIELDS_BY_ID["fantasy_points"]])
 
     if search.grain == "games":
-        values = {field.id: _game_values(field, frame, scored, rows) for field in
-                  dict.fromkeys([c.field for c in search.conditions] + _stat_columns(search))}
+        values = {field.id: _game_values(field, frame, scored, rows) for field in needed}
         groups = None
     else:
         groups = _group_seasons(frame, rows)
-        values = {field.id: _season_values(field, frame, scored, groups) for field in
-                  dict.fromkeys([c.field for c in search.conditions] + _stat_columns(search))}
+        values = {field.id: _season_values(field, frame, scored, groups) for field in needed}
 
     histograms = {condition.field.id: _histogram(values[condition.field.id], condition)
                   for condition in search.conditions}
@@ -647,14 +685,18 @@ def run_search(db: Session, search: Search, config: ScoringConfig, limit: int = 
     common = {
         "grain": search.grain, "mode": search.mode, "season_type": search.season_type,
         "histograms": histograms, "limit": limit, "offset": offset,
+        "default_columns": list(DEFAULT_COLUMNS[search.grain]),
     }
     if search.grain == "games" and search.mode == "count":
         return {**common, **_count_page(frame, scored, rows, hits, search, limit, offset)}
 
-    columns = _stat_columns(search)
     sortable = {field.id: field for field in columns}
-    sort_field = sortable.get(search.sort) or next(
-        (field for field in columns if field.id in condition_ids), FIELDS_BY_ID["fantasy_points"])
+    sort_field = (
+        sortable.get(search.sort)
+        or next((field for field in columns if field.id in condition_ids), None)
+        or sortable.get("fantasy_points")
+        or (columns[0] if columns else FIELDS_BY_ID["fantasy_points"])
+    )
     descending = (search.order or ("desc" if sort_field.higher_is_better else "asc")) == "desc"
     tiebreak = values["fantasy_points"][hits]
     ordered = hits[_sort_rows(values[sort_field.id][hits], descending, tiebreak)]
