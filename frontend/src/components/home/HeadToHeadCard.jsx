@@ -15,6 +15,7 @@ import { Link } from "react-router-dom";
 import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
 import { MarginTable } from "../player/MarginTable";
 import { SIDES } from "../player/sides";
+import { Headshot } from "../explore/common";
 import { useDebounce } from "../../hooks/useDebounce";
 import { usePlayerSearch } from "../../hooks/usePlayerSearch";
 import { MATCHUP_METRICS, MATCHUP_METRICS_BY_POSITION } from "../../constants/signals";
@@ -42,21 +43,13 @@ function Face({ player, side, align }) {
         right ? "sm:flex-row-reverse sm:text-right" : "sm:text-left"
       }`}
     >
-      {player.headshot_url ? (
-        <img
-          src={player.headshot_url}
-          alt=""
-          className="h-[72px] w-[72px] shrink-0 rounded-full object-cover object-top sm:h-24 sm:w-24"
-          style={{ border: `2px solid ${side.color}`, background: "var(--surface-2)" }}
-        />
-      ) : (
-        <span
-          className="grid h-[72px] w-[72px] shrink-0 place-items-center rounded-full text-2xl font-bold sm:h-24 sm:w-24"
-          style={{ border: `2px solid ${side.color}`, color: side.color }}
-        >
-          {player.name?.[0]}
-        </span>
-      )}
+      <Headshot
+        url={player.headshot_url}
+        name={player.name}
+        className="h-[72px] w-[72px] rounded-full sm:h-24 sm:w-24"
+        initialsClassName="text-2xl"
+        style={{ border: `2px solid ${side.color}`, background: "var(--surface-2)" }}
+      />
       <span className="min-w-0">
         <Link
           to={`/players/${player.player_id}`}

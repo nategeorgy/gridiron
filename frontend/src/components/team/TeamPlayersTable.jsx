@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PositionTag } from "../PositionTag";
+import { Headshot } from "../explore/common";
 import { formatStat, shortName } from "../../utils/format";
 import { Segmented } from "./Segmented";
 
@@ -125,7 +126,7 @@ export function TeamPlayersTable({ rows, isLoading, season, weeksLabel, position
                 <td className="pin-col px-2 py-1.5">
                   <Link to={`/players/${row.player_id}`} className="flex items-center gap-2 whitespace-nowrap font-medium text-fg hover:text-accent">
                     {/* shrink-0: a shrinkable image let the cell size itself 24px short of its contents. */}
-                    {row.headshot_url ? <img src={row.headshot_url} alt="" className="h-6 w-6 shrink-0 rounded-full bg-surface-2 object-cover" /> : <span className="h-6 w-6 shrink-0 rounded-full bg-surface-2" />}
+                    <Headshot url={row.headshot_url} name={row.name} size={24} />
                     <span className="md:hidden">{shortName(row.name)}</span>
                     <span className="hidden md:inline">{row.name}</span>
                     <PositionTag position={row.position} variant="quiet" />

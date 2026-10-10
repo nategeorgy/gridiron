@@ -184,15 +184,22 @@ function toDataUri(url) {
   return dataUris.get(url);
 }
 
-/** Replace every external <image> with a data URI, or drop it (the initials beneath show). */
+/**
+ * Replace every external <image> with a data URI, or drop it. A dropped headshot shows
+ * the initials `SvgHeadshot` keeps hidden beside it.
+ */
 async function inlineImages(svg) {
   const images = [...svg.querySelectorAll("image")];
   await Promise.all(images.map(async (image) => {
     const href = image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href");
     if (!href || href.startsWith("data:")) return;
     const uri = await toDataUri(href);
-    if (uri) image.setAttribute("href", uri);
-    else image.remove();
+    if (uri) {
+      image.setAttribute("href", uri);
+      return;
+    }
+    image.parentNode?.querySelector(":scope > text[data-initials]")?.removeAttribute("visibility");
+    image.remove();
   }));
 }
 

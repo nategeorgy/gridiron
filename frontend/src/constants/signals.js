@@ -129,10 +129,9 @@ export const FEATURED_MATCHUP = {
 export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
-  // One week: CeeDee Lamb's 21 targets in Week 4.
-  weeks: "4",
-  passerId: "00-0033077", // Dak Prescott
-  team: "DAL",
+  // The season so far. Name `weeks` (e.g. "4") to feature a single week instead.
+  passerId: "00-0037834", // Brock Purdy
+  team: "SF",
 };
 
 /**
