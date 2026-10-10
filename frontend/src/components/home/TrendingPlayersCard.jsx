@@ -17,6 +17,7 @@
 // registry rather than being repeated here.
 import { Link } from "react-router-dom";
 import { PositionTag } from "../PositionTag";
+import { Headshot } from "../explore/common";
 import { FinishChip } from "../player/FinishChip";
 import { Card, CardHead, CardLink, CardState } from "./primitives";
 import { TRENDING_BASIS } from "../../constants/signals";
@@ -97,17 +98,7 @@ function TrendingRow({ pick, row, previousRow, seasonRow, recentRow, windows, he
   return (
     <div className="grid gap-2.5 border-b border-dashed border-line py-3 last:border-0 xl:grid-cols-[215px_1fr] xl:items-center xl:gap-3.5">
       <div className="flex min-w-0 items-center gap-2.5">
-        {headshot ? (
-          <img
-            src={headshot}
-            alt=""
-            className="h-14 w-14 shrink-0 rounded-xl border border-edge bg-surface-2 object-cover object-top"
-          />
-        ) : (
-          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl border border-edge bg-surface-2 text-base font-bold text-muted">
-            {row.name?.[0]}
-          </span>
-        )}
+        <Headshot url={headshot} name={row.name} size={56} className="rounded-xl border border-edge" style={{ background: "var(--surface-2)" }} />
         <div className="min-w-0">
           <Link
             to={`/players/${row.player_id}`}

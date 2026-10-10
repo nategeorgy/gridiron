@@ -15,6 +15,7 @@ import { PositionTag } from "../PositionTag";
 import { StatTooltip, useStatTooltip } from "../StatTooltip";
 import { Card, CardHead, CardState } from "./primitives";
 import { formatSigned, formatStat } from "../../utils/format";
+import { initials } from "../../utils/explore";
 import { scoringLabel } from "../../constants/scoring";
 import { usePhone } from "../../hooks/useMediaQuery";
 
@@ -275,6 +276,14 @@ export function ExpectedActualCard({ season, scoring, rows, cloud = [], headshot
                   {headshots?.[row.player_id] && (
                     <image href={headshots[row.player_id]} x={cx - radius} y={cy - radius - 1} width={radius * 2} height={radius * 2 + 2}
                            clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMin slice" />
+                  )}
+                  {/* Initials only once the lookup has answered with no photo, so they never
+                      flash in before one, and never sit under one. */}
+                  {headshots && row.player_id in headshots && !headshots[row.player_id] && (
+                    <text x={cx} y={cy} dy="0.35em" textAnchor="middle"
+                          style={{ fill: "var(--muted)", font: `600 ${Math.max(8, radius * 0.62)}px Inter, sans-serif` }}>
+                      {initials(row.name)}
+                    </text>
                   )}
                   <circle cx={cx} cy={cy} r={radius} style={{ fill: "none", stroke: tone, strokeWidth: 2.5 }} />
                   <circle cx={px} cy={py} r={3.5}
