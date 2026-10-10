@@ -65,33 +65,46 @@ export function Field({ label, children }) {
   );
 }
 
-/** A round headshot with initials underneath, which show until (or unless) the photo loads. */
-export function Headshot({ url, name, size = 28, ring }) {
-  const [failed, setFailed] = useState(false);
+/**
+ * A player's headshot, or their initials when there is no photo or it fails to load.
+ * Never both: the photos are cutouts on a transparent background, so initials drawn
+ * underneath show through around the player.
+ *
+ * Round at `size` pixels (28 by default). A caller with a responsive or non-round box
+ * passes it as `className` instead (size and corner classes), with `initialsClassName`
+ * to size the letters; `style` adds a border or background.
+ */
+export function Headshot({ url, name, size, ring, className, style, initialsClassName = "" }) {
+  // Keyed on the url, so a failed photo does not stick when the same slot shows someone else.
+  const [failedUrl, setFailedUrl] = useState(null);
+  const photo = url && failedUrl !== url;
+  const pixels = className ? size : size ?? 28;
   return (
     <span
-      className="relative inline-block shrink-0 overflow-hidden rounded-full"
+      className={`relative inline-block shrink-0 overflow-hidden ${className ?? "rounded-full"}`}
       style={{
-        width: size,
-        height: size,
+        width: pixels,
+        height: pixels,
         background: "color-mix(in srgb, var(--fg) 10%, var(--surface-solid))",
         boxShadow: ring ? `0 0 0 2px ${ring}` : undefined,
+        ...style,
       }}
     >
-      <span
-        className="absolute inset-0 grid place-items-center font-semibold text-muted"
-        style={{ fontSize: Math.max(9, size * 0.34) }}
-      >
-        {initials(name)}
-      </span>
-      {url && !failed && (
+      {photo ? (
         <img
           src={url}
           alt=""
           loading="lazy"
-          onError={() => setFailed(true)}
+          onError={() => setFailedUrl(url)}
           className="absolute inset-0 h-full w-full object-cover object-top"
         />
+      ) : (
+        <span
+          className={`absolute inset-0 grid place-items-center font-semibold text-muted ${initialsClassName}`}
+          style={pixels ? { fontSize: Math.max(9, pixels * 0.34) } : undefined}
+        >
+          {initials(name)}
+        </span>
       )}
     </span>
   );

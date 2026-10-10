@@ -17,26 +17,22 @@ import { ThemeToggle } from "./ThemeToggle";
 import { NavDropdown } from "./ui/NavDropdown";
 import { TeamsMenu } from "./team/TeamsMenu";
 import { EXPLORE_GROUP, NAV_GROUPS } from "../constants/boards";
-import { HOME_LAYOUT } from "../constants/homeLayout";
 
-// Routes that opt out of the 1280px shell, capped rather than full-bleed so nothing
-// stretches to absurd cell sizes on an ultrawide display. Empty while the draft room
-// — the only page that ever needed it — is hidden for launch.
+// Routes that opt out of the shell, capped rather than full-bleed so nothing stretches
+// to absurd cell sizes on an ultrawide display. Empty while the draft room, the only
+// page that ever needed it, is hidden for launch.
 const WIDE_ROUTES = [];
 
-// The shell's own cap, and the wide routes' cap, as numbers rather than Tailwind classes
-// (`max-w-7xl` is 80rem). They are numbers because **one place has to own the content
-// width**: `<main>` and the credit bar both read it here, so the footer can never end up
-// a different width from the content above it — which is what happened when the home
-// page started choosing its own width and the footer kept the 1280px class.
-const SHELL_WIDTH = 1280;
+// The shell's own cap, and the wide routes' cap, as numbers rather than Tailwind classes.
+// They are numbers because **one place has to own the content width**: `<main>` and the
+// credit bar both read it here, so the footer can never end up a different width from
+// the content above it. Every page takes the home page's 1,560px (October 2026); it was
+// 1,280px everywhere but the home page before that.
+const SHELL_WIDTH = 1560;
 const WIDE_WIDTH = 1800;
 
 /** How wide the content column is on this route. */
 function contentWidth(pathname) {
-  // The home page's arrangement decides how much room its columns need, so it names its
-  // own width (constants/homeLayout.js). Every other route takes the shell.
-  if (pathname === "/") return HOME_LAYOUT.container;
   return WIDE_ROUTES.some((route) => pathname.startsWith(route)) ? WIDE_WIDTH : SHELL_WIDTH;
 }
 
@@ -85,8 +81,8 @@ export function Layout() {
     <div className="flex min-h-screen flex-col">
       <header className="glass-header sticky top-0 z-20">
         <div
-          className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 lg:!h-auto lg:py-3"
-          style={{ height: MOBILE_HEADER_HEIGHT }}
+          className="mx-auto flex items-center justify-between gap-3 px-4 lg:!h-auto lg:py-3"
+          style={{ height: MOBILE_HEADER_HEIGHT, maxWidth }}
         >
           <Link to="/" aria-label="Second Level home" className="shrink-0">
             <span className="block lg:hidden">

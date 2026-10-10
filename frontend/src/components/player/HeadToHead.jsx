@@ -12,27 +12,20 @@
 // so the same two players read the same way on both surfaces.
 import { Link } from "react-router-dom";
 import { MarginTable } from "./MarginTable";
+import { Headshot } from "../explore/common";
 import { SIDES } from "./sides";
 
 function Face({ player, side, align }) {
   const right = align === "right";
   return (
     <div className={`flex min-w-0 flex-col items-center gap-2 ${right ? "text-right" : "text-left"} sm:items-center`}>
-      {player.headshot_url ? (
-        <img
-          src={player.headshot_url}
-          alt=""
-          className="h-24 w-24 rounded-2xl object-cover object-top"
-          style={{ border: `2px solid ${side.color}`, background: "var(--surface-2)" }}
-        />
-      ) : (
-        <span
-          className="grid h-24 w-24 place-items-center rounded-2xl text-2xl font-bold"
-          style={{ border: `2px solid ${side.color}`, color: side.color }}
-        >
-          {player.name?.[0]}
-        </span>
-      )}
+      <Headshot
+        url={player.headshot_url}
+        name={player.name}
+        size={96}
+        className="rounded-2xl"
+        style={{ border: `2px solid ${side.color}`, background: "var(--surface-2)" }}
+      />
       <span className="min-w-0 text-center">
         <Link
           to={`/players/${player.player_id}`}
