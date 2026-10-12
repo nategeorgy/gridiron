@@ -58,37 +58,39 @@ export function trendingWindows(week, size) {
  */
 export const TRENDING_PLAYERS = {
   season: 2026,
-  week: 4,
+  week: 5,
   // Weeks per side for a RECENT_WEEKS pick.
   window: 2,
   players: [
     {
-      // Weeks 3-4 against 1-2: target share 25% to 34%, air-yard share 36% to 58%.
-      playerId: "00-0041438", // Carnell Tate
+      // Week 5 against 4, with Lamb on 57% of the snaps: 3 targets to 13, target share 7% to 31%.
+      playerId: "00-0037247", // George Pickens
+      stats: ["target_share", "targets", "air_yards_share", "opportunity_share"],
+    },
+    {
+      // Weeks 4-5 against 2-3: target share 19% to 32%, air-yard share 25% to 62%.
+      playerId: "00-0031408", // Mike Evans
       basis: TRENDING_BASIS.RECENT_WEEKS,
-      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
+      stats: ["target_share", "air_yards_share", "snap_share", "opportunity_share"],
     },
     {
-      // Week 4 against 3. His points fell (17.0 to 11.1) while the role grew.
-      playerId: "00-0040719", // Bhayshul Tuten
-      stats: ["rush_attempt_share", "snap_share", "opportunity_share", "route_participation"],
-    },
-    {
-      // Weeks 3-4 against 1-2: target share 23% to 36%, air-yard share 38% to 52%.
-      playerId: "00-0038559", // Michael Wilson
-      basis: TRENDING_BASIS.RECENT_WEEKS,
-      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
-    },
-    {
-      // Weeks 3-4 against 1-2: snaps 60% to 77%, rush share 40% to 65%.
-      playerId: "00-0037840", // Kyren Williams
+      // Weeks 4-5 against 2-3, with Breece Hall out: snaps 42% to 90%, rush share 20% to 88%.
+      playerId: "00-0039794", // Braelon Allen
       basis: TRENDING_BASIS.RECENT_WEEKS,
       stats: ["snap_share", "rush_attempt_share", "opportunity_share", "target_share"],
     },
     {
-      // Week 4 against 3. Snap share and route participation fell, so they stay off.
-      playerId: "00-0037816", // Romeo Doubs
-      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
+      // The Patriots' backfield in Week 5: 71% of the snaps to Henderson's 16%, 13 carries to 4.
+      playerId: "00-0036875", // Rhamondre Stevenson
+      basis: TRENDING_BASIS.TEAMMATE,
+      against: "00-0040734", // TreVeyon Henderson
+      stats: ["snap_share", "carries", "rush_attempt_share", "opportunity_share"],
+    },
+    {
+      // Weeks 4-5 against 2-3: target share 13% to 28%, air-yard share 12% to 30%.
+      playerId: "00-0038935", // Brenton Strange
+      basis: TRENDING_BASIS.RECENT_WEEKS,
+      stats: ["target_share", "air_yards_share", "opportunity_share", "snap_share"],
     },
   ],
 };
@@ -103,12 +105,14 @@ export const TRENDING_PLAYERS = {
  * instead of appearing under a heading that has stopped being true.
  */
 export const EXPECTED_VS_ACTUAL = [
-  "00-0036555", // Chuba Hubbard
-  "00-0038559", // Michael Wilson
-  "00-0040126", // Colston Loveland
-  "00-0040122", // Ashton Jeanty
-  "00-0029604", // Kirk Cousins
-  "00-0035719", // Deebo Samuel Sr.
+  "00-0037834", // Brock Purdy
+  "00-0036355", // Justin Herbert
+  "00-0037228", // Jaylen Warren
+  "00-0038597", // Chase Brown
+  "00-0039064", // Zay Flowers
+  "00-0034348", // Courtland Sutton
+  "00-0033288", // George Kittle
+  "00-0034753", // Mark Andrews
 ];
 
 /**
@@ -116,7 +120,7 @@ export const EXPECTED_VS_ACTUAL = [
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0040667", "00-0038124"], // Matthew Golden, Christian Watson
+  players: ["00-0037247", "00-0036358"], // George Pickens, CeeDee Lamb
   caption: String(SIGNALS_SEASON),
 };
 
@@ -129,10 +133,10 @@ export const FEATURED_MATCHUP = {
 export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
-  // One week: CeeDee Lamb's 21 targets in Week 4.
-  weeks: "4",
-  passerId: "00-0033077", // Dak Prescott
-  team: "DAL",
+  // One week: Malik Nabers's 20 targets and Isaiah Likely's 13, 33 of Winston's 52.
+  weeks: "5",
+  passerId: "00-0031503", // Jameis Winston
+  team: "NYG",
 };
 
 /**
@@ -147,31 +151,30 @@ export const HIGHLIGHTED_VIZ = {
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 4,
+  week: 5,
   entries: [
     {
-      // Second only to Wes Welker's 2011, with CeeDee Lamb third.
+      // Second only to Christian McCaffrey's 2019.
       kind: "leaders",
-      playerId: "00-0038543", // Jaxon Smith-Njigba
-      title: "Most fantasy points by a receiver through Week 4",
-      query: { grain: "seasons", positions: "WR", last_week: 4, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
+      playerId: "00-0039139", // Jahmyr Gibbs
+      title: "Most fantasy points by a running back through Week 5",
+      query: { grain: "seasons", positions: "RB", last_week: 5, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
     },
     {
       kind: "count",
-      playerId: "00-0040124", // Tetairoa McMillan
-      title: "14+ catches, 190+ yards and 2+ touchdowns",
+      playerId: "00-0039851", // Drake Maye
+      title: "370+ passing yards, 4+ passing TDs and a rushing TD",
       seasonCount: false,
-      query: { grain: "games", where: "receptions:14:,receiving_yards:190:,receiving_tds:2:", sort: "receiving_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.receptions} catches, ${row.receiving_yards} yards, ${row.receiving_tds} TDs`,
+      query: { grain: "games", where: "passing_yards:370:,passing_tds:4:,rushing_tds:1:", sort: "passing_yards", order: "desc", limit: 200 },
+      line: (row) => `${row.passing_yards} yards, ${row.passing_tds} TDs, ${row.rushing_tds} rushing TD`,
     },
     {
-      // Receptions can't pass targets, so 13+ catches on 13 or fewer targets is exactly 13 of 13.
+      // The other 2026 game is CeeDee Lamb's 21 in Week 4.
       kind: "count",
-      playerId: "00-0035229", // T.J. Hockenson
-      title: "13 catches on 13 targets",
-      seasonCount: false,
-      query: { grain: "games", where: "receptions:13:,targets::13,receiving_yards::", sort: "receiving_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.receptions} of ${row.targets} targets for ${row.receiving_yards} yards`,
+      playerId: "00-0039337", // Malik Nabers
+      title: "20+ targets in a game",
+      query: { grain: "games", where: "targets:20:,receptions::,receiving_yards::", sort: "targets", order: "desc", limit: 200 },
+      line: (row) => `${row.targets} targets, ${row.receptions} catches, ${row.receiving_yards} yards`,
     },
   ],
 };
