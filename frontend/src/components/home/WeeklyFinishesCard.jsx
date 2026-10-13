@@ -1,10 +1,15 @@
 // Weekly Finishes (October 2026): where each of a position's top scorers finished, week
-// by week, coloured by how deep a league starts the position.
+// by week, on a green-to-yellow-to-red scale.
 //
 // The grid answers what a season total hides: whether a player's points came every week
 // or in two big games. Each cell is the finish the player's game log shows (the endpoint
-// reads the Query Builder's ranking, pinned to the game log in tests), and the colour is
-// the player page's FinishChip tier, so "RB30" looks the same here as there.
+// reads the Query Builder's ranking, pinned to the game log in tests).
+//
+// The scale is anchored on how deep a league starts the position, not on the pool: green
+// at the week's best finish, yellow at the last rank a league starts (RB28 in a 12-team
+// league), red from one league's worth of ranks past that, which is also where Duds start
+// counting. So QB15 is already orange and WR15 still green, which is how a manager reads
+// them.
 //
 // Byes come from the schedule, so a hatched cell is a bye, a dot is a game missed, and a
 // blank cell is a game not played yet: the rest of the season, and Monday night on a Monday.
@@ -13,58 +18,65 @@ import { Link } from "react-router-dom";
 
 import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
 import { Headshot } from "../explore/common";
-import { finishTier, startingDepth } from "../player/FinishChip";
+import { startingDepth } from "../player/FinishChip";
 import { formatStat, shortName } from "../../utils/format";
 import { scoringLabel } from "../../constants/scoring";
 
 export const FINISH_POSITIONS = ["QB", "RB", "WR", "TE"];
+/** Rows per position: the deep positions get more, since a league starts more of them. */
+export const FINISH_LIMITS = { QB: 20, RB: 30, WR: 30, TE: 20 };
 const TABS = FINISH_POSITIONS.map((value) => ({ value, label: value }));
 
 // The sortable columns on the right, and the direction each one is best in.
 const SORTS = {
+  total: { label: "Total", descending: true },
   ppg: { label: "PPG", descending: true },
-  top: { label: "TOP", descending: true },
-  startable: { label: "Startable", descending: true },
+  top: { label: "Top", descending: true },
   duds: { label: "Duds", descending: false },
 };
 
 const CELL = "stat-num grid h-6 w-[38px] place-items-center rounded-md text-[11.5px] font-semibold";
 
-/** Weeks inside the top tier, games inside the startable depth, and games well outside it. */
-function summarize(row, position, league) {
+/** The three anchors of the scale: the top tier, the last started rank, and the dud line. */
+function anchors(position, league) {
   const depth = startingDepth(position, league);
-  const ranks = Object.values(row.finishes);
+  return { top: depth.top, start: depth.flex, dud: depth.flex + league.teams };
+}
+
+/** The scale's hue at a rank: green to yellow up to the last started rank, then to red. */
+function finishHue(rank, position, league) {
+  const { start, dud } = anchors(position, league);
+  if (rank <= start) {
+    const share = start > 1 ? (rank - 1) / (start - 1) : 1;
+    return `color-mix(in srgb, var(--scale-mid) ${Math.round(share * 100)}%, var(--pos))`;
+  }
+  const share = Math.min(1, (rank - start) / (dud - start));
+  return `color-mix(in srgb, var(--neg) ${Math.round(share * 100)}%, var(--scale-mid))`;
+}
+
+/** A tinted fill with its text mixed toward the foreground, as FinishChip does. */
+function finishStyle(rank, position, league) {
+  const hue = finishHue(rank, position, league);
   return {
-    top: ranks.filter((rank) => rank <= depth.top).length,
-    startable: ranks.length ? ranks.filter((rank) => rank <= depth.flex).length / ranks.length : null,
-    duds: ranks.filter((rank) => rank > depth.flex + league.teams).length,
+    background: `color-mix(in srgb, ${hue} 44%, transparent)`,
+    color: `color-mix(in srgb, ${hue} 26%, var(--fg))`,
   };
 }
 
-/** The tier key: one chip per non-empty rank range, in the FinishChip colours. */
-function tierRanges(position, league) {
-  const depth = startingDepth(position, league);
-  const edge = depth.flex + league.teams;
-  const ranges = [
-    [1, depth.top],
-    [depth.top + 1, depth.starter],
-    [depth.starter + 1, depth.flex],
-    [depth.flex + 1, edge],
-  ].filter(([low, high]) => high >= low);
-  return [
-    ...ranges.map(([low, high]) => ({ rank: low, label: `${position}${low}–${high}` })),
-    { rank: edge + 1, label: `${position}${edge + 1}+` },
-  ];
+/** Weeks inside the top tier, and games past the dud line. */
+function summarize(row, position, league) {
+  const { top, dud } = anchors(position, league);
+  const ranks = Object.values(row.finishes);
+  return { top: ranks.filter((rank) => rank <= top).length, duds: ranks.filter((rank) => rank > dud).length };
 }
 
 function WeekCell({ week, row, position, league }) {
   const rank = row.finishes[week];
   if (rank != null) {
-    const tier = finishTier(rank, position, league);
     return (
       <span
         className={CELL}
-        style={{ background: tier.background, color: tier.color }}
+        style={finishStyle(rank, position, league)}
         title={`Week ${week}: ${position}${rank}, ${formatStat(row.points[week], 1)} points`}
       >
         {rank}
@@ -99,14 +111,43 @@ function WeekCell({ week, row, position, league }) {
   );
 }
 
+/** The key: the scale as a bar, labelled at its three anchors. */
+function ScaleKey({ position, league }) {
+  const { start, dud } = anchors(position, league);
+  const stop = (rank) => finishStyle(rank, position, league).background;
+  const middle = ((start - 1) / (dud - 1)) * 100;
+  return (
+    <div className="flex items-center gap-2 text-[10.5px] font-semibold text-muted">
+      <span className="stat-num">{position}1</span>
+      <span className="relative h-2.5 w-44 rounded-full sm:w-56">
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{ background: `linear-gradient(90deg, ${stop(1)}, ${stop(start)} ${middle}%, ${stop(dud)})` }}
+        />
+        <span
+          className="stat-num absolute top-full mt-0.5 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-faint"
+          style={{ left: `${middle}%` }}
+        >
+          {position}
+          {start}
+        </span>
+      </span>
+      <span className="stat-num">
+        {position}
+        {dud}+
+      </span>
+    </div>
+  );
+}
+
 export function WeeklyFinishesCard({ season, scoring, league, position, onPositionChange, minGames, result, isLoading, isError }) {
   const [sort, setSort] = useState({ key: "ppg", descending: true });
   const weeks = result?.weeks ?? [];
-  const depth = startingDepth(position, league);
+  const { top, start, dud } = anchors(position, league);
 
   const rows = useMemo(() => {
     const withSummary = (result?.data ?? []).map((row) => ({ ...row, ...summarize(row, position, league) }));
-    const value = (row) => (sort.key === "ppg" ? row.fantasy_ppg : row[sort.key] ?? -1);
+    const value = (row) => ({ total: row.fantasy_points, ppg: row.fantasy_ppg, top: row.top, duds: row.duds })[sort.key];
     // Ties keep the endpoint's order, which is points per game.
     return withSummary
       .map((row, index) => ({ row, index }))
@@ -160,16 +201,16 @@ export function WeeklyFinishesCard({ season, scoring, league, position, onPositi
                     {week}
                   </th>
                 ))}
+                {sortHeader("total", SORTS.total.label)}
                 {sortHeader("ppg", SORTS.ppg.label)}
-                {sortHeader("top", `Top ${depth.top}`)}
-                {sortHeader("startable", SORTS.startable.label)}
+                {sortHeader("top", `Top ${top}`)}
                 {sortHeader("duds", SORTS.duds.label)}
               </tr>
             </thead>
             <tbody>
               {rows.map((row, index) => (
                 <tr key={row.player_id}>
-                  <td className="pin-col max-w-[230px] py-px pl-1 pr-3">
+                  <td className="pin-col max-w-[270px] py-px pl-1 pr-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="stat-num w-4 shrink-0 text-right text-[10.5px] text-faint">{index + 1}</span>
                       <Headshot url={row.headshot_url} name={row.name} size={22} />
@@ -187,9 +228,9 @@ export function WeeklyFinishesCard({ season, scoring, league, position, onPositi
                       </div>
                     </td>
                   ))}
+                  <td className="stat-num px-1.5 text-right text-[12.5px] text-muted">{formatStat(row.fantasy_points, 1)}</td>
                   <td className="stat-num px-1.5 text-right text-[13px] font-bold text-fg">{formatStat(row.fantasy_ppg, 1)}</td>
                   <td className="stat-num px-1.5 text-right text-[12.5px] text-muted">{row.top}</td>
-                  <td className="stat-num px-1.5 text-right text-[12.5px] text-muted">{row.startable == null ? "—" : `${Math.round(row.startable * 100)}%`}</td>
                   <td className="stat-num px-1.5 text-right text-[12.5px] text-muted">{row.duds}</td>
                 </tr>
               ))}
@@ -198,23 +239,11 @@ export function WeeklyFinishesCard({ season, scoring, league, position, onPositi
         </div>
       )}
       {rows.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {tierRanges(position, league).map((range) => {
-              const tier = finishTier(range.rank, position, league);
-              return (
-                <span
-                  key={range.label}
-                  className="stat-num rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold"
-                  style={{ background: tier.background, color: tier.color }}
-                >
-                  {range.label}
-                </span>
-              );
-            })}
-          </div>
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-x-6 gap-y-4 pb-3">
+          <ScaleKey position={position} league={league} />
           <p className="text-[11px] text-faint">
-            Startable: games inside the top {depth.flex}. Duds: games outside the top {depth.flex + league.teams}. Sort by
+            Yellow is {position}
+            {start}, the last {position} a {league.teams}-team league starts. Duds: games outside the top {dud}. Sort by
             any column on the right.
           </p>
         </div>

@@ -45,6 +45,9 @@
     --pos: #00e389;
     --neg: #f87171;
     --warn: #f5a524;
+    /* The middle of a good-to-bad scale (green, this, red), October 2026. --warn is
+       amber, and amber tinted over a dark card reads brown, not yellow. */
+    --scale-mid: #facc15;
 
     /* Categorical chart series (M4). A fixed order, never cycled — a series keeps
        its hue when the set is filtered. Deliberately NOT the accent/pos/neg/warn
@@ -129,6 +132,7 @@
     --pos: #0a9d63;
     --neg: #dc4c4c;
     --warn: #b9770a;
+    --scale-mid: #eab308;
 
     /* The same five hues, re-stepped for the light surface — not an automatic
        flip of the dark values. Validated independently against the light card. */

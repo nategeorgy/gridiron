@@ -1,94 +1,13 @@
-// The four ranked tables on the Command Center (M10).
+// The ranked tables from the Command Center (M10). Only My Players is on the page now;
+// Last Week's Scoring left in October 2026, when Weekly Finishes took its place.
 //
 // All four are the leaderboard endpoint with a different column set, which is the
 // point: the boards a manager checks every week should not be a second implementation
 // of the boards they can open in full. Each card links through to its own board with
 // the same filters already applied.
-import { useState } from "react";
 import { Card, CardHead, CardLink, CardState, PlayerCell, ScrollTable, Tabs, Th } from "./primitives";
 import { formatStat, formatSigned } from "../../utils/format";
 import { percentileColor } from "../player/percentile";
-import { scoringLabel } from "../../constants/scoring";
-
-const POSITION_TABS = ["ALL", "QB", "RB", "WR", "TE", "FLEX"].map((value) => ({
-  value,
-  label: value,
-}));
-
-/** The positions each tab asks for. FLEX is every position a flex slot can start. */
-export const WEEKLY_TAB_POSITIONS = { QB: "QB", RB: "RB", WR: "WR", TE: "TE", FLEX: "RB,WR,TE" };
-
-/** " · 2 TD", or nothing — a zero would be noise on every line that scored none. */
-function touchdowns(count, label = "TD") {
-  return count > 0 ? ` · ${count} ${label}` : "";
-}
-
-/** The stat line under a weekly score, shaped for the position that earned it. */
-function statLine(row) {
-  if (row.position === "QB") {
-    // Passing touchdowns sit beside the passing yards; a rushing score says so, since
-    // "2 TD" after a rushing total would read as passing ones.
-    return (
-      `${formatStat(row.passing_yards, "int")} pass${touchdowns(row.passing_tds)}` +
-      ` · ${formatStat(row.rushing_yards, "int")} rush${touchdowns(row.rushing_tds, "rush TD")}`
-    );
-  }
-  // For a back or a pass catcher the scores are one number, however they came.
-  const scores = touchdowns((row.rushing_tds ?? 0) + (row.receiving_tds ?? 0));
-  if (row.position === "RB") {
-    return `${formatStat(row.carries, "int")} car · ${formatStat(row.rushing_yards, "int")} yd · ${formatStat(row.receptions, "int")} rec${scores}`;
-  }
-  return `${formatStat(row.receptions, "int")}/${formatStat(row.targets, "int")} · ${formatStat(row.receiving_yards, "int")} yd${scores}`;
-}
-
-export function WeeklyScoringCard({ week, scoring, position, onPositionChange, result, isLoading, isError }) {
-  const rows = result?.data ?? [];
-  const scoredIn = scoringLabel(scoring);
-  return (
-    <Card>
-      <CardHead title="Last Week's Scoring" sub={week ? `Week ${week} · ${scoredIn}` : scoredIn}>
-        <Tabs options={POSITION_TABS} value={position} onChange={onPositionChange} label="Position" />
-      </CardHead>
-      <CardState isLoading={isLoading} isError={isError} isEmpty={rows.length === 0} empty="No games scored in this week." rows={6} />
-      {rows.length > 0 && (
-        // On a phone the stat line moves under the name, so the points stay on screen
-        // instead of scrolling off behind a 400px table.
-        <ScrollTable minWidth={400} phoneMinWidth={0}>
-          <thead>
-            <tr>
-              <Th align="left">Player</Th>
-              <Th className="hidden sm:table-cell">Stat line</Th>
-              <Th>FPTS</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.player_id} className="border-t border-line">
-                <td className="py-2">
-                  <PlayerCell
-                    playerId={row.player_id}
-                    name={row.name}
-                    position={row.position}
-                    team={row.team_abbreviation}
-                    rank={index + 1}
-                  />
-                  <div className="stat-num mt-0.5 pl-[18px] text-[11px] text-muted sm:hidden">{statLine(row)}</div>
-                </td>
-                <td className="stat-num hidden py-2 text-right text-[11px] text-muted sm:table-cell">{statLine(row)}</td>
-                <td className="stat-num py-2 text-right font-semibold text-accent">
-                  {formatStat(row.fantasy_points, 1)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </ScrollTable>
-      )}
-      <CardLink to={`/leaderboards/fantasy?positions=${WEEKLY_TAB_POSITIONS[position] ?? "all"}${week ? `&weeks=${week}` : ""}`}>
-        Full weekly board
-      </CardLink>
-    </Card>
-  );
-}
 
 // The opportunity columns, per position. A back's job is carries and goal-line work; a
 // receiver's is routes and targets — so these are different questions, not one table

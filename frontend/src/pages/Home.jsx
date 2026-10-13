@@ -5,8 +5,8 @@
 //   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
 //      Explore chart;
 //   2. a row of Explore cards: the team landscape, air yards, the record book;
-//   3. the week's players: the watchlist and Expected vs Actual on the left, Last Week's
-//      Scoring and a reader-picked Head to Head on the right;
+//   3. the week's players: the watchlist and Expected vs Actual on the left, a
+//      reader-picked Head to Head on the right;
 //   4. Weekly Finishes: a position's top scorers and where each finished every week;
 //   5. the Week N Preview: the slate, then matchups by position and implied team totals.
 //
@@ -43,7 +43,7 @@ import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
 import { AirYardsCard } from "../components/home/AirYardsCard";
 import { TeamLandscapeCard } from "../components/home/TeamLandscapeCard";
 import { RecordBookCard } from "../components/home/RecordBookCard";
-import { FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
+import { FINISH_LIMITS, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
 import { HeadToHeadCard, matchupMetrics } from "../components/home/HeadToHeadCard";
 import { ExpectedActualCard } from "../components/home/ExpectedActualCard";
 import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
@@ -51,7 +51,7 @@ import { EnvironmentsCard } from "../components/home/EnvironmentsCard";
 import { SlateCard } from "../components/home/SlateCard";
 import { BandHeading } from "../components/home/BandHeading";
 import { dateParts } from "../components/schedule/kickoff";
-import { MyPlayersCard, WEEKLY_TAB_POSITIONS, WeeklyScoringCard } from "../components/home/BoardCards";
+import { MyPlayersCard } from "../components/home/BoardCards";
 
 // The same fixed-PPR fallback the leaderboard uses when the backend cannot score yet.
 const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
@@ -98,7 +98,6 @@ export function Home() {
   const { supportsScoring } = useMetrics();
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
-  const [weekPosition, setWeekPosition] = useState("ALL");
   const [finishPosition, setFinishPosition] = useState(FINISH_POSITIONS[1]);
 
   // --- The scoreboard: the ticker's finals, and the week ahead for the bottom band.
@@ -167,28 +166,12 @@ export function Home() {
     () => Object.fromEntries((facePlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
     [facePlayers],
   );
-  // --- Last week's scoring. Waits for the scoreboard to say which week that was. ---
-  const weeklyParams = useMemo(
-    () => ({
-      season: lastPlayed?.season,
-      week: lastPlayed?.week,
-      season_type: "REG",
-      metric: pointsKey,
-      positions: WEEKLY_TAB_POSITIONS[weekPosition],
-      scoring,
-      order: "desc",
-      limit: 10,
-    }),
-    [lastPlayed?.season, lastPlayed?.week, pointsKey, weekPosition, scoring],
-  );
-  const weekly = useLeaderboard(weeklyParams, { enabled: Boolean(lastPlayed?.week) });
-
   // --- Weekly finishes: the position's top scorers, week by week. The games floor is
   //     stated for a full season (9 of 18) and scaled to the weeks played. ---
   const minFinishGames = scaledMinGames(9, weeksPlayed(season, lastPlayed));
   const finishes = useWeeklyFinishes(
     useMemo(
-      () => ({ season, position: finishPosition, scoring, min_games: minFinishGames, limit: 30 }),
+      () => ({ season, position: finishPosition, scoring, min_games: minFinishGames, limit: FINISH_LIMITS[finishPosition] }),
       [season, finishPosition, scoring, minFinishGames],
     ),
     { enabled: Boolean(season) },
@@ -314,17 +297,6 @@ export function Home() {
         headshots={headshots}
         isLoading={expected.isLoading}
         isError={expected.isError}
-      />
-    ),
-    weekly: (
-      <WeeklyScoringCard
-        week={lastPlayed?.week}
-        scoring={scoring}
-        position={weekPosition}
-        onPositionChange={setWeekPosition}
-        result={weekly.data}
-        isLoading={scoreboard.isLoading || weekly.isLoading}
-        isError={weekly.isError}
       />
     ),
     headToHead: (

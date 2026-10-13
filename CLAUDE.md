@@ -870,9 +870,10 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   *not* the leaderboard. Rebuilt in October 2026 as **"Option C"** (it was M10's two-column
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
   **Highlighted Viz of the Week**; a row of Explore cards (team landscape, air-yard
-  distribution, record book); the week's players (Expected vs Actual, last week's scoring, a
-  reader-picked head-to-head); **Weekly Finishes** (a position's top 30 week by week, which
-  replaced Trending Players in October 2026); and a **Week N Preview** (the slate,
+  distribution, record book); the week's players (Expected vs Actual and a reader-picked
+  head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
+  red, which replaced Trending Players and Last Week's Scoring in October 2026); and a **Week N
+  Preview** (the slate,
   matchups by position, implied totals). The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
   in the code and in these docs. The nav holds **five dropdowns**: **Insight**

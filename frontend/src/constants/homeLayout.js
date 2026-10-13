@@ -5,8 +5,8 @@
 //
 //   1. a score ticker and the Highlighted Viz of the Week, full width;
 //   2. a row of Explore cards (team landscape, air yards, record book);
-//   3. the two familiar columns: the week's players on the left, scoring and the
-//      head-to-head on the right;
+//   3. the two familiar columns: the week's players on the left, the head-to-head on
+//      the right;
 //   4. Weekly Finishes, full width (October 2026, replacing Trending Players): its grid
 //      runs to eighteen weeks, which only the full width holds without scrolling;
 //   5. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
@@ -20,8 +20,9 @@
 // - ⚠️ **Expected vs Actual grows with its column.** Its plot is a fixed-ratio SVG at
 //   100% width (457px tall in a 660px column, 1,029px in a 1,500px one), so it lives in
 //   the wide column and never full width.
-// - ⚠️ **Tables in the narrow column carry a `min-width`** (Last Week's Scoring 400px),
-//   which is why the narrow column is never narrower than about 500px above 1,024.
+// - ⚠️ **Cards in the narrow column were built for about 500px** (Last Week's Scoring's
+//   400px table set it, until that card left in October 2026; Head to Head and the
+//   environments card still read at that width), so it never goes narrower above 1,024.
 export const HOME_LAYOUT = {
   // The home page is the only route whose width depends on its own arrangement, so
   // `Layout` drops the 1280px shell on `/` and the page centres this container itself.
@@ -38,7 +39,7 @@ export const HOME_LAYOUT = {
     // Three across from 1,100px (about 345px each there, the width each card is built to
     // read at), two across with the odd one out spanning both below that, one on a phone.
     { kind: "grid", cards: ["landscape", "airYards", "recordBook"] },
-    { kind: "columns", cards: [["myPlayers", "expected", "weekly"], ["headToHead"]] },
+    { kind: "columns", cards: [["myPlayers", "expected"], ["headToHead"]] },
     { kind: "full", cards: ["weeklyFinishes"] },
     { kind: "full", cards: ["previewHeading"] },
     { kind: "full", cards: ["slate"] },
