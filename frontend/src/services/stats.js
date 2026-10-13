@@ -70,3 +70,14 @@ export async function getTrending(params) {
   const { data } = await api.get("/stats/trending", { params });
   return data;
 }
+
+/**
+ * Fetch weekly finishes (October 2026): a position's top scorers by PPG with their
+ * finish every week. Params: season?, position, scoring, min_games, limit.
+ * Returns { data: [{ finishes, points, byes, upcoming, ... }], weeks, last_week, ... }.
+ * Ranks only: the tiers depend on the league's lineup, which the client owns.
+ */
+export async function getWeeklyFinishes(params) {
+  const { data } = await api.get("/stats/weekly-finishes", { params });
+  return data;
+}

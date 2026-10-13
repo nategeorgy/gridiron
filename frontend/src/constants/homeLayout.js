@@ -1,13 +1,15 @@
 // How the Command Center arranges its cards (October 2026, "Option C").
 //
-// The page reads top to bottom in four bands, chosen from mockups built on 2026 Week 3
+// The page reads top to bottom in five bands, chosen from mockups built on 2026 Week 3
 // data (https://claude.ai/artifact/556KvBCx8M7HNvYyy2RNbb):
 //
 //   1. a score ticker and the Highlighted Viz of the Week, full width;
 //   2. a row of Explore cards (team landscape, air yards, record book);
 //   3. the two familiar columns: the week's players on the left, scoring and the
 //      head-to-head on the right;
-//   4. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
+//   4. Weekly Finishes, full width (October 2026, replacing Trending Players): its grid
+//      runs to eighteen weeks, which only the full width holds without scrolling;
+//   5. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
 //      and implied totals side by side.
 //
 // The arrangement is data rather than JSX for the same reason it always was: it is
@@ -36,7 +38,8 @@ export const HOME_LAYOUT = {
     // Three across from 1,100px (about 345px each there, the width each card is built to
     // read at), two across with the odd one out spanning both below that, one on a phone.
     { kind: "grid", cards: ["landscape", "airYards", "recordBook"] },
-    { kind: "columns", cards: [["trending", "myPlayers", "expected"], ["weekly", "headToHead"]] },
+    { kind: "columns", cards: [["myPlayers", "expected", "weekly"], ["headToHead"]] },
+    { kind: "full", cards: ["weeklyFinishes"] },
     { kind: "full", cards: ["previewHeading"] },
     { kind: "full", cards: ["slate"] },
     { kind: "columns", cards: [["matchups"], ["environments"]] },

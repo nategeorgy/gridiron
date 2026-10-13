@@ -805,6 +805,9 @@ GET /api/v1/games/scoreboard                 ← M10 the week just played beside
                                                names its own
 GET /api/v1/stats/trending                   ← M10 who is gaining or losing work over a
                                                trailing window. ?direction=up|down
+GET /api/v1/stats/weekly-finishes            ← a position's top scorers by PPG with their
+                                               finish every week, byes from the schedule
+                                               (the home page grid). position=, min_games=
 
 # Explore (September 2026). Play-level views, all public, all but the Query Builder
 # served through cached_response. weeks= and situation=all|red_zone|late_downs apply.
@@ -867,8 +870,9 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   *not* the leaderboard. Rebuilt in October 2026 as **"Option C"** (it was M10's two-column
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
   **Highlighted Viz of the Week**; a row of Explore cards (team landscape, air-yard
-  distribution, record book); the week's players (Trending Players, Expected vs Actual, last
-  week's scoring, a reader-picked head-to-head); and a **Week N Preview** (the slate,
+  distribution, record book); the week's players (Expected vs Actual, last week's scoring, a
+  reader-picked head-to-head); **Weekly Finishes** (a position's top 30 week by week, which
+  replaced Trending Players in October 2026); and a **Week N Preview** (the slate,
   matchups by position, implied totals). The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
   in the code and in these docs. The nav holds **five dropdowns**: **Insight**
