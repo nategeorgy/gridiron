@@ -1,11 +1,14 @@
-// A headshot inside an SVG chart: a disc with the player's initials, the photo clipped
-// to a circle over it, and a coloured ring.
+// A headshot inside an SVG chart: the photo clipped to a circle on a disc, or the
+// player's initials when there is no photo, and a coloured ring.
 //
 // The clip path needs an id, and ids must be unique in the document (two charts on one
 // page each carry their own), so a chart calls useClipId() once and renders <ClipDef>
-// in its <defs>. The initials stay under the photo, so a missing headshot, or one an
-// export could not fetch, still reads as someone.
-import { useId } from "react";
+// in its <defs>. The initials are never drawn under a photo: the photos are cutouts on
+// a transparent background, so they would show through around the player. They are
+// still in the markup, hidden, so an export that cannot fetch a photo can show them
+// instead (`inlineImages` in utils/exportImage.js), and a missing headshot still reads
+// as someone.
+import { useId, useState } from "react";
 import { initials } from "../../utils/explore";
 
 /** A document-unique clip-path id for one chart. */
@@ -24,19 +27,25 @@ export function ClipDef({ id }) {
 
 /** A headshot centred on the enclosing group's origin. */
 export function SvgHeadshot({ url, name, r, ring, ringWidth = 2, clipId }) {
+  // Keyed on the url, so a failed photo does not stick when the same node shows someone else.
+  const [failedUrl, setFailedUrl] = useState(null);
+  const photo = url && failedUrl !== url;
   return (
     <g>
       <circle r={r} fill="color-mix(in srgb, var(--fg) 12%, var(--surface-solid))" />
       <text
+        data-initials=""
         textAnchor="middle"
         dy="0.35em"
+        visibility={photo ? "hidden" : undefined}
         style={{ fontSize: Math.max(8, r * 0.62), fontWeight: 600, fill: "var(--muted)" }}
       >
         {initials(name)}
       </text>
-      {url && (
+      {photo && (
         <image
           href={url}
+          onError={() => setFailedUrl(url)}
           x={-r}
           y={-r}
           width={2 * r}

@@ -34,6 +34,7 @@ import { BoardResizer } from "../components/BoardResizer";
 import { ComparePopup } from "../components/ComparePopup";
 import { PlayerModal } from "../components/PlayerModal";
 import { PositionTag } from "../components/PositionTag";
+import { Headshot } from "../components/explore/common";
 import { assignToSlots, roundOf, runBots, snakeOrder } from "../utils/draftBots";
 import { formatStat } from "../utils/format";
 
@@ -216,21 +217,7 @@ function RosterPanel({ slots, title, isUser, onSelectPlayer }) {
             </span>
             {slot.player ? (
               <>
-                {slot.player.headshot_url ? (
-                  <img
-                    src={slot.player.headshot_url}
-                    alt=""
-                    aria-hidden="true"
-                    loading="lazy"
-                    onError={(event) => {
-                      event.currentTarget.style.visibility = "hidden";
-                    }}
-                    className="h-8 w-8 shrink-0 rounded-full object-cover"
-                    style={{ background: "var(--surface-2)" }}
-                  />
-                ) : (
-                  <span className="h-8 w-8 shrink-0 rounded-full bg-surface-2" />
-                )}
+                <Headshot url={slot.player.headshot_url} name={slot.player.name} size={32} style={{ background: "var(--surface-2)" }} />
                 <button
                   type="button"
                   onClick={() => onSelectPlayer?.(slot.player.player_id)}

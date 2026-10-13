@@ -19,6 +19,7 @@ import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { PositionTag } from "../components/PositionTag";
+import { Headshot } from "../components/explore/common";
 import { CareerTable } from "../components/player/CareerTable";
 import { ComparePicker } from "../components/player/ComparePicker";
 import { CompareRadar } from "../components/player/CompareRadar";
@@ -56,17 +57,7 @@ import { useTableView } from "../hooks/useTableView";
 function ProfileHeader({ player, seasonTeam }) {
   return (
     <section className="glass-card flex items-center gap-4 p-5">
-      {player.headshot_url ? (
-        <img
-          src={player.headshot_url}
-          alt=""
-          className="h-20 w-20 rounded-full border border-edge bg-surface-2 object-cover object-top"
-        />
-      ) : (
-        <div className="flex h-20 w-20 items-center justify-center rounded-full border border-edge bg-surface-2 text-2xl font-bold text-faint">
-          {player.name?.[0]}
-        </div>
-      )}
+      <Headshot url={player.headshot_url} name={player.name} size={80} className="rounded-full border border-edge" style={{ background: "var(--surface-2)" }} />
       <div>
         <div className="flex items-center gap-2.5">
           <h1 className="text-2xl font-bold tracking-tight text-fg">{player.name}</h1>

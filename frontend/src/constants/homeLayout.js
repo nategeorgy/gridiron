@@ -24,9 +24,7 @@
 //   400px table set it, until that card left in October 2026; Head to Head and the
 //   environments card still read at that width), so it never goes narrower above 1,024.
 export const HOME_LAYOUT = {
-  // The home page is the only route whose width depends on its own arrangement, so
-  // `Layout` drops the 1280px shell on `/` and the page centres this container itself.
-  container: 1560,
+  // The page is 1,560px wide, the width every page now takes from `Layout`'s shell.
   // The two-column bands. 1.75/1 clears the narrow column's widest table from 1,440px;
   // below that the narrow column takes a bigger share so it stays near 536px at 1,280.
   columns: [

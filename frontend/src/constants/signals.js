@@ -50,8 +50,7 @@ export const FEATURED_MATCHUP = {
 export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
-  // The whole season: Amon-Ra St. Brown 57 of Goff's 188 targets through Week 5.
-  weeks: "",
+  // The season so far. Name `weeks` (e.g. "4") to feature a single week instead.
   passerId: "00-0033106", // Jared Goff
   team: "DET",
 };

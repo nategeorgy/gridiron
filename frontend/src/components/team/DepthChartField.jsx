@@ -5,6 +5,7 @@
 import { Link } from "react-router-dom";
 import { formatStat } from "../../utils/format";
 import { formatTeamStat } from "../../utils/teamStats";
+import { initials } from "../../utils/explore";
 
 // pos_slot is the feed's alignment code: 1 is wide left, 2 wide right, 8 the slot.
 const SPOTS = [
@@ -20,6 +21,11 @@ const LINE = [37, 43.5, 50, 56.5, 63];
 // The same spots as a list, for a phone, where the 660px field would scroll sideways and
 // show two of the six starters at a time.
 const LIST_ORDER = ["QB", "RB", "WR-1", "WR-2", "WR-8", "TE"];
+
+// A starter's photo is the spot's background image; without one, their initials.
+function NoPhoto({ name, className }) {
+  return <span className={`absolute inset-0 grid place-items-center font-semibold text-muted ${className}`}>{initials(name)}</span>;
+}
 
 function spotsFrom(chart) {
   const bySpot = {};
@@ -66,6 +72,7 @@ export function DepthChartField({ chart, asOf, stats, season, weeksLabel, topPer
                   style={{ backgroundImage: starter.headshot_url ? `url('${starter.headshot_url}')` : undefined, boxShadow: `0 0 0 2px ${ring}` }}
                   aria-label={starter.name}
                 >
+                  {!starter.headshot_url && <NoPhoto name={starter.name} className="text-[14px]" />}
                   <span className="absolute -bottom-[6px] left-1/2 -translate-x-1/2 rounded px-1 py-px text-[9px] font-bold leading-none text-white" style={{ background: `color-mix(in srgb, ${ring} 80%, var(--surface-solid))` }}>
                     {position}{starter.pos_rank}
                   </span>
@@ -125,6 +132,7 @@ export function DepthChartField({ chart, asOf, stats, season, weeksLabel, topPer
                     style={{ backgroundImage: starter.headshot_url ? `url('${starter.headshot_url}')` : undefined, boxShadow: `0 0 0 2px ${ring}, 0 6px 18px -8px rgba(0,0,0,.6)` }}
                     aria-label={starter.name}
                   >
+                    {!starter.headshot_url && <NoPhoto name={starter.name} className="text-[17px]" />}
                     <span className="absolute -bottom-[7px] left-1/2 -translate-x-1/2 rounded px-1.5 py-0.5 text-[10px] font-bold leading-none text-white" style={{ background: `color-mix(in srgb, ${ring} 80%, var(--surface-solid))` }}>
                       {position}{starter.pos_rank}
                     </span>
