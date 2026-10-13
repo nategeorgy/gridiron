@@ -1300,9 +1300,10 @@ def weekly_finishes(
     scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'ppr:te_rec=1.5'"),
     min_games: int = Query(1, ge=1, le=22, description="Games played to be listed"),
     limit: int = Query(30, ge=1, le=60),
+    sort: str = Query("total", pattern="^(total|ppg)$", description="Who is top: total points or points per game"),
     db: Session = Depends(get_db),
 ) -> dict:
-    """A position's top scorers by points per game, with their finish every week.
+    """A position's top scorers by total points (or per game), with their finish every week.
 
     Each finish ranks everyone at the position with a stat line that week, in the
     request's scoring, the same number as the player's game log and the Query Builder.
@@ -1322,7 +1323,7 @@ def weekly_finishes(
         raise HTTPException(status_code=404, detail="No seasons are loaded")
 
     result = build_weekly_finishes(
-        db, config, target, upper, season_type=season_type, min_games=min_games, limit=limit,
+        db, config, target, upper, season_type=season_type, min_games=min_games, limit=limit, sort=sort,
     )
     return {**result, "scoring": config.model_dump()}
 

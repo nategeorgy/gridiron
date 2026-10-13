@@ -141,14 +141,14 @@ function ScaleKey({ position, league }) {
 }
 
 export function WeeklyFinishesCard({ season, scoring, league, position, onPositionChange, minGames, result, isLoading, isError }) {
-  const [sort, setSort] = useState({ key: "ppg", descending: true });
+  const [sort, setSort] = useState({ key: "total", descending: true });
   const weeks = result?.weeks ?? [];
-  const { top, start, dud } = anchors(position, league);
+  const { top } = anchors(position, league);
 
   const rows = useMemo(() => {
     const withSummary = (result?.data ?? []).map((row) => ({ ...row, ...summarize(row, position, league) }));
     const value = (row) => ({ total: row.fantasy_points, ppg: row.fantasy_ppg, top: row.top, duds: row.duds })[sort.key];
-    // Ties keep the endpoint's order, which is points per game.
+    // Ties keep the endpoint's order, which is total points.
     return withSummary
       .map((row, index) => ({ row, index }))
       .sort((a, b) => (sort.descending ? value(b.row) - value(a.row) : value(a.row) - value(b.row)) || a.index - b.index)
@@ -175,7 +175,7 @@ export function WeeklyFinishesCard({ season, scoring, league, position, onPositi
     </th>
   );
 
-  const sub = [season, scoringLabel(scoring), `${league.teams}-team league`, `top PPG, ${minGames}+ games`]
+  const sub = [season, scoringLabel(scoring), `${league.teams}-team league`, `most points, ${minGames}+ games`]
     .filter(Boolean)
     .join(" · ");
 
@@ -239,13 +239,8 @@ export function WeeklyFinishesCard({ season, scoring, league, position, onPositi
         </div>
       )}
       {rows.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-start justify-between gap-x-6 gap-y-4 pb-3">
+        <div className="mt-3 pb-3">
           <ScaleKey position={position} league={league} />
-          <p className="text-[11px] text-faint">
-            Yellow is {position}
-            {start}, the last {position} a {league.teams}-team league starts. Duds: games outside the top {dud}. Sort by
-            any column on the right.
-          </p>
         </div>
       )}
       <CardLink to={`/leaderboards/fantasy?positions=${position}`}>Full fantasy board</CardLink>

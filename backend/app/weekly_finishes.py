@@ -1,5 +1,7 @@
 """Weekly finishes: one position's top scorers, with where each finished every week.
 
+"Top" is total points by default (``sort="total"``), or points per game.
+
 The home page's Weekly Finishes card (October 2026) draws a player-by-week grid: each
 cell is the player's finish at his position that week, coloured by how deep a league
 starts the position. The finish is the Query Builder's (``app/query_builder.py``), which
@@ -58,8 +60,9 @@ def build_weekly_finishes(
     season_type: str = "REG",
     min_games: int = 1,
     limit: int = 30,
+    sort: str = "total",
 ) -> dict:
-    """The top ``limit`` players at ``position`` by points per game, week by week."""
+    """The top ``limit`` players at ``position`` by total points (or points per game), week by week."""
     frame = get_frame(db)
     scored = get_scored(db, config)
     mask = (
@@ -110,7 +113,8 @@ def build_weekly_finishes(
             "upcoming": upcoming,
         })
 
-    players.sort(key=lambda player: (-player["fantasy_ppg"], player["name"]))
+    first, second = ("fantasy_points", "fantasy_ppg") if sort == "total" else ("fantasy_ppg", "fantasy_points")
+    players.sort(key=lambda player: (-player[first], -player[second], player["name"]))
     return {
         "data": players[:limit],
         "total": len(players),
@@ -118,6 +122,7 @@ def build_weekly_finishes(
         "season_type": season_type,
         "position": position,
         "min_games": min_games,
+        "sort": sort,
         "weeks": schedule_weeks,
         "last_week": last_week,
     }

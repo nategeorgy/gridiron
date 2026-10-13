@@ -166,12 +166,19 @@ export function Home() {
     () => Object.fromEntries((facePlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
     [facePlayers],
   );
-  // --- Weekly finishes: the position's top scorers, week by week. The games floor is
+  // --- Weekly finishes: the position's top scorers by total points, week by week. The games floor is
   //     stated for a full season (9 of 18) and scaled to the weeks played. ---
   const minFinishGames = scaledMinGames(9, weeksPlayed(season, lastPlayed));
   const finishes = useWeeklyFinishes(
     useMemo(
-      () => ({ season, position: finishPosition, scoring, min_games: minFinishGames, limit: FINISH_LIMITS[finishPosition] }),
+      () => ({
+        season,
+        position: finishPosition,
+        scoring,
+        min_games: minFinishGames,
+        limit: FINISH_LIMITS[finishPosition],
+        sort: "total",
+      }),
       [season, finishPosition, scoring, minFinishGames],
     ),
     { enabled: Boolean(season) },

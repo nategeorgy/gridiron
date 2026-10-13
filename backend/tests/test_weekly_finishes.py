@@ -121,10 +121,14 @@ def test_a_traded_players_byes_follow_him(client: TestClient, league: dict) -> N
     assert traded["byes"] == [2, 4] and traded["upcoming"] == []
 
 
-def test_sorted_by_points_per_game_and_floored_by_games(client: TestClient, league: dict) -> None:
+def test_sorted_by_total_or_per_game_and_floored_by_games(client: TestClient, league: dict) -> None:
     result = _finishes(client)
-    ppg = [row["fantasy_ppg"] for row in result["data"]]
-    assert ppg == sorted(ppg, reverse=True)
+    # PPR totals: Steady 27.0 over two games, Missed 14.0 in one, Traded 21.0 over two.
+    assert [row["name"] for row in result["data"]] == ["Steady Receiver", "Traded Receiver", "Missed Receiver"]
+    # Per game, Missed's one 14-point game beats Steady's 13.5 and Traded's 10.5 averages.
+    per_game = _finishes(client, sort="ppg")
+    assert [row["name"] for row in per_game["data"]] == ["Missed Receiver", "Steady Receiver", "Traded Receiver"]
+    assert client.get(URL, params={"season": SEASON, "sort": "rank"}).status_code == 422
     steady = _row(result, "Steady Receiver")
     assert steady["games"] == 2 and steady["fantasy_ppg"] == pytest.approx((15.0 + 12.0) / 2)
 

@@ -24,14 +24,12 @@ export const SIGNALS_SEASON = 2026;
  * instead of appearing under a heading that has stopped being true.
  */
 export const EXPECTED_VS_ACTUAL = [
-  "00-0037834", // Brock Purdy
-  "00-0036355", // Justin Herbert
-  "00-0037228", // Jaylen Warren
   "00-0038597", // Chase Brown
-  "00-0039064", // Zay Flowers
-  "00-0034348", // Courtland Sutton
-  "00-0033288", // George Kittle
-  "00-0034753", // Mark Andrews
+  "00-0038559", // Michael Wilson
+  "00-0040122", // Ashton Jeanty
+  "00-0038124", // Christian Watson
+  "00-0036555", // Chuba Hubbard
+  "00-0037228", // Jaylen Warren
 ];
 
 /**
@@ -39,7 +37,7 @@ export const EXPECTED_VS_ACTUAL = [
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0037247", "00-0036358"], // George Pickens, CeeDee Lamb
+  players: ["00-0040667", "00-0038124"], // Matthew Golden, Christian Watson
   caption: String(SIGNALS_SEASON),
 };
 
@@ -52,10 +50,10 @@ export const FEATURED_MATCHUP = {
 export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
-  // One week: Malik Nabers's 20 targets and Isaiah Likely's 13, 33 of Winston's 52.
-  weeks: "5",
-  passerId: "00-0031503", // Jameis Winston
-  team: "NYG",
+  // The whole season: Amon-Ra St. Brown 57 of Goff's 188 targets through Week 5.
+  weeks: "",
+  passerId: "00-0033106", // Jared Goff
+  team: "DET",
 };
 
 /**

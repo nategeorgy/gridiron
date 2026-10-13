@@ -805,9 +805,9 @@ GET /api/v1/games/scoreboard                 ← M10 the week just played beside
                                                names its own
 GET /api/v1/stats/trending                   ← M10 who is gaining or losing work over a
                                                trailing window. ?direction=up|down
-GET /api/v1/stats/weekly-finishes            ← a position's top scorers by PPG with their
+GET /api/v1/stats/weekly-finishes            ← a position's top scorers by total points with their
                                                finish every week, byes from the schedule
-                                               (the home page grid). position=, min_games=
+                                               (the home page grid). position=, min_games=, sort=total|ppg
 
 # Explore (September 2026). Play-level views, all public, all but the Query Builder
 # served through cached_response. weeks= and situation=all|red_zone|late_downs apply.
