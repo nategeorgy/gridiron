@@ -60,8 +60,9 @@ export const HIGHLIGHTED_VIZ = {
  * Record Book entries: a week's standout line set against every season since 2009,
  * answered live by the Query Builder (`/explore/query`).
  *
- * - `leaders`: a seasons search cut at `lastWeek`, drawn as a top-five list with the
- *   featured player's season highlighted.
+ * - `leaders`: a seasons search cut at `lastWeek`, drawn as a ranked list (the query's
+ *   `limit`) with the featured player's season highlighted. It ranks by fantasy points
+ *   unless the entry names a `stat` (and its `format`).
  * - `count`: how many games since 2009 match `where`, and how many of them this season;
  *   `playerId`/`week` pick the featured game out of the same search for its line.
  *   `seasonCount: false` leaves the "this season" clause off.
@@ -75,23 +76,26 @@ export const RECORD_BOOK = {
       kind: "leaders",
       playerId: "00-0039139", // Jahmyr Gibbs
       title: "Most fantasy points by a running back through Week 5",
-      query: { grain: "seasons", positions: "RB", last_week: 5, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
+      query: { grain: "seasons", positions: "RB", last_week: 5, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
     },
     {
+      // A record: Zach Ertz (2018) and Jake Ferguson (2025) had 41.
+      kind: "leaders",
+      playerId: "00-0037744", // Trey McBride
+      title: "Most catches by a tight end through Week 5",
+      stat: "receptions",
+      format: "int",
+      query: { grain: "seasons", positions: "TE", last_week: 5, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
+    },
+    {
+      // The other is Jalen Hurts, Week 15 of 2022. A quarterback scores the same in every
+      // preset, so the 32-point bound holds whichever scoring the reader picked.
       kind: "count",
-      playerId: "00-0039851", // Drake Maye
-      title: "370+ passing yards, 4+ passing TDs and a rushing TD",
+      playerId: "00-0039910", // Jayden Daniels
+      title: "32+ fantasy points without a touchdown pass",
       seasonCount: false,
-      query: { grain: "games", where: "passing_yards:370:,passing_tds:4:,rushing_tds:1:", sort: "passing_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.passing_yards} yards, ${row.passing_tds} TDs, ${row.rushing_tds} rushing TD`,
-    },
-    {
-      // The other 2026 game is CeeDee Lamb's 21 in Week 4.
-      kind: "count",
-      playerId: "00-0039337", // Malik Nabers
-      title: "20+ targets in a game",
-      query: { grain: "games", where: "targets:20:,receptions::,receiving_yards::", sort: "targets", order: "desc", limit: 200 },
-      line: (row) => `${row.targets} targets, ${row.receptions} catches, ${row.receiving_yards} yards`,
+      query: { grain: "games", positions: "QB", where: "fantasy_points:32:,passing_tds::0,rushing_yards::,rushing_tds::", sort: "fantasy_points", order: "desc", limit: 50 },
+      line: (row) => `${row.fantasy_points.toFixed(1)} points, ${row.rushing_yards} rush yds, ${row.rushing_tds} rush TDs`,
     },
   ],
 };
