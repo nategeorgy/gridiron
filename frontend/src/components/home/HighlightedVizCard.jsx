@@ -1,7 +1,7 @@
 // Highlighted Viz of the Week (October 2026): one Explore chart, large, at the top of the page.
 //
 // The pick is `HIGHLIGHTED_VIZ` in constants/signals.js. Only the selection is written
-// down: the headline, the lede and every number beside the chart are read from the same
+// down: the passer's name and every number beside the chart are read from the same
 // `/explore/network` response the Passing Network page draws, so the card cannot say
 // something the chart does not show. The chart is Explore's own `NetworkChart`, and it
 // exports through the same branded-image dialog.
@@ -27,19 +27,6 @@ function Stat({ label, value }) {
       <div className="stat-num mt-1 text-[22px] font-bold text-fg">{value}</div>
     </div>
   );
-}
-
-/** "JSN took 14 of them, 32% of the throws. Barner was next with 9, 1.1 yards downfield on average." */
-function lede(shown, total) {
-  const [first, second] = shown;
-  if (!first) return null;
-  const share = Math.round((first.targets / total) * 100);
-  let text = `${first.name} took ${first.targets} of them, ${share}% of the throws.`;
-  if (second) {
-    text += ` ${second.name} was next with ${second.targets}`;
-    text += second.adot === null ? "." : `, ${second.adot.toFixed(1)} yards downfield on average.`;
-  }
-  return text;
 }
 
 export function HighlightedVizCard({ pick, network, shape, isLoading, isError }) {
@@ -92,9 +79,8 @@ export function HighlightedVizCard({ pick, network, shape, isLoading, isError })
           <div className="contents min-[1100px]:grid min-[1100px]:min-w-0 min-[1100px]:gap-5">
             <div className="max-[1099px]:order-1">
               <h2 className="text-[22px] font-bold leading-tight tracking-tight text-fg [text-wrap:balance] sm:text-[28px]">
-                Where {passer.name}&apos;s {totals.targets} targets went
+                {passer.name} {pick.weeks ? `Week ${pick.weeks}` : "Season Long"} Pass Attempts
               </h2>
-              <p className="mt-2 max-w-[70ch] text-[14px] leading-relaxed text-muted sm:text-[15px]">{lede(shape.shown, totals.targets)}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2 max-[1099px]:order-3 sm:grid-cols-4">

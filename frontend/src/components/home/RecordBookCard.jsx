@@ -14,10 +14,13 @@ import { scoringLabel } from "../../constants/scoring";
 import { formatStat } from "../../utils/format";
 
 function LeadersEntry({ entry, scoring }) {
+  // An entry ranks by fantasy points unless it names its own stat (catches, touchdowns).
+  const stat = entry.stat ?? "fantasy_points";
+  const format = entry.format ?? 1;
   const search = useQuerySearch({ ...entry.query, scoring });
   const rows = search.data?.rows ?? [];
   const featured = rows.find((row) => row.player_id === entry.playerId);
-  const top = rows[0]?.fantasy_points ?? 0;
+  const top = rows[0]?.[stat] ?? 0;
   // Bars run from 60% of the leader up, so a list of near neighbours still shows its order.
   const floor = top * 0.6;
 
@@ -27,7 +30,10 @@ function LeadersEntry({ entry, scoring }) {
         <Headshot url={(featured ?? rows[0])?.headshot_url} name={(featured ?? rows[0])?.name ?? ""} size={46} />
         <div className="min-w-0 text-[14px] leading-snug text-fg">
           <b>{entry.title}</b>
-          <span className="block text-[11.5px] text-faint">Any season since {FIRST_SEASON} {"·"} {scoringLabel(scoring)}</span>
+          <span className="block text-[11.5px] text-faint">
+            Any season since {FIRST_SEASON}
+            {stat === "fantasy_points" ? ` · ${scoringLabel(scoring)}` : ""}
+          </span>
         </div>
       </div>
       {search.isLoading && <CardState isLoading rows={3} />}
@@ -42,13 +48,13 @@ function LeadersEntry({ entry, scoring }) {
               <span
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{
-                  width: `${top > floor ? Math.max(4, ((row.fantasy_points - floor) / (top - floor)) * 100) : 100}%`,
+                  width: `${top > floor ? Math.max(4, ((row[stat] - floor) / (top - floor)) * 100) : 100}%`,
                   background: mine ? "var(--accent)" : "color-mix(in srgb, var(--fg) 30%, transparent)",
                 }}
               />
             </span>
             <span className={`stat-num text-right text-[13.5px] ${mine ? "font-bold text-fg" : "text-muted"}`}>
-              {formatStat(row.fantasy_points, 1)}
+              {formatStat(row[stat], format)}
             </span>
           </div>
         );

@@ -1,13 +1,14 @@
 // Command Center: the app's home (rebuilt October 2026 as "Option C").
 //
-// Four bands, top to bottom (constants/homeLayout.js):
+// Five bands, top to bottom (constants/homeLayout.js):
 //
 //   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
 //      Explore chart;
 //   2. a row of Explore cards: the team landscape, air yards, the record book;
-//   3. the week's players: Trending Players, the watchlist and Expected vs Actual on the
-//      left, Last Week's Scoring and a reader-picked Head to Head on the right;
-//   4. the Week N Preview: the slate, then matchups by position and implied team totals.
+//   3. the week's players: the watchlist and Expected vs Actual on the left, a
+//      reader-picked Head to Head on the right;
+//   4. Weekly Finishes: a position's top scorers and where each finished every week;
+//   5. the Week N Preview: the slate, then matchups by position and implied team totals.
 //
 // **Two seasons are in play from January to September.** The fantasy cards describe the
 // last season *played*; the ticker and the week-ahead cards describe the schedule, which
@@ -16,10 +17,11 @@ import { cloneElement, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useLeaderboard } from "../hooks/useLeaderboard";
-import { useGames, useScoreboard } from "../hooks/useGames";
+import { useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
 import { useCompare, useNetwork, usePlayersById, useScatter, useTargetBoard } from "../hooks/useExplore";
 import { useSos } from "../hooks/useDraftBoard";
+import { useWeeklyFinishes } from "../hooks/useWeeklyFinishes";
 import { useTeamsList, useTeamStats } from "../hooks/useTeamStats";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
@@ -29,18 +31,10 @@ import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
+import { scaledMinGames, weeksPlayed } from "../utils/qualify";
 import { getPlayers } from "../services/players";
 import { parseLeague } from "../constants/league";
-import {
-  EXPECTED_VS_ACTUAL,
-  FEATURED_MATCHUP,
-  HIGHLIGHTED_VIZ,
-  RECORD_BOOK,
-  SIGNALS_SEASON,
-  TRENDING_BASIS,
-  TRENDING_PLAYERS,
-  trendingWindows,
-} from "../constants/signals";
+import { EXPECTED_VS_ACTUAL, FEATURED_MATCHUP, HIGHLIGHTED_VIZ, RECORD_BOOK, SIGNALS_SEASON } from "../constants/signals";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 import { shapeNetwork } from "../components/explore/NetworkChart";
 
@@ -49,7 +43,7 @@ import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
 import { AirYardsCard } from "../components/home/AirYardsCard";
 import { TeamLandscapeCard } from "../components/home/TeamLandscapeCard";
 import { RecordBookCard } from "../components/home/RecordBookCard";
-import { TrendingPlayersCard } from "../components/home/TrendingPlayersCard";
+import { FINISH_LIMITS, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
 import { HeadToHeadCard, matchupMetrics } from "../components/home/HeadToHeadCard";
 import { ExpectedActualCard } from "../components/home/ExpectedActualCard";
 import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
@@ -57,7 +51,7 @@ import { EnvironmentsCard } from "../components/home/EnvironmentsCard";
 import { SlateCard } from "../components/home/SlateCard";
 import { BandHeading } from "../components/home/BandHeading";
 import { dateParts } from "../components/schedule/kickoff";
-import { MyPlayersCard, WEEKLY_TAB_POSITIONS, WeeklyScoringCard } from "../components/home/BoardCards";
+import { MyPlayersCard } from "../components/home/BoardCards";
 
 // The same fixed-PPR fallback the leaderboard uses when the backend cannot score yet.
 const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
@@ -77,11 +71,6 @@ const MY_PLAYERS_PERCENTILES = [
   "route_participation",
   "rush_attempt_share",
 ].join(",");
-
-/** Index rows by player id, so a card can look a pick up rather than scanning. */
-function byPlayerId(rows) {
-  return Object.fromEntries((rows ?? []).map((row) => [row.player_id, row]));
-}
 
 const WEEKDAY_NAMES = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
 
@@ -106,10 +95,10 @@ export function Home() {
   const [league] = useLeague();
   const leagueConfig = useMemo(() => parseLeague(league), [league]);
   const { currentSeason: season } = useSeasons();
-  const { metrics, supportsScoring } = useMetrics();
+  const { supportsScoring } = useMetrics();
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
-  const [weekPosition, setWeekPosition] = useState("ALL");
+  const [finishPosition, setFinishPosition] = useState(FINISH_POSITIONS[1]);
 
   // --- The scoreboard: the ticker's finals, and the week ahead for the bottom band.
   //     Which two weeks those are is the server's call. ---
@@ -129,84 +118,6 @@ export function Home() {
   // --- The Explore row. ---
   const airYards = useTargetBoard({ season, positions: "WR", min_targets: AIR_YARDS_MIN_TARGETS });
   const teamBoard = useTeamStats({ season, scoring });
-
-  // --- Trending Players: one week of usage for a hand-picked few, each with his own
-  //     four stats and his own basis for the change beneath them (constants/signals.js).
-  //     Scoped to that week alone (`weeks=`) and in the reader's scoring. ---
-  const trendingIds = useMemo(
-    () => [
-      ...new Set(TRENDING_PLAYERS.players.flatMap((pick) => [pick.playerId, pick.against].filter(Boolean))),
-    ],
-    [],
-  );
-  // Fantasy points are always ranked: the finish chip beside each pick's points reads it,
-  // whether or not any pick shows fantasy points as one of its four stats.
-  const trendingMetrics = useMemo(
-    () => [...new Set(["fantasy_points", ...TRENDING_PLAYERS.players.flatMap((pick) => pick.stats)])].join(","),
-    [],
-  );
-  // Which extra windows the picks actually need. A card of quarterbacks ranked on the
-  // season asks for no previous week; a card with no season ranks asks for no season.
-  const needsPreviousWeek = TRENDING_PLAYERS.players.some(
-    (pick) => (pick.basis ?? TRENDING_BASIS.LAST_WEEK) === TRENDING_BASIS.LAST_WEEK,
-  );
-  const seasonRankIds = TRENDING_PLAYERS.players
-    .filter((pick) => pick.basis === TRENDING_BASIS.SEASON_RANK)
-    .map((pick) => pick.playerId)
-    .join(",");
-  const recentWeeksIds = TRENDING_PLAYERS.players
-    .filter((pick) => pick.basis === TRENDING_BASIS.RECENT_WEEKS)
-    .map((pick) => pick.playerId)
-    .join(",");
-  const windows = trendingWindows(TRENDING_PLAYERS.week, TRENDING_PLAYERS.window ?? 2);
-
-  const trendingParams = useMemo(
-    () => ({
-      season: TRENDING_PLAYERS.season,
-      season_type: "REG",
-      player_ids: trendingIds.join(","),
-      metric: "fantasy_points",
-      ranks: trendingMetrics,
-      scoring,
-      league,
-      limit: trendingIds.length,
-      // A pick can miss games and still be the story; the card is a list, not a board.
-      include_unqualified: true,
-    }),
-    [trendingIds, trendingMetrics, scoring, league],
-  );
-  const trendingNow = useIntelligence(
-    useMemo(() => ({ ...trendingParams, weeks: String(TRENDING_PLAYERS.week) }), [trendingParams]),
-  );
-  const trendingBefore = useIntelligence(
-    useMemo(() => ({ ...trendingParams, weeks: String(TRENDING_PLAYERS.week - 1) }), [trendingParams]),
-    { enabled: needsPreviousWeek && TRENDING_PLAYERS.week > 1 },
-  );
-  const trendingSeason = useIntelligence(
-    useMemo(
-      () => ({ ...trendingParams, player_ids: seasonRankIds, limit: 10 }),
-      [trendingParams, seasonRankIds],
-    ),
-    { enabled: Boolean(seasonRankIds) },
-  );
-  // A RECENT_WEEKS pick reads two windows (weeks 3-4 against 1-2), each one request for
-  // every such pick. Rates come back aggregated over the window, not averaged by week.
-  const recentWeeks = windows.recent.join(",");
-  const earlierWeeks = windows.earlier.join(",");
-  const trendingRecent = useIntelligence(
-    useMemo(
-      () => ({ ...trendingParams, player_ids: recentWeeksIds, limit: 10, weeks: recentWeeks }),
-      [trendingParams, recentWeeksIds, recentWeeks],
-    ),
-    { enabled: Boolean(recentWeeksIds) },
-  );
-  const trendingEarlier = useIntelligence(
-    useMemo(
-      () => ({ ...trendingParams, player_ids: recentWeeksIds, limit: 10, weeks: earlierWeeks }),
-      [trendingParams, recentWeeksIds, earlierWeeks],
-    ),
-    { enabled: Boolean(recentWeeksIds && earlierWeeks) },
-  );
 
   // --- Expected vs Actual: the five picks, plus every other player as a faint dot. ---
   const expectedIds = EXPECTED_VS_ACTUAL.join(",");
@@ -245,10 +156,7 @@ export function Home() {
 
   // Headshots live on the profile, not on an aggregated stat row. One request for every
   // face the page draws.
-  const faceIds = useMemo(
-    () => [...new Set([...trendingIds, ...EXPECTED_VS_ACTUAL])].join(","),
-    [trendingIds],
-  );
+  const faceIds = EXPECTED_VS_ACTUAL.join(",");
   const { data: facePlayers } = useQuery({
     queryKey: ["players", faceIds],
     queryFn: () => getPlayers({ player_ids: faceIds, limit: 30 }),
@@ -258,28 +166,23 @@ export function Home() {
     () => Object.fromEntries((facePlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
     [facePlayers],
   );
-  const trendingGames = useGames({
-    season: TRENDING_PLAYERS.season,
-    week: TRENDING_PLAYERS.week,
-    season_type: "REG",
-    limit: 32,
-  });
-
-  // --- Last week's scoring. Waits for the scoreboard to say which week that was. ---
-  const weeklyParams = useMemo(
-    () => ({
-      season: lastPlayed?.season,
-      week: lastPlayed?.week,
-      season_type: "REG",
-      metric: pointsKey,
-      positions: WEEKLY_TAB_POSITIONS[weekPosition],
-      scoring,
-      order: "desc",
-      limit: 10,
-    }),
-    [lastPlayed?.season, lastPlayed?.week, pointsKey, weekPosition, scoring],
+  // --- Weekly finishes: the position's top scorers by total points, week by week. The games floor is
+  //     stated for a full season (9 of 18) and scaled to the weeks played. ---
+  const minFinishGames = scaledMinGames(9, weeksPlayed(season, lastPlayed));
+  const finishes = useWeeklyFinishes(
+    useMemo(
+      () => ({
+        season,
+        position: finishPosition,
+        scoring,
+        min_games: minFinishGames,
+        limit: FINISH_LIMITS[finishPosition],
+        sort: "total",
+      }),
+      [season, finishPosition, scoring, minFinishGames],
+    ),
+    { enabled: Boolean(season) },
   );
-  const weekly = useLeaderboard(weeklyParams, { enabled: Boolean(lastPlayed?.week) });
 
   // --- Head to Head: the reader's pair rides in the URL, so a matchup is shareable. The
   //     radar's axes follow the first player's position, which the request has to know
@@ -382,24 +285,6 @@ export function Home() {
       <TeamLandscapeCard board={teamBoard.data} season={season} isLoading={teamBoard.isLoading} isError={teamBoard.isError} />
     ),
     recordBook: <RecordBookCard book={RECORD_BOOK} scoring={scoring} />,
-    trending: (
-      <TrendingPlayersCard
-        picks={TRENDING_PLAYERS.players}
-        week={TRENDING_PLAYERS.week}
-        rows={byPlayerId(trendingNow.data?.data)}
-        previousRows={byPlayerId(trendingBefore.data?.data)}
-        seasonRows={byPlayerId(trendingSeason.data?.data)}
-        recentRows={byPlayerId(trendingRecent.data?.data)}
-        earlierRows={byPlayerId(trendingEarlier.data?.data)}
-        windows={windows}
-        headshots={headshots}
-        games={trendingGames.data?.data}
-        league={leagueConfig}
-        metrics={metrics}
-        isLoading={trendingNow.isLoading || trendingRecent.isLoading}
-        isError={trendingNow.isError}
-      />
-    ),
     myPlayers:
       isSignedIn && favorites.length > 0 ? (
         <MyPlayersCard
@@ -421,17 +306,6 @@ export function Home() {
         isError={expected.isError}
       />
     ),
-    weekly: (
-      <WeeklyScoringCard
-        week={lastPlayed?.week}
-        scoring={scoring}
-        position={weekPosition}
-        onPositionChange={setWeekPosition}
-        result={weekly.data}
-        isLoading={scoreboard.isLoading || weekly.isLoading}
-        isError={weekly.isError}
-      />
-    ),
     headToHead: (
       <HeadToHeadCard
         caption={FEATURED_MATCHUP.caption}
@@ -441,6 +315,19 @@ export function Home() {
         isLoading={!pairPosition || matchup.isLoading}
         isError={matchup.isError}
         onChange={(next) => setPairText(next.join(","))}
+      />
+    ),
+    weeklyFinishes: (
+      <WeeklyFinishesCard
+        season={finishes.data?.season ?? season}
+        scoring={scoring}
+        league={leagueConfig}
+        position={finishPosition}
+        onPositionChange={setFinishPosition}
+        minGames={minFinishGames}
+        result={finishes.data}
+        isLoading={finishes.isLoading}
+        isError={finishes.isError}
       />
     ),
     previewHeading: upcoming?.games?.length ? (

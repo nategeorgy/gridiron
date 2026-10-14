@@ -15,85 +15,6 @@
 export const SIGNALS_SEASON = 2026;
 
 /**
- * How a Trending Players row measures its change. "Trending" is not one question, so a
- * pick names the comparison that makes its own case:
- *
- * - `LAST_WEEK` — the same player, the week before. The usual one: a role grew.
- * - `TEAMMATE` — another player, the *same* week (`against` names him). For a job
- *   taken off someone, where the interesting number is the split, not the history.
- * - `SEASON_RANK` — no change at all. The season value with its rank at the position,
- *   for a player who is not trending so much as simply playing well, and whose weekly
- *   deltas would understate that.
- * - `RECENT_WEEKS`: the last few weeks against the same number before them (the card's
- *   `window`, so weeks 3-4 against 1-2). For a role that changed a couple of weeks ago,
- *   where this week against last would compare two weeks of the new role.
- */
-export const TRENDING_BASIS = {
-  LAST_WEEK: "last-week",
-  TEAMMATE: "teammate",
-  SEASON_RANK: "season-rank",
-  RECENT_WEEKS: "recent-weeks",
-};
-
-/**
- * The two windows a `RECENT_WEEKS` pick compares, ending at `week`: with a window of 2
- * and Week 4, `{ recent: [3, 4], earlier: [1, 2] }`. The earlier window is cut at Week 1,
- * so it can be shorter (or empty) early in a season.
- */
-export function trendingWindows(week, size) {
-  const span = (last) => Array.from({ length: size }, (_, index) => last - size + 1 + index).filter((value) => value >= 1);
-  return { recent: span(week), earlier: span(week - size) };
-}
-
-/**
- * The card at the top of the page (renamed from Week Standouts, September 2026).
- *
- * Each pick names **its own four stats**, because the reason a player is on the card
- * differs: a receiver's case is targets and air yards, a back's is the share of the
- * backfield he took, a quarterback's is where he ranks. Stats are metric ids from the
- * registry, so labels and formats come from `/metrics` rather than being repeated here.
- *
- * Every number is scoped to `week` (the intelligence endpoint's `weeks=`), so the card
- * keeps describing Week 2 once later weeks have been played.
- */
-export const TRENDING_PLAYERS = {
-  season: 2026,
-  week: 4,
-  // Weeks per side for a RECENT_WEEKS pick.
-  window: 2,
-  players: [
-    {
-      // Weeks 3-4 against 1-2: target share 25% to 34%, air-yard share 36% to 58%.
-      playerId: "00-0041438", // Carnell Tate
-      basis: TRENDING_BASIS.RECENT_WEEKS,
-      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
-    },
-    {
-      // Week 4 against 3. His points fell (17.0 to 11.1) while the role grew.
-      playerId: "00-0040719", // Bhayshul Tuten
-      stats: ["rush_attempt_share", "snap_share", "opportunity_share", "route_participation"],
-    },
-    {
-      // Weeks 3-4 against 1-2: target share 23% to 36%, air-yard share 38% to 52%.
-      playerId: "00-0038559", // Michael Wilson
-      basis: TRENDING_BASIS.RECENT_WEEKS,
-      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
-    },
-    {
-      // Weeks 3-4 against 1-2: snaps 60% to 77%, rush share 40% to 65%.
-      playerId: "00-0037840", // Kyren Williams
-      basis: TRENDING_BASIS.RECENT_WEEKS,
-      stats: ["snap_share", "rush_attempt_share", "opportunity_share", "target_share"],
-    },
-    {
-      // Week 4 against 3. Snap share and route participation fell, so they stay off.
-      playerId: "00-0037816", // Romeo Doubs
-      stats: ["target_share", "targets_per_route_run", "fantasy_points_per_route_run", "air_yards_share"],
-    },
-  ],
-};
-
-/**
  * Expected vs Actual (September 2026). One plot replaced the two rail cards
  * (Underperformers and Regression Candidates), which drew the same gap twice on two
  * scales and never said what caused it.
@@ -103,12 +24,12 @@ export const TRENDING_PLAYERS = {
  * instead of appearing under a heading that has stopped being true.
  */
 export const EXPECTED_VS_ACTUAL = [
-  "00-0036555", // Chuba Hubbard
+  "00-0038597", // Chase Brown
   "00-0038559", // Michael Wilson
-  "00-0040126", // Colston Loveland
   "00-0040122", // Ashton Jeanty
-  "00-0029604", // Kirk Cousins
-  "00-0035719", // Deebo Samuel Sr.
+  "00-0038124", // Christian Watson
+  "00-0036555", // Chuba Hubbard
+  "00-0037228", // Jaylen Warren
 ];
 
 /**
@@ -130,47 +51,50 @@ export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
   // The season so far. Name `weeks` (e.g. "4") to feature a single week instead.
-  passerId: "00-0037834", // Brock Purdy
-  team: "SF",
+  passerId: "00-0033106", // Jared Goff
+  team: "DET",
 };
 
 /**
  * Record Book entries: a week's standout line set against every season since 2009,
  * answered live by the Query Builder (`/explore/query`).
  *
- * - `leaders`: a seasons search cut at `lastWeek`, drawn as a top-five list with the
- *   featured player's season highlighted.
+ * - `leaders`: a seasons search cut at `lastWeek`, drawn as a ranked list (the query's
+ *   `limit`) with the featured player's season highlighted. It ranks by fantasy points
+ *   unless the entry names a `stat` (and its `format`).
  * - `count`: how many games since 2009 match `where`, and how many of them this season;
  *   `playerId`/`week` pick the featured game out of the same search for its line.
  *   `seasonCount: false` leaves the "this season" clause off.
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 4,
+  week: 5,
   entries: [
     {
-      // Second only to Wes Welker's 2011, with CeeDee Lamb third.
+      // Second only to Christian McCaffrey's 2019.
       kind: "leaders",
-      playerId: "00-0038543", // Jaxon Smith-Njigba
-      title: "Most fantasy points by a receiver through Week 4",
-      query: { grain: "seasons", positions: "WR", last_week: 4, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 5 },
+      playerId: "00-0039139", // Jahmyr Gibbs
+      title: "Most fantasy points by a running back through Week 5",
+      query: { grain: "seasons", positions: "RB", last_week: 5, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
     },
     {
-      kind: "count",
-      playerId: "00-0040124", // Tetairoa McMillan
-      title: "14+ catches, 190+ yards and 2+ touchdowns",
-      seasonCount: false,
-      query: { grain: "games", where: "receptions:14:,receiving_yards:190:,receiving_tds:2:", sort: "receiving_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.receptions} catches, ${row.receiving_yards} yards, ${row.receiving_tds} TDs`,
+      // A record: Zach Ertz (2018) and Jake Ferguson (2025) had 41.
+      kind: "leaders",
+      playerId: "00-0037744", // Trey McBride
+      title: "Most catches by a tight end through Week 5",
+      stat: "receptions",
+      format: "int",
+      query: { grain: "seasons", positions: "TE", last_week: 5, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
     },
     {
-      // Receptions can't pass targets, so 13+ catches on 13 or fewer targets is exactly 13 of 13.
+      // The other is Jalen Hurts, Week 15 of 2022. A quarterback scores the same in every
+      // preset, so the 32-point bound holds whichever scoring the reader picked.
       kind: "count",
-      playerId: "00-0035229", // T.J. Hockenson
-      title: "13 catches on 13 targets",
+      playerId: "00-0039910", // Jayden Daniels
+      title: "32+ fantasy points without a touchdown pass",
       seasonCount: false,
-      query: { grain: "games", where: "receptions:13:,targets::13,receiving_yards::", sort: "receiving_yards", order: "desc", limit: 200 },
-      line: (row) => `${row.receptions} of ${row.targets} targets for ${row.receiving_yards} yards`,
+      query: { grain: "games", positions: "QB", where: "fantasy_points:32:,passing_tds::0,rushing_yards::,rushing_tds::", sort: "fantasy_points", order: "desc", limit: 50 },
+      line: (row) => `${row.fantasy_points.toFixed(1)} points, ${row.rushing_yards} rush yds, ${row.rushing_tds} rush TDs`,
     },
   ],
 };

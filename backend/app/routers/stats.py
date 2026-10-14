@@ -65,6 +65,7 @@ from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
 from app.seasons import current_season, latest_scheduled_season, week_bounds
 from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
+from app.weekly_finishes import build_weekly_finishes
 from app.trending import (
     DEFAULT_WINDOW as TREND_WINDOW,
     DIRECTIONS as TREND_DIRECTIONS,
@@ -111,6 +112,10 @@ _COMPARE_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=32)
 # so ~45 MB a visit on a warm process (October 2026). A body is ~66 kB, so 48 entries
 # (every position, window and scoring preset for the current season) hold ~3 MB.
 _SOS_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=48)
+# Weekly finishes (October 2026) read no stat lines, only the Query Builder's frame, but
+# the home page asks for them on every visit. A 30-player body is ~25 kB in December, so
+# every position in every scoring preset is ~0.4 MB.
+_FINISHES_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=32)
 
 
 def _round(value: float | None, digits: int = 3) -> float | None:
@@ -1280,6 +1285,47 @@ def strength_of_schedule(
         "scoring": config.model_dump(),
         **context,
     }
+
+
+# --- Weekly finishes (October 2026) ------------------------------------------------
+
+
+@router.get("/weekly-finishes")
+@cached_response(_FINISHES_RESPONSES)
+def weekly_finishes(
+    request: Request,
+    season: int | None = Query(None, description="Defaults to the newest season with stats"),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    position: str = Query("RB", description="QB, RB, WR or TE"),
+    scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'ppr:te_rec=1.5'"),
+    min_games: int = Query(1, ge=1, le=22, description="Games played to be listed"),
+    limit: int = Query(30, ge=1, le=60),
+    sort: str = Query("total", pattern="^(total|ppg)$", description="Who is top: total points or points per game"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """A position's top scorers by total points (or per game), with their finish every week.
+
+    Each finish ranks everyone at the position with a stat line that week, in the
+    request's scoring, the same number as the player's game log and the Query Builder.
+    Byes come from the schedule, so a missing week is told apart from a missed game.
+    Tiers are left to the client, which knows the league's lineup.
+    """
+    upper = position.upper()
+    if upper not in ("QB", "RB", "WR", "TE"):
+        raise HTTPException(status_code=400, detail=f"Unknown position '{position}'")
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    target = season if season is not None else current_season(db)
+    if target is None:
+        raise HTTPException(status_code=404, detail="No seasons are loaded")
+
+    result = build_weekly_finishes(
+        db, config, target, upper, season_type=season_type, min_games=min_games, limit=limit, sort=sort,
+    )
+    return {**result, "scoring": config.model_dump()}
 
 
 # --- The Vegas board (M6.4) --------------------------------------------------------
