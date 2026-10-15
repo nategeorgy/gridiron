@@ -11,9 +11,11 @@
 # far the largest download and the slowest-changing input, so folding it into the daily
 # run would spend most of the minutes here re-deriving numbers that did not move.
 #
-#   daily     — rosters, the schedule (which carries the betting lines), depth charts,
-#               and the consensus rankings
-#   Wednesday — the full stats chain, and only once the season has kicked off
+#   daily:     rosters, the schedule (which carries the betting lines), depth charts,
+#               and the consensus rankings; and in season, the newest week's stats and
+#               plays, so a game's recap fills in the morning after it is played
+#   Wednesday: the full stats chain over the whole season, and only once the season
+#               has kicked off
 #
 # Wednesday because a week's numbers are not final until Monday night has been played
 # and Tuesday's official stat corrections have landed.
@@ -138,6 +140,12 @@ jobs:
       - name: Refresh coaching staff
         working-directory: pipeline
         run: python ingest_staff.py
+      # The game previews' injury report. Teams publish Wednesday to Friday (Monday and
+      # Tuesday for a Thursday game), so a daily refresh trails each report by a day at
+      # most. Idles outside the season: the stats clock has no new season to load.
+      - name: Refresh injury reports
+        working-directory: pipeline
+        run: python ingest_injuries.py
 
   # The stats chain: weekly numbers, then the three enrichment passes over them.
   stats:
@@ -231,3 +239,62 @@ jobs:
           python ingest_pfr.py          --seasons $SEASONS
           python ingest_team_stats.py   --seasons $SEASONS
           python ingest_plays.py        --seasons $SEASONS
+
+  # The newest week's games, every day in season (October 2026). The game pages' recaps
+  # read stat lines, expected points, snaps, team sums and play-by-play, and the weekly
+  # chain above writes those only on Wednesday, so a Sunday game had no recap for three
+  # days. This redoes just the newest week with a finished game: Monday picks up Sunday,
+  # Tuesday Monday night, Friday the Thursday game. Earlier weeks, stat corrections and
+  # the tracking feeds (Next Gen, PFR, target depth) stay with Wednesday's full run.
+  #
+  # One week rather than the season because the season grows: measured in Week 5 of
+  # 2026, a full-season pass of these five scripts touched about 54,000 pages even when
+  # nothing changed, and one week about 16,000, which stays that size all season.
+  # Skipped on Wednesday, when the full run covers it.
+  recaps:
+    name: Newest week for the game pages
+    needs: roster
+    if: ${{ !cancelled() && github.event.schedule == '0 10 * * *' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.PIPELINE_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Read the season clock and the newest played week
+        id: clock
+        working-directory: pipeline
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime
+          import db
+          import seasons
+          season = seasons.latest_season(seasons.STATS)
+          print(f"season={season}")
+          print(f"in_season={str(seasons.in_season()).lower()}")
+          print(f"week={db.newest_played_week(season) or ''}")
+          print(f"wednesday={str(datetime.datetime.now(datetime.UTC).isoweekday() == 3).lower()}")
+          PY
+
+      - name: Refresh the newest week
+        if: steps.clock.outputs.in_season == 'true' && steps.clock.outputs.week != '' && steps.clock.outputs.wednesday != 'true'
+        working-directory: pipeline
+        env:
+          SEASON: ${{ steps.clock.outputs.season }}
+          WEEK: ${{ steps.clock.outputs.week }}
+        run: |
+          python ingest_stats.py      --seasons $SEASON --weeks $WEEK
+          python ingest_expected.py   --seasons $SEASON --weeks $WEEK
+          python ingest_usage.py      --seasons $SEASON --weeks $WEEK
+          python ingest_team_stats.py --seasons $SEASON --weeks $WEEK
+          python ingest_plays.py      --seasons $SEASON --weeks $WEEK

@@ -40,7 +40,7 @@ import nflreadpy as nfl
 import polars as pl
 from sqlalchemy import text
 
-from db import get_engine, load_stat_keys, upsert
+from db import add_weeks_argument, games_in_weeks, get_engine, load_stat_keys, only_games, upsert
 from seasons import PARTICIPATION, SNAPS, STATS, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -147,7 +147,7 @@ def collect_routes(season: int, positions: dict[str, str]) -> dict[tuple, dict]:
     return collected
 
 
-def derive_route_rates(seasons: list[int]) -> int:
+def derive_route_rates(seasons: list[int], weeks: list[int] | None = None) -> int:
     """Set targets/yards per route run from each row's own targets and yards.
 
     Derived in SQL after the route counts land, so the numerator and denominator
@@ -168,18 +168,18 @@ def derive_route_rates(seasons: list[int]) -> int:
         UPDATE player_stats
            SET targets_per_route_run = {tprr},
                yards_per_route_run = {yprr}
-         WHERE season = ANY(:seasons)
+         WHERE season = ANY(:seasons){" AND week = ANY(:weeks)" if weeks else ""}
            AND routes_run IS NOT NULL
            AND (targets_per_route_run, yards_per_route_run) IS DISTINCT FROM ({tprr}, {yprr})
         """
     )
     with get_engine().begin() as connection:
-        result = connection.execute(statement, {"seasons": seasons})
+        result = connection.execute(statement, {"seasons": seasons, **({"weeks": list(weeks)} if weeks else {})})
     logger.info("route rates: TPRR/YPRR changed on %d rows", result.rowcount)
     return result.rowcount
 
 
-def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
+def ingest_usage(seasons: list[int], include_routes: bool = True, weeks: list[int] | None = None) -> int:
     """Update snap and route usage columns for the given seasons."""
     # The two sources here have *different* windows, so each is clamped to its own
     # rather than both to the stats clock. Snaps come from PFR and start in 2012;
@@ -236,7 +236,7 @@ def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
             row.setdefault("route_participation", None)
 
     written = upsert(
-        "player_stats", list(merged.values()),
+        "player_stats", only_games(merged.values(), games_in_weeks(seasons, weeks)),
         conflict_columns=["player_id", "game_id"],
     )
     # Re-derived for the snap seasons too. In season those carry routes loaded by hand
@@ -245,7 +245,7 @@ def ingest_usage(seasons: list[int], include_routes: bool = True) -> int:
     # targets or yards. Only rows that already have a route count are touched.
     rate_seasons = sorted(set(route_seasons) | set(snap_seasons))
     if rate_seasons:
-        derive_route_rates(rate_seasons)
+        derive_route_rates(rate_seasons, weeks)
     logger.info(
         "usage: updated %d stat lines (snaps %s, routes %s; skipped %d with no "
         "matching stat line)",
@@ -265,5 +265,6 @@ if __name__ == "__main__":
         "--skip-routes", action="store_true",
         help="Snaps only — skip the participation/play-by-play route derivation.",
     )
+    add_weeks_argument(parser)
     args = parser.parse_args()
-    ingest_usage(args.seasons, include_routes=not args.skip_routes)
+    ingest_usage(args.seasons, include_routes=not args.skip_routes, weeks=args.weeks)

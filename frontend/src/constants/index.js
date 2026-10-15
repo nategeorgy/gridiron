@@ -10,6 +10,16 @@
 // this floor: see utils/availability.js and the registry's per-metric windows.
 export const FIRST_SEASON = 2009;
 
+// The first season with game pages (every play, every drive, recaps and previews). A scope
+// decision like FIRST_SEASON, mirrored in backend/app/models/game_detail.py and
+// pipeline/seasons.py; tests/test_game_pages.py fails if the three disagree.
+export const FIRST_GAME_PAGE_SEASON = 2025;
+
+/** Does this game have a page? Every game from FIRST_GAME_PAGE_SEASON on, played or not. */
+export function hasGamePage(season) {
+  return Number(season) >= FIRST_GAME_PAGE_SEASON;
+}
+
 /**
  * The season a date falls in, for use *before* /seasons answers.
  *

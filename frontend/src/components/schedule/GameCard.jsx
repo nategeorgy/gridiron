@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { ImpliedSplit } from "./ImpliedSplit";
 import { formatKickoffShort } from "./kickoff";
 import { formatStat } from "../../utils/format";
+import { GameCardLink, TEAM_LINK_LAYER } from "../game/GameLink";
 
 function TeamLine({ teamId, abbreviation, logoUrl, score, spread, played, won }) {
   return (
@@ -19,7 +20,7 @@ function TeamLine({ teamId, abbreviation, logoUrl, score, spread, played, won })
       )}
       <Link
         to={`/teams/${teamId}`}
-        className={`text-sm font-bold transition hover:text-accent ${
+        className={`${TEAM_LINK_LAYER} text-sm font-bold transition hover:text-accent ${
           played ? (won ? "text-fg" : "text-muted") : spread != null ? "text-fg" : "text-muted"
         }`}
       >
@@ -47,7 +48,8 @@ export function GameCard({ game }) {
   const homeFavoured = game.favorite === game.home_abbreviation;
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface-2 p-3">
+    <div className="relative flex flex-col gap-2.5 rounded-2xl border border-line bg-surface-2 p-3 transition hover:border-[color:var(--border-strong)]">
+      <GameCardLink game={game} />
       <div className="flex items-center justify-between text-[10.5px] text-faint">
         <span>{formatKickoffShort(game.kickoff_time)}</span>
         <span className="flex items-center gap-1.5">

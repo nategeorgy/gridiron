@@ -15,3 +15,4 @@ class TeamOut(BaseModel):
     division: str | None = None
     logo_url: str | None = None
     color: str | None = None
+    color2: str | None = None

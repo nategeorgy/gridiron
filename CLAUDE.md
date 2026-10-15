@@ -129,7 +129,9 @@ teams (
   conference    VARCHAR(10),         -- "AFC" / "NFC"
   division      VARCHAR(20),         -- e.g. "AFC West"
   logo_url      VARCHAR(255),        -- nflverse's ESPN logo, hotlinked like headshots
-  color         VARCHAR(7)           -- primary colour, tints the team page header
+  color         VARCHAR(7),          -- primary colour, tints the team page header
+  color2        VARCHAR(7)           -- second colour: a game page draws one team in it when
+                                     -- both share a primary (Bills and Rams are both blue)
 )
 
 -- Players
@@ -186,6 +188,7 @@ games (
   under_odds     INT,
 
   -- Game context (M6)
+  stadium       VARCHAR(100),        -- October 2026, for the game pages
   roof          VARCHAR(20),
   surface       VARCHAR(20),
   div_game      BOOLEAN
@@ -541,6 +544,47 @@ player_run_lanes (
   stuffed INT, short INT, medium INT, explosive INT,
   PRIMARY KEY (player_id, game_id, lane)
 )
+
+-- The game pages (October 2026), 2025 on (FIRST_GAME_PAGE_SEASON, a scope decision mirrored
+-- in pipeline/seasons.py, backend/app/models/game_detail.py and frontend constants). Every
+-- play of a game, for the score by quarter, the win probability, the scoring plays and the
+-- play-by-play. Replaced per game, never upserted. ~47,000 plays a season.
+game_plays (
+  game_id VARCHAR(50) REFERENCES games(game_id), play_id INT,
+  season INT, week INT, season_type VARCHAR(20),
+  sequence INT,                 -- play-by-play's order; play_id is not always monotonic
+  quarter SMALLINT, clock VARCHAR(5), quarter_seconds SMALLINT,   -- quarter 5+ is overtime
+  team_id INT REFERENCES teams(team_id),   -- the offense
+  drive SMALLINT, down SMALLINT, distance SMALLINT, yardline VARCHAR(10), yardline_100 SMALLINT,
+  play_type VARCHAR(20), description TEXT,  -- play-by-play's own text, shortened by the API
+  yards SMALLINT, epa FLOAT, success BOOLEAN, is_pass BOOLEAN, is_rush BOOLEAN,
+  touchdown BOOLEAN, turnover BOOLEAN, penalty BOOLEAN,
+  home_wp FLOAT, home_wp_post FLOAT,       -- SPREAD-ADJUSTED home win probability, before/after
+  home_score SMALLINT, away_score SMALLINT, -- the running score after the play
+  score_type VARCHAR(4),                    -- TD | FG | XP | 2PT | SAF | DEF2, scoring plays only
+  score_team_id INT REFERENCES teams(team_id),
+  PRIMARY KEY (game_id, play_id)
+)
+
+-- Every possession. Yard lines from the offense's OWN goal line, so every drive runs one way.
+game_drives (
+  game_id VARCHAR(50) REFERENCES games(game_id), drive SMALLINT,
+  season INT, week INT, season_type VARCHAR(20), team_id INT REFERENCES teams(team_id),
+  quarter SMALLINT, clock VARCHAR(5), elapsed INT,   -- game seconds before the drive began
+  start_yardline SMALLINT, end_yardline SMALLINT, plays SMALLINT, yards SMALLINT,
+  first_downs SMALLINT, seconds SMALLINT, result VARCHAR(30), points SMALLINT, started_by VARCHAR(40),
+  PRIMARY KEY (game_id, drive)
+)
+
+-- Each team's weekly injury report, for the previews. Current state per team-week, so
+-- replaced, never upserted. player_id has NO foreign key: the report names linemen.
+injury_reports (
+  season INT, season_type VARCHAR(20), week INT, team_id INT REFERENCES teams(team_id),
+  player_id VARCHAR(50), name VARCHAR(100), position VARCHAR(10),
+  status VARCHAR(30),           -- Out / Doubtful / Questionable; NULL = practice report only
+  injury VARCHAR(60), practice_status VARCHAR(60),
+  PRIMARY KEY (season, season_type, week, team_id, player_id)
+)
 ```
 
 ---
@@ -803,6 +847,17 @@ GET /api/v1/games/scoreboard                 ← M10 the week just played beside
                                                coming up. Straddles two seasons from
                                                January to September, so each window
                                                names its own
+GET /api/v1/games/{game_id}                  ← one game's header (October 2026), 2025 on:
+                                               score by quarter or kickoff, line, rest,
+                                               has_plays / has_stats. Older games 404
+GET /api/v1/games/{game_id}/recap            ← a played game: win probability, swings,
+                                               scoring plays, drives, team box, the week's
+                                               ranks, every line priced in scoring=
+GET /api/v1/games/{game_id}/plays            ← every play, for the play-by-play tab
+GET /api/v1/games/{game_id}/preview          ← an upcoming game: form ATS, slate ranks,
+                                               meetings since 2009, rosters week by week
+                                               with consensus rank and matchup, injuries,
+                                               tape and tendencies. scoring=
 GET /api/v1/stats/trending                   ← M10 who is gaining or losing work over a
                                                trailing window. ?direction=up|down
 GET /api/v1/stats/weekly-finishes            ← a position's top scorers by total points with their
@@ -1333,6 +1388,18 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       tables pin their player or team column (`.pin-col`), and the SVG charts that were scaled down
       from a desktop box draw a phone-sized one (`usePhone()`). Desktop was compared page by page at
       1280px against main. Frontend only
+- [x] Game pages (October 2026). Every game from 2025 on has a page at `/games/:gameId`, linked from
+      the home ticker and slate, the Schedule cards and grid, team schedules and player game logs. A
+      **recap** once played (Summary with win probability, swings, scoring and possessions; Box Score;
+      Fantasy; Usage; Targets & Runs; Team Stats; Drives; Play-by-Play) and a **preview** before (Matchup;
+      Fantasy with this week's consensus rank and matchup; Usage Trends; Tale of the Tape; Depth Charts;
+      History). Three tables (`game_plays`, `game_drives`, `injury_reports`, migration `7922d74faa17`, RLS
+      on) plus `games.stadium` and `teams.color2`; `app/game_pages.py`, four routes on `routers/games.py`,
+      `pipeline/ingest_injuries.py` (daily) and game plays from `ingest_plays.py`. Chosen from three
+      mockups: Game Center, with two of Fantasy Desk's tabs on the recap and one on the preview, and no
+      defense or kicking box score. ⚠️ **Production needs `ingest_plays.py --seasons 2025 2026`,
+      `ingest_injuries.py --seasons 2025 2026`, `ingest_teams.py` and `ingest_schedules.py` run once
+      after merge** to fill the new tables and columns
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is
@@ -2046,6 +2113,28 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - ⚠️ **`useLeague()` returns the spec string, not a league.** Anything that reads
   `teams` or `lineup` (`FinishChip`, `finishTier`) needs `parseLeague(spec)` first; the
   Query Builder's first build passed the string and blanked the page
+- **Game pages start at `FIRST_GAME_PAGE_SEASON` (2025)**, a scope decision mirrored in three
+  places (`pipeline/seasons.py`, `backend/app/models/game_detail.py`, `frontend/src/constants/index.js`;
+  `tests/test_game_pages.py` fails if they drift). An older game is a 404 and gets no link. Widening it
+  is the constant plus `ingest_plays.py` for the added seasons
+- **A recap fills in the morning after the game.** The score arrives within minutes (the daily schedule
+  ingest); stat lines, expected points, snaps, team sums and play-by-play come with the **daily
+  newest-week job** (`recaps` in `pipeline.yml`, in season, skipped Wednesdays): it runs the five
+  scripts with `--weeks <newest played week>`, so Monday fills Sunday, Tuesday Monday night and Friday
+  Thursday night. Until then a tab says so (`has_stats`, `has_plays` on `GET /games/{id}`). Earlier
+  weeks, stat corrections and the tracking feeds stay with Wednesday's full run. **One week, never the
+  season, in the daily job**: a full-season pass touched ~54,000 pages in Week 5 even writing nothing,
+  and grows every week; one week was ~16,000 and stays that size
+- **This week's consensus ranks come from `fp_latest_weekly`** (twice daily) as well as the Thursday
+  ECR archive (`ingest_rankings.py --weekly`). Its `ppr-rb`/`ppr-wr`/`ppr-te`/`qb` pages are the same
+  pages the archive's `weekly-*` boards are scraped from, so they are stored under the same ranking
+  types with their own scrape date; the newest scrape is the one a page reads. `weekly-op` (overall)
+  is archive-only
+- **The win probability is nflfastR's spread-adjusted one** (`vegas_home_wp`), so a chart starts where
+  the market started rather than at 50%; `home_wp_post` is `vegas_home_wp + vegas_home_wpa`
+- **Two teams on one chart need two colours that differ** (`components/game/colors.js`): many pairings
+  share a primary, and many primaries vanish on the dark theme. Use `gameColors(away, home)`, never
+  `team.color` straight, and `teamText()` for text drawn in a team colour
 - The pipeline scripts should be idempotent — safe to run multiple times without
   duplicating data (use INSERT ... ON CONFLICT DO UPDATE)
 - fantasy_ppg_ppr, fantasy_ppg_half, fantasy_ppg_std, and routes_run_per_game are

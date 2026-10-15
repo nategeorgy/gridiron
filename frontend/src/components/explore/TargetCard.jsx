@@ -59,8 +59,8 @@ export function PlayerTargetCard({ player, season }) {
   );
 }
 
-export function TeamTargetCard({ teamId, teamName, season, weeks, weeksLabel }) {
-  const { data, isLoading, isError } = useTeamTargets(teamId, { season, weeks: weeks || undefined });
+export function TeamTargetCard({ teamId, teamName, season, seasonType, weeks, weeksLabel }) {
+  const { data, isLoading, isError } = useTeamTargets(teamId, { season, season_type: seasonType, weeks: weeks || undefined });
   return (
     <section className="glass-card min-w-0 p-4">
       <CardTitle title="Where the offense throws" sub={`Every targeted pass · ${weeksLabel}`} />

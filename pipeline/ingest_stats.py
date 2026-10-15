@@ -15,7 +15,7 @@ import logging
 import nflreadpy as nfl
 import polars as pl
 
-from db import get_engine, load_team_id_map, upsert
+from db import add_weeks_argument, games_in_weeks, get_engine, load_team_id_map, only_games, upsert
 from availability import mask_unavailable, unavailable_columns
 from franchises import contemporary_code_map, resolve
 from seasons import STATS, clamp_seasons, default_seasons
@@ -147,7 +147,7 @@ def compute_pbp_derived(seasons: list[int]) -> dict[str, dict]:
     return derived
 
 
-def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
+def ingest_stats(seasons: list[int], include_pbp: bool = True, weeks: list[int] | None = None) -> int:
     """Load weekly stats for the given seasons and upsert player_stats rows."""
     # This feed has nothing for a season that has not kicked off yet, and the
     # loaders take every season in one call — so an unavailable season would fail
@@ -270,7 +270,7 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True) -> int:
         }, season)
 
     written = upsert(
-        "player_stats", list(rows.values()),
+        "player_stats", only_games(rows.values(), games_in_weeks(seasons, weeks)),
         conflict_columns=["player_id", "game_id"],
     )
     logger.info(
@@ -296,5 +296,6 @@ if __name__ == "__main__":
         help="Skip the play-by-play derivations — red zone, inside 10/5/2, "
              "unrealized air yards (faster, leaves those columns NULL).",
     )
+    add_weeks_argument(parser)
     args = parser.parse_args()
-    ingest_stats(args.seasons, include_pbp=not args.skip_pbp)
+    ingest_stats(args.seasons, include_pbp=not args.skip_pbp, weeks=args.weeks)

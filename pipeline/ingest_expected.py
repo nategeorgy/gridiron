@@ -34,7 +34,7 @@ import logging
 
 import nflreadpy as nfl
 
-from db import load_stat_keys, upsert
+from db import add_weeks_argument, games_in_weeks, load_stat_keys, only_games, upsert
 from availability import mask_unavailable
 from seasons import EXPECTED, clamp_seasons, default_seasons
 
@@ -88,7 +88,7 @@ def _share(numerator: float | None, denominator: float | None) -> float | None:
 
 
 
-def ingest_expected(seasons: list[int]) -> int:
+def ingest_expected(seasons: list[int], weeks: list[int] | None = None) -> int:
     """Load ffopportunity weekly data and update expected + market-share columns."""
     # ffopportunity's model starts in 2006 and, like every stats feed, has nothing
     # for a season that has not kicked off. Either end raises inside nflreadpy, and
@@ -145,7 +145,7 @@ def ingest_expected(seasons: list[int]) -> int:
         rows[(player_id, game_id)] = mask_unavailable(row, season) if season else row
 
     written = upsert(
-        "player_stats", list(rows.values()),
+        "player_stats", only_games(rows.values(), games_in_weeks(seasons, weeks)),
         conflict_columns=["player_id", "game_id"],
     )
     logger.info(
@@ -164,5 +164,6 @@ if __name__ == "__main__":
         "--seasons", type=int, nargs="+", default=default_seasons(EXPECTED),
         help="Seasons to ingest (default: 2006 — the model's first season — onwards).",
     )
+    add_weeks_argument(parser)
     args = parser.parse_args()
-    ingest_expected(args.seasons)
+    ingest_expected(args.seasons, weeks=args.weeks)

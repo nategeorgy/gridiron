@@ -101,6 +101,7 @@ def ingest_schedules(seasons: list[int]) -> int:
             "over_odds": record.get("over_odds"),
             "under_odds": record.get("under_odds"),
             # Game context.
+            "stadium": (record.get("stadium") or "")[:100] or None,
             "roof": record.get("roof"),
             "surface": record.get("surface"),
             "div_game": _as_bool(record.get("div_game")),

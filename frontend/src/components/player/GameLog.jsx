@@ -19,6 +19,7 @@ import { StatTooltip, useStatTooltip } from "../StatTooltip";
 import { GAMELOG_LABELS, SIGNED_COLUMNS, gameValue } from "../../constants/playerPage";
 import { FinishChip } from "./FinishChip";
 import { metricTip } from "./metricTip";
+import { MaybeGameLink } from "../game/GameLink";
 
 /**
  * The season's whole slate, not only the weeks with a stat line: every fixture his team
@@ -171,11 +172,15 @@ export function GameLog({ games, sections, controls, metrics, position, league, 
                     >
                       <span className="inline-block w-5 text-right md:w-auto">{game.week}</span>
                       <span className="ml-2 inline-block w-9 md:hidden">
-                        {bye ? "BYE" : game.opponent_abbreviation ?? "—"}
+                        {bye ? "BYE" : (
+                          <MaybeGameLink gameId={game.game_id} season={season} className="hover:text-accent">{game.opponent_abbreviation ?? "—"}</MaybeGameLink>
+                        )}
                       </span>
                     </td>
                     <td className={`stat-num hidden px-2 py-1 text-[12.5px] md:table-cell ${bye ? "" : "text-muted"}`}>
-                      {bye ? "BYE" : game.opponent_abbreviation ?? "—"}
+                      {bye ? "BYE" : (
+                        <MaybeGameLink gameId={game.game_id} season={season} className="hover:text-accent" title="Game page">{game.opponent_abbreviation ?? "—"}</MaybeGameLink>
+                      )}
                     </td>
                     {kind === "played" ? (
                       <>

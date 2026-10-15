@@ -38,6 +38,10 @@ class _JoinedEngine:
         with self._connection.begin_nested():
             yield self._connection
 
+    @contextmanager
+    def connect(self):
+        yield self._connection
+
 
 @pytest.fixture
 def pipeline(_engine, monkeypatch):
@@ -252,3 +256,36 @@ class TestReplaceScoped:
     def test_scopes_are_chunked_without_splitting_a_group(self, pipeline):
         chunks = list(pipeline._scope_chunks({"a": [1, 2, 3], "b": [1], "c": [1], "d": [1, 2]}, 2))
         assert chunks == [["a"], ["b", "c"], ["d"]]
+
+
+class TestNewestWeek:
+    """The daily in-season refresh redoes only the newest week with a finished game."""
+
+    def _schedule(self, pipeline):
+        teams = _seed_teams(pipeline)
+        aaa, bbb = teams["AAA"], teams["BBB"]
+        pipeline.upsert("games", [
+            {"game_id": "2026_04_AAA_BBB", "season": 2026, "week": 4, "season_type": "REG",
+             "home_team_id": bbb, "away_team_id": aaa, "home_score": 20, "away_score": 17},
+            {"game_id": "2026_05_BBB_AAA", "season": 2026, "week": 5, "season_type": "REG",
+             "home_team_id": aaa, "away_team_id": bbb, "home_score": 10, "away_score": 13},
+            {"game_id": "2026_06_AAA_BBB", "season": 2026, "week": 6, "season_type": "REG",
+             "home_team_id": bbb, "away_team_id": aaa, "home_score": None, "away_score": None},
+        ], ["game_id"])
+
+    def test_the_newest_played_week_skips_unplayed_ones(self, pipeline):
+        self._schedule(pipeline)
+        assert pipeline.newest_played_week(2026) == 5
+        assert pipeline.newest_played_week(2030) is None
+
+    def test_rows_are_kept_only_for_that_week(self, pipeline):
+        self._schedule(pipeline)
+        games = pipeline.games_in_weeks([2026], [5])
+        assert games == {"2026_05_BBB_AAA"}
+        rows = [{"game_id": "2026_04_AAA_BBB"}, {"game_id": "2026_05_BBB_AAA"}]
+        assert pipeline.only_games(rows, games) == [{"game_id": "2026_05_BBB_AAA"}]
+
+    def test_no_weeks_means_every_game(self, pipeline):
+        rows = [{"game_id": "2026_04_AAA_BBB"}, {"game_id": "2026_05_BBB_AAA"}]
+        assert pipeline.games_in_weeks([2026], None) is None
+        assert pipeline.only_games(rows, None) == rows

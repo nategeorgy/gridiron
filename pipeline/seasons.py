@@ -55,6 +55,12 @@ logger = logging.getLogger("pipeline.seasons")
 # this and re-running the backfill is what re-admits older seasons.
 FIRST_SEASON = 2009
 
+# The first season the game pages cover (every play, every drive, the injury reports).
+# A scope decision like FIRST_SEASON, not a feed's floor: the pages were asked for "last
+# season, this season, and going forward" in October 2026. Mirrored in the backend
+# (app/models/game_detail.py) and the frontend (constants/index.js).
+FIRST_GAME_PAGE_SEASON = 2025
+
 
 @dataclass(frozen=True)
 class Feed:
@@ -111,6 +117,9 @@ PFR = Feed("pfr", clock="stats", first_season=2018)
 # load_ftn_charting: FTN's play charting (formation, motion, play action, blitzers,
 # box count, drops), 2022+. Published weekly in season, unlike participation.
 FTN = Feed("ftn", clock="stats", first_season=2022)
+# load_injuries: the weekly practice and game-status reports. Published through a season
+# as it is played, so it follows the stats clock.
+INJURIES = Feed("injuries", clock="stats", first_season=2009)
 
 
 def latest_season(feed: Feed = STATS) -> int:

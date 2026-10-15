@@ -15,6 +15,7 @@ import { useGames } from "../hooks/useGames";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
 import { getTeams } from "../services/teams";
+import { MaybeGameLink } from "../components/game/GameLink";
 
 export function ScheduleGridView({ board }) {
   const { seasons, currentSeason } = useSeasons({ statsOnly: false });
@@ -43,6 +44,8 @@ export function ScheduleGridView({ board }) {
 
     for (const game of games) {
       record(game.home_team_id, game.home_abbreviation, game.week, {
+        gameId: game.game_id,
+        season: game.season,
         opponent: game.away_abbreviation,
         home: true,
         played: game.played,
@@ -52,6 +55,8 @@ export function ScheduleGridView({ board }) {
         implied: game.home_implied,
       });
       record(game.away_team_id, game.away_abbreviation, game.week, {
+        gameId: game.game_id,
+        season: game.season,
         opponent: game.home_abbreviation,
         home: false,
         played: game.played,
@@ -146,8 +151,10 @@ export function ScheduleGridView({ board }) {
                             : "color-mix(in srgb, var(--neg) 16%, transparent)";
                       return (
                         <td key={week} className="px-0.5 py-1">
-                          <span
-                            className="block rounded px-1.5 py-1 text-center text-[11px] leading-tight"
+                          <MaybeGameLink
+                            gameId={cell.gameId}
+                            season={cell.season}
+                            className="block rounded px-1.5 py-1 text-center text-[11px] leading-tight transition hover:brightness-125"
                             style={{ background: tint }}
                             title={
                               cell.played
@@ -161,7 +168,7 @@ export function ScheduleGridView({ board }) {
                               {cell.home ? "" : <span className="text-faint">@</span>}
                               {cell.opponent}
                             </span>
-                          </span>
+                          </MaybeGameLink>
                         </td>
                       );
                     })}

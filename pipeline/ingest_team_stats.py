@@ -39,7 +39,7 @@ import nflreadpy as nfl
 import polars as pl
 from sqlalchemy import text
 
-from db import get_engine, load_team_id_map, upsert
+from db import add_weeks_argument, games_in_weeks, get_engine, load_team_id_map, only_games, upsert
 from franchises import contemporary_code_map, resolve
 from seasons import FTN, PARTICIPATION, PBP, SNAPS, clamp_seasons, default_seasons
 
@@ -274,7 +274,7 @@ def _existing_games(seasons: list[int]) -> set[str]:
         return {g for (g,) in connection.execute(text("SELECT game_id FROM games WHERE season = ANY(:s)"), {"s": seasons})}
 
 
-def ingest_team_stats(seasons: list[int]) -> int:
+def ingest_team_stats(seasons: list[int], weeks: list[int] | None = None) -> int:
     """Write team_game_stats and team_personnel for the given seasons. Returns rows written."""
     seasons = clamp_seasons(seasons, PBP)
     if not seasons:
@@ -283,6 +283,7 @@ def ingest_team_stats(seasons: list[int]) -> int:
     team_ids = load_team_id_map()
     codes = contemporary_code_map(seasons)
     games = _existing_games(seasons)
+    recent = games_in_weeks(seasons, weeks)
     written = 0
     for season in seasons:
         stats, personnel = collect_season(season)
@@ -295,6 +296,7 @@ def ingest_team_stats(seasons: list[int]) -> int:
                 continue
             r.update(team_id=team, opponent_id=opponent, season=season, week=int(r["week"]))
             rows.append({k: (float(v) if isinstance(v, (int, float)) and k not in ("team_id", "opponent_id", "season", "week") else v) for k, v in r.items()})
+        rows = only_games(rows, recent)
         written += upsert("team_game_stats", rows, conflict_columns=["team_id", "game_id", "side"])
         logger.info("team stats %d: wrote %d team-game-side rows (skipped %d)", season, len(rows), skipped)
         if personnel is not None:
@@ -305,7 +307,7 @@ def ingest_team_stats(seasons: list[int]) -> int:
                     continue
                 r.update(team_id=team, season=season, week=int(r["week"]))
                 prow.append(r)
-            written += upsert("team_personnel", prow, conflict_columns=["team_id", "game_id", "grouping"])
+            written += upsert("team_personnel", only_games(prow, recent), conflict_columns=["team_id", "game_id", "grouping"])
             logger.info("team personnel %d: wrote %d rows", season, len(prow))
     return written
 
@@ -349,8 +351,9 @@ if __name__ == "__main__":
                         help="Seasons to ingest (default: 2009 through the latest played season).")
     parser.add_argument("--snaps-only", action="store_true",
                         help="Refresh only the snap-count columns on existing rows (no play-by-play).")
+    add_weeks_argument(parser)
     args = parser.parse_args()
     if args.snaps_only:
         ingest_snap_sums(args.seasons)
     else:
-        ingest_team_stats(args.seasons)
+        ingest_team_stats(args.seasons, weeks=args.weeks)

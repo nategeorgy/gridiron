@@ -45,6 +45,7 @@ class Game(Base):
     under_odds: Mapped[int | None] = mapped_column(Integer)
 
     # --- Game context (M6). Environment a fantasy projection cares about. ---
+    stadium: Mapped[str | None] = mapped_column(String(100))
     roof: Mapped[str | None] = mapped_column(String(20))
     surface: Mapped[str | None] = mapped_column(String(20))
     div_game: Mapped[bool | None] = mapped_column(Boolean)

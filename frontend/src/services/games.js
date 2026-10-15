@@ -31,3 +31,30 @@ export async function getScoreboard() {
   const { data } = await api.get("/games/scoreboard");
   return data;
 }
+
+/**
+ * One game's header (October 2026): both teams, the score by quarter or the kickoff,
+ * the line, and whether play-by-play and stat lines have arrived yet.
+ */
+export async function getGame(gameId) {
+  const { data } = await api.get(`/games/${gameId}`);
+  return data;
+}
+
+/** A finished game's recap, priced in `scoring`. */
+export async function getGameRecap(gameId, params) {
+  const { data } = await api.get(`/games/${gameId}/recap`, { params });
+  return data;
+}
+
+/** Every play of a finished game, in order. */
+export async function getGamePlays(gameId) {
+  const { data } = await api.get(`/games/${gameId}/plays`);
+  return data;
+}
+
+/** An upcoming game's preview, priced in `scoring`. */
+export async function getGamePreview(gameId, params) {
+  const { data } = await api.get(`/games/${gameId}/preview`, { params });
+  return data;
+}

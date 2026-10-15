@@ -58,6 +58,11 @@ const EXPLORE_VIEWS = {
   "explore-query": page(() => import("./pages/QueryBuilderView"), "QueryBuilderView"),
 };
 
+// A game page (October 2026), loaded on first visit like the Explore tools: it draws the
+// passing network and the target map, which a visitor who never opens a game should not
+// download with the home page.
+const GamePage = page(() => import("./pages/GamePage"), "GamePage");
+
 function PageLoading() {
   return <div className="glass-card p-6 text-center text-sm text-muted">Loading…</div>;
 }
@@ -184,6 +189,7 @@ export function App() {
         <Route path="teams/leaderboards" element={<Navigate to="/teams/leaderboards/overview" replace />} />
         <Route path="teams/leaderboards/:tab" element={<TeamLeaderboards />} />
         <Route path="teams/:teamId" element={<TeamProfile />} />
+        <Route path="games/:gameId" element={<Suspense fallback={<PageLoading />}><GamePage /></Suspense>} />
 
         {/* Design-token studio — a build tool, not a page of the product, so it
             exists only under `npm run dev` and is never linked from the nav.
