@@ -42,7 +42,9 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_personnel.py                   # 10b. in-season personnel (hand-loaded)
 .venv/bin/python ingest_team_stats.py --snaps-only --seasons 2013 2014  # 10c. snap-count columns only
 .venv/bin/python ingest_staff.py                       # 11. coaching staff (from a CSV)
-.venv/bin/python ingest_plays.py --seasons 2024        # 12. every target + run lanes (Explore)
+.venv/bin/python ingest_plays.py --seasons 2024        # 12. every target + run lanes (Explore), and
+                                                       #     every play + drive from 2025 (game pages)
+.venv/bin/python ingest_injuries.py                    # 13. the weekly injury reports (game previews)
 ```
 
 Steps 8 and 9 are independent of 4–7 — they need only `players` (and `teams`) — but
@@ -110,7 +112,12 @@ best run in chunks of four or five seasons rather than as one call.
 perishable domains don't go stale: **rosters + schedule daily** (the schedule feed is
 where betting lines arrive and move) and the **stats chain on Wednesdays in-season**,
 once Monday night has been played and Tuesday's official stat corrections have landed.
-It refreshes only the current season — the backfill above stays a one-off, since
+In season it also runs a **daily newest-week job** for the game pages' recaps:
+`ingest_stats`, `ingest_expected`, `ingest_usage`, `ingest_team_stats` and `ingest_plays`
+with `--seasons <current> --weeks <newest played week>` (`db.newest_played_week`), so a
+game's recap fills in the morning after. `--weeks` limits a run to those weeks' games
+(`db.games_in_weeks` / `only_games`); a full-season pass reads several times as much and
+grows with every week. It refreshes only the current season. The backfill above stays a one-off, since
 re-downloading years of play-by-play weekly would rewrite numbers that cannot change.
 Needs the `PIPELINE_DATABASE_URL` repo secret.
 
@@ -230,6 +237,13 @@ table, at the real week number:
   than the latest-weekly file, which publishes only positional pages. The archive has
   `weekly-op` — the one overall weekly board still published, since `weekly-offense` was
   discontinued in October 2020 — alongside `weekly-qb/rb/wr/te`.
+- **Also the latest-weekly file, for the current week** (October 2026). The archive
+  lands Thursday night, which left game previews without ranks Monday to Thursday.
+  `load_ff_rankings("week")` is refreshed twice a day, and its `ppr-rb`, `ppr-wr`,
+  `ppr-te` and `qb` pages are the pages the archive's `weekly-rb/wr/te/qb` are scraped
+  from (the archive's `fp_page` column says so), so its rows go in under the same
+  ranking types with their own scrape date. An archive row for the same day wins. On
+  2026-10-15 it matched 398 of its 407 QB/RB/WR/TE rows.
 - **The archive is a real time series**, unlike the draft snapshot, so a missed day is
   recoverable and a re-run rewrites rows that already match. This corrects the M6.1 note
   about history accruing only from our first ingest: that is true of the snapshot file,
@@ -320,6 +334,22 @@ disagree about which code a franchise used in a given season (`STL` vs `LA`). Se
   correction can remove or renumber a play, and an upsert would keep the stale row.
 - About 17,000 targets and 6,000 run-lane rows a season; the full 2009 backfill is
   ~310,000 and ~100,000 rows, roughly 90 MB with indexes.
+- **From 2025 (`FIRST_GAME_PAGE_SEASON`) it also writes the game pages' tables**, from
+  the same download: **`game_plays`** (every play: quarter, clock, down and distance,
+  play-by-play's own text, EPA, the running score after the play, the spread-adjusted
+  home win probability before and after, and how a scoring play scored) and
+  **`game_drives`** (every possession: where it started and ended from the offense's
+  own goal line, plays, yards, time of possession, result, points). Administrative rows
+  ("END QUARTER", timeouts) are left out. Replaced per game like the others; about
+  47,000 plays and 6,000 drives a season, 17 MB for 2025 and 2026 to Week 5.
+
+`ingest_injuries.py` loads **`injury_reports`**, each team's weekly report from
+`load_injuries`: game status (Out, Doubtful, Questionable) and practice participation.
+A player on the practice report with no status is kept. Current state per team and
+week, so each team-week is **replaced** rather than upserted (a player taken off the
+report must not stay Questionable). The report names linemen and defenders, so
+`player_id` has no foreign key and the name is stored beside it. Game-page seasons
+only; runs daily in the roster job, defaulting to the current season.
 
 `ingest_staff.py` loads **`team_staff`** from `data/staff/team_staff.csv`, one row per
 person: `team, season, role (hc|oc|dc), order, name, note`. Order puts an in-season

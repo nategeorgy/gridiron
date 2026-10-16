@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
 import { dateParts, formatKickoff, formatKickoffCompact, slotOf, SLOT_ORDER } from "../schedule/kickoff";
 import { formatStat } from "../../utils/format";
+import { GameCardLink, TEAM_LINK_LAYER } from "../game/GameLink";
 
 const VIEWS = [
   { value: "kickoff", label: "By kickoff" },
@@ -67,7 +68,7 @@ function TeamRow({ teamId, abbreviation, logoUrl, record, spread, implied, score
     <div className="flex h-8 items-center gap-1 sm:h-6 sm:gap-2">
       {logoUrl ? <img src={logoUrl} alt="" loading="lazy" className="h-[18px] w-[18px] flex-none object-contain sm:h-5 sm:w-5" /> : <span className="h-[18px] w-[18px] flex-none sm:h-5 sm:w-5" />}
       <span className="flex flex-col max-sm:leading-none sm:contents">
-        <Link to={`/teams/${teamId}`} className={`w-[34px] text-[13px] font-bold hover:text-accent max-sm:leading-tight sm:w-[38px] ${played && !won ? "text-muted" : "text-fg"}`}>
+        <Link to={`/teams/${teamId}`} className={`${TEAM_LINK_LAYER} w-[34px] text-[13px] font-bold hover:text-accent max-sm:leading-tight sm:w-[38px] ${played && !won ? "text-muted" : "text-fg"}`}>
           {abbreviation}
         </Link>
         {record && <span className="stat-num text-[9.5px] text-faint sm:text-[10.5px]">{record}</span>}
@@ -97,7 +98,8 @@ function SlateGame({ game, records, colors }) {
   });
 
   return (
-    <div className="flex flex-col rounded-[14px] border border-line bg-surface-2 px-2 py-2 sm:px-3 sm:py-2.5">
+    <div className="relative flex flex-col rounded-[14px] border border-line bg-surface-2 px-2 py-2 transition hover:border-[color:var(--border-strong)] sm:px-3 sm:py-2.5">
+      <GameCardLink game={game} />
       <div className="mb-1 flex items-center justify-between gap-1.5 whitespace-nowrap text-[9.5px] text-faint sm:mb-1.5 sm:text-[10px]">
         <span className="font-semibold">
           {parts ? `${parts.dow} ` : ""}

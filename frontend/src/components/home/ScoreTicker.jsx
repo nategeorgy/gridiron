@@ -14,6 +14,8 @@ import { Link } from "react-router-dom";
 import { Tabs } from "./primitives";
 import { dateParts, formatKickoffCompact, todayEastern } from "../schedule/kickoff";
 import { formatStat } from "../../utils/format";
+import { gamePath } from "../game/GameLink";
+import { hasGamePage } from "../../constants";
 
 /**
  * Which week the ticker opens on: the slate once the coming week's first game day has
@@ -70,7 +72,10 @@ function useStrip(resetKey) {
     strip.scrollBy({ left: direction * strip.clientWidth * 0.85, behavior: prefersReducedMotion() ? "auto" : "smooth" });
   };
 
+  // A drag that scrolled the strip must not also follow the link it started on.
+  const dragged = useRef(false);
   const endDrag = () => {
+    dragged.current = Boolean(drag.current?.moved);
     drag.current = null;
     setDragging(false);
   };
@@ -94,6 +99,12 @@ function useStrip(resetKey) {
     },
     onPointerUp: endDrag,
     onPointerCancel: endDrag,
+    onClickCapture: (event) => {
+      if (!dragged.current) return;
+      dragged.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+    },
   };
 
   return { ref, edges, dragging, page, handlers };
@@ -128,17 +139,21 @@ function SlateSide({ abbreviation, logoUrl, spread, reverse }) {
   );
 }
 
-function Item({ divided, title, children }) {
-  return (
-    <span title={title} className={`flex flex-none items-center gap-2 px-3 ${divided ? "border-l border-line" : ""}`}>
-      {children}
-    </span>
-  );
+function Item({ divided, title, game, children }) {
+  const className = `flex flex-none items-center gap-2 px-3 ${divided ? "border-l border-line" : ""}`;
+  if (game && hasGamePage(game.season)) {
+    return (
+      <Link to={gamePath(game.game_id)} title={title} draggable={false} className={`${className} rounded-md transition hover:bg-surface-2`}>
+        {children}
+      </Link>
+    );
+  }
+  return <span title={title} className={className}>{children}</span>;
 }
 
 function FinalGame({ game, divided }) {
   return (
-    <Item divided={divided}>
+    <Item divided={divided} game={game}>
       <Side abbreviation={game.away_abbreviation} logoUrl={game.away_logo_url} score={game.away_score} lost={game.winner === "home"} />
       <span className="text-[11px] text-faint">{"·"}</span>
       <Side abbreviation={game.home_abbreviation} logoUrl={game.home_logo_url} score={game.home_score} lost={game.winner === "away"} reverse />
@@ -153,7 +168,7 @@ function SlateGame({ game, divided }) {
     game.total_line != null ? `O/U ${formatStat(game.total_line, 1)}` : "No line yet",
   ].filter(Boolean).join(", ");
   return (
-    <Item divided={divided} title={title}>
+    <Item divided={divided} title={title} game={game}>
       <span className="stat-num whitespace-nowrap text-[10.5px] text-faint">{formatKickoffCompact(game.kickoff_time)}</span>
       <SlateSide abbreviation={game.away_abbreviation} logoUrl={game.away_logo_url} spread={spreadFor(game.away_abbreviation)} />
       <span className="text-[11px] font-semibold text-faint">@</span>

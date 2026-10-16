@@ -2,6 +2,7 @@
 // of schedule by position above them.
 import { Link } from "react-router-dom";
 import { formatStat, ordinal } from "../../utils/format";
+import { MaybeGameLink } from "../game/GameLink";
 
 const POSITIONS = ["QB", "RB", "WR", "TE"];
 
@@ -77,9 +78,11 @@ export function TeamSchedule({ schedule, sos, sosBasis, season, abbreviation, ne
                     </span>
                   </td>
                   <td className="stat-num px-2 py-1.5 text-right">
-                    {game.result ? (
-                      <span className={game.result === "W" ? "text-pos" : game.result === "L" ? "text-neg" : "text-muted"}>{game.result} {game.team_score}–{game.opponent_score}</span>
-                    ) : spreadLabel(abbreviation, game.team_spread) ?? <span className="text-faint">No line</span>}
+                    <MaybeGameLink gameId={game.game_id} season={season} className="transition hover:underline" title={game.result ? "Recap" : "Preview"}>
+                      {game.result ? (
+                        <span className={game.result === "W" ? "text-pos" : game.result === "L" ? "text-neg" : "text-muted"}>{game.result} {game.team_score}–{game.opponent_score}</span>
+                      ) : spreadLabel(abbreviation, game.team_spread) ?? <span className="text-faint">No line</span>}
+                    </MaybeGameLink>
                   </td>
                   <td className="stat-num px-2 py-1.5 text-right text-muted">{game.implied_total != null ? formatStat(game.implied_total, 1) : "—"}</td>
                 </tr>

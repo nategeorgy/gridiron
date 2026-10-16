@@ -19,7 +19,7 @@ from math import isfinite
 from dotenv import load_dotenv
 from sqlalchemy import (
     ColumnElement, Connection, Engine, MetaData, Table, cast, create_engine,
-    literal_column, select, text, tuple_,
+    func, literal_column, select, text, tuple_,
 )
 from sqlalchemy.dialects.postgresql import JSON, JSONB, Insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -376,6 +376,55 @@ def replace_scoped(table_name: str, rows: list[dict], scope_columns: list[str]) 
         rewritten, len(by_scope) - rewritten,
     )
     return len(rows)
+
+
+def games_in_weeks(seasons: list[int], weeks: list[int] | None) -> set[str] | None:
+    """The game ids in these weeks of these seasons, for a run limited to recent games.
+
+    The daily in-season refresh rewrites only the newest week, so a game's recap fills in
+    the morning after it is played, while Wednesday's full run still sweeps the whole
+    season for stat corrections. A full-season run is measured: about 54,000 pages read
+    in Week 5 of 2026 even when nothing changes, and it grows with every week played.
+    Returns None when no weeks were asked for, which ``only_games`` reads as every game.
+    """
+    if not weeks:
+        return None
+    table = _reflect_table("games")
+    with get_engine().connect() as connection:
+        result = connection.execute(
+            table.select().with_only_columns(table.c.game_id)
+            .where(table.c.season.in_(list(seasons)), table.c.week.in_(list(weeks)))
+        )
+        return {game_id for (game_id,) in result}
+
+
+def only_games(rows, game_ids: set[str] | None) -> list[dict]:
+    """The rows for these games, or every row when ``game_ids`` is None."""
+    rows = list(rows)
+    return rows if game_ids is None else [row for row in rows if row["game_id"] in game_ids]
+
+
+def newest_played_week(season: int) -> int | None:
+    """The newest week of a season with a finished game: what the daily refresh redoes.
+
+    Read from ``games``, which the daily schedule ingest has just refreshed. Playoff weeks
+    continue the numbering (19-22), so one number names the week either way.
+    """
+    table = _reflect_table("games")
+    with get_engine().connect() as connection:
+        return connection.execute(
+            table.select().with_only_columns(func.max(table.c.week))
+            .where(table.c.season == season, table.c.home_score.is_not(None))
+        ).scalar()
+
+
+def add_weeks_argument(parser) -> None:
+    """``--weeks``, shared by the scripts the daily in-season refresh runs."""
+    parser.add_argument(
+        "--weeks", type=int, nargs="+", default=None,
+        help="Only these weeks of the given seasons (the daily refresh passes the newest "
+             "played week). Default: every week.",
+    )
 
 
 def load_stat_keys(seasons: list[int] | None = None) -> set[tuple[str, str]]:

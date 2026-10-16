@@ -11,12 +11,15 @@ fixture list defaults to, and from March to September those are different years
 tab on a season that finished eight months ago.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
+from app.cache import VersionedCache, cached_response
 from app.database import get_db
+from app.game_pages import GameNotFound, game_header, game_play_list, game_preview, game_recap, load_game
 from app.models import Game, Team
+from app.scoring import parse_scoring
 from app.schemas.common import PaginatedResponse, paginated
 from app.schemas.game import GameOut, ScoreboardOut, ScoreboardWindow
 from app.seasons import latest_scheduled_season, newest_played_week, next_unplayed_week
@@ -213,3 +216,73 @@ def scoreboard(db: Session = Depends(get_db)) -> ScoreboardOut:
 
     last = newest_played_week(db)
     return ScoreboardOut(last=window(last), next=window(next_unplayed_week(db, after=last)))
+
+
+# --- One game (October 2026) --------------------------------------------------------
+#
+# The game pages: a header for every game from FIRST_GAME_PAGE_SEASON on, then a recap
+# once it has been played or a preview before. Each is a function of the URL and the
+# data, so each is served whole from the response cache; the header and the play list
+# are the same for every scoring, and the recap and preview are keyed on it.
+
+_GAME_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=160)
+
+
+def _game(db: Session, game_id: str) -> Game:
+    try:
+        return load_game(db, game_id)
+    except GameNotFound as exc:
+        raise HTTPException(status_code=404, detail="Game not found") from exc
+
+
+def _scoring(spec: str):
+    try:
+        return parse_scoring(spec)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/{game_id}")
+@cached_response(_GAME_RESPONSES)
+def game_detail(request: Request, game_id: str, db: Session = Depends(get_db)) -> dict:
+    """One game's header: both teams, the score by quarter or the kickoff, the line and the
+    rest each team had. ``has_plays`` and ``has_stats`` say which recap tabs have data yet,
+    since play-by-play and stat lines arrive with the weekly refresh after a game ends."""
+    return game_header(db, _game(db, game_id))
+
+
+@router.get("/{game_id}/recap")
+@cached_response(_GAME_RESPONSES)
+def game_recap_detail(
+    request: Request,
+    game_id: str,
+    scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'half'"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """A finished game: win probability, scoring plays, drives, team stats, and every
+    player's line with his fantasy points, expected points and finish that week."""
+    game = _game(db, game_id)
+    if game.home_score is None:
+        raise HTTPException(status_code=404, detail="This game has not been played")
+    return game_recap(db, game, _scoring(scoring))
+
+
+@router.get("/{game_id}/plays")
+@cached_response(_GAME_RESPONSES)
+def game_plays(request: Request, game_id: str, db: Session = Depends(get_db)) -> dict:
+    """Every play of a finished game, in order, with its EPA and the swing in win probability."""
+    return game_play_list(db, _game(db, game_id))
+
+
+@router.get("/{game_id}/preview")
+@cached_response(_GAME_RESPONSES)
+def game_preview_detail(
+    request: Request,
+    game_id: str,
+    scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'half'"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """An upcoming game: form against the spread, where the line sits in the week, each
+    offense against the other defense, the fantasy players with this week's consensus rank
+    and matchup, the injury report and every meeting since 2009."""
+    return game_preview(db, _game(db, game_id), _scoring(scoring))

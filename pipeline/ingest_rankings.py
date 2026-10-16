@@ -23,6 +23,16 @@ real time series rather than a snapshot, so weekly history is backfillable — w
 M6.1 note about history accruing only from our first ingest got wrong: that is true of
 the *latest* file, not of the archive beside it.
 
+**The archive arrives Thursday night, so the current week's positional boards also come
+from the latest file** (October 2026). The archive's newest scrape lands late in the
+week, which left a game preview with no consensus ranks from Monday to Thursday, and a
+Thursday game with none at all. `fp_latest_weekly` is refreshed twice a day and carries
+the same FantasyPros pages the archive's positional boards are scraped from (its
+`ppr-rb` is the archive's `weekly-rb`; checked on the `fp_page` column), so its rows are
+stored under the same ranking types with their own scrape date. The newest scrape is
+the one a page reads, and when the archive later holds the same day the archive's row
+stands. `weekly-op` is not in the latest file and still waits for Thursday.
+
 **The archive carries no week number**, only a scrape date, so the week is derived from
 the schedule: a board scraped on date D belongs to the first week whose games have not
 all finished by D.
@@ -59,6 +69,11 @@ DRAFT_WEEK = 0
 # the overall board plus the four in-scope positions.
 WEEKLY_PAGES = ("weekly-op", "weekly-qb", "weekly-rb", "weekly-wr", "weekly-te")
 
+# fp_latest_weekly's page names for the same positional boards: PPR for the flex
+# positions, as the archive's `fp_page` shows (/nfl/rankings/ppr-rb.php for weekly-rb).
+LATEST_PAGES = {"qb": "weekly-qb", "ppr-rb": "weekly-rb", "ppr-wr": "weekly-wr", "ppr-te": "weekly-te"}
+NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
 
 def _existing_player_ids() -> set[str]:
     """Player ids already in the players table (player_rankings has a real FK)."""
@@ -90,6 +105,49 @@ def _resolve_player(record: dict, by_fantasypros: dict, by_name: dict) -> str | 
         if merge_name:
             player_id = by_name.get((str(merge_name).lower(), record.get("pos")))
     return player_id
+
+
+def _merge_name(name: str | None) -> str | None:
+    """A display name in the crosswalk's merge-name form: lower case, letters and spaces,
+    no suffix. The latest-weekly file carries no merge name of its own."""
+    if not name:
+        return None
+    words = "".join(ch if ch.isalnum() or ch.isspace() else "" for ch in str(name).lower()).split()
+    return " ".join(word for word in words if word not in NAME_SUFFIXES) or None
+
+
+def _latest_weekly(season: int, boundaries, by_fantasypros: dict, by_name: dict, known_players: set[str]) -> list[dict]:
+    """The current week's positional boards from fp_latest_weekly, in the archive's shape."""
+    try:
+        latest = nfl.load_ff_rankings("week").filter(pl.col("page").is_in(list(LATEST_PAGES)))
+    except Exception as error:  # the archive rows stand on their own; this only adds to them
+        logger.warning("latest weekly rankings unavailable: %s", error)
+        return []
+    rows = []
+    for record in latest.iter_rows(named=True):
+        scrape = str(record.get("scrape_date"))
+        week = _week_for(scrape, boundaries)
+        player_id = _resolve_player(
+            {"id": record.get("fantasypros_id"), "mergename": _merge_name(record.get("player_name")), "pos": record.get("pos")},
+            by_fantasypros, by_name,
+        )
+        if week is None or player_id is None or player_id not in known_players:
+            continue
+        rows.append({
+            "player_id": player_id,
+            "source": SOURCE,
+            "ranking_type": LATEST_PAGES[record["page"]],
+            "season": season,
+            "week": week,
+            "scraped_at": scrape,
+            "ecr": record.get("ecr"),
+            "sd": record.get("sd"),
+            "best": record.get("best"),
+            "worst": record.get("worst"),
+            "rank_delta": record.get("player_ecr_delta"),
+            "player_owned_avg": record.get("player_owned_avg"),
+        })
+    return rows
 
 
 def _shift_days(iso_date: str, days: int) -> str:
@@ -257,6 +315,16 @@ def ingest_weekly_rankings(season: int | None = None) -> int:
             "rank_delta": record.get("rank_delta"),
             "player_owned_avg": record.get("player_owned_avg"),
         }
+
+    # This week's positional boards, before the archive has them. An archive row for the
+    # same player, board and scrape date wins.
+    latest = 0
+    for row in _latest_weekly(season, boundaries, by_fantasypros, by_name, known_players):
+        key = (row["player_id"], SOURCE, row["ranking_type"], season, row["week"], row["scraped_at"])
+        if key not in rows:
+            rows[key] = row
+            latest += 1
+    logger.info("latest weekly file: %d rows not yet in the archive", latest)
 
     written = upsert(
         "player_rankings",

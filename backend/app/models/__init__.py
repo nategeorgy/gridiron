@@ -14,6 +14,7 @@ from app.models.draft import (
     RankingBoardEntry,
 )
 from app.models.game import Game
+from app.models.game_detail import GameDrive, GamePlay, InjuryReport
 from app.models.player import Player
 from app.models.player_ranking import PlayerRanking
 from app.models.player_stats import PlayerStats
@@ -32,6 +33,9 @@ __all__ = [
     "TeamStaff",
     "Player",
     "Game",
+    "GamePlay",
+    "GameDrive",
+    "InjuryReport",
     "PlayerStats",
     "PlayerRanking",
     "DepthChartEntry",

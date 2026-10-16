@@ -19,7 +19,12 @@ because a target to a fullback or a two-way defensive back is still one of the
 quarterback's targets, and dropping it would skew every share. Runs keep the usual
 guard instead (only stat lines we track), since player_run_lanes is keyed on a player.
 
-Both tables are **replaced per game**, not upserted: a stat correction can remove or
+From 2025 (``FIRST_GAME_PAGE_SEASON``) two more tables come out of the same download,
+for the game pages: ``game_plays`` (every play: the score after it, the spread-adjusted
+win probability before and after, the play's own text) and ``game_drives`` (every
+possession). Older seasons skip them: the pages were scoped to last season onward.
+
+Every table is **replaced per game**, not upserted: a stat correction can remove or
 renumber a play, and an upsert would keep the stale row forever. Only games present in
 this download are touched, so a failed download cannot empty a season.
 
@@ -36,9 +41,9 @@ import polars as pl
 from sqlalchemy import text
 
 from availability import FIRST_TARGET_DEPTH_SEASON
-from db import get_engine, load_stat_keys, load_team_id_map, replace_scoped
+from db import add_weeks_argument, games_in_weeks, get_engine, load_stat_keys, load_team_id_map, replace_scoped
 from franchises import contemporary_code_map, resolve
-from seasons import STATS, clamp_seasons, default_seasons
+from seasons import FIRST_GAME_PAGE_SEASON, STATS, clamp_seasons, default_seasons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("pipeline.plays")
@@ -149,8 +154,171 @@ def collect_run_lanes(pbp: pl.DataFrame, season: int, games: set[str], stat_keys
     return list(cells.values())
 
 
-def ingest_plays(seasons: list[int]) -> tuple[int, int]:
-    """Write both tables for the given seasons. Returns (targets written, lane rows written)."""
+def _elapsed(quarter, quarter_seconds, season_type: str) -> int | None:
+    """Game seconds played before this moment: 900 per quarter, then overtime periods.
+
+    A regular-season overtime is ten minutes (since 2017) and a playoff one fifteen, which
+    is the only reason the season type is needed.
+    """
+    if quarter is None or quarter_seconds is None or quarter != quarter or quarter_seconds != quarter_seconds:
+        return None
+    quarter, quarter_seconds = int(quarter), int(quarter_seconds)
+    if quarter <= 4:
+        return (quarter - 1) * 900 + (900 - quarter_seconds)
+    period = 600 if season_type == "REG" else 900
+    return 3600 + (quarter - 5) * period + (period - quarter_seconds)
+
+
+def _own_yardline(text: str | None, team: str | None) -> int | None:
+    """"BUF 34" -> 34 for Buffalo, 66 for its opponent; "50" -> 50."""
+    if not text or not team:
+        return None
+    parts = text.split()
+    if len(parts) == 1:
+        return int(parts[0]) if parts[0].isdigit() else None
+    side, number = parts[0], parts[-1]
+    if not number.isdigit():
+        return None
+    return int(number) if side == team else 100 - int(number)
+
+
+def _minutes(text: str | None) -> int | None:
+    """"7:48" -> 468 seconds."""
+    if not text or ":" not in text:
+        return None
+    minutes, seconds = text.split(":", 1)
+    return int(minutes) * 60 + int(seconds) if minutes.isdigit() and seconds.isdigit() else None
+
+
+def _score_type(play: dict) -> str | None:
+    """How a scoring play scored."""
+    if play["sp"] != 1:
+        return None
+    if _flag(play["touchdown"]):
+        return "TD"
+    if play["field_goal_result"] == "made":
+        return "FG"
+    if play["extra_point_result"] == "good":
+        return "XP"
+    if play["two_point_conv_result"] == "success":
+        return "2PT"
+    if _flag(play["safety"]):
+        return "SAF"
+    if _flag(play["defensive_two_point_conv"]):
+        return "DEF2"
+    return None
+
+
+def collect_game_plays(pbp: pl.DataFrame, season: int, games: set[str], codes, team_ids) -> list[dict]:
+    """Every play of every game in the season, for the game pages.
+
+    Administrative rows (the game's opening line, "END QUARTER", timeouts) carry no play
+    type and are left out; a penalty that wiped a play out is kept, because it moved the
+    ball and the clock.
+    """
+    plays = pbp.filter(
+        pl.col("game_id").is_in(list(games))
+        & (pl.col("play_type").is_not_null() | (pl.col("penalty").fill_null(0) == 1))
+    )
+    def team(code):
+        return team_ids.get(resolve(codes, season, code)) if code else None
+
+    rows = []
+    for play in plays.iter_rows(named=True):
+        score = _score_type(play)
+        if score == "TD":
+            scorer = play["td_team"]
+        elif score in ("SAF", "DEF2"):
+            scorer = play["defteam"]
+        else:
+            scorer = play["posteam"] if score else None
+        wp = play["vegas_home_wp"]
+        wpa = play["vegas_home_wpa"]
+        post = wp + wpa if wp is not None and wpa is not None and wp == wp and wpa == wpa else None
+        rows.append({
+            "game_id": play["game_id"],
+            "play_id": int(play["play_id"]),
+            "season": season,
+            "week": int(play["week"]),
+            "season_type": play["season_type"],
+            "sequence": _small(play["order_sequence"]),
+            "quarter": _small(play["qtr"]),
+            "clock": play["time"],
+            "quarter_seconds": _small(play["quarter_seconds_remaining"]),
+            "team_id": team(play["posteam"]),
+            "drive": _small(play["fixed_drive"]),
+            "down": _small(play["down"]),
+            "distance": _small(play["ydstogo"]),
+            "yardline": play["yrdln"],
+            "yardline_100": _small(play["yardline_100"]),
+            "play_type": play["play_type"],
+            "description": play["desc"],
+            "yards": _small(play["yards_gained"]),
+            "epa": play["epa"],
+            "success": None if play["success"] is None or play["success"] != play["success"] else bool(play["success"]),
+            "is_pass": _flag(play["pass"]),
+            "is_rush": _flag(play["rush"]),
+            "touchdown": _flag(play["touchdown"]),
+            "turnover": _flag(play["interception"]) or _flag(play["fumble_lost"]),
+            "penalty": _flag(play["penalty"]),
+            "home_wp": wp,
+            "home_wp_post": None if post is None else min(1.0, max(0.0, post)),
+            "home_score": _small(play["total_home_score"]),
+            "away_score": _small(play["total_away_score"]),
+            "score_type": score,
+            "score_team_id": team(scorer),
+        })
+    return rows
+
+
+def collect_game_drives(pbp: pl.DataFrame, season: int, games: set[str], codes, team_ids) -> list[dict]:
+    """Every possession of every game in the season, for the game pages."""
+    plays = pbp.filter(
+        pl.col("game_id").is_in(list(games)) & pl.col("posteam").is_not_null() & pl.col("fixed_drive").is_not_null()
+    ).sort(["game_id", "order_sequence"])
+    drives = plays.group_by(["game_id", "fixed_drive"], maintain_order=True).agg(
+        pl.col("week").first(), pl.col("season_type").first(), pl.col("posteam").first(),
+        pl.col("drive_quarter_start").first(), pl.col("drive_game_clock_start").first(),
+        pl.col("qtr").first().alias("first_qtr"), pl.col("quarter_seconds_remaining").first().alias("first_seconds"),
+        pl.col("drive_start_yard_line").first(), pl.col("drive_end_yard_line").first(),
+        pl.col("drive_play_count").first(), pl.col("ydsnet").drop_nulls().first(),
+        pl.col("drive_first_downs").first(), pl.col("drive_time_of_possession").first(),
+        pl.col("fixed_drive_result").first(), pl.col("drive_start_transition").first(),
+        pl.col("posteam_score").min().alias("score_before"), pl.col("posteam_score_post").max().alias("score_after"),
+    )
+    rows = []
+    for drive in drives.iter_rows(named=True):
+        code = drive["posteam"]
+        before, after = drive["score_before"], drive["score_after"]
+        points = int(after - before) if before is not None and after is not None and after == after and before == before else None
+        rows.append({
+            "game_id": drive["game_id"],
+            "drive": int(drive["fixed_drive"]),
+            "season": season,
+            "week": int(drive["week"]),
+            "season_type": drive["season_type"],
+            "team_id": team_ids.get(resolve(codes, season, code)),
+            "quarter": _small(drive["drive_quarter_start"]) or _small(drive["first_qtr"]),
+            "clock": (drive["drive_game_clock_start"] or "")[:5] or None,
+            "elapsed": _elapsed(drive["first_qtr"], drive["first_seconds"], drive["season_type"]),
+            "start_yardline": _own_yardline(drive["drive_start_yard_line"], code),
+            "end_yardline": _own_yardline(drive["drive_end_yard_line"], code),
+            "plays": _small(drive["drive_play_count"]),
+            "yards": _small(drive["ydsnet"]),
+            "first_downs": _small(drive["drive_first_downs"]),
+            "seconds": _minutes(drive["drive_time_of_possession"]),
+            "result": drive["fixed_drive_result"],
+            "points": max(points, 0) if points is not None else None,
+            "started_by": drive["drive_start_transition"],
+        })
+    return rows
+
+
+def ingest_plays(seasons: list[int], weeks: list[int] | None = None) -> tuple[int, int]:
+    """Write the tables for the given seasons. Returns (targets written, lane rows written).
+
+    The game-page tables are written only for seasons from ``FIRST_GAME_PAGE_SEASON``.
+    """
     seasons = clamp_seasons(seasons, STATS)
     too_early = [season for season in seasons if season < FIRST_TARGET_DEPTH_SEASON]
     if too_early:
@@ -165,14 +333,23 @@ def ingest_plays(seasons: list[int]) -> tuple[int, int]:
     codes = contemporary_code_map(seasons)
     stat_keys = load_stat_keys(seasons)
     written_targets = written_lanes = 0
+    recent = games_in_weeks(seasons, weeks)
     for season in seasons:
         games = season_game_ids(season)
+        if recent is not None:
+            games &= recent
         pbp = nfl.load_pbp([season])
         targets = collect_targets(pbp, season, games, codes, team_ids)
         lanes = collect_run_lanes(pbp, season, games, stat_keys)
         written_targets += replace_scoped("play_targets", targets, scope_columns=["game_id"])
         written_lanes += replace_scoped("player_run_lanes", lanes, scope_columns=["game_id"])
         logger.info("plays %d: %d targets, %d run-lane rows", season, len(targets), len(lanes))
+        if season >= FIRST_GAME_PAGE_SEASON:
+            plays = collect_game_plays(pbp, season, games, codes, team_ids)
+            drives = collect_game_drives(pbp, season, games, codes, team_ids)
+            replace_scoped("game_plays", plays, scope_columns=["game_id"])
+            replace_scoped("game_drives", drives, scope_columns=["game_id"])
+            logger.info("game pages %d: %d plays, %d drives", season, len(plays), len(drives))
     return written_targets, written_lanes
 
 
@@ -182,5 +359,6 @@ if __name__ == "__main__":
         "--seasons", type=int, nargs="+", default=default_seasons(STATS),
         help="Seasons to ingest (default: 2009 through the latest played season).",
     )
+    add_weeks_argument(parser)
     args = parser.parse_args()
-    ingest_plays(args.seasons)
+    ingest_plays(args.seasons, weeks=args.weeks)

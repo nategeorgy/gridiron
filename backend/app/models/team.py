@@ -20,5 +20,9 @@ class Team(Base):
     logo_url: Mapped[str | None] = mapped_column(String(255))
     # nflverse's primary team colour, a hex string. Tints the team page header only.
     color: Mapped[str | None] = mapped_column(String(7))
+    # nflverse's second team colour. The game pages draw two teams side by side, and
+    # many pairings share a primary (Bills and Rams are both royal blue), so one of
+    # them is drawn in this instead.
+    color2: Mapped[str | None] = mapped_column(String(7))
 
     players: Mapped[list["Player"]] = relationship(back_populates="team")  # noqa: F821
