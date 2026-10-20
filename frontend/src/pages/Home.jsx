@@ -194,6 +194,10 @@ export function Home() {
   }, [pairText]);
   const pairPeople = usePlayersById(pair.filter(Boolean));
   const pairPosition = pairPeople[pair[0]]?.position;
+  // The featured pair's weeks belong to that pair: a matchup the reader builds covers
+  // the season.
+  const featuredPair = pair.join(",") === FEATURED_MATCHUP.players.join(",");
+  const matchupWeeks = featuredPair ? FEATURED_MATCHUP.weeks : undefined;
   const matchup = useCompare(
     useMemo(
       () => ({
@@ -202,8 +206,9 @@ export function Home() {
         season: SIGNALS_SEASON,
         season_type: "REG",
         scoring,
+        ...(matchupWeeks ? { weeks: matchupWeeks } : {}),
       }),
-      [pair, pairPosition, scoring],
+      [pair, pairPosition, scoring, matchupWeeks],
     ),
   );
 
@@ -308,7 +313,7 @@ export function Home() {
     ),
     headToHead: (
       <HeadToHeadCard
-        caption={FEATURED_MATCHUP.caption}
+        caption={featuredPair ? FEATURED_MATCHUP.caption : String(SIGNALS_SEASON)}
         ids={pair}
         position={pairPosition}
         result={matchup.data}

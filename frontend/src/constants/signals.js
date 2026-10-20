@@ -35,10 +35,15 @@ export const EXPECTED_VS_ACTUAL = [
 /**
  * The head-to-head's opening pair. A reader can swap either player from the card, and
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
+ *
+ * `weeks` narrows the featured pair to the games they shared, percentile pools
+ * included; a pair the reader picks gets the whole season again.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0041489", "00-0035640"], // Germie Bernard, DK Metcalf
-  caption: String(SIGNALS_SEASON),
+  players: ["00-0039491", "00-0040124"], // Jalen Coker, Tetairoa McMillan
+  // Week 3 is left out: Coker played 36% of the snaps. Carolina's bye was Week 5.
+  weeks: "1,2,6",
+  caption: `${SIGNALS_SEASON} · Weeks 1, 2 and 6`,
 };
 
 /**
@@ -51,8 +56,8 @@ export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
   // The season so far. Name `weeks` (e.g. "4") to feature a single week instead.
-  passerId: "00-0033077", // Dak Prescott
-  team: "DAL",
+  passerId: "00-0039918", // Caleb Williams
+  team: "CHI",
 };
 
 /**

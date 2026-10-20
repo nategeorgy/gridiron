@@ -495,6 +495,11 @@ def compare(
     last_weeks: int | None = Query(
         None, ge=1, le=22, description="Trailing window of played weeks. Omit for the full season."
     ),
+    weeks: str = Query(
+        "",
+        description="Comma-separated weeks to compare over, e.g. '1,2,6'. An explicit "
+                    "selection; takes precedence over `last_weeks`.",
+    ),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
     metrics: str = Query("", description="Comma-separated metric ids. Defaults per position."),
     scoring: str = Query("ppr", description="League scoring as preset[:overrides]"),
@@ -522,7 +527,9 @@ def compare(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    window = resolve_window(db, season, season_type, last_weeks)
+    # Explicit weeks narrow the percentile pools too, so "84th percentile" is among
+    # receivers over those same weeks, the only reading that compares like with like.
+    window = resolve_window(db, season, season_type, last_weeks, _parse_weeks(weeks))
     games = games_expr()
     rows = [
         finalize_row(dict(row), config, custom_metrics)
@@ -531,7 +538,7 @@ def compare(
                 window_filters(
                     window.season, window.season_type,
                     week_from=window.week_from, week_to=window.week_to,
-                    positions=POSITIONS,
+                    positions=POSITIONS, week_in=window.week_list,
                 ),
                 games,
             )
@@ -664,8 +671,9 @@ def _compare_weekly(
             PlayerStats.player_id.in_(player_ids),
             PlayerStats.season == window.season,
             PlayerStats.season_type == window.season_type,
-            PlayerStats.week >= window.week_from,
-            PlayerStats.week <= window.week_to,
+            PlayerStats.week.in_(window.week_list)
+            if window.week_list
+            else PlayerStats.week.between(window.week_from, window.week_to),
         )
         .order_by(PlayerStats.week)
     ).all()

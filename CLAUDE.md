@@ -826,7 +826,9 @@ GET /api/v1/draft/rankings                   ← M9 one board's players, with ou
 POST /api/v1/draft/mock-grade                ← M9 value the rosters out of a finished
                                                mock. Needs no account
 GET /api/v1/stats/scatter                    ← M4 any two metrics (UI offers presets only)
-GET /api/v1/stats/compare                    ← M4 up to 5 players, position-intersected
+GET /api/v1/stats/compare                    ← M4 up to 5 players, position-intersected.
+                                               weeks= (an explicit set) narrows the stats,
+                                               the weekly series and the percentile pools
 GET /api/v1/metrics                          ← metric registry
 GET /api/v1/seasons                          ← seasons held + the current one.
                                                "Current" = newest season WITH STATS,
