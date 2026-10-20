@@ -31,7 +31,7 @@ export function Loading({ height = 320 }) {
   return <div className="glass-card animate-pulse" style={{ height }} aria-busy="true" />;
 }
 
-const TH_BASE = "whitespace-nowrap px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint";
+const TH_BASE = "whitespace-nowrap px-2 pb-1.5 text-[10.5px] font-bold uppercase tracking-[0.07em] text-faint";
 export const TH = `${TH_BASE} text-right`;
 export const TH_LEFT = `${TH_BASE} text-left`;
 export const TH_CENTER = `${TH_BASE} text-center`;

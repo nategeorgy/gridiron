@@ -225,6 +225,10 @@ def collect_game_plays(pbp: pl.DataFrame, season: int, games: set[str], codes, t
 
     rows = []
     for play in plays.iter_rows(named=True):
+        # A two-point try is worth 2 to the players on it and nothing else: its yards and
+        # its catch are not stat-line yards or receptions.
+        two_point_try = _flag(play["two_point_attempt"])
+        fumbler = play["fumbled_1_player_id"] if _flag(play["fumble_lost"]) else None
         score = _score_type(play)
         if score == "TD":
             scorer = play["td_team"]
@@ -267,6 +271,18 @@ def collect_game_plays(pbp: pl.DataFrame, season: int, games: set[str], codes, t
             "away_score": _small(play["total_away_score"]),
             "score_type": score,
             "score_team_id": team(scorer),
+            "passer_id": play["passer_player_id"],
+            "rusher_id": play["rusher_player_id"],
+            "receiver_id": play["receiver_player_id"],
+            "fumble_lost_id": fumbler,
+            "passing_yards": None if two_point_try else _small(play["passing_yards"]),
+            "rushing_yards": None if two_point_try else _small(play["rushing_yards"]),
+            "receiving_yards": None if two_point_try else _small(play["receiving_yards"]),
+            "complete": _flag(play["complete_pass"]) and not two_point_try,
+            "interception": _flag(play["interception"]),
+            "pass_touchdown": _flag(play["pass_touchdown"]),
+            "rush_touchdown": _flag(play["rush_touchdown"]),
+            "two_point": two_point_try and play["two_point_conv_result"] == "success",
         })
     return rows
 

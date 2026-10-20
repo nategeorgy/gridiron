@@ -182,13 +182,16 @@ def team_breakdown_detail(
     season: int | None = Query(None, description="Season. Defaults to the newest season with stats."),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
     weeks: str = Query("", description="Comma-separated weeks. Empty means every week played."),
+    rank_against: str = Query("window", pattern="^(window|season)$",
+                              description="Rank pass depth and run lanes among offenses over the same weeks (window), "
+                                          "or among every offense's regular season (season)."),
     db: Session = Depends(get_db),
 ) -> dict:
     """One team's panels: the EPA trend by week, pass depth, run lanes, personnel
     groupings and the coaching staff by season."""
     if db.get(Team, team_id) is None:
         raise HTTPException(status_code=404, detail="Team not found")
-    return team_breakdown(db, team_id, _stats_season(db, season), season_type, weeks)
+    return team_breakdown(db, team_id, _stats_season(db, season), season_type, weeks, rank_against)
 
 
 # --- The team page (M6.2) ---------------------------------------------------------

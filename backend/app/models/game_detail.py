@@ -87,6 +87,23 @@ class GamePlay(Base):
     score_type: Mapped[str | None] = mapped_column(String(4))
     score_team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.team_id"))
 
+    # The play's players and what each was credited with, as play-by-play states them, so
+    # a recap can price every play in any scoring (points by quarter). No
+    # foreign keys, like play_targets: a fullback's carry is still a play. Yards are NULL
+    # where the role is absent: a sack has no passing yards, not zero.
+    passer_id: Mapped[str | None] = mapped_column(String(50))
+    rusher_id: Mapped[str | None] = mapped_column(String(50))
+    receiver_id: Mapped[str | None] = mapped_column(String(50))
+    fumble_lost_id: Mapped[str | None] = mapped_column(String(50))
+    passing_yards: Mapped[int | None] = mapped_column(SmallInteger)
+    rushing_yards: Mapped[int | None] = mapped_column(SmallInteger)
+    receiving_yards: Mapped[int | None] = mapped_column(SmallInteger)
+    complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    interception: Mapped[bool] = mapped_column(Boolean, default=False)
+    pass_touchdown: Mapped[bool] = mapped_column(Boolean, default=False)
+    rush_touchdown: Mapped[bool] = mapped_column(Boolean, default=False)
+    two_point: Mapped[bool] = mapped_column(Boolean, default=False)   # a successful conversion
+
 
 class GameDrive(Base):
     """One possession: where it started and ended, how long it took, and how it ended.

@@ -563,6 +563,12 @@ game_plays (
   home_score SMALLINT, away_score SMALLINT, -- the running score after the play
   score_type VARCHAR(4),                    -- TD | FG | XP | 2PT | SAF | DEF2, scoring plays only
   score_team_id INT REFERENCES teams(team_id),
+  -- Who was on the play and what each was credited with, so a recap prices every play in
+  -- any scoring (points by quarter on the box score). No foreign keys, like play_targets.
+  passer_id VARCHAR(50), rusher_id VARCHAR(50), receiver_id VARCHAR(50), fumble_lost_id VARCHAR(50),
+  passing_yards SMALLINT, rushing_yards SMALLINT, receiving_yards SMALLINT,   -- NULL where the role is absent
+  complete BOOLEAN, interception BOOLEAN, pass_touchdown BOOLEAN, rush_touchdown BOOLEAN,
+  two_point BOOLEAN,                        -- a successful conversion, 2 to each player on it
   PRIMARY KEY (game_id, play_id)
 )
 
@@ -837,7 +843,10 @@ GET /api/v1/teams/stats                      ← every team metric for every tea
                                                weeks=, scoring=
 GET /api/v1/teams/{team_id}/breakdown        ← one team's EPA trend, pass depth, run
                                                lanes, personnel and staff. season=,
-                                               weeks=
+                                               weeks=, rank_against=window|season (rank
+                                               pass depth and run lanes among every
+                                               offense's regular season, as a game page
+                                               does for one game)
 GET /api/v1/games                            ← M10 the schedule: filter by season,
                                                week and team. Defaults to the newest
                                                SCHEDULED season, not the newest played
@@ -852,7 +861,8 @@ GET /api/v1/games/{game_id}                  ← one game's header (October 2026
                                                has_plays / has_stats. Older games 404
 GET /api/v1/games/{game_id}/recap            ← a played game: win probability, swings,
                                                scoring plays, drives, team box, the week's
-                                               ranks, every line priced in scoring=
+                                               ranks, every target and carry in order,
+                                               every line priced in scoring=
 GET /api/v1/games/{game_id}/plays            ← every play, for the play-by-play tab
 GET /api/v1/games/{game_id}/preview          ← an upcoming game: form ATS, slate ranks,
                                                meetings since 2009, rosters week by week
@@ -2117,6 +2127,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   places (`pipeline/seasons.py`, `backend/app/models/game_detail.py`, `frontend/src/constants/index.js`;
   `tests/test_game_pages.py` fails if they drift). An older game is a 404 and gets no link. Widening it
   is the constant plus `ingest_plays.py` for the added seasons
+- **A recap prices every play, not just every stat line** (October 2026). `game_plays` stores who
+  threw, ran, caught and lost a fumble, and `_play_points` in `app/game_pages.py` prices each play in
+  the request's scoring for the box score's points by quarter. Checked against all 8,099 stat lines
+  of 2025-26: 99% match to the tenth. The rest are return
+  touchdowns (no offensive play credits them) and laterals. A lost fumble counts only when the fumbler
+  was the passer, rusher or receiver, because a stat line does not count a muffed punt. ⚠️ Production
+  needs `ingest_plays.py --seasons 2025 2026` once after migration `5b2e9c4d7a10` to fill the columns
 - **A recap fills in the morning after the game.** The score arrives within minutes (the daily schedule
   ingest); stat lines, expected points, snaps, team sums and play-by-play come with the **daily
   newest-week job** (`recaps` in `pipeline.yml`, in season, skipped Wednesdays): it runs the five

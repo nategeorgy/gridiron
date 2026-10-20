@@ -1,7 +1,7 @@
 """Team stats: ranks, week windows, and aggregate-first rates (no database needed)."""
 
 from app.models.team_game_stats import SUM_COLUMNS
-from app.team_stats import BY_ID, METRICS, _personnel_cards, _personnel_through_week, _rank, _value, _windows, parse_weeks
+from app.team_stats import BY_ID, METRICS, _personnel_cards, _personnel_through_week, _rank, _value, _windows, _zone, parse_weeks
 
 
 def _row(team, week, side, opponent, **values):
@@ -131,3 +131,24 @@ def test_players_on_the_field_are_blank_before_snap_counts():
     window = _windows({"rows": rows, "personnel": {}, "teams": {}, "weeks": [1]}, {1}, {})[1]
     for metric in ("back_play", "te_play", "wr_play", "two_back"):
         assert _value(BY_ID[metric], window, "o") is None
+
+
+def _depth_window(short, deep):
+    """A window holding only what the pass depth panel reads: attempts and EPA by depth."""
+    return {"o": {"depth_short_attempts": short, "depth_short_epa": 0.0, "depth_deep_attempts": deep, "depth_deep_epa": 0.0}}
+
+
+def test_a_game_can_rank_among_every_offenses_season():
+    week = {1: _depth_window(8, 2), 2: _depth_window(5, 5)}
+    season = {1: _depth_window(80, 20), 2: _depth_window(90, 10), 3: _depth_window(50, 50)}
+
+    # Against that week: 20% deep is second of the two teams that played.
+    deep = {row["key"]: row for row in _zone(week, 1, "depth", ("short", "deep"), "attempts", ())}["deep"]
+    assert (deep["share"], deep["share_rank"], deep["share_teams"]) == (0.2, 2, 2)
+
+    # Against every offense's season, the game replaces team 1's own season: 20% deep sits
+    # between team 3's 50% and team 2's 10%, and the league share is the season's.
+    deep = {row["key"]: row for row in _zone(week, 1, "depth", ("short", "deep"), "attempts", (), season)}["deep"]
+    assert (deep["share"], deep["share_rank"], deep["share_teams"]) == (0.2, 2, 3)
+    assert deep["league_share"] == round(80 / 300, 4)
+

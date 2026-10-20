@@ -482,21 +482,37 @@ def _r(v, digits: int = 4):
     return None if v is None else round(v, digits)
 
 
-def _zone(windows: dict, team_id: int, prefix: str, keys: tuple[str, ...], count_field: str, extra: tuple[str, ...]) -> list[dict]:
+def _ranked_against(windows: dict, team_id: int, pool: dict | None) -> tuple[dict, dict]:
+    """The windows a panel ranks among, and the windows its league figures come from.
+
+    By default both are the request's own window, every offense over the same weeks. With
+    a ``pool`` (every offense's season), the team's window is ranked among the other
+    offenses' seasons, so one game reads against how offenses play over a year rather
+    than against one noisy week, and the league figures are the season's.
+    """
+    if pool is None or team_id not in windows:
+        return windows, windows
+    return {**pool, team_id: windows[team_id]}, pool
+
+
+def _zone(windows: dict, team_id: int, prefix: str, keys: tuple[str, ...], count_field: str, extra: tuple[str, ...],
+          pool: dict | None = None) -> list[dict]:
     """Share, share rank, EPA and EPA rank per bucket, for one team against the league (offense)."""
+    me = windows.get(team_id)
+    windows, league = _ranked_against(windows, team_id, pool)
     totals = {t: sum(w["o"][f"{prefix}_{k}_{count_field}"] or 0 for k in keys) for t, w in windows.items()}
+    league_totals = {t: sum(w["o"][f"{prefix}_{k}_{count_field}"] or 0 for k in keys) for t, w in league.items()}
     out = []
     for k in keys:
         n = {t: w["o"][f"{prefix}_{k}_{count_field}"] or 0 for t, w in windows.items()}
         share = {t: n[t] / totals[t] for t in windows if totals[t]}
         epa = {t: windows[t]["o"][f"{prefix}_{k}_epa"] / n[t] for t in windows if n[t] >= ZONE_MIN_PLAYS}
         sr, er = _rank(share, 0), _rank(epa, 1)
-        me = windows.get(team_id)
-        lg_n = sum(n.values())
+        lg_n = sum(w["o"][f"{prefix}_{k}_{count_field}"] or 0 for w in league.values())
         row = {"key": k, "plays": n.get(team_id, 0), "share": _r(share.get(team_id)), "share_rank": sr.get(team_id), "share_teams": len(share),
                "epa": _r(epa.get(team_id)), "epa_rank": er.get(team_id), "epa_teams": len(epa),
-               "league_share": _r(lg_n / sum(totals.values())) if sum(totals.values()) else None,
-               "league_epa": _r(sum(w["o"][f"{prefix}_{k}_epa"] or 0 for w in windows.values()) / lg_n) if lg_n else None}
+               "league_share": _r(lg_n / sum(league_totals.values())) if sum(league_totals.values()) else None,
+               "league_epa": _r(sum(w["o"][f"{prefix}_{k}_epa"] or 0 for w in league.values()) / lg_n) if lg_n else None}
         for f in extra:
             v = me["o"][f"{prefix}_{k}_{f}"] if me else None
             row[f] = _r(v / n[team_id]) if me and n.get(team_id) and v is not None else None
@@ -504,17 +520,18 @@ def _zone(windows: dict, team_id: int, prefix: str, keys: tuple[str, ...], count
     return out
 
 
-def _lane_groups(windows: dict, team_id: int) -> list[dict]:
+def _lane_groups(windows: dict, team_id: int, pool: dict | None = None) -> list[dict]:
     def runs(w, lanes, f):
         return sum(w["o"][f"lane_{x}_{f}"] or 0 for x in lanes)
+    windows, league = _ranked_against(windows, team_id, pool)
     out = []
     for key, lanes in LANE_GROUPS.items():
         share = {t: runs(w, lanes, "runs") / runs(w, LANES, "runs") for t, w in windows.items() if runs(w, LANES, "runs")}
         epa = {t: runs(w, lanes, "epa") / runs(w, lanes, "runs") for t, w in windows.items() if runs(w, lanes, "runs") >= ZONE_MIN_PLAYS}
         er = _rank(epa, 1)
-        total = sum(runs(w, LANES, "runs") for w in windows.values())
+        total = sum(runs(w, LANES, "runs") for w in league.values())
         out.append({"key": key, "share": _r(share.get(team_id)), "epa": _r(epa.get(team_id)), "epa_rank": er.get(team_id), "epa_teams": len(epa),
-                    "league_share": _r(sum(runs(w, lanes, "runs") for w in windows.values()) / total) if total else None})
+                    "league_share": _r(sum(runs(w, lanes, "runs") for w in league.values()) / total) if total else None})
     return out
 
 
@@ -542,17 +559,26 @@ def _personnel_cards(windows: dict, team_id: int) -> list[dict]:
     return cards
 
 
-def team_breakdown(db: Session, team_id: int, season: int, season_type: str, weeks_raw: str | None) -> dict:
+def team_breakdown(db: Session, team_id: int, season: int, season_type: str, weeks_raw: str | None,
+                   rank_against: str = "window") -> dict:
+    """One team's panels. ``rank_against="season"`` ranks the pass depth and run lane panels
+    among every offense's regular season (to date) instead of the same weeks, which is how
+    a game page reads one game; the personnel cards keep the window either way."""
     data = _load_rows(db, season, season_type)
     weeks = parse_weeks(weeks_raw, data["weeks"])
     windows = _windows(data, weeks, {})
+    pool = None
+    if rank_against == "season":
+        regular = data if season_type == "REG" else _load_rows(db, season, "REG")
+        pool = _windows(regular, set(regular["weeks"]), {})
     staff = db.execute(select(TeamStaff).where(TeamStaff.team_id == team_id).order_by(TeamStaff.season.desc())).scalars().all()
     return {
         "team_id": team_id, "season": season, "season_type": season_type, "played_weeks": data["weeks"], "weeks": sorted(weeks),
         "trend": _trend(data, team_id),
-        "pass_depth": _zone(windows, team_id, "depth", DEPTHS, "attempts", ("completions",)),
-        "run_lanes": _zone(windows, team_id, "lane", LANES, "runs", ("successes", "yards")),
-        "run_groups": _lane_groups(windows, team_id),
+        "rank_against": "season" if pool is not None else "window",
+        "pass_depth": _zone(windows, team_id, "depth", DEPTHS, "attempts", ("completions",), pool),
+        "run_lanes": _zone(windows, team_id, "lane", LANES, "runs", ("successes", "yards"), pool),
+        "run_groups": _lane_groups(windows, team_id, pool),
         "personnel": _personnel_cards(windows, team_id),
         "personnel_through_week": _personnel_through_week(windows),
         "staff": [{"season": s.season, "head_coach": s.head_coach, "offensive_coordinator": s.offensive_coordinator,
