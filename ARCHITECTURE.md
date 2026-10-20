@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-10-15 (daily newest-week refresh for recaps; current-week consensus ranks from the latest weekly file)
+Last updated: 2026-10-19 (recap tabs reworked; game_plays names the players on each play)
 
 ---
 
@@ -275,6 +275,7 @@ directly. Top to bottom: **pages → components → hooks → services → api c
 | `hooks/useScoring.js` | state | The active league scoring, resolved **URL param > `localStorage` > PPR**, and **normalised to one of the four presets** so a custom spec in an old link resolves to its bare preset rather than to a scoring the picker cannot display. The URL outranks storage deliberately: a shared `?scoring=` link must show *that* scoring to whoever opens it, or every share link silently lies. |
 | `hooks/useLeague.js` | state | The **league context** (size + starting lineup) — now a constant returning `DEFAULT_LEAGUE`. It drove replacement level, which drove VORP; with VORP retired nothing on screen responds to it, but the API still takes a league spec. Kept as a hook so reinstating an editor is a change here and nowhere else. |
 | `hooks/useTheme.js` | state | The active UI theme (light/dark), and the setter. **The `data-theme` attribute on `<html>` is the state**: the theme is read through `useThemeName`, and setting it writes the attribute and `localStorage` (`gridiron.theme`); defaults to dark. It used to be component state mirrored onto the attribute, which left the header's two theme controls (the desktop button, the phone menu's switch) each holding a copy. |
+| `hooks/useElementWidth.js` | state | An element's rendered width, kept current by a `ResizeObserver`, for a chart that draws its viewBox at the size it is shown rather than scaling a fixed box (`PassDepthField`, whose labels fell to 7px scaled into a narrow card). |
 | `hooks/useMediaQuery.js` | state | Whether a media query matches, kept in step as the window resizes, plus `usePhone()` (below sm). Only for a phone needing a different *structure*: the charts that draw a phone-sized box (`NetworkChart`, `ScatterPlot`, `ExpectedActualCard`, `SeasonTrend`, `SeasonRadar`), the column editor's touch hint. Anything CSS can do stays in CSS. |
 | `hooks/useThemeName.js` | state | The active theme read from `<html data-theme>` and subscribed to with a `MutationObserver`, so a chart that paints its own pixels (the heatmap) repaints on a switch, and answers correctly while an export renders in the other theme. |
 | `hooks/useHoverMenu.js` | state | ⭐ **Open/close behaviour for the header hover menus** (`NavDropdown`; the Leaderboards mega menu that shared it was retired in September 2026). Fixes two bugs of geometry rather than state: no grace period (leaving the trigger closed the menu on the same frame, so the diagonal travel toward an item lost it) and a dead 6px gap belonging to neither element. A close is deferred ~260ms and cancelled on re-entry; callers carry the offset as padding on a hoverable wrapper. A module-level registry closes any sibling the moment another opens, so the delay never leaves two panels up. |
@@ -457,6 +458,7 @@ machine (your laptop, Supabase) can be brought to the exact same schema with
 | `alembic/versions/a1470d03b94d_*.py` | **2026 personnel.** Creates `team_personnel_season` (RLS on, `anon`/`authenticated` revoked). |
 | `alembic/versions/cc1003cfc34f_*.py` | **Personnel from snap counts.** Adds `back_snaps`, `te_snaps`, `wr_snaps`, `two_back_snaps` to `team_game_stats`. |
 | `alembic/versions/7922d74faa17_*.py` | ⭐ **Game pages.** Creates `game_plays`, `game_drives` and `injury_reports` (RLS on, `anon`/`authenticated` revoked), and adds `games.stadium` and `teams.color2`. |
+| `alembic/versions/5b2e9c4d7a10_*.py` | **The players on each play.** Adds `passer_id`, `rusher_id`, `receiver_id`, `fumble_lost_id`, the play's passing, rushing and receiving yards, and its completion, interception, touchdown and two-point flags to `game_plays`, so a recap can price every play in any scoring. |
 | `alembic/versions/85d024666c8f_*.py` | ⭐ **Scope narrowed to 2009.** Deletes 52,146 stat lines and 2,646 games before 2009 — the M8 audit's own conclusion applied, since targets are unrecoverable 2003–2008 and expected points have no usable receiving side until 2009. Leaves `players` and `teams` alone: `load_players` republishes every retired player daily, so that delete would undo itself overnight. ⚠️ Frees pages without returning them — `VACUUM FULL player_stats` afterwards, by hand, since it cannot run in a transaction. |
 | `alembic/versions/4a2fb3bf6c6b_*.py` | Migration #2 — adds a unique constraint on team abbreviation. |
 | `alembic/versions/521f727f5461_*.py` | Migration #3 (M2) — adds the expected stat components, the three market-share columns, and carries inside the 10/5/2. |
@@ -828,6 +830,26 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-10-16**: **Recap tabs reworked.** Summary drops the win probability caption and lists each team's
+  top five scorers. The Fantasy tab is gone (an old `?tab=fantasy` link opens the Box Score). Box Score
+  has eleven columns per phase, ending Snap %, FPTS and Finish, on one column grid shared by its three
+  tables so every column lines up down the card; under each team's box score sits **against his
+  average** (this game against his points per game coming in) and **points by quarter**, both teams'
+  cards holding the same number of players so the rows end level. Every recap
+  table header is bold. **Passing by depth** (`components/team/PassDepthField.jsx`, team pages too)
+  draws at its card's measured width (new `hooks/useElementWidth.js`) rather than scaling a 460-wide
+  box, which set its labels at 7 to 11px in a game page's quarter-width card, and stacks its labels in a
+  narrow card; secondary text moved from faint to muted. On a recap it ranks the game among every
+  offense's regular season (`rank_against=season` on `/teams/{id}/breakdown`), not that week's games. Usage becomes **Usage & Efficiency**:
+  per team, Passing, Rushing and Receiving tables, each in Usage and Efficiency column groups on one
+  shared column grid, with each phase's EPA and fantasy points per dropback, carry, target and route
+  (that phase's points only, `points_by_phase` on the recap), and under them **who got the ball**:
+  every target and carry on the game clock (`TouchTimeline`, from the recap's new `touches`, which
+  match the stat lines on 8,098 of 8,099 2025-26 lines). Team Stats repacks onto four columns, and EPA by quarter becomes a grid tinted
+  against the season's league rates (`league` on the recap). Migration `5b2e9c4d7a10` adds each play's
+  passer, rusher, receiver and fumbler and what they were credited with to `game_plays`, filled by
+  `ingest_plays.py`; `_play_points` in `game_pages.py` prices them. Chosen from the "Game Recap
+  Options" mockup (F3, F4 and E2 kept).
 - **2026-10-15**: **Recaps the morning after, and this week's ranks before Thursday.** A daily in-season
   `recaps` job in `pipeline.yml` runs `ingest_stats`, `ingest_expected`, `ingest_usage`, `ingest_team_stats`
   and `ingest_plays` for the newest played week only (new `--weeks` option on all five, via `db.py`'s

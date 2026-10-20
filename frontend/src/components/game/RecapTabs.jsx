@@ -6,12 +6,13 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { FinishChip } from "../player/FinishChip";
+import { PositionTag } from "../PositionTag";
 import { RankChip } from "../team/RankChip";
 import { PassDepthField } from "../team/PassDepthField";
 import { RunLaneColumns } from "../team/RunLaneColumns";
 import { NetworkChart, NetworkLegend, shapeNetwork } from "../explore/NetworkChart";
 import { TeamTargetCard } from "../explore/TargetCard";
-import { Headshot, Legend } from "../explore/common";
+import { Headshot } from "../explore/common";
 import { useNetwork } from "../../hooks/useExplore";
 import { useGamePlays } from "../../hooks/useGames";
 import { useLeague } from "../../hooks/useLeague";
@@ -19,11 +20,11 @@ import { useTeamBreakdown } from "../../hooks/useTeamStats";
 import { usePhone } from "../../hooks/useMediaQuery";
 import { parseLeague } from "../../constants/league";
 import { formatTeamStat } from "../../utils/teamStats";
-import { lastName, signed } from "../../utils/explore";
+import { signed } from "../../utils/explore";
 import { ordinal } from "../../utils/format";
-import { BREAKDOWN_PARTS, DriveChart, EpaByQuarterChart, ExpectedDumbbell, PointsBreakdownChart, PossessionStrip, WinProbabilityChart } from "./GameCharts";
+import { AverageChart, DriveChart, PossessionStrip, TouchTimeline, WinProbabilityChart } from "./GameCharts";
 import { TeamKey } from "./GameHeader";
-import { inkOn, teamText } from "./colors";
+import { teamText } from "./colors";
 import { Heat, Loading, Panel, PlayerName, TD, TH, TH_CENTER, TH_LEFT, Waiting, clockTime, int, lineText, num, pct } from "./parts";
 
 const sides = (game) => [game.away.abbreviation, game.home.abbreviation];
@@ -112,30 +113,27 @@ function ScoringSummary({ scoring, game, dense = false }) {
   );
 }
 
+const LEADERS = 5;
+
 function GameLeaders({ recap, game }) {
   const league = parseLeague(useLeague()[0]);
   const logos = logosOf(game);
   const column = (team) => {
-    const players = recap.players.filter((p) => p.team === team);
-    const passer = players.filter((p) => p.attempts > 0).sort((a, b) => b.passing_yards - a.passing_yards)[0];
-    const rusher = players.filter((p) => p.carries > 0 && p !== passer).sort((a, b) => b.rushing_yards - a.rushing_yards)[0];
-    const receiver = players.filter((p) => p.targets > 0).sort((a, b) => b.receiving_yards - a.receiving_yards)[0];
-    const rows = [
-      ["Pass", passer, passer && `${passer.completions}/${passer.attempts}, ${passer.passing_yards} yds, ${passer.passing_tds} TD${passer.interceptions ? `, ${passer.interceptions} INT` : ""}`],
-      ["Rush", rusher, rusher && `${rusher.carries}-${rusher.rushing_yards}, ${rusher.rushing_tds} TD`],
-      ["Rec", receiver, receiver && `${receiver.receptions}-${receiver.receiving_yards} on ${receiver.targets} tgt${receiver.receiving_tds ? `, ${receiver.receiving_tds} TD` : ""}`],
-    ].filter(([, player]) => player);
+    // recap.players arrives sorted by fantasy points.
+    const rows = recap.players.filter((p) => p.team === team).slice(0, LEADERS);
     return (
       <div key={team} className="min-w-0">
         <div className="mb-1 flex items-center gap-2 text-[12.5px] font-bold text-fg">
           {logos[team] && <img src={logos[team]} alt="" className="h-5 w-5 object-contain" />}{team}
         </div>
-        {rows.map(([label, player, text]) => (
-          <div key={label} className="flex items-center gap-2.5 border-b border-line py-2 last:border-0">
+        {rows.map((player) => (
+          <div key={player.player_id} className="flex items-center gap-2.5 border-b border-line py-2 last:border-0">
             <Headshot url={player.headshot_url} name={player.name} size={38} />
             <div className="min-w-0 flex-1">
-              <Link to={`/players/${player.player_id}`} className="block truncate text-[13px] font-semibold text-fg hover:text-accent">{player.name}</Link>
-              <div className="truncate text-[11px] text-faint"><span className="font-bold tracking-wide">{label.toUpperCase()}</span> {text}</div>
+              <Link to={`/players/${player.player_id}`} className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-fg hover:text-accent">
+                <span className="truncate">{player.name}</span><PositionTag position={player.position} variant="quiet" />
+              </Link>
+              <div className="truncate text-[11px] text-faint">{lineText(player)}</div>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="stat-num text-[15px] font-extrabold text-fg">{num(player.fantasy_points)}</span>
@@ -165,8 +163,9 @@ function TeamSplitBars({ recap, game, colors }) {
   const [a, h] = sides(game);
   const box = recap.team_box;
   if (!box[a] || !box[h]) return <p className="py-6 text-center text-sm text-muted">Team stats arrive with the weekly update.</p>;
+  // Spread down the card, which is as tall as the game leaders beside it.
   return (
-    <div className="grid gap-2.5">
+    <div className="grid flex-1 content-between gap-2.5">
       {SPLIT_ROWS.map(([label, key, format, better, compare]) => {
         const text = (b) => (typeof key === "function" ? key(b) : format(b[key]));
         const value = (b) => (compare ? compare(b) : b[key] ?? 0);
@@ -199,7 +198,7 @@ export function SummaryTab({ game, recap, colors }) {
     <div className="grid gap-4">
       {hasPlays ? (
         <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_440px]">
-          <Panel title="Win probability" sub="After every play, from the market's view at kickoff. Numbered: the biggest swings. Triangles: every score">
+          <Panel title="Win probability">
             <WinProbabilityChart winProbability={recap.win_probability} swings={recap.swings} scoring={recap.scoring_plays} away={a} home={h} colors={colors} />
             <div className="mt-3"><SwingList swings={recap.swings} game={game} colors={colors} /></div>
             <div className="mt-4 border-t border-line pt-3.5"><FlowFacts flow={recap.flow} game={game} /></div>
@@ -218,7 +217,7 @@ export function SummaryTab({ game, recap, colors }) {
           <Panel title="Game leaders" sub={`Fantasy points in ${recap.scoring?.rec === 1 ? "PPR" : recap.scoring?.rec === 0.5 ? "Half-PPR" : "standard scoring"}, with the finish at the position that week`}>
             <GameLeaders recap={recap} game={game} />
           </Panel>
-          <Panel title="Team stats" right={<TeamKey teams={[{ abbreviation: a, color: colors.away }, { abbreviation: h, color: colors.home }]} />}>
+          <Panel title="Team stats" className="flex flex-col" right={<TeamKey teams={[{ abbreviation: a, color: colors.away }, { abbreviation: h, color: colors.home }]} />}>
             <TeamSplitBars recap={recap} game={game} colors={colors} />
           </Panel>
         </div>
@@ -228,156 +227,133 @@ export function SummaryTab({ game, recap, colors }) {
 }
 
 // ------------------------------------------------------------------- Box Score
-function BoxTables({ players, logo }) {
-  const league = parseLeague(useLeague()[0]);
-  const passers = players.filter((p) => p.attempts > 0);
-  const rushers = players.filter((p) => p.carries > 0).sort((x, y) => y.rushing_yards - x.rushing_yards);
-  const receivers = players.filter((p) => p.targets > 0).sort((x, y) => y.receiving_yards - x.receiving_yards);
-  const fantasy = (p) => (
-    <>
-      <td className={`${TD} font-bold text-fg`}>{num(p.fantasy_points)}</td>
-      <td className="py-1.5 pl-2 text-right"><FinishChip rank={p.position_rank} position={p.position} league={league} detail={`of ${p.pool_size} that week`} /></td>
-    </>
-  );
-  const table = (title, heads, rows, cells) => (
+const scoringName = (scoring) => (scoring?.te_rec ? "TE premium" : scoring?.rec === 1 ? "PPR" : scoring?.rec === 0.5 ? "Half-PPR" : "Standard");
+
+// Every phase has eleven columns, the last three snap share, points and finish. The three
+// tables share one column grid, so each column lines up down the card: the same width at a
+// position in every table, sized for the widest label or value any table puts there
+// ("Stuffed" in the seventh, the finish chip in the last). Weights, summing to 100.
+const BOX_WIDTHS = [9, 7, 7, 9, 8, 9, 12, 10, 10, 8, 11];
+const PLAYER_SHARE = 24;   // percent of the table for the player column
+const TIGHT = "!px-1";
+
+// Ten-plus and stuffed runs are over designed runs, so a quarterback's one designed run is
+// not a count worth showing.
+const designed = (p, value) => ((p.designed_runs ?? 0) >= 3 ? value : "—");
+
+const BOX_PHASES = [
+  {
+    title: "Passing",
+    rows: (players) => players.filter((p) => p.attempts > 0),
+    columns: [
+      ["C/Att", (p) => `${p.completions}/${p.attempts}`], ["Yds", (p) => p.passing_yards],
+      ["Y/A", (p) => num(p.passing_yards / p.attempts)], ["TD", (p) => p.passing_tds], ["Int", (p) => p.interceptions],
+      ["Sacks", (p) => p.sacks_suffered ?? 0], ["Rate", (p) => num(p.passer_rating)], ["EPA", (p) => signed(p.passing_epa, 1)],
+    ],
+  },
+  {
+    title: "Rushing",
+    rows: (players) => players.filter((p) => p.carries > 0).sort((x, y) => y.rushing_yards - x.rushing_yards),
+    columns: [
+      ["Car", (p) => p.carries], ["Yds", (p) => p.rushing_yards], ["Avg", (p) => num(p.rushing_yards / p.carries)],
+      ["TD", (p) => p.rushing_tds], ["IN10", (p) => p.rush_att_inside_10 ?? 0], ["10+", (p) => designed(p, p.explosive_runs)],
+      ["Stuffed", (p) => designed(p, p.stuffed_runs)], ["Rush %", (p) => pct(p.rush_attempt_share)],
+    ],
+  },
+  {
+    title: "Receiving",
+    rows: (players) => players.filter((p) => p.targets > 0).sort((x, y) => y.receiving_yards - x.receiving_yards),
+    columns: [
+      ["Tgt", (p) => p.targets], ["Rec", (p) => p.receptions], ["Yds", (p) => p.receiving_yards],
+      ["Y/Rec", (p) => (p.receptions ? num(p.receiving_yards / p.receptions) : "—")], ["TD", (p) => p.receiving_tds],
+      ["aDOT", (p) => num(p.adot)], ["RZ Tgt", (p) => p.red_zone_targets ?? 0], ["Tgt %", (p) => pct(p.target_share)],
+    ],
+  },
+];
+
+function BoxTable({ phase, players, league }) {
+  const rows = phase.rows(players);
+  if (!rows.length) return null;
+  const columns = [
+    ...phase.columns,
+    ["Snap %", (p) => pct(p.snap_share)],
+    ["FPTS", (p) => <span className="font-bold">{num(p.fantasy_points)}</span>],
+    ["Finish", (p) => <FinishChip rank={p.position_rank} position={p.position} league={league} detail={`of ${p.pool_size} that week`} />],
+  ];
+  return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[620px] border-collapse text-[12.5px]">
+      <table className="w-full min-w-[680px] table-fixed border-collapse text-[12.5px]">
+        <colgroup>
+          <col style={{ width: `${PLAYER_SHARE}%` }} />
+          {BOX_WIDTHS.map((weight, index) => <col key={index} style={{ width: `${(weight * (100 - PLAYER_SHARE)) / 100}%` }} />)}
+        </colgroup>
         <thead>
           <tr className="border-b border-line">
-            <th className={`${TH_LEFT} pin-col pl-0 text-muted`}>{title}</th>
-            {heads.map((head) => <th key={head} className={TH}>{head}</th>)}
-            <th className={TH}>FPTS</th><th className={TH} />
+            <th className={`${TH_LEFT} pin-col pl-0 text-muted`}>{phase.title}</th>
+            {columns.map(([head]) => <th key={head} className={`${TH} ${TIGHT}`}>{head}</th>)}
           </tr>
         </thead>
         <tbody>
           {rows.map((p) => (
             <tr key={p.player_id} className="border-b border-line last:border-0">
-              <td className="pin-col py-1.5 pr-2"><PlayerName player={p} /></td>
-              {cells(p).map((cell, index) => <td key={index} className={`${TD} text-fg`}>{cell}</td>)}
-              {fantasy(p)}
+              <td className="pin-col overflow-hidden py-1.5 pr-2"><PlayerName player={p} /></td>
+              {columns.map(([head, cell]) => <td key={head} className={`${TD} ${TIGHT} text-fg`}>{cell(p)}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
-  return (
-    <div className="grid gap-4">
-      {passers.length > 0 && table("Passing", ["C/Att", "Yds", "TD", "Int", "Sck", "CPOE", "EPA"], passers, (p) => [
-        `${p.completions}/${p.attempts}`, p.passing_yards, p.passing_tds, p.interceptions, p.sacks_suffered ?? 0, signed(p.cpoe, 1), signed(p.epa, 1),
-      ])}
-      {rushers.length > 0 && table("Rushing", ["Car", "Yds", "Avg", "TD", "Success", "10+", "Stuffed"], rushers, (p) => [
-        p.carries, p.rushing_yards, num(p.rushing_yards / p.carries), p.rushing_tds,
-        // Success and the rest are over designed runs, so a quarterback's one designed run is not a rate.
-        (p.designed_runs ?? 0) >= 3 ? pct(p.run_success_rate) : "—", (p.designed_runs ?? 0) >= 3 ? p.explosive_runs : "—", (p.designed_runs ?? 0) >= 3 ? p.stuffed_runs : "—",
-      ])}
-      {receivers.length > 0 && table("Receiving", ["Tgt", "Rec", "Yds", "TD", "aDOT", "YAC", "Tgt %"], receivers, (p) => [
-        p.targets, p.receptions, p.receiving_yards, p.receiving_tds, num(p.adot), int(p.yards_after_catch), pct(p.target_share),
-      ])}
-    </div>
-  );
 }
 
-export function BoxScoreTab({ game, recap }) {
-  if (!game.has_stats) return <NoStats />;
-  return (
-    <div className="grid gap-4 xl:grid-cols-2">
-      {["away", "home"].map((side) => (
-        <Panel key={side} title={<span className="flex items-center gap-2">{game[side].logo_url && <img src={game[side].logo_url} alt="" className="h-6 w-6 object-contain" />}{game[side].name}</span>}>
-          <BoxTables players={recap.players.filter((p) => p.team === game[side].abbreviation)} />
-        </Panel>
-      ))}
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------- Fantasy
-const scoringName = (scoring) => (scoring?.te_rec ? "TE premium" : scoring?.rec === 1 ? "PPR" : scoring?.rec === 0.5 ? "Half-PPR" : "Standard");
-
-export function FantasyTab({ game, recap }) {
+function BoxTables({ players }) {
   const league = parseLeague(useLeague()[0]);
-  if (!game.has_stats) return <NoStats />;
-  const logos = logosOf(game);
-  const players = recap.players.filter((p) => p.fantasy_points >= 1 || (p.expected_fantasy_points ?? 0) >= 2);
-  const charted = recap.players.filter((p) => p.expected_fantasy_points !== null && (p.fantasy_points >= 3 || p.expected_fantasy_points >= 4));
   return (
     <div className="grid gap-4">
-      <Panel title="Fantasy box score" sub={`${scoringName(recap.scoring)}. Finish is the rank at the position among everyone who played that week. xFP is expected points from the volume and where it came`}>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] border-collapse text-[12.5px]">
-            <thead>
-              <tr className="border-b border-line">
-                <th className={`${TH_LEFT} pin-col pl-0`}>Player</th>
-                <th className={TH}>FPTS</th><th className={`${TH_CENTER}`}>Finish</th><th className={TH}>xFP</th><th className={TH}>+/−</th>
-                <th className={TH}>Snap</th><th className={TH}>Tgt %</th><th className={TH}>Opp</th><th className={`${TH_LEFT}`}>Line</th>
-              </tr>
-            </thead>
-            <tbody>
-              {players.map((p) => {
-                const diff = p.expected_fantasy_points === null ? null : p.fantasy_points - p.expected_fantasy_points;
-                return (
-                  <tr key={p.player_id} className="border-b border-line last:border-0">
-                    <td className="pin-col py-1.5 pr-2"><PlayerName player={p} logo={logos[p.team]} size={24} /></td>
-                    <td className={`${TD} font-bold text-fg`}>{num(p.fantasy_points)}</td>
-                    <td className="px-2 py-1.5 text-center"><FinishChip rank={p.position_rank} position={p.position} league={league} detail={`of ${p.pool_size} that week`} /></td>
-                    <td className={`${TD} text-muted`}>{num(p.expected_fantasy_points)}</td>
-                    <td className={`${TD} font-bold`} style={{ color: diff === null ? undefined : `color-mix(in srgb, ${diff >= 0 ? "var(--pos)" : "var(--neg)"} 72%, var(--fg))` }}>{diff === null ? "—" : signed(diff, 1)}</td>
-                    <td className={`${TD} text-muted`}>{pct(p.snap_share)}</td>
-                    <td className={`${TD} text-muted`}>{p.target_share ? pct(p.target_share) : "—"}</td>
-                    <td className={`${TD} text-muted`}>{(p.targets ?? 0) + (p.carries ?? 0)}</td>
-                    <td className="whitespace-nowrap px-2 py-1.5 text-left text-[11.5px] text-muted">{lineText(p)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <Panel title="Points against expected" sub="The gap is touchdowns and efficiency: expected points come from the volume and where it came">
-          <ExpectedDumbbell players={recap.players} logos={logos} />
-          <Legend items={[
-            { label: "Expected", color: "var(--muted)", round: true },
-            { label: "Scored more", color: "var(--pos)", round: true },
-            { label: "Scored less", color: "var(--neg)", round: true },
-          ]} />
-        </Panel>
-        <Panel title="Where the points came from" sub={scoringName(recap.scoring)}>
-          <PointsBreakdownChart players={charted} />
-          <div className="mt-2"><Legend items={[...BREAKDOWN_PARTS.map((part) => ({ label: part.label, color: part.color })), { label: "Turnovers", color: "var(--neg)" }]} /></div>
-        </Panel>
-      </div>
+      {BOX_PHASES.map((phase) => <BoxTable key={phase.title} phase={phase} players={players} league={league} />)}
     </div>
   );
 }
 
-// ------------------------------------------------------------------- Usage
-function UsageTable({ players }) {
-  const rows = players.filter((p) => (p.snap_share ?? 0) >= 0.08 || (p.targets ?? 0) + (p.carries ?? 0) > 0)
-    .sort((x, y) => (y.expected_fantasy_points ?? 0) - (x.expected_fantasy_points ?? 0));
+function TeamTitle({ team }) {
+  return <span className="flex items-center gap-2">{team.logo_url && <img src={team.logo_url} alt="" className="h-6 w-6 object-contain" />}{team.name}</span>;
+}
+
+// Both teams' cards share a row, so each team shows the same number of players and the
+// pair ends level: the larger team's count of players who qualify, up to a cap, filled
+// out with the next-highest scorers. Lists arrive sorted by fantasy points.
+function evenRows(lists, qualifies, cap) {
+  const count = Math.min(cap, Math.max(...lists.map((list) => list.filter(qualifies).length)));
+  return lists.map((list) => list.slice(0, count));
+}
+
+function QuarterPoints({ players, game, max }) {
+  const periods = Array.from({ length: Math.max(4, game.periods?.length ?? 4) }, (_, index) => index + 1);
+  const cell = (value) => {
+    if (Math.abs(value) < 0.05) return <span className="text-faint">·</span>;
+    if (value < 0) return <span style={{ color: "color-mix(in srgb, var(--neg) 72%, var(--fg))" }}>{num(value)}</span>;
+    return num(value);
+  };
+  const tint = (value) => (value > 0.05 ? { background: `color-mix(in srgb, var(--accent) ${Math.round(6 + (value / max) * 48)}%, transparent)` } : undefined);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] border-collapse text-[12.5px]">
+      <table className="w-full min-w-[520px] border-collapse text-[12.5px]">
         <thead>
           <tr className="border-b border-line">
             <th className={`${TH_LEFT} pin-col pl-0`}>Player</th>
-            {["Snap", "Route", "Tgt", "Tgt %", "Air %", "aDOT", "Car", "Car %", "RZ opp", "xFP"].map((head) => <th key={head} className={TH}>{head}</th>)}
+            {periods.map((quarter) => <th key={quarter} className={TH_CENTER}>{periodName(quarter, game)}</th>)}
+            <th className={TH}>Total</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((p) => (
+          {players.map((p) => (
             <tr key={p.player_id} className="border-b border-line last:border-0">
               <td className="pin-col py-1.5 pr-2"><PlayerName player={p} /></td>
-              <td className={TD}><Heat value={p.snap_share} max={1}>{pct(p.snap_share)}</Heat></td>
-              <td className={TD}><Heat value={p.route_participation} max={1}>{pct(p.route_participation)}</Heat></td>
-              <td className={`${TD} text-fg`}>{p.targets || "—"}</td>
-              <td className={TD}><Heat value={p.target_share} max={0.45}>{pct(p.target_share)}</Heat></td>
-              <td className={TD}><Heat value={p.air_yards_share} max={0.6}>{pct(p.air_yards_share)}</Heat></td>
-              <td className={`${TD} text-muted`}>{p.adot === null ? "—" : num(p.adot)}</td>
-              <td className={`${TD} text-fg`}>{p.carries || "—"}</td>
-              <td className={TD}><Heat value={p.rush_attempt_share} max={0.8}>{pct(p.rush_attempt_share)}</Heat></td>
-              <td className={`${TD} text-fg`}>{(p.red_zone_targets ?? 0) + (p.rush_att_inside_10 ?? 0) || "—"}</td>
-              <td className={`${TD} font-bold text-fg`}>{num(p.expected_fantasy_points)}</td>
+              {periods.map((quarter) => {
+                const value = p.points_by_quarter?.[String(quarter)] ?? 0;
+                return <td key={quarter} className="stat-num whitespace-nowrap px-2 py-1.5 text-center text-fg" style={tint(value)}>{cell(value)}</td>;
+              })}
+              <td className={`${TD} font-bold text-fg`}>{num(p.fantasy_points)}</td>
             </tr>
           ))}
         </tbody>
@@ -386,31 +362,165 @@ function UsageTable({ players }) {
   );
 }
 
-function WorkSplit({ players, color, field, label }) {
-  const rows = players.filter((p) => (p[field] ?? 0) > 0).sort((x, y) => y[field] - x[field]);
-  const total = rows.reduce((sum, p) => sum + p[field], 0);
-  if (!total) return null;
-  const shades = [100, 78, 60, 46, 34, 24, 16];
-  const shade = (index) => `color-mix(in srgb, ${color} ${shades[Math.min(index, 6)]}%, var(--surface-2))`;
+export function BoxScoreTab({ game, recap, colors }) {
+  if (!game.has_stats) return <NoStats />;
+  const scoring = scoringName(recap.scoring);
+  const lists = ["away", "home"].map((side) => recap.players.filter((p) => p.team === game[side].abbreviation));
+  const averages = evenRows(lists, (p) => p.fantasy_points >= 2 || (p.average_coming_in ?? 0) >= 5, 9);
+  const quarters = evenRows(lists, (p) => p.fantasy_points >= 3, 8);
+  // Plays stored before they named their players price to nothing, so an empty grid is hidden.
+  const hasQuarters = game.has_plays && recap.players.some((p) => Object.keys(p.points_by_quarter ?? {}).length > 0);
+  // One scale for both teams' average charts, and one heat scale for both quarter grids.
+  const averageTop = Math.ceil(Math.max(10, ...averages.flat().map((p) => Math.max(p.fantasy_points, p.average_coming_in ?? 0))) / 10) * 10;
+  const quarterMax = Math.max(1, ...quarters.flat().flatMap((p) => Object.values(p.points_by_quarter ?? {})));
+  // Each team is a column, side by side only where half the page holds a box score. The
+  // grid fills down the first column and then the second, so the two teams' cards share
+  // rows and line up; below that width each team's cards stay together.
   return (
-    <div className="grid gap-1.5">
-      <div className="flex justify-between text-[11.5px]"><b className="font-semibold text-fg">{label}</b><span className="stat-num text-faint">{total}</span></div>
-      <div className="flex h-[26px] gap-0.5 overflow-hidden rounded-md">
-        {rows.map((p, index) => (
-          <span key={p.player_id} title={`${p.name}: ${p[field]}`} className="stat-num flex items-center justify-center overflow-hidden text-[10.5px] font-bold"
-            style={{ width: `${(p[field] / total) * 100}%`, background: shade(index), color: index < 2 ? inkOn(color) : "var(--fg)" }}>
-            {p[field] / total >= 0.09 ? p[field] : ""}
-          </span>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
-        {rows.slice(0, 6).map((p, index) => (
-          <span key={p.player_id} className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: shade(index) }} />
-            {lastName(p.name)} {Math.round((p[field] / total) * 100)}%
-          </span>
-        ))}
-      </div>
+    <div className={`grid gap-4 2xl:grid-flow-col 2xl:grid-cols-2 ${hasQuarters ? "2xl:grid-rows-[repeat(3,auto)]" : "2xl:grid-rows-[repeat(2,auto)]"}`}>
+      {["away", "home"].map((side, index) => {
+        const abbr = game[side].abbreviation;
+        return [
+          <Panel key={`${side}-box`} title={<TeamTitle team={game[side]} />} right={<span className="text-xs font-semibold text-faint">{scoring}</span>}>
+            <BoxTables players={lists[index]} />
+          </Panel>,
+          <Panel key={`${side}-average`} title={`${abbr} against his average`} sub="Bar: points this game. Tick: season average coming in">
+            <AverageChart players={averages[index]} color={colors[side]} top={averageTop} />
+          </Panel>,
+          hasQuarters && (
+            <Panel key={`${side}-quarters`} title={`${abbr} points by quarter`} sub={scoring}>
+              <QuarterPoints players={quarters[index]} game={game} max={quarterMax} />
+            </Panel>
+          ),
+        ].filter(Boolean);
+      })}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------- Usage & Efficiency
+// One table per phase, as on the Box Score: what each player was given (usage), then what
+// he did with it (efficiency), each rate beside the volume it is a rate of. Every rate is
+// that game's own numbers divided. The fantasy rates are in the page's scoring and count
+// only that phase's points (points_by_phase), so a back's points per target are what he
+// did as a receiver, not his rushing touchdowns over one target.
+const ratio = (top, bottom) => (top === null || top === undefined || !bottom ? null : top / bottom);
+const dropbacks = (p) => (p.attempts ?? 0) + (p.sacks_suffered ?? 0);
+const count = (value) => (value ? value : <span className="text-faint">0</span>);
+const share = (value, max) => <Heat value={value} max={max}>{pct(value)}</Heat>;
+const fixed = (value, digits = 1) => (value === null || value === undefined ? <span className="text-faint">—</span> : num(value, digits));
+const plus = (value, digits = 2) => (value === null || value === undefined ? <span className="text-faint">—</span> : signed(value, digits));
+
+const PHASES = [
+  {
+    title: "Passing",
+    rows: (players) => players.filter((p) => p.attempts > 0).sort((x, y) => dropbacks(y) - dropbacks(x)),
+    usage: [
+      ["DB", (p) => dropbacks(p), "Dropbacks: attempts plus sacks"],
+      ["Air yds", (p) => p.pass_air_yards ?? "—"],
+      ["aDOT", (p) => fixed(ratio(p.pass_air_yards, p.pass_depth_attempts))],
+      ["20+ Att", (p) => count(p.deep_attempts)],
+      ["RZ Att", (p) => count(p.red_zone_attempts)],
+    ],
+    efficiency: [
+      ["Y/A", (p) => fixed(ratio(p.passing_yards, p.attempts))],
+      ["CPOE", (p) => plus(p.cpoe, 1)],
+      ["Sack %", (p) => pct(ratio(p.sacks_suffered ?? 0, dropbacks(p)))],
+      ["EPA", (p) => plus(p.passing_epa, 1)],
+      ["EPA/DB", (p) => plus(ratio(p.passing_epa, dropbacks(p)))],
+      ["FP/DB", (p) => fixed(ratio(p.points_by_phase?.passing, dropbacks(p)), 2)],
+    ],
+  },
+  {
+    title: "Rushing",
+    rows: (players) => players.filter((p) => p.carries > 0).sort((x, y) => y.carries - x.carries),
+    usage: [
+      ["Snap", (p) => share(p.snap_share, 1)],
+      ["Car", (p) => p.carries],
+      ["Rush %", (p) => share(p.rush_attempt_share, 0.8)],
+      ["RZ Car", (p) => count(p.red_zone_rush_attempts)],
+      ["IN10", (p) => count(p.rush_att_inside_10)],
+      ["IN5", (p) => count(p.rush_att_inside_5)],
+      ["IN2", (p) => count(p.rush_att_inside_2)],
+    ],
+    efficiency: [
+      ["YPC", (p) => fixed(ratio(p.rushing_yards, p.carries))],
+      // Over designed runs, so a quarterback's one designed run is not a rate.
+      ["Success", (p) => ((p.designed_runs ?? 0) >= 3 ? pct(p.run_success_rate) : <span className="text-faint">—</span>)],
+      ["EPA", (p) => plus(p.rushing_epa, 1)],
+      ["EPA/Car", (p) => plus(ratio(p.rushing_epa, p.carries))],
+      ["FP/Car", (p) => fixed(ratio(p.points_by_phase?.rushing, p.carries), 2)],
+    ],
+  },
+  {
+    title: "Receiving",
+    rows: (players) => players.filter((p) => p.targets > 0 || p.routes_run > 0)
+      .sort((x, y) => (y.routes_run ?? 0) - (x.routes_run ?? 0) || y.targets - x.targets),
+    usage: [
+      ["Snap", (p) => share(p.snap_share, 1)],
+      ["Routes", (p) => p.routes_run ?? "—"],
+      ["Route %", (p) => share(p.route_participation, 1)],
+      ["Tgt", (p) => count(p.targets)],
+      ["Tgt %", (p) => share(p.target_share, 0.45)],
+      ["Air %", (p) => share(p.air_yards_share, 0.6)],
+      ["aDOT", (p) => fixed(p.adot)],
+      ["RZ Tgt", (p) => count(p.red_zone_targets)],
+      ["WOPR", (p) => fixed(p.wopr, 2)],
+    ],
+    efficiency: [
+      ["Catch %", (p) => pct(ratio(p.receptions, p.targets))],
+      ["Y/Rec", (p) => fixed(ratio(p.receiving_yards, p.receptions))],
+      ["Y/Tgt", (p) => fixed(ratio(p.receiving_yards, p.targets))],
+      ["TPRR", (p) => pct(ratio(p.targets, p.routes_run))],
+      ["YPRR", (p) => fixed(ratio(p.receiving_yards, p.routes_run), 2)],
+      ["EPA", (p) => plus(p.receiving_epa, 1)],
+      ["EPA/Tgt", (p) => plus(ratio(p.receiving_epa, p.targets))],
+      ["FP/Tgt", (p) => fixed(ratio(p.points_by_phase?.receiving, p.targets), 2)],
+      ["FP/RR", (p) => fixed(ratio(p.points_by_phase?.receiving, p.routes_run), 2)],
+    ],
+  },
+];
+
+// Every stat column is the same width in all three tables, the widest table filling the
+// card, so the phases stack on one grid rather than each spreading its own columns.
+const PLAYER_COLUMN = 250;
+const WIDEST_PHASE = Math.max(...PHASES.map((phase) => phase.usage.length + phase.efficiency.length));
+
+function PhaseTable({ phase, players }) {
+  const rows = phase.rows(players);
+  if (!rows.length) return null;
+  const columns = [...phase.usage, ...phase.efficiency];
+  const firstEfficiency = phase.usage.length;
+  const group = "px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-faint";
+  const width = `calc(${PLAYER_COLUMN}px + ${columns.length} * (100% - ${PLAYER_COLUMN}px) / ${WIDEST_PHASE})`;
+  return (
+    <div className="overflow-x-auto">
+      <table className="table-fixed border-collapse text-[12.5px]" style={{ width, minWidth: 150 + columns.length * 72 }}>
+        <colgroup>
+          <col className="w-[150px] md:w-[250px]" />
+          {columns.map(([head]) => <col key={head} />)}
+        </colgroup>
+        <thead>
+          <tr>
+            <th rowSpan={2} className={`${TH_LEFT} pin-col pl-0 align-bottom text-muted`}>{phase.title}</th>
+            <th colSpan={phase.usage.length} className={`${group} border-b border-line text-left`}>Usage</th>
+            <th colSpan={phase.efficiency.length} className={`${group} border-b border-l border-line text-left`}>Efficiency</th>
+          </tr>
+          <tr className="border-b border-line">
+            {columns.map(([head, , title], index) => <th key={head} title={title} className={`${TH} ${index === firstEfficiency ? "border-l border-line" : ""}`}>{head}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.player_id} className="border-b border-line last:border-0">
+              <td className="pin-col overflow-hidden py-1.5 pr-2"><PlayerName player={p} /></td>
+              {columns.map(([head, cell], index) => (
+                <td key={head} className={`${TD} text-fg ${index === firstEfficiency ? "border-l border-line" : ""}`}>{cell(p)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -419,24 +529,39 @@ export function UsageTab({ game, recap, colors }) {
   if (!game.has_stats) return <NoStats />;
   return (
     <div className="grid gap-4">
-      {["away", "home"].map((side) => (
-        <Panel key={side} title={`${game[side].abbreviation} usage`} sub="Shares are of the team's own snaps, routes, targets and carries">
-          <UsageTable players={recap.players.filter((p) => p.team === game[side].abbreviation)} />
-        </Panel>
-      ))}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {["away", "home"].map((side) => {
-          const players = recap.players.filter((p) => p.team === game[side].abbreviation);
-          return (
-            <Panel key={side} title={`${game[side].abbreviation} split of the work`}>
-              <div className="grid gap-4">
-                <WorkSplit players={players} color={colors[side]} field="targets" label="Targets" />
-                <WorkSplit players={players} color={colors[side]} field="carries" label="Carries" />
-              </div>
-            </Panel>
-          );
-        })}
-      </div>
+      {["away", "home"].map((side) => {
+        const players = recap.players.filter((p) => p.team === game[side].abbreviation);
+        return (
+          <Panel key={side} title={<TeamTitle team={game[side]} />} sub="Shares are of the team's own snaps, routes, targets and carries">
+            <div className="grid gap-5">
+              {PHASES.map((phase) => <PhaseTable key={phase.title} phase={phase} players={players} />)}
+            </div>
+          </Panel>
+        );
+      })}
+      {game.has_plays && recap.touches?.length > 0 && ["away", "home"].map((side) => {
+        const players = recap.players.filter((p) => p.team === game[side].abbreviation);
+        const ids = new Set(players.map((p) => p.player_id));
+        return (
+          <Panel key={`${side}-touches`} title={`${game[side].abbreviation}: who got the ball`} sub="Every target and carry on the game clock">
+            <TouchTimeline touches={recap.touches.filter((touch) => ids.has(touch.player))} players={players} color={colors[side]}
+              end={recap.win_probability?.end ?? 3600} periods={game.periods?.length} seasonType={game.season_type} />
+            <TouchKey color={colors[side]} />
+          </Panel>
+        );
+      })}
+    </div>
+  );
+}
+
+function TouchKey({ color }) {
+  const item = "inline-flex items-center gap-1.5";
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
+      <span className={item}><span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />Target, caught</span>
+      <span className={item}><span className="h-2.5 w-2.5 rounded-full bg-[color:var(--surface-solid)]" style={{ boxShadow: `inset 0 0 0 1.6px ${color}` }} />Target, not caught</span>
+      <span className={item}><span className="h-2.5 w-2.5 rounded-[2px]" style={{ background: `color-mix(in srgb, ${color} 56%, var(--surface-solid))`, boxShadow: `inset 0 0 0 1.2px ${color}` }} />Carry</span>
+      <span className={item}><span className="h-2.5 w-2.5 rounded-full" style={{ boxShadow: "inset 0 0 0 2px var(--accent)" }} />Touchdown</span>
     </div>
   );
 }
@@ -497,21 +622,26 @@ const TEAM_TABLES = [
   ["Efficiency", [
     ["EPA per play", "epa_per_play", (v) => signed(v, 2), 1], ["Success rate", "success_rate", (v) => pct(v, 1), 1],
     ["EPA per dropback", "epa_per_dropback", (v) => signed(v, 2), 1], ["EPA per run", "epa_per_run", (v) => signed(v, 2), 1],
-    ["Yards per play", "yards_per_play", num, 1], ["Explosive plays", "explosive_plays", int, 1], ["Points per drive", "points_per_drive", (v) => num(v, 2), 1],
+    ["Yards per play", "yards_per_play", num, 1], ["Total yards", "yards", int, 1], ["First downs", "first_downs", int, 1],
+    ["Explosive plays", "explosive_plays", int, 1], ["Points per drive", "points_per_drive", (v) => num(v, 2), 1],
   ]],
   ["Situations", [
-    ["Third down", "third", null, 1], ["Red zone TDs", "red_zone", null, 1], ["Average start", "average_start", (v) => (v === null ? "—" : `own ${Math.round(v)}`), 1],
-    ["Three-and-outs", "three_and_outs", int, -1], ["Turnovers", "turnovers", int, -1], ["Sacks taken", "sacks", int, -1], ["Penalties", "penalties", null, -1],
+    ["Third down", "third", null, 1], ["Fourth down", "fourth", null, 1], ["Red zone TDs", "red_zone", null, 1],
+    ["Average start", "average_start", (v) => (v === null ? "—" : `own ${Math.round(v)}`), 1],
+    ["Three-and-outs", "three_and_outs", int, -1], ["Turnovers", "turnovers", int, -1], ["Sacks taken", "sacks", int, -1],
+    ["Penalties", "penalties", null, -1], ["Time of possession", "time_of_possession", clockTime, 1],
   ]],
   ["Style", [
-    ["Pass rate", "pass_rate", (v) => pct(v), 0], ["Neutral pass rate", "neutral_pass_rate", (v) => pct(v), 0],
+    ["Plays", "plays", int, 0], ["Pass rate", "pass_rate", (v) => pct(v), 0], ["Neutral pass rate", "neutral_pass_rate", (v) => pct(v), 0],
     ["Pass rate over expected", "pass_rate_over_expected", (v) => (v === null ? "—" : `${signed(v, 1)}%`), 0], ["Seconds per snap", "seconds_per_snap", num, 0],
-    ["Average depth of throw", "adot", num, 0], ["Backs on the field", "backs_per_play", (v) => num(v, 2), 0], ["Tight ends on the field", "tight_ends_per_play", (v) => num(v, 2), 0],
+    ["Average depth of throw", "adot", num, 0], ["Backs on the field", "backs_per_play", (v) => num(v, 2), 0],
+    ["Tight ends on the field", "tight_ends_per_play", (v) => num(v, 2), 0], ["Receivers on the field", "receivers_per_play", (v) => num(v, 2), 0],
   ]],
 ];
 
 function boxValue(box, key) {
   if (key === "third") return [box.third_down_attempts ? box.third_down_conversions / box.third_down_attempts : null, `${int(box.third_down_conversions)}/${int(box.third_down_attempts)}`];
+  if (key === "fourth") return [box.fourth_down_attempts ? box.fourth_down_conversions / box.fourth_down_attempts : null, `${int(box.fourth_down_conversions)}/${int(box.fourth_down_attempts)}`];
   if (key === "red_zone") return [box.red_zone_trips ? box.red_zone_tds / box.red_zone_trips : null, `${int(box.red_zone_tds)}/${int(box.red_zone_trips)}`];
   if (key === "penalties") return [box.penalty_yards, `${int(box.penalties)}-${int(box.penalty_yards)}`];
   return [box[key], null];
@@ -521,8 +651,10 @@ function MirrorTable({ title, rows, game, recap }) {
   const [a, h] = sides(game);
   const box = recap.team_box;
   return (
-    <Panel title={title}>
-      <table className="w-full border-collapse text-[12.5px]">
+    // The table fills its card, so beside a taller card its rows spread out rather than
+    // leaving a gap at the bottom.
+    <Panel title={title} className="flex flex-col">
+      <table className="h-full w-full flex-1 border-collapse text-[12.5px]">
         <thead>
           <tr className="border-b border-line">
             <th className={TH}><img src={game.away.logo_url} alt={a} className="ml-auto h-[18px] w-[18px] object-contain" /></th>
@@ -555,20 +687,88 @@ const WEEK_RANK_LABELS = [
   ["explosive", "Explosive rate"], ["pts_drive", "Points per drive"], ["d3", "Third down rate"], ["rz_td", "Red zone TD rate"], ["proe", "Pass rate over expected"],
 ];
 
+// One game's throws, ranked among every offense's regular season rather than that week's
+// games: a week is one game per team, too few throws to a depth for a rank to settle.
 function PassDepth({ game, side }) {
   const team = game[side];
-  const { data } = useTeamBreakdown(team.team_id, { season: game.season, season_type: game.season_type, weeks: String(game.week) });
+  const { data } = useTeamBreakdown(team.team_id, { season: game.season, season_type: game.season_type, weeks: String(game.week), rank_against: "season" });
   if (!data) return <Loading height={420} />;
-  return <PassDepthField depth={data.pass_depth} weeksLabel={`${team.name} · ${game.week_label} · ranks among that week's offenses`} />;
+  return <PassDepthField depth={data.pass_depth} weeksLabel={`${team.name} · ${game.week_label} · ranked against each offense's season`} />;
 }
 
-export function TeamStatsTab({ game, recap, colors }) {
+/** A tint from bad to good around the league's rate: `spread` away from it is full strength. */
+function rateTint(value, middle, spread) {
+  if (value === null || value === undefined || middle === null || middle === undefined) return undefined;
+  const strength = Math.min(1, Math.abs(value - middle) / spread);
+  return { background: `color-mix(in srgb, ${value >= middle ? "var(--pos)" : "var(--neg)"} ${Math.round(6 + strength * 38)}%, transparent)` };
+}
+
+/** Each offense's EPA per play, success rate and plays, quarter by quarter and for the game. */
+function QuarterGrid({ game, recap }) {
+  const teams = sides(game);
+  const periods = [...new Set(teams.flatMap((team) => (recap.epa_by_quarter[team] ?? []).map((row) => row.quarter)))].sort((x, y) => x - y);
+  const league = recap.league ?? {};
+  const rowFor = (team, quarter) => (recap.epa_by_quarter[team] ?? []).find((row) => row.quarter === quarter);
+  const wholeGame = (team) => {
+    const rows = recap.epa_by_quarter[team] ?? [];
+    const plays = rows.reduce((total, row) => total + row.plays, 0);
+    return {
+      plays, epa: rows.reduce((total, row) => total + row.epa, 0),
+      success_rate: plays ? rows.reduce((total, row) => total + (row.success_rate ?? 0) * row.plays, 0) / plays : null,
+    };
+  };
+  const cells = (team) => [...periods.map((quarter) => rowFor(team, quarter)), wholeGame(team)];
+  const perPlay = (row) => (row && row.plays ? row.epa / row.plays : null);
+  const cell = "stat-num whitespace-nowrap px-2 py-1.5 text-center";
+  return (
+    <div className="flex-1 overflow-x-auto">
+      <table className="h-full w-full min-w-[460px] border-collapse text-[12.5px]">
+        <thead>
+          <tr className="border-b border-line">
+            <th className={`${TH_LEFT} pl-0`} />
+            {periods.map((quarter) => <th key={quarter} className={TH_CENTER}>{periodName(quarter, game)}</th>)}
+            <th className={TH_CENTER}>Game</th>
+          </tr>
+        </thead>
+        {teams.map((team, index) => {
+          const side = index ? game.home : game.away;
+          const rows = cells(team);
+          return (
+            <tbody key={team}>
+              <tr>
+                <td colSpan={rows.length + 1} className="pb-1 pt-3 text-[12.5px] font-bold text-fg">
+                  <span className="flex items-center gap-2">{side.logo_url && <img src={side.logo_url} alt="" className="h-5 w-5 object-contain" />}{side.name}</span>
+                </td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-1.5 pr-2 font-semibold text-muted">EPA per play</td>
+                {rows.map((row, column) => <td key={column} className={`${cell} font-bold text-fg`} style={rateTint(perPlay(row), league.epa_per_play, 0.5)}>{perPlay(row) === null ? "—" : signed(perPlay(row), 2)}</td>)}
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-1.5 pr-2 font-semibold text-muted">Success rate</td>
+                {rows.map((row, column) => <td key={column} className={`${cell} text-fg`} style={rateTint(row?.success_rate, league.success_rate, 0.25)}>{pct(row?.success_rate)}</td>)}
+              </tr>
+              <tr className={index ? "" : "border-b border-line"}>
+                <td className="py-1.5 pr-2 font-semibold text-muted">Plays</td>
+                {rows.map((row, column) => <td key={column} className={`${cell} text-muted`}>{row ? row.plays : "—"}</td>)}
+              </tr>
+            </tbody>
+          );
+        })}
+      </table>
+    </div>
+  );
+}
+
+export function TeamStatsTab({ game, recap }) {
   if (!game.has_stats || !recap.team_box[game.away.abbreviation]) return <NoStats />;
   const [a, h] = sides(game);
   const ranks = recap.week_ranks;
+  // Both rows are on four columns, so the second row's cards sit under the first row's.
+  // A playoff week has no ranks, and its three tables share the row.
   return (
     <div className="grid gap-4">
-      <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className={`grid gap-4 md:grid-cols-2 ${ranks ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
         {TEAM_TABLES.map(([title, rows]) => <MirrorTable key={title} title={title} rows={rows} game={game} recap={recap} />)}
         {ranks && (
           <Panel title={`${game.week_label} ranks`} sub={`Against the other ${ranks.teams - 1} offenses that week`}>
@@ -595,11 +795,12 @@ export function TeamStatsTab({ game, recap, colors }) {
           </Panel>
         )}
       </div>
-      <div className="grid items-start gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {game.has_plays && (
-          <Panel title="EPA by quarter" sub="Total EPA on offense">
-            <EpaByQuarterChart data={recap.epa_by_quarter} away={a} home={h} colors={colors} periods={game.periods?.length} />
-            <div className="mt-2"><TeamKey teams={[{ abbreviation: a, color: colors.away }, { abbreviation: h, color: colors.home }]} /></div>
+          <Panel title="EPA by quarter"
+            sub={`Offense. Tinted against the league this season: ${signed(recap.league?.epa_per_play ?? 0, 2)} EPA per play, ${pct(recap.league?.success_rate)} success`}
+            className="flex flex-col md:col-span-2">
+            <QuarterGrid game={game} recap={recap} />
           </Panel>
         )}
         {["away", "home"].map((side) => <PassDepth key={side} game={game} side={side} />)}
@@ -655,7 +856,7 @@ export function PlayByPlayTab({ game, recap, colors }) {
           </button>
         ))}
       </div>
-      <div className="hidden grid-cols-[52px_140px_minmax(0,1fr)_64px_80px] gap-2.5 border-b border-line pb-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-faint md:grid">
+      <div className="hidden grid-cols-[52px_140px_minmax(0,1fr)_64px_80px] gap-2.5 border-b border-line pb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-faint md:grid">
         <span>Clock</span><span>Down</span><span>Play</span><span className="text-right">EPA</span><span className="text-right">Win %</span>
       </div>
       {plays.length === 0 && <p className="py-8 text-center text-sm text-muted">No plays match.</p>}

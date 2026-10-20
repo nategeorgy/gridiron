@@ -22,9 +22,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.game_pages import scoring_text, short_play
+from app.game_pages import _play_points, _touches, scoring_text, short_play
 from app.models import Game, GamePlay, InjuryReport, Player, PlayerRanking, PlayerStats, Team
 from app.models.game_detail import FIRST_GAME_PAGE_SEASON
+from app.scoring import parse_scoring
 
 GAME = "2026_05_DEN_KC"
 NEXT = "2026_06_KC_DEN"
@@ -149,10 +150,9 @@ def test_the_recap_prices_points_and_finishes_in_the_requested_scoring(client: T
     assert ppr["Score Touchdowns"]["fantasy_points"] == 17.0 and ppr["Score Touchdowns"]["position_rank"] == 2
     assert std["Score Touchdowns"]["position_rank"] == 1 and std["Catch Volume"]["position_rank"] == 2
     assert ppr["Catch Volume"]["pool_size"] == 2
-    # The breakdown adds back up to the total.
-    parts = ppr["Catch Volume"]["breakdown"]
-    assert parts["catches"] == 10.0 and parts["receiving_yards"] == 10.0
-    assert round(sum(parts.values()), 2) == 20.0
+    # Each phase's points, for the per-dropback, per-carry and per-target rates.
+    assert ppr["Score Touchdowns"]["points_by_phase"] == {"passing": 0.0, "rushing": 0.0, "receiving": 17.0}
+    assert std["Catch Volume"]["points_by_phase"]["receiving"] == 10.0
     assert ppr["Catch Volume"]["expected_fantasy_points"] == pytest.approx(8.0 + 8.0 + 3.0)
 
 
@@ -171,6 +171,63 @@ def test_the_recap_tells_the_game_in_order(client: TestClient, games: dict):
     assert wp["pregame"] == 0.6
     assert wp["series"][-1][1] == 0.0  # the home team lost
     assert body["swings"][0]["text"] == "Lutz 45-yard field goal good"
+
+
+def test_each_play_is_priced_by_quarter_for_the_players_on_it():
+    qb, rb, te, returner = "qb", "rb", "te", "kr"
+    plays = [
+        # Q1: a 20-yard touchdown pass to the tight end.
+        GamePlay(quarter=1, passer_id=qb, receiver_id=te, complete=True, passing_yards=20, receiving_yards=20,
+                 pass_touchdown=True, is_pass=True),
+        # Q2: a 15-yard touchdown run, then the back runs in the two-point try.
+        GamePlay(quarter=2, rusher_id=rb, rushing_yards=15, rush_touchdown=True, is_rush=True),
+        GamePlay(quarter=2, rusher_id=rb, two_point=True, is_rush=True),
+        # Q3: an interception thrown at the tight end.
+        GamePlay(quarter=3, passer_id=qb, receiver_id=te, interception=True, is_pass=True),
+        # Q4: a muffed punt costs the returner nothing; a fumble on a run costs the back.
+        GamePlay(quarter=4, fumble_lost_id=returner, play_type="punt"),
+        GamePlay(quarter=4, rusher_id=rb, rushing_yards=3, fumble_lost_id=rb, is_rush=True),
+    ]
+    positions = {qb: "QB", rb: "RB", te: "TE", returner: "WR"}
+    points = _play_points(parse_scoring("ppr_te"), plays, positions)
+
+    assert points[te] == {1: pytest.approx(1.5 + 2.0 + 6.0)}
+    assert points[qb] == {1: pytest.approx(0.8 + 4.0), 3: pytest.approx(-2.0)}
+    assert points[rb] == {2: pytest.approx(1.5 + 6.0 + 2.0), 4: pytest.approx(0.3 - 2.0)}
+    assert returner not in points
+
+
+def test_every_target_and_carry_is_a_touch_in_order():
+    plays = [
+        GamePlay(quarter=1, quarter_seconds=800, receiver_id="wr", is_pass=True, complete=True, receiving_yards=12),
+        GamePlay(quarter=1, quarter_seconds=700, receiver_id="wr", is_pass=True, complete=False),
+        GamePlay(quarter=2, quarter_seconds=600, rusher_id="rb", rushing_yards=3, rush_touchdown=True, is_rush=True),
+        # A scramble is a carry, as the stat line counts it.
+        GamePlay(quarter=3, quarter_seconds=300, rusher_id="qb", rushing_yards=9, is_pass=True),
+        # A two-point try and a play wiped out by a penalty are neither.
+        GamePlay(quarter=3, quarter_seconds=290, receiver_id="wr", is_pass=True, complete=True,
+                 description="TWO-POINT CONVERSION ATTEMPT. J.Allen pass to D.Kincaid is complete. ATTEMPT SUCCEEDS."),
+        GamePlay(quarter=4, quarter_seconds=100, play_type="no_play", description="(No Play)"),
+    ]
+    touches = _touches(plays, "REG")
+
+    assert [(t["player"], t["kind"]) for t in touches] == [("wr", "target"), ("wr", "target"), ("rb", "carry"), ("qb", "carry")]
+    assert touches[0]["t"] == 100 and touches[0]["caught"] and not touches[1]["caught"]
+    assert touches[2]["td"] and touches[3]["yards"] == 9
+
+
+def test_the_recap_carries_each_players_average_coming_in(client: TestClient, games: dict):
+    body = client.get(f"/api/v1/games/{GAME}/recap", params={"scoring": "ppr"}).json()
+    players = {p["name"]: p for p in body["players"]}
+
+    # Week 4: four catches for 40 yards, 8.0 in PPR. Week 5 itself does not count.
+    assert players["Catch Volume"]["average_coming_in"] == 8.0
+    assert players["Catch Volume"]["games_coming_in"] == 1
+    assert players["Score Touchdowns"]["average_coming_in"] is None
+    assert players["Score Touchdowns"]["games_coming_in"] == 0
+    # The game's plays are stored, so every line says how its points fell by quarter.
+    assert players["Catch Volume"]["points_by_quarter"] == {}
+    assert set(body["league"]) == {"epa_per_play", "success_rate"}
 
 
 def test_an_unplayed_game_has_no_recap(client: TestClient, games: dict):

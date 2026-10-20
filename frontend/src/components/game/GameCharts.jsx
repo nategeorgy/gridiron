@@ -125,74 +125,58 @@ export function PossessionStrip({ drives = [], end, away, home, colors }) {
   );
 }
 
-/** Each offense's total EPA by quarter, side by side. */
-export function EpaByQuarterChart({ data, away, home, colors, periods }) {
-  const W = 440, H = 190, pad = { l: 36, r: 8, t: 12, b: 26 };
-  const rows = { [away]: data?.[away] ?? [], [home]: data?.[home] ?? [] };
-  const quarters = (rows[away].length ? rows[away] : rows[home]).map((row) => row.quarter);
-  const values = [...rows[away], ...rows[home]].map((row) => Math.abs(row.epa));
-  const max = Math.max(4, ...values);
-  const y = lin(-max, max, H - pad.b, pad.t);
-  const band = (W - pad.l - pad.r) / Math.max(quarters.length, 1);
+/** A face in a chart: the headshot clipped to a circle, ringed in the team's colour. */
+function Face({ player, cx, cy, r, ring }) {
+  const clip = `face-${player.player_id}-${Math.round(cx)}-${Math.round(cy)}`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="EPA by quarter">
-      {[-max, 0, max].map((v) => (
-        <text key={v} x={pad.l - 6} y={y(v) + 3} textAnchor="end" fontSize="9.5" fill="var(--faint)" fontFamily={MONO}>{signed(Math.round(v), 0)}</text>
-      ))}
-      <line x1={pad.l} x2={W - pad.r} y1={y(0)} y2={y(0)} stroke="var(--plot-rule)" />
-      {quarters.map((quarter, index) => (
-        <g key={quarter}>
-          {[away, home].map((team, side) => {
-            const row = rows[team].find((entry) => entry.quarter === quarter);
-            if (!row) return null;
-            const x0 = pad.l + index * band + band * 0.16 + side * band * 0.34;
-            return (
-              <rect key={team} x={x0} y={Math.min(y(0), y(row.epa))} width={band * 0.3} height={Math.max(1, Math.abs(y(row.epa) - y(0)))} rx="2"
-                fill={side ? colors.home : colors.away}>
-                <title>{`${team} ${periodLabel(quarter, periods)}: ${signed(row.epa, 1)} EPA on ${row.plays} plays`}</title>
-              </rect>
-            );
-          })}
-          <text x={pad.l + index * band + band / 2} y={H - 8} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--faint)">{periodLabel(quarter, periods)}</text>
-        </g>
-      ))}
-    </svg>
+    <g>
+      <clipPath id={clip}><circle cx={cx} cy={cy} r={r} /></clipPath>
+      <circle cx={cx} cy={cy} r={r + 1.2} fill="var(--surface-2)" stroke={ring} strokeWidth="2" />
+      {player.headshot_url && <image href={player.headshot_url} x={cx - r} y={cy - r} width={r * 2} height={r * 2} clipPath={`url(#${clip})`} preserveAspectRatio="xMidYMid slice" />}
+    </g>
   );
 }
 
-/** Points scored against points expected, one row per player. */
-export function ExpectedDumbbell({ players, logos }) {
+/**
+ * This game's points against what the player averaged coming in: the bar is the game,
+ * the tick his average. `top` is shared by both teams' charts so their bars compare.
+ */
+export function AverageChart({ players, color, top }) {
   const phone = usePhone();
-  const rows = players.filter((p) => p.expected_fantasy_points !== null && (p.fantasy_points >= 3 || p.expected_fantasy_points >= 4));
-  if (!rows.length) return null;
-  const W = phone ? 380 : 640, rowH = 25;
-  const pad = { l: phone ? 112 : 150, r: 54, t: 22, b: 6 };
-  const H = pad.t + rows.length * rowH + pad.b;
-  const top = Math.ceil(Math.max(...rows.map((p) => Math.max(p.fantasy_points, p.expected_fantasy_points))) / 10) * 10;
+  if (!players.length) return null;
+  const W = phone ? 380 : 560, rowH = 32;
+  const pad = { l: phone ? 112 : 150, r: phone ? 52 : 64, t: 22, b: 4 };
+  const H = pad.t + players.length * rowH + pad.b;
   const x = lin(0, top, pad.l, W - pad.r);
   const ticks = [];
   for (let v = 0; v <= top; v += 10) ticks.push(v);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Fantasy points against expected points">
+    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Fantasy points against the player's average">
       {ticks.map((v) => (
         <g key={v}>
           <line x1={x(v)} x2={x(v)} y1={pad.t - 6} y2={H - pad.b} stroke="var(--divider)" />
           <text x={x(v)} y={pad.t - 10} textAnchor="middle" fontSize="9.5" fill="var(--faint)" fontFamily={MONO}>{v}</text>
         </g>
       ))}
-      {rows.map((player, index) => {
-        const yy = pad.t + index * rowH + rowH / 2;
-        const diff = player.fantasy_points - player.expected_fantasy_points;
-        const color = diff >= 0 ? "var(--pos)" : "var(--neg)";
+      {players.map((player, index) => {
+        const mid = pad.t + index * rowH + rowH / 2;
+        const has = player.games_coming_in > 0 && player.average_coming_in !== null;
+        const diff = has ? player.fantasy_points - player.average_coming_in : null;
         return (
           <g key={player.player_id}>
-            {logos?.[player.team] && <image href={logos[player.team]} x="0" y={yy - 8} width="16" height="16" />}
-            <text x="22" y={yy + 4} fontSize="12" fontWeight="600" fill="var(--fg)">{phone ? lastName(player.name) : player.name}</text>
-            <line x1={x(player.expected_fantasy_points)} x2={x(player.fantasy_points)} y1={yy} y2={yy} stroke={color} strokeWidth="3" strokeOpacity="0.55" />
-            <circle cx={x(player.expected_fantasy_points)} cy={yy} r="4.5" fill="var(--surface-solid)" stroke="var(--muted)" strokeWidth="1.6" />
-            <circle cx={x(player.fantasy_points)} cy={yy} r="5.5" fill={color} />
-            <text x={W - 4} y={yy + 4} textAnchor="end" fontSize="11.5" fontWeight="700" fontFamily={MONO}
-              fill={`color-mix(in srgb, ${color} 72%, var(--fg))`}>{signed(diff, 1)}</text>
+            <title>{has
+              ? `${player.name}: ${player.fantasy_points.toFixed(1)} this game, ${player.average_coming_in.toFixed(1)} a game in his ${player.games_coming_in} before it`
+              : `${player.name}: ${player.fantasy_points.toFixed(1)}, his first game this season`}</title>
+            <Face player={player} cx={10} cy={mid} r={9} ring={color} />
+            <text x="26" y={mid + 4} fontSize="12" fontWeight="600" fill="var(--fg)">{phone || player.name.length > 17 ? lastName(player.name) : player.name}</text>
+            <rect x={x(0)} y={mid - 8} width={Math.max(2, x(Math.max(0, player.fantasy_points)) - x(0))} height="16" rx="4" fill={color} fillOpacity="0.85" />
+            {has && <rect x={x(Math.max(0, player.average_coming_in)) - 1.5} y={mid - 12} width="3" height="24" rx="1.5" fill="var(--fg)" />}
+            {has ? (
+              <text x={W - 2} y={mid + 4} textAnchor="end" fontSize="11.5" fontWeight="700" fontFamily={MONO}
+                fill={`color-mix(in srgb, ${diff >= 0 ? "var(--pos)" : "var(--neg)"} 72%, var(--fg))`}>{signed(diff, 1)}</text>
+            ) : (
+              <text x={W - 2} y={mid + 4} textAnchor="end" fontSize="10.5" fill="var(--faint)">1st game</text>
+            )}
           </g>
         );
       })}
@@ -200,55 +184,77 @@ export function ExpectedDumbbell({ players, logos }) {
   );
 }
 
-export const BREAKDOWN_PARTS = [
-  { key: "catches", label: "Catches", color: "var(--series-1)" },
-  { key: "receiving_yards", label: "Receiving yards", color: "var(--series-3)" },
-  { key: "rushing_yards", label: "Rushing yards", color: "var(--series-2)" },
-  { key: "passing_yards", label: "Passing yards", color: "var(--series-4)" },
-  { key: "touchdowns", label: "Touchdowns", color: "var(--series-5)" },
-];
+const TOUCH_ROWS = 7;
 
-/** Each player's points as a stack of where they came from; turnovers run left of zero. */
-export function PointsBreakdownChart({ players }) {
+/**
+ * Every target and carry one team's players got, where it happened on the game clock: a
+ * row per player, circles for targets (filled when caught), squares for carries, a ring
+ * in the accent for a touchdown. `end` is the game's last second, so both teams' charts
+ * share one clock.
+ */
+export function TouchTimeline({ touches, players, color, end, periods, seasonType }) {
   const phone = usePhone();
-  if (!players.length) return null;
-  const W = phone ? 380 : 640, rowH = 25;
-  const pad = { l: phone ? 112 : 150, r: 46, t: 6, b: 4 };
-  const H = pad.t + players.length * rowH + pad.b;
-  const positive = (p) => BREAKDOWN_PARTS.reduce((sum, part) => sum + Math.max(0, p.breakdown[part.key] + (part.key === "touchdowns" ? Math.max(0, p.breakdown.other) : 0)), 0);
-  const low = Math.min(0, ...players.map((p) => p.breakdown.turnovers));
-  const high = Math.max(...players.map(positive), 1);
-  const x = lin(low, high, pad.l, W - pad.r);
+  const counts = {};
+  for (const touch of touches) counts[touch.player] = (counts[touch.player] ?? 0) + 1;
+  const rows = players.filter((p) => (counts[p.player_id] ?? 0) >= 2)
+    .sort((a, b) => counts[b.player_id] - counts[a.player_id]).slice(0, TOUCH_ROWS);
+  if (!rows.length) return null;
+  const W = phone ? 380 : 1180, rowH = phone ? 30 : 34;
+  const pad = phone ? { l: 98, r: 8, t: 22, b: 4 } : { l: 180, r: 120, t: 22, b: 4 };
+  const H = pad.t + rows.length * rowH + pad.b;
+  const total = Math.max(end, 3600);
+  const x = lin(0, total, pad.l, W - pad.r);
+  const quarters = [[1, 0, 900], [2, 900, 1800], [3, 1800, 2700], [4, 2700, 3600]];
+  if (total > 3600) quarters.push([5, 3600, total]);
+  const mark = phone ? 4 : 5.5;
+  const clock = (t) => {
+    const quarter = t >= 3600 ? 5 : Math.min(4, Math.floor(t / 900) + 1);
+    // A regular-season overtime is ten minutes, a playoff one fifteen.
+    const overtime = seasonType === "REG" ? 600 : 900;
+    const left = quarter === 5 ? overtime - ((t - 3600) % overtime) : 900 - (t - (quarter - 1) * 900);
+    return `${periodLabel(quarter, periods)} ${Math.max(0, Math.floor(left / 60))}:${String(Math.max(0, Math.round(left % 60))).padStart(2, "0")}`;
+  };
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Where each player's points came from">
-      {players.map((player, index) => {
-        const yy = pad.t + index * rowH;
-        let running = 0;
+    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Every target and carry on the game clock">
+      {quarters.map(([quarter, a, b], index) => (
+        <g key={quarter}>
+          {index % 2 === 1 && <rect x={x(a)} y={pad.t - 4} width={x(b) - x(a)} height={H - pad.t} fill="color-mix(in srgb, var(--fg) 3.5%, transparent)" />}
+          <text x={(x(a) + x(b)) / 2} y="13" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--faint)">{periodLabel(quarter, periods)}</text>
+        </g>
+      ))}
+      {rows.map((player, index) => {
+        const cy = pad.t + index * rowH + rowH / 2;
+        const mine = touches.filter((touch) => touch.player === player.player_id);
+        const targets = mine.filter((touch) => touch.kind === "target").length;
         return (
           <g key={player.player_id}>
-            <text x="0" y={yy + 16} fontSize="12" fontWeight="600" fill="var(--fg)">{phone ? lastName(player.name) : player.name}</text>
-            {BREAKDOWN_PARTS.map((part) => {
-              // Two-point conversions and return scores are folded into touchdowns.
-              const value = player.breakdown[part.key] + (part.key === "touchdowns" ? Math.max(0, player.breakdown.other) : 0);
-              if (value <= 0.05) return null;
-              const start = running;
-              running += value;
+            <line x1={pad.l} x2={W - pad.r} y1={cy} y2={cy} stroke="var(--divider)" />
+            <Face player={player} cx={12} cy={cy} r={phone ? 9 : 11} ring={color} />
+            <text x={phone ? 26 : 30} y={cy + 4} fontSize={phone ? 11 : 12.5} fontWeight="600" fill="var(--fg)">{phone ? lastName(player.name) : player.name}</text>
+            {!phone && (
+              <text x={W - pad.r + 14} y={cy + 4} fontSize="11.5" fill="var(--muted)" fontFamily={MONO}>
+                <tspan fontWeight="700" fill="var(--fg)">{targets}</tspan> tgt · <tspan fontWeight="700" fill="var(--fg)">{mine.length - targets}</tspan> car
+              </text>
+            )}
+            {mine.map((touch, at) => {
+              const cx = x(touch.t);
+              const what = touch.kind === "target" ? (touch.caught ? `caught for ${touch.yards}` : "incomplete") : `carry for ${touch.yards}`;
               return (
-                <rect key={part.key} x={x(start)} y={yy + 4} width={x(running) - x(start)} height={rowH - 8} fill={part.color}>
-                  <title>{`${part.label}: ${value.toFixed(1)}`}</title>
-                </rect>
+                <g key={at}>
+                  <title>{`${player.name}, ${clock(touch.t)}: ${what}${touch.td ? ", touchdown" : ""}`}</title>
+                  {touch.td && <circle cx={cx} cy={cy} r={mark + 4.5} fill="none" stroke="var(--accent)" strokeWidth="2" />}
+                  {touch.kind === "target" ? (
+                    <circle cx={cx} cy={cy} r={mark} fill={touch.caught ? color : "var(--surface-solid)"} stroke={color} strokeWidth="1.6" />
+                  ) : (
+                    <rect x={cx - mark} y={cy - mark} width={mark * 2} height={mark * 2} rx="2"
+                      fill={`color-mix(in srgb, ${color} 56%, var(--surface-solid))`} stroke={color} strokeWidth="1.2" />
+                  )}
+                </g>
               );
             })}
-            {player.breakdown.turnovers < 0 && (
-              <rect x={x(player.breakdown.turnovers)} y={yy + 4} width={x(0) - x(player.breakdown.turnovers)} height={rowH - 8} fill="var(--neg)" fillOpacity="0.75">
-                <title>{`Turnovers: ${player.breakdown.turnovers.toFixed(1)}`}</title>
-              </rect>
-            )}
-            <text x={x(running) + 6} y={yy + 16} fontSize="11.5" fontWeight="700" fill="var(--fg)" fontFamily={MONO}>{player.fantasy_points.toFixed(1)}</text>
           </g>
         );
       })}
-      <line x1={x(0)} x2={x(0)} y1="0" y2={H} stroke="var(--plot-rule)" />
     </svg>
   );
 }

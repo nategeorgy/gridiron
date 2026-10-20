@@ -14,7 +14,7 @@ import { GameHeader } from "../components/game/GameHeader";
 import { gameColors } from "../components/game/colors";
 import { Loading, Waiting } from "../components/game/parts";
 import {
-  BoxScoreTab, DrivesTab, FantasyTab, PlayByPlayTab, SummaryTab, TargetsRunsTab, TeamStatsTab, UsageTab,
+  BoxScoreTab, DrivesTab, PlayByPlayTab, SummaryTab, TargetsRunsTab, TeamStatsTab, UsageTab,
 } from "../components/game/RecapTabs";
 import {
   DepthTab, HistoryTab, MatchupTab, PreviewFantasyTab, TapeTab, UsageTrendsTab,
@@ -26,13 +26,16 @@ import { useUrlState } from "../hooks/useUrlState";
 const RECAP_TABS = [
   { id: "summary", label: "Summary", Tab: SummaryTab },
   { id: "box", label: "Box Score", Tab: BoxScoreTab },
-  { id: "fantasy", label: "Fantasy", Tab: FantasyTab },
-  { id: "usage", label: "Usage", Tab: UsageTab },
+  { id: "usage", label: "Usage & Efficiency", Tab: UsageTab },
   { id: "targets", label: "Targets & Runs", Tab: TargetsRunsTab },
   { id: "team", label: "Team Stats", Tab: TeamStatsTab },
   { id: "drives", label: "Drives", Tab: DrivesTab },
   { id: "plays", label: "Play-by-Play", Tab: PlayByPlayTab },
 ];
+
+// The recap had a Fantasy tab until October 2026. Its charts moved to the Box Score,
+// which is where an old link to it opens now.
+const RECAP_ALIASES = { fantasy: "box" };
 
 const PREVIEW_TABS = [
   { id: "matchup", label: "Matchup", Tab: MatchupTab },
@@ -96,7 +99,9 @@ export function GamePage() {
   const { data: game, isLoading, isError, error } = useGame(gameId);
   const [scoring, setScoring] = useScoring();
   const tabs = game?.played ? RECAP_TABS : PREVIEW_TABS;
-  const [tab, setTab] = useUrlState("tab", tabs[0].id, tabs.map((entry) => entry.id));
+  const aliases = game?.played ? RECAP_ALIASES : {};
+  const [requested, setTab] = useUrlState("tab", tabs[0].id, [...tabs.map((entry) => entry.id), ...Object.keys(aliases)]);
+  const tab = aliases[requested] ?? requested;
   const colors = useMemo(() => gameColors(game?.away, game?.home), [game]);
 
   if (isLoading) return <div className="grid gap-4"><Loading height={180} /><Loading height={520} /></div>;

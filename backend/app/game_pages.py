@@ -47,6 +47,7 @@ from app.availability import FIRST_SEASON
 from app.scoring import (
     EXPECTED_COMPONENTS,
     POINTS_COMPONENTS,
+    TWO_POINT_CONV_WEIGHT,
     ScoringConfig,
     compute_expected_points,
     compute_points,
@@ -62,6 +63,9 @@ POST_WEEKS = {19: "Wild Card", 20: "Divisional round", 21: "Conference champions
 # How many swings the win probability chart numbers, and how many scorers a past meeting lists.
 SWINGS = 6
 MEETING_SCORERS = 3
+
+# A deep throw, as the target pages count one: 20 or more air yards.
+DEEP_AIR_YARDS = 20
 
 # The week's team ranks shown on a recap, and the season metrics a preview compares.
 WEEK_RANK_METRICS = ("epa", "suc", "p_epa", "r_epa", "explosive", "pts_drive", "d3", "rz_td", "proe")
@@ -367,33 +371,101 @@ def _week_finishes(db: Session, game: Game, config: ScoringConfig, player_ids: s
     return {row.player_id: (row.position_rank, row.pool_size) for row in rows}
 
 
-def _points_breakdown(config: ScoringConfig, line: PlayerStats, position: str, total: float) -> dict:
-    """Where a line's points came from, in this scoring. ``other`` holds what the parts do not
-    (two-point conversions, a return touchdown)."""
-    rec_weight = config.te_rec if (config.te_rec is not None and position == "TE") else config.rec
+def _play_points(config: ScoringConfig, plays: list[GamePlay], positions: dict[str, str]) -> dict[str, dict[int, float]]:
+    """Each player's points by period, from every play.
 
+    Every play is priced in the request's scoring from what it credited each player with,
+    the stat line's own weights: a two-point conversion is 2 to each player on it, as in
+    the standard scoring the stat lines start from. The periods add up to the stat line's
+    total on 99% of 2025-26 lines; the rest are return touchdowns, which no offensive play
+    credits, and laterals, whose yards belong to a player the play does not name.
+    """
+    by_period: dict[str, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+
+    def credit(player_id: str | None, points: float, quarter: int) -> None:
+        if player_id and points:
+            by_period[player_id][quarter] += points
+
+    for play in plays:
+        if play.quarter is None:
+            continue
+        two = TWO_POINT_CONV_WEIGHT if play.two_point else 0.0
+        if play.passer_id:
+            credit(play.passer_id, config.pass_yd * (play.passing_yards or 0) + config.pass_td * bool(play.pass_touchdown)
+                   + config.pass_int * bool(play.interception) + (two if play.is_pass else 0.0), play.quarter)
+        if play.rusher_id:
+            credit(play.rusher_id, config.rush_yd * (play.rushing_yards or 0) + config.rush_td * bool(play.rush_touchdown)
+                   + (two if not play.is_pass else 0.0), play.quarter)
+        if play.receiver_id:
+            rec_weight = config.te_rec if config.te_rec is not None and positions.get(play.receiver_id) == "TE" else config.rec
+            credit(play.receiver_id, rec_weight * bool(play.complete) + config.rec_yd * (play.receiving_yards or 0)
+                   + config.rec_td * bool(play.pass_touchdown) + two, play.quarter)
+        # A stat line counts the fumbles its player lost with the ball as passer, rusher or
+        # receiver; a muffed punt is a special-teams fumble and costs nothing.
+        if play.fumble_lost_id and play.fumble_lost_id in (play.passer_id, play.rusher_id, play.receiver_id):
+            credit(play.fumble_lost_id, config.fumble_lost, play.quarter)
+    return by_period
+
+
+def _average_coming_in(db: Session, game: Game, config: ScoringConfig, player_ids: set[str]) -> dict[str, tuple[float, int]]:
+    """Each player's fantasy points per game this season before this game, in this scoring."""
+    if not player_ids:
+        return {}
+    points = points_expr(config, sum_mode=False)
+    rows = db.execute(
+        select(PlayerStats.player_id, func.avg(points), func.count())
+        .join(Player, PlayerStats.player_id == Player.player_id)
+        .where(PlayerStats.season == game.season, PlayerStats.week < game.week, PlayerStats.player_id.in_(player_ids))
+        .group_by(PlayerStats.player_id)
+    ).all()
+    return {player_id: (float(average), games) for player_id, average, games in rows}
+
+
+def _touches(plays: list[GamePlay], season_type: str) -> list[dict]:
+    """Every target and carry in order, for the timeline of who got the ball.
+
+    A target is a pass with a named receiver, a carry any play with a rusher and rushing
+    yards (scrambles and kneels included, as the stat lines count them). Two-point tries
+    are not either, and a play wiped out by a penalty names no one, so it drops out.
+    """
+    out = []
+    for play in plays:
+        t = elapsed(play.quarter, play.quarter_seconds, season_type)
+        if t is None or (play.description or "").startswith("TWO-POINT"):
+            continue
+        if play.receiver_id and play.is_pass:
+            out.append({"t": t, "player": play.receiver_id, "kind": "target", "yards": play.receiving_yards or 0,
+                        "caught": bool(play.complete), "td": bool(play.pass_touchdown)})
+        elif play.rusher_id and play.rushing_yards is not None:
+            out.append({"t": t, "player": play.rusher_id, "kind": "carry", "yards": play.rushing_yards,
+                        "caught": None, "td": bool(play.rush_touchdown)})
+    return out
+
+
+def _phase_points(config: ScoringConfig, line: PlayerStats, position: str) -> dict[str, float]:
+    """A line's points from passing, rushing and receiving, in this scoring, for the rates a
+    phase table shows (points per dropback, per carry, per target). Two-point conversions
+    and lost fumbles belong to no phase, so the three need not add up to the line's total."""
     def v(name: str) -> float:
         return float(getattr(line, name) or 0)
 
-    parts = {
-        "catches": rec_weight * v("receptions"),
-        "receiving_yards": config.rec_yd * v("receiving_yards"),
-        "rushing_yards": config.rush_yd * v("rushing_yards"),
-        "passing_yards": config.pass_yd * v("passing_yards"),
-        "touchdowns": config.rec_td * v("receiving_tds") + config.rush_td * v("rushing_tds") + config.pass_td * v("passing_tds"),
-        "turnovers": config.pass_int * v("interceptions") + config.fumble_lost * v("fumbles_lost"),
+    rec_weight = config.te_rec if config.te_rec is not None and position == "TE" else config.rec
+    return {
+        "passing": round(config.pass_yd * v("passing_yards") + config.pass_td * v("passing_tds") + config.pass_int * v("interceptions"), 2),
+        "rushing": round(config.rush_yd * v("rushing_yards") + config.rush_td * v("rushing_tds"), 2),
+        "receiving": round(rec_weight * v("receptions") + config.rec_yd * v("receiving_yards") + config.rec_td * v("receiving_tds"), 2),
     }
-    parts["other"] = total - sum(parts.values())
-    return {key: round(value, 2) for key, value in parts.items()}
 
 
-def _player_lines(db: Session, game: Game, config: ScoringConfig, teams: dict[int, Team]) -> list[dict]:
+def _player_lines(db: Session, game: Game, config: ScoringConfig, teams: dict[int, Team], plays: list[GamePlay]) -> list[dict]:
     rows = db.execute(
         select(PlayerStats, Player.name, Player.position, Player.headshot_url)
         .join(Player, PlayerStats.player_id == Player.player_id)
         .where(PlayerStats.game_id == game.game_id, Player.position.in_(POSITIONS))
     ).all()
     finishes = _week_finishes(db, game, config, {line.player_id for line, *_ in rows})
+    averages = _average_coming_in(db, game, config, {line.player_id for line, *_ in rows})
+    by_period = _play_points(config, plays, {line.player_id: position for line, _, position, _ in rows})
 
     runs: dict[str, dict] = defaultdict(lambda: {"carries": 0, "successes": 0, "explosive": 0, "stuffed": 0})
     for run in db.scalars(select(PlayerRunLane).where(PlayerRunLane.game_id == game.game_id)):
@@ -401,27 +473,54 @@ def _player_lines(db: Session, game: Game, config: ScoringConfig, teams: dict[in
         for key in tally:
             tally[key] += getattr(run, key) or 0
 
+    # A passer's throws by depth and field position, from every targeted pass. Throwaways
+    # and spikes name no receiver and are not in play_targets, so these count targeted
+    # attempts, which is also what a receiver's aDOT counts.
+    throws: dict[str, dict] = defaultdict(lambda: {"air_yards": 0, "depth_attempts": 0, "deep_attempts": 0, "red_zone_attempts": 0})
+    for target in db.scalars(select(PlayTarget).where(PlayTarget.game_id == game.game_id, PlayTarget.passer_id.is_not(None))):
+        tally = throws[target.passer_id]
+        if target.air_yards is not None:
+            tally["air_yards"] += target.air_yards
+            tally["depth_attempts"] += 1
+            tally["deep_attempts"] += target.air_yards >= DEEP_AIR_YARDS
+        tally["red_zone_attempts"] += target.yardline_100 is not None and target.yardline_100 <= 20
+
     lines = []
     for line, name, position, headshot in rows:
         fp = compute_points(config, {k: getattr(line, k) for k in POINTS_COMPONENTS}, position)
         xfp = compute_expected_points(config, {k: getattr(line, k) for k in EXPECTED_COMPONENTS}, position)
         rank, pool = finishes.get(line.player_id, (None, None))
         run = runs.get(line.player_id)
+        thrown = throws.get(line.player_id)
+        # ``epa`` is all three phases; the passing part is what is left of it.
+        passing_epa = None if line.epa is None or not line.attempts else line.epa - (line.rushing_epa or 0) - (line.receiving_epa or 0)
         lines.append({
             "player_id": line.player_id, "name": name, "position": position, "headshot_url": headshot,
             "team": teams[line.team_id].abbreviation if line.team_id in teams else None,
             "fantasy_points": round(fp, 2), "expected_fantasy_points": round(xfp, 2) if xfp is not None else None,
             "position_rank": rank, "pool_size": pool,
-            "breakdown": _points_breakdown(config, line, position, fp),
             "designed_runs": run["carries"] if run else 0,
             "run_success_rate": round(run["successes"] / run["carries"], 4) if run and run["carries"] else None,
             "explosive_runs": run["explosive"] if run else None, "stuffed_runs": run["stuffed"] if run else None,
+            "points_by_phase": _phase_points(config, line, position),
+            "average_coming_in": round(averages[line.player_id][0], 2) if line.player_id in averages else None,
+            "games_coming_in": averages[line.player_id][1] if line.player_id in averages else 0,
+            # Points by period, only when the game's plays are stored: {quarter: points}, 5+ overtime.
+            "points_by_quarter": ({str(q): round(v, 2) for q, v in sorted(by_period[line.player_id].items())}
+                                  if plays else None),
+            "passing_epa": round(passing_epa, 3) if passing_epa is not None else None,
+            "pass_air_yards": thrown["air_yards"] if thrown else None,
+            "pass_depth_attempts": thrown["depth_attempts"] if thrown else None,
+            "deep_attempts": thrown["deep_attempts"] if thrown else None,
+            "red_zone_attempts": thrown["red_zone_attempts"] if thrown else None,
             **{key: getattr(line, key) for key in (
                 "completions", "attempts", "passing_yards", "passing_tds", "interceptions", "sacks_suffered", "cpoe",
-                "epa", "carries", "rushing_yards", "rushing_tds", "targets", "receptions", "receiving_yards",
-                "receiving_tds", "adot", "yards_after_catch", "air_yards", "target_share", "air_yards_share",
-                "rush_attempt_share", "opportunity_share", "snap_share", "snap_count", "routes_run",
-                "route_participation", "red_zone_targets", "rush_att_inside_5", "rush_att_inside_10", "fumbles_lost",
+                "epa", "rushing_epa", "receiving_epa", "carries", "rushing_yards", "rushing_tds", "targets",
+                "receptions", "receiving_yards", "receiving_tds", "adot", "yards_after_catch", "air_yards", "passer_rating",
+                "target_share", "air_yards_share", "wopr", "rush_attempt_share", "opportunity_share", "snap_share",
+                "snap_count", "routes_run", "route_participation", "targets_per_route_run", "yards_per_route_run",
+                "yards_per_target", "red_zone_targets", "red_zone_rush_attempts", "rush_att_inside_10",
+                "rush_att_inside_5", "rush_att_inside_2", "fumbles_lost", "passing_first_downs",
                 "receiving_first_downs", "rushing_first_downs",
             )},
         })
@@ -461,8 +560,21 @@ def _team_box(db: Session, game: Game, teams: dict[int, Team], drives: list[dict
             "seconds_per_snap": per(row.neutral_seconds_sum, row.neutral_seconds_snaps),
             "adot": per(row.air_yards_sum, row.air_yards_attempts),
             "backs_per_play": per(row.back_snaps, row.snaps), "tight_ends_per_play": per(row.te_snaps, row.snaps),
+            "receivers_per_play": per(row.wr_snaps, row.snaps),
         }
     return out
+
+
+def _league_rates(db: Session, game: Game) -> dict:
+    """Every offense's EPA per play and success rate this season, the middle a recap's
+    quarter grid tints against."""
+    plays, epa, successes = db.execute(
+        select(func.sum(TeamGameStats.plays), func.sum(TeamGameStats.epa), func.sum(TeamGameStats.successes))
+        .where(TeamGameStats.season == game.season, TeamGameStats.side == "o")
+    ).one()
+    if not plays:
+        return {"epa_per_play": None, "success_rate": None}
+    return {"epa_per_play": round(epa / plays, 4), "success_rate": round(successes / plays, 4)}
 
 
 def _week_ranks(db: Session, game: Game, config: ScoringConfig, abbrs: tuple[str, str]) -> dict | None:
@@ -562,7 +674,7 @@ def game_recap(db: Session, game: Game, config: ScoringConfig) -> dict:
                 "success_rate": round(sum(1 for p in rows if p.success) / len(rows), 4) if rows else None,
             })
 
-    players = _player_lines(db, game, config, teams)
+    players = _player_lines(db, game, config, teams, plays)
     passers = defaultdict(list)
     for line in players:
         if line["position"] == "QB" and (line["attempts"] or 0) >= 5:
@@ -575,6 +687,8 @@ def game_recap(db: Session, game: Game, config: ScoringConfig) -> dict:
         "flow": {"lead_changes": changes, "ties": ties, "largest_lead": biggest,
                  "plays": sum(1 for p in plays if p.is_pass or p.is_rush)},
         "epa_by_quarter": epa_by_quarter,
+        "touches": _touches(plays, game.season_type),
+        "league": _league_rates(db, game),
         "team_box": _team_box(db, game, teams, drives),
         "week_ranks": _week_ranks(db, game, config, (away, home)),
         "players": players,
