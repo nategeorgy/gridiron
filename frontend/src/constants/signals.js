@@ -84,23 +84,24 @@ export const RECORD_BOOK = {
       query: { grain: "seasons", positions: "WR", last_week: 6, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
     },
     {
-      // A record by two: Cam Newton (2011), Robert Griffin III (2012), Kyler Murray (2020)
-      // and Jalen Hurts (2022) had 6.
+      // A record in PPR and half-PPR, ahead of Christian McCaffrey's 2019 (30.2); third in
+      // standard, behind Todd Gurley (2018) and Derrick Henry (2021). The four-game floor
+      // keeps a two-game start off the list.
       kind: "leaders",
-      playerId: "00-0034857", // Josh Allen
-      title: "Most rushing touchdowns by a quarterback through Week 6",
-      stat: "rushing_tds",
-      format: "int",
-      query: { grain: "seasons", positions: "QB", last_week: 6, where: "rushing_tds::", sort: "rushing_tds", order: "desc", limit: 3 },
+      playerId: "00-0039139", // Jahmyr Gibbs
+      title: "Most fantasy points per game by a running back through Week 6",
+      stat: "fantasy_ppg",
+      format: 1,
+      query: { grain: "seasons", positions: "RB", last_week: 6, where: "fantasy_ppg::,games:4:", sort: "fantasy_ppg", order: "desc", limit: 3 },
     },
     {
-      // The others are Justin Fields (Week 9, 2022) and Jon Kitna (Week 11, 2010).
+      // The others are Michael Crabtree (Week 15, 2017) and Austin Ekeler (Week 6, 2022).
       kind: "count",
-      playerId: "00-0040743", // Tyler Shough
-      title: "Three touchdown passes and a rushing touchdown on 150 passing yards or fewer",
+      playerId: "00-0040129", // Emeka Egbuka
+      title: "16+ targets and fewer than 50 receiving yards",
       seasonCount: false,
-      query: { grain: "games", positions: "QB", where: "passing_yards::150,passing_tds:3:,rushing_tds:1:", sort: "fantasy_points", order: "desc", limit: 50 },
-      line: (row) => `${row.passing_yards} pass yds, ${row.passing_tds} pass TDs, ${row.rushing_tds} rush TD`,
+      query: { grain: "games", positions: "RB,WR,TE", where: "targets:16:,receiving_yards::49,receptions::", sort: "targets", order: "desc", limit: 50 },
+      line: (row) => `${row.targets} targets, ${row.receptions} catches, ${row.receiving_yards} yds`,
     },
   ],
 };
