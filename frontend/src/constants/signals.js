@@ -24,12 +24,12 @@ export const SIGNALS_SEASON = 2026;
  * instead of appearing under a heading that has stopped being true.
  */
 export const EXPECTED_VS_ACTUAL = [
-  "00-0038597", // Chase Brown
-  "00-0038559", // Michael Wilson
-  "00-0040122", // Ashton Jeanty
-  "00-0038124", // Christian Watson
-  "00-0036555", // Chuba Hubbard
-  "00-0037228", // Jaylen Warren
+  "00-0038543", // Jaxon Smith-Njigba
+  "00-0037248", // James Cook
+  "00-0030506", // Travis Kelce
+  "00-0040129", // Emeka Egbuka
+  "00-0036158", // J.K. Dobbins
+  "00-0040126", // Colston Loveland
 ];
 
 /**
@@ -37,7 +37,7 @@ export const EXPECTED_VS_ACTUAL = [
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0040667", "00-0038124"], // Matthew Golden, Christian Watson
+  players: ["00-0041489", "00-0035640"], // Germie Bernard, DK Metcalf
   caption: String(SIGNALS_SEASON),
 };
 
@@ -51,8 +51,8 @@ export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
   // The season so far. Name `weeks` (e.g. "4") to feature a single week instead.
-  passerId: "00-0033106", // Jared Goff
-  team: "DET",
+  passerId: "00-0033077", // Dak Prescott
+  team: "DAL",
 };
 
 /**
@@ -68,33 +68,34 @@ export const HIGHLIGHTED_VIZ = {
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 5,
+  week: 6,
   entries: [
     {
-      // Second only to Christian McCaffrey's 2019.
+      // Second only to Wes Welker's 2011 in PPR and half-PPR; third in standard, where
+      // Tyreek Hill's 2023 passes both.
       kind: "leaders",
-      playerId: "00-0039139", // Jahmyr Gibbs
-      title: "Most fantasy points by a running back through Week 5",
-      query: { grain: "seasons", positions: "RB", last_week: 5, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
+      playerId: "00-0038543", // Jaxon Smith-Njigba
+      title: "Most fantasy points by a wide receiver through Week 6",
+      query: { grain: "seasons", positions: "WR", last_week: 6, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
     },
     {
-      // A record: Zach Ertz (2018) and Jake Ferguson (2025) had 41.
+      // A record by two: Cam Newton (2011), Robert Griffin III (2012), Kyler Murray (2020)
+      // and Jalen Hurts (2022) had 6.
       kind: "leaders",
-      playerId: "00-0037744", // Trey McBride
-      title: "Most catches by a tight end through Week 5",
-      stat: "receptions",
+      playerId: "00-0034857", // Josh Allen
+      title: "Most rushing touchdowns by a quarterback through Week 6",
+      stat: "rushing_tds",
       format: "int",
-      query: { grain: "seasons", positions: "TE", last_week: 5, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
+      query: { grain: "seasons", positions: "QB", last_week: 6, where: "rushing_tds::", sort: "rushing_tds", order: "desc", limit: 3 },
     },
     {
-      // The other is Jalen Hurts, Week 15 of 2022. A quarterback scores the same in every
-      // preset, so the 32-point bound holds whichever scoring the reader picked.
+      // The others are Justin Fields (Week 9, 2022) and Jon Kitna (Week 11, 2010).
       kind: "count",
-      playerId: "00-0039910", // Jayden Daniels
-      title: "32+ fantasy points without a touchdown pass",
+      playerId: "00-0040743", // Tyler Shough
+      title: "Three touchdown passes and a rushing touchdown on 150 passing yards or fewer",
       seasonCount: false,
-      query: { grain: "games", positions: "QB", where: "fantasy_points:32:,passing_tds::0,rushing_yards::,rushing_tds::", sort: "fantasy_points", order: "desc", limit: 50 },
-      line: (row) => `${row.fantasy_points.toFixed(1)} points, ${row.rushing_yards} rush yds, ${row.rushing_tds} rush TDs`,
+      query: { grain: "games", positions: "QB", where: "passing_yards::150,passing_tds:3:,rushing_tds:1:", sort: "fantasy_points", order: "desc", limit: 50 },
+      line: (row) => `${row.passing_yards} pass yds, ${row.passing_tds} pass TDs, ${row.rushing_tds} rush TD`,
     },
   ],
 };
