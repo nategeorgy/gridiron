@@ -368,7 +368,8 @@ export function BoxScoreTab({ game, recap, colors }) {
   const lists = ["away", "home"].map((side) => recap.players.filter((p) => p.team === game[side].abbreviation));
   const averages = evenRows(lists, (p) => p.fantasy_points >= 2 || (p.average_coming_in ?? 0) >= 5, 9);
   const quarters = evenRows(lists, (p) => p.fantasy_points >= 3, 8);
-  const hasQuarters = game.has_plays && recap.players.some((p) => p.points_by_quarter);
+  // Plays stored before they named their players price to nothing, so an empty grid is hidden.
+  const hasQuarters = game.has_plays && recap.players.some((p) => Object.keys(p.points_by_quarter ?? {}).length > 0);
   // One scale for both teams' average charts, and one heat scale for both quarter grids.
   const averageTop = Math.ceil(Math.max(10, ...averages.flat().map((p) => Math.max(p.fantasy_points, p.average_coming_in ?? 0))) / 10) * 10;
   const quarterMax = Math.max(1, ...quarters.flat().flatMap((p) => Object.values(p.points_by_quarter ?? {})));
