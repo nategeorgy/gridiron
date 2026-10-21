@@ -15,24 +15,6 @@
 export const SIGNALS_SEASON = 2026;
 
 /**
- * Expected vs Actual (September 2026). One plot replaced the two rail cards
- * (Underperformers and Regression Candidates), which drew the same gap twice on two
- * scales and never said what caused it.
- *
- * The list is not split by side: which side a player is on is read from his own points
- * over expected, so a pick that moves across par between weeks reclassifies itself
- * instead of appearing under a heading that has stopped being true.
- */
-export const EXPECTED_VS_ACTUAL = [
-  "00-0038543", // Jaxon Smith-Njigba
-  "00-0037248", // James Cook
-  "00-0030506", // Travis Kelce
-  "00-0040129", // Emeka Egbuka
-  "00-0036158", // J.K. Dobbins
-  "00-0040126", // Colston Loveland
-];
-
-/**
  * The head-to-head's opening pair. A reader can swap either player from the card, and
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
  *

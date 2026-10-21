@@ -15,11 +15,11 @@
 // The arrangement is data rather than JSX for the same reason it always was: it is
 // chosen by measuring, and a config is cheaper to rearrange than a page.
 //
-// Two measurements from the previous layout still hold:
+// Two measurements hold:
 //
-// - ⚠️ **Expected vs Actual grows with its column.** Its plot is a fixed-ratio SVG at
-//   100% width (457px tall in a 660px column, 1,029px in a 1,500px one), so it lives in
-//   the wide column and never full width.
+// - **Floor and Ceiling (October 2026, replacing Expected vs Actual) keeps its height.**
+//   Fourteen rows of fixed height, so it reads the same in the wide column at any width;
+//   its strips stretch, its rows do not.
 // - ⚠️ **Cards in the narrow column were built for about 500px** (Last Week's Scoring's
 //   400px table set it, until that card left in October 2026; Head to Head and the
 //   environments card still read at that width), so it never goes narrower above 1,024.
@@ -37,7 +37,7 @@ export const HOME_LAYOUT = {
     // Three across from 1,100px (about 345px each there, the width each card is built to
     // read at), two across with the odd one out spanning both below that, one on a phone.
     { kind: "grid", cards: ["landscape", "airYards", "recordBook"] },
-    { kind: "columns", cards: [["myPlayers", "expected"], ["headToHead"]] },
+    { kind: "columns", cards: [["myPlayers", "floorCeiling"], ["headToHead"]] },
     { kind: "full", cards: ["weeklyFinishes"] },
     { kind: "full", cards: ["previewHeading"] },
     { kind: "full", cards: ["slate"] },

@@ -5,7 +5,7 @@
 //   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
 //      Explore chart;
 //   2. a row of Explore cards: the team landscape, air yards, the record book;
-//   3. the week's players: the watchlist and Expected vs Actual on the left, a
+//   3. the week's players: the watchlist and Floor and Ceiling on the left, a
 //      reader-picked Head to Head on the right;
 //   4. Weekly Finishes: a position's top scorers and where each finished every week;
 //   5. the Week N Preview: the slate, then matchups by position and implied team totals.
@@ -14,12 +14,10 @@
 // last season *played*; the ticker and the week-ahead cards describe the schedule, which
 // runs a year ahead. Every card names its own season rather than the page claiming one.
 import { cloneElement, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 
-import { useLeaderboard } from "../hooks/useLeaderboard";
 import { useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
-import { useCompare, useNetwork, usePlayersById, useScatter, useTargetBoard } from "../hooks/useExplore";
+import { useCompare, useNetwork, usePlayersById, useTargetBoard } from "../hooks/useExplore";
 import { useSos } from "../hooks/useDraftBoard";
 import { useWeeklyFinishes } from "../hooks/useWeeklyFinishes";
 import { useTeamsList, useTeamStats } from "../hooks/useTeamStats";
@@ -32,9 +30,8 @@ import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
 import { scaledMinGames, weeksPlayed } from "../utils/qualify";
-import { getPlayers } from "../services/players";
 import { parseLeague } from "../constants/league";
-import { EXPECTED_VS_ACTUAL, FEATURED_MATCHUP, HIGHLIGHTED_VIZ, RECORD_BOOK, SIGNALS_SEASON } from "../constants/signals";
+import { FEATURED_MATCHUP, HIGHLIGHTED_VIZ, RECORD_BOOK, SIGNALS_SEASON } from "../constants/signals";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 import { shapeNetwork } from "../components/explore/NetworkChart";
 
@@ -45,7 +42,7 @@ import { TeamLandscapeCard } from "../components/home/TeamLandscapeCard";
 import { RecordBookCard } from "../components/home/RecordBookCard";
 import { FINISH_LIMITS, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
 import { HeadToHeadCard, matchupMetrics } from "../components/home/HeadToHeadCard";
-import { ExpectedActualCard } from "../components/home/ExpectedActualCard";
+import { FloorCeilingCard } from "../components/home/FloorCeilingCard";
 import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
 import { EnvironmentsCard } from "../components/home/EnvironmentsCard";
 import { SlateCard } from "../components/home/SlateCard";
@@ -119,53 +116,17 @@ export function Home() {
   const airYards = useTargetBoard({ season, positions: "WR", min_targets: AIR_YARDS_MIN_TARGETS });
   const teamBoard = useTeamStats({ season, scoring });
 
-  // --- Expected vs Actual: the five picks, plus every other player as a faint dot. ---
-  const expectedIds = EXPECTED_VS_ACTUAL.join(",");
-  const expected = useLeaderboard(
+  // --- Floor and Ceiling: every game of the top FLEX scorers by points per game. The
+  //     games floor is stated for a full season (12 of 18) and scaled to the weeks played.
+  const minRangeGames = scaledMinGames(12, weeksPlayed(season, lastPlayed));
+  const ranges = useWeeklyFinishes(
     useMemo(
-      () => ({
-        season: SIGNALS_SEASON,
-        season_type: "REG",
-        metric: "fantasy_points_over_expected",
-        scoring,
-        order: "asc",
-        min_games: 1,
-        limit: EXPECTED_VS_ACTUAL.length,
-        player_ids: expectedIds,
-      }),
-      [scoring, expectedIds],
+      () => ({ season, position: "FLEX", scoring, min_games: minRangeGames, limit: 14, sort: "ppg" }),
+      [season, scoring, minRangeGames],
     ),
-  );
-  // The scatter endpoint rather than a paged leaderboard: the cloud needs two numbers a
-  // row, and /stats/scatter returns exactly those for the whole league in one request.
-  const expectedCloud = useScatter(
-    useMemo(
-      () => ({
-        season: SIGNALS_SEASON,
-        season_type: "REG",
-        x: "expected_fantasy_points",
-        y: "fantasy_points",
-        mode: "season",
-        min_games: 1,
-        limit: 600,
-        scoring,
-      }),
-      [scoring],
-    ),
+    { enabled: Boolean(season) },
   );
 
-  // Headshots live on the profile, not on an aggregated stat row. One request for every
-  // face the page draws.
-  const faceIds = EXPECTED_VS_ACTUAL.join(",");
-  const { data: facePlayers } = useQuery({
-    queryKey: ["players", faceIds],
-    queryFn: () => getPlayers({ player_ids: faceIds, limit: 30 }),
-    staleTime: Infinity,
-  });
-  const headshots = useMemo(
-    () => Object.fromEntries((facePlayers?.data ?? []).map((row) => [row.player_id, row.headshot_url])),
-    [facePlayers],
-  );
   // --- Weekly finishes: the position's top scorers by total points, week by week. The games floor is
   //     stated for a full season (9 of 18) and scaled to the weeks played. ---
   const minFinishGames = scaledMinGames(9, weeksPlayed(season, lastPlayed));
@@ -300,15 +261,14 @@ export function Home() {
           isError={watchlist.isError}
         />
       ) : null,
-    expected: (
-      <ExpectedActualCard
-        season={SIGNALS_SEASON}
+    floorCeiling: (
+      <FloorCeilingCard
+        season={ranges.data?.season ?? season}
         scoring={scoring}
-        rows={expected.data?.data ?? []}
-        cloud={expectedCloud.data?.data ?? []}
-        headshots={headshots}
-        isLoading={expected.isLoading}
-        isError={expected.isError}
+        minGames={minRangeGames}
+        result={ranges.data}
+        isLoading={ranges.isLoading}
+        isError={ranges.isError}
       />
     ),
     headToHead: (

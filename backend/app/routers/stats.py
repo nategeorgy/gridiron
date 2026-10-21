@@ -65,7 +65,7 @@ from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
 from app.seasons import current_season, latest_scheduled_season, week_bounds
 from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
-from app.weekly_finishes import build_weekly_finishes
+from app.weekly_finishes import POOLS as FINISH_POOLS, build_weekly_finishes
 from app.trending import (
     DEFAULT_WINDOW as TREND_WINDOW,
     DIRECTIONS as TREND_DIRECTIONS,
@@ -1304,7 +1304,7 @@ def weekly_finishes(
     request: Request,
     season: int | None = Query(None, description="Defaults to the newest season with stats"),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
-    position: str = Query("RB", description="QB, RB, WR or TE"),
+    position: str = Query("RB", description="QB, RB, WR, TE, or FLEX (RB, WR and TE together)"),
     scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'ppr:te_rec=1.5'"),
     min_games: int = Query(1, ge=1, le=22, description="Games played to be listed"),
     limit: int = Query(30, ge=1, le=60),
@@ -1319,7 +1319,7 @@ def weekly_finishes(
     Tiers are left to the client, which knows the league's lineup.
     """
     upper = position.upper()
-    if upper not in ("QB", "RB", "WR", "TE"):
+    if upper not in FINISH_POOLS:
         raise HTTPException(status_code=400, detail=f"Unknown position '{position}'")
     try:
         config = parse_scoring(scoring)
