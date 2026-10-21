@@ -65,7 +65,7 @@ from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
 from app.seasons import current_season, latest_scheduled_season, week_bounds
 from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
-from app.weekly_finishes import build_weekly_finishes
+from app.weekly_finishes import POOLS as FINISH_POOLS, build_weekly_finishes
 from app.trending import (
     DEFAULT_WINDOW as TREND_WINDOW,
     DIRECTIONS as TREND_DIRECTIONS,
@@ -495,6 +495,11 @@ def compare(
     last_weeks: int | None = Query(
         None, ge=1, le=22, description="Trailing window of played weeks. Omit for the full season."
     ),
+    weeks: str = Query(
+        "",
+        description="Comma-separated weeks to compare over, e.g. '1,2,6'. An explicit "
+                    "selection; takes precedence over `last_weeks`.",
+    ),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
     metrics: str = Query("", description="Comma-separated metric ids. Defaults per position."),
     scoring: str = Query("ppr", description="League scoring as preset[:overrides]"),
@@ -522,7 +527,9 @@ def compare(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    window = resolve_window(db, season, season_type, last_weeks)
+    # Explicit weeks narrow the percentile pools too, so "84th percentile" is among
+    # receivers over those same weeks, the only reading that compares like with like.
+    window = resolve_window(db, season, season_type, last_weeks, _parse_weeks(weeks))
     games = games_expr()
     rows = [
         finalize_row(dict(row), config, custom_metrics)
@@ -531,7 +538,7 @@ def compare(
                 window_filters(
                     window.season, window.season_type,
                     week_from=window.week_from, week_to=window.week_to,
-                    positions=POSITIONS,
+                    positions=POSITIONS, week_in=window.week_list,
                 ),
                 games,
             )
@@ -664,8 +671,9 @@ def _compare_weekly(
             PlayerStats.player_id.in_(player_ids),
             PlayerStats.season == window.season,
             PlayerStats.season_type == window.season_type,
-            PlayerStats.week >= window.week_from,
-            PlayerStats.week <= window.week_to,
+            PlayerStats.week.in_(window.week_list)
+            if window.week_list
+            else PlayerStats.week.between(window.week_from, window.week_to),
         )
         .order_by(PlayerStats.week)
     ).all()
@@ -1296,7 +1304,7 @@ def weekly_finishes(
     request: Request,
     season: int | None = Query(None, description="Defaults to the newest season with stats"),
     season_type: str = Query("REG", pattern="^(REG|POST)$"),
-    position: str = Query("RB", description="QB, RB, WR or TE"),
+    position: str = Query("RB", description="QB, RB, WR, TE, or FLEX (RB, WR and TE together)"),
     scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'ppr:te_rec=1.5'"),
     min_games: int = Query(1, ge=1, le=22, description="Games played to be listed"),
     limit: int = Query(30, ge=1, le=60),
@@ -1311,7 +1319,7 @@ def weekly_finishes(
     Tiers are left to the client, which knows the league's lineup.
     """
     upper = position.upper()
-    if upper not in ("QB", "RB", "WR", "TE"):
+    if upper not in FINISH_POOLS:
         raise HTTPException(status_code=400, detail=f"Unknown position '{position}'")
     try:
         config = parse_scoring(scoring)

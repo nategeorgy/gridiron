@@ -15,30 +15,17 @@
 export const SIGNALS_SEASON = 2026;
 
 /**
- * Expected vs Actual (September 2026). One plot replaced the two rail cards
- * (Underperformers and Regression Candidates), which drew the same gap twice on two
- * scales and never said what caused it.
- *
- * The list is not split by side: which side a player is on is read from his own points
- * over expected, so a pick that moves across par between weeks reclassifies itself
- * instead of appearing under a heading that has stopped being true.
- */
-export const EXPECTED_VS_ACTUAL = [
-  "00-0038597", // Chase Brown
-  "00-0038559", // Michael Wilson
-  "00-0040122", // Ashton Jeanty
-  "00-0038124", // Christian Watson
-  "00-0036555", // Chuba Hubbard
-  "00-0037228", // Jaylen Warren
-];
-
-/**
  * The head-to-head's opening pair. A reader can swap either player from the card, and
  * the pick rides in the URL (`?h2h=`), so this is only what the card shows first.
+ *
+ * `weeks` narrows the featured pair to the games they shared, percentile pools
+ * included; a pair the reader picks gets the whole season again.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0040667", "00-0038124"], // Matthew Golden, Christian Watson
-  caption: String(SIGNALS_SEASON),
+  players: ["00-0039491", "00-0040124"], // Jalen Coker, Tetairoa McMillan
+  // Week 3 is left out: Coker played 36% of the snaps. Carolina's bye was Week 5.
+  weeks: "1,2,6",
+  caption: `${SIGNALS_SEASON} · Weeks 1, 2 and 6`,
 };
 
 /**
@@ -51,8 +38,8 @@ export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
   // The season so far. Name `weeks` (e.g. "4") to feature a single week instead.
-  passerId: "00-0033106", // Jared Goff
-  team: "DET",
+  passerId: "00-0039918", // Caleb Williams
+  team: "CHI",
 };
 
 /**
@@ -68,33 +55,35 @@ export const HIGHLIGHTED_VIZ = {
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 5,
+  week: 6,
   entries: [
     {
-      // Second only to Christian McCaffrey's 2019.
+      // Second only to Wes Welker's 2011 in PPR and half-PPR; third in standard, where
+      // Tyreek Hill's 2023 passes both.
+      kind: "leaders",
+      playerId: "00-0038543", // Jaxon Smith-Njigba
+      title: "Most fantasy points by a wide receiver through Week 6",
+      query: { grain: "seasons", positions: "WR", last_week: 6, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
+    },
+    {
+      // A record in PPR and half-PPR, ahead of Christian McCaffrey's 2019 (30.2); third in
+      // standard, behind Todd Gurley (2018) and Derrick Henry (2021). The four-game floor
+      // keeps a two-game start off the list.
       kind: "leaders",
       playerId: "00-0039139", // Jahmyr Gibbs
-      title: "Most fantasy points by a running back through Week 5",
-      query: { grain: "seasons", positions: "RB", last_week: 5, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
+      title: "Most fantasy points per game by a running back through Week 6",
+      stat: "fantasy_ppg",
+      format: 1,
+      query: { grain: "seasons", positions: "RB", last_week: 6, where: "fantasy_ppg::,games:4:", sort: "fantasy_ppg", order: "desc", limit: 3 },
     },
     {
-      // A record: Zach Ertz (2018) and Jake Ferguson (2025) had 41.
-      kind: "leaders",
-      playerId: "00-0037744", // Trey McBride
-      title: "Most catches by a tight end through Week 5",
-      stat: "receptions",
-      format: "int",
-      query: { grain: "seasons", positions: "TE", last_week: 5, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
-    },
-    {
-      // The other is Jalen Hurts, Week 15 of 2022. A quarterback scores the same in every
-      // preset, so the 32-point bound holds whichever scoring the reader picked.
+      // The others are Michael Crabtree (Week 15, 2017) and Austin Ekeler (Week 6, 2022).
       kind: "count",
-      playerId: "00-0039910", // Jayden Daniels
-      title: "32+ fantasy points without a touchdown pass",
+      playerId: "00-0040129", // Emeka Egbuka
+      title: "16+ targets and fewer than 50 receiving yards",
       seasonCount: false,
-      query: { grain: "games", positions: "QB", where: "fantasy_points:32:,passing_tds::0,rushing_yards::,rushing_tds::", sort: "fantasy_points", order: "desc", limit: 50 },
-      line: (row) => `${row.fantasy_points.toFixed(1)} points, ${row.rushing_yards} rush yds, ${row.rushing_tds} rush TDs`,
+      query: { grain: "games", positions: "RB,WR,TE", where: "targets:16:,receiving_yards::49,receptions::", sort: "targets", order: "desc", limit: 50 },
+      line: (row) => `${row.targets} targets, ${row.receptions} catches, ${row.receiving_yards} yds`,
     },
   ],
 };

@@ -32,7 +32,7 @@ function LeadersEntry({ entry, scoring }) {
           <b>{entry.title}</b>
           <span className="block text-[11.5px] text-faint">
             Any season since {FIRST_SEASON}
-            {stat === "fantasy_points" ? ` · ${scoringLabel(scoring)}` : ""}
+            {stat.startsWith("fantasy_") ? ` · ${scoringLabel(scoring)}` : ""}
           </span>
         </div>
       </div>

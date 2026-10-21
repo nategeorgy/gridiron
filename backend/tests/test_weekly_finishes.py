@@ -100,6 +100,19 @@ def test_the_tight_end_is_not_in_the_receivers_pool(client: TestClient, league: 
                                                                "Traded Receiver")] == [1, 2, 3]
 
 
+def test_flex_pools_every_position_but_ranks_each_at_his_own(client: TestClient, league: dict) -> None:
+    """Floor and Ceiling reads the pooled list; a finish must not change meaning in it."""
+    receivers = _finishes(client)
+    flex = _finishes(client, position="FLEX")
+    names = {row["name"] for row in flex["data"]}
+    assert "Big Tight End" in names and "Steady Receiver" in names
+    tight_end = _row(flex, "Big Tight End")
+    assert tight_end["position"] == "TE" and tight_end["finishes"]["1"] == 1
+    for row in receivers["data"]:
+        assert _row(flex, row["name"])["finishes"] == row["finishes"]
+        assert _row(flex, row["name"])["position"] == "WR"
+
+
 def test_a_bye_a_missed_game_and_an_unplayed_week_are_three_things(client: TestClient, league: dict) -> None:
     result = _finishes(client)
     assert result["weeks"] == [1, 2, 3, 4] and result["last_week"] == 3
