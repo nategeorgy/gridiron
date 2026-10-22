@@ -156,7 +156,7 @@ function cardPreviewFantasy(pv) {
 // B3 ---------------------------------------------------------- Tale of the tape
 function cardTape(pv) {
   const [away, home] = pvSides(pv);
-  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: `Each offense against the defense it faces. Season ranks of ${pv.teams_ranked}, 1st is best.` });
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: `Offense against offense, defense against defense. Season ranks of ${pv.teams_ranked}, 1st is best.` });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const ids = ["epa", "suc", "p_epa", "r_epa", "explosive", "pts_drive", "rz_td", "d3", "sack_rate"];
@@ -165,34 +165,38 @@ function cardTape(pv) {
   const panelW = (w - pad * 2 - 50) / 2;
   const n = pv.teams_ranked;
   let s = "";
-  [[away, home], [home, away]].forEach(([off, def], pi) => {
+  // Left panel: both offenses. Right panel: both defenses. Each scale runs worst to best.
+  [["o", "Offense"], ["d", "Defense"]].forEach(([side, heading], pi) => {
     const x0 = pad + pi * (panelW + 50);
     let y = fr.top - 6;
-    s += logo(off, x0, y, 40) + T(x0 + 50, y + 30, `${off} offense`, { size: 24, weight: 750, fill: teamText(colors[off]) });
-    const vw = textWidth(`${off} offense`, 24, 750);
-    s += T(x0 + 50 + vw + 14, y + 30, "vs", { size: 20, fill: "var(--faint)" });
-    s += logo(def, x0 + 50 + vw + 48, y, 40) + T(x0 + 50 + vw + 98, y + 30, `${def} defense`, { size: 24, weight: 750, fill: teamText(colors[def]) });
+    s += T(x0, y + 30, heading, { size: 26, weight: 800 });
+    let hx = x0 + textWidth(heading, 26, 800) + 22;
+    [away, home].forEach((team, ti) => {
+      if (ti) { s += T(hx, y + 30, "vs", { size: 20, fill: "var(--faint)" }); hx += textWidth("vs", 20) + 14; }
+      s += logo(team, hx, y, 40) + T(hx + 50, y + 30, team, { size: 24, weight: 750, fill: teamText(colors[team]) });
+      hx += 50 + textWidth(team, 24, 750) + 14;
+    });
     y += 64;
     const labelW = 200, tx0 = x0 + labelW, tx1 = x0 + panelW - 150;
-    const x = lin(1, n, tx0 + 18, tx1 - 18);
-    s += T(tx0 + 18, y - 6, "Best", { size: 15, weight: 700, fill: "var(--faint)" }) + T(tx1 - 18, y - 6, "Worst", { size: 15, weight: 700, anchor: "end", fill: "var(--faint)" });
-    s += T(tx1 + 74, y - 6, off, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" }) + T(tx1 + 136, y - 6, def, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" });
+    const x = lin(n, 1, tx0 + 18, tx1 - 18);
+    s += T(tx0 + 18, y - 6, "Worst", { size: 15, weight: 700, fill: "var(--faint)" }) + T(tx1 - 18, y - 6, "Best", { size: 15, weight: 700, anchor: "end", fill: "var(--faint)" });
+    s += T(tx1 + 74, y - 6, away, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" }) + T(tx1 + 136, y - 6, home, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" });
     const rowH = (fr.bottom - y) / rows.length;
     rows.forEach((row, i) => {
       const cy = y + i * rowH + rowH / 2;
-      const o = row.o[off], d = row.d[def];
+      const a = row[side][away], h = row[side][home];
       s += T(x0, cy + 7, short[row.id] || row.label, { size: 20, weight: 600, fill: "var(--muted)" });
       s += L(tx0 + 18, cy, tx1 - 18, cy, { stroke: "var(--rule)", sw: 6, cap: "round" });
-      if (o && d) {
-        const edge = o[1] < d[1] ? off : d[1] < o[1] ? def : null;
-        s += L(x(o[1]), cy, x(d[1]), cy, { stroke: edge ? colors[edge] : "var(--muted)", sw: 6, cap: "round", opacity: 0.85 });
-        const close = Math.abs(x(o[1]) - x(d[1])) < 34;
-        for (const [team, r, dy] of [[def, d[1], close ? 11 : 0], [off, o[1], close ? -11 : 0]]) {
+      if (a && h) {
+        const edge = a[1] < h[1] ? away : h[1] < a[1] ? home : null;
+        s += L(x(a[1]), cy, x(h[1]), cy, { stroke: edge ? colors[edge] : "var(--muted)", sw: 6, cap: "round", opacity: 0.85 });
+        const close = Math.abs(x(a[1]) - x(h[1])) < 34;
+        for (const [team, r, dy] of [[home, h[1], close ? 11 : 0], [away, a[1], close ? -11 : 0]]) {
           s += C(x(r), cy + dy, 17, { fill: "var(--card)", stroke: colors[team], sw: 2.5 }) + logo(team, x(r) - 13, cy + dy - 13, 26);
         }
       }
-      s += T(tx1 + 74, cy + 7, o ? ord(o[1]) : "-", { size: 19, weight: 700, anchor: "middle", mono: true, fill: o && d && o[1] < d[1] ? teamText(colors[off]) : "var(--fg)" });
-      s += T(tx1 + 136, cy + 7, d ? ord(d[1]) : "-", { size: 19, weight: 700, anchor: "middle", mono: true, fill: o && d && d[1] < o[1] ? teamText(colors[def]) : "var(--fg)" });
+      s += T(tx1 + 74, cy + 7, a ? ord(a[1]) : "-", { size: 19, weight: 700, anchor: "middle", mono: true, fill: a && h && a[1] < h[1] ? teamText(colors[away]) : "var(--fg)" });
+      s += T(tx1 + 136, cy + 7, h ? ord(h[1]) : "-", { size: 19, weight: 700, anchor: "middle", mono: true, fill: a && h && h[1] < a[1] ? teamText(colors[home]) : "var(--fg)" });
     });
   });
   s += L(w / 2, fr.top + 40, w / 2, fr.bottom, { stroke: "var(--rule)" });

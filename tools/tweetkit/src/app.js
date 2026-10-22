@@ -34,7 +34,7 @@ const GROUPS = {
   preview: [
     { id: "B1", name: "Matchup", fn: cardMatchup, note: "Line, implied totals, last five against the spread, four players to watch per side." },
     { id: "B2", name: "Fantasy matchup", fn: cardPreviewFantasy, pick: true, note: "Each skill player's PPG, expected PPG, weekly finishes and matchup grade." },
-    { id: "B3", name: "Tale of the tape", fn: cardTape, wide: true, pick: true, note: "Each offense against the defense it faces, rank against rank." },
+    { id: "B3", name: "Tale of the tape", fn: cardTape, wide: true, pick: true, note: "Both offenses side by side, then both defenses, rank against rank." },
     { id: "B4", name: "Usage by week", fn: cardPreviewUsage, wide: true, pick: true, note: "Target and carry share every week for each team's main pieces, with snap share under each." },
     { id: "B6", name: "EPA by game", fn: cardTrend, wide: true, isNew: true, note: "Both offenses and both defenses game by game this season, against the league's middle half." },
   ],

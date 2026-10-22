@@ -86,7 +86,7 @@ adds or removes his face (on C1, highlights the team). The hover targets draw no
 |---|---|---|---|---|---|
 | B1 | Matchup | 1200x1500 | Line, implied totals, last five against the spread, four players to watch a side | | |
 | B2 | Fantasy matchup | 1200x1500 | PPG, expected PPG, weekly finishes, soft or tough matchup tag | | |
-| B3 | Tale of the tape | 1600x900 | Each offense's rank against the rank of the defense it faces. Titled with the matchup only (Oct 21) | | Picked Oct 20 |
+| B3 | Tale of the tape | 1600x900 | Both offenses' ranks on one side, both defenses' on the other, each scale running worst to best (Oct 22). Titled with the matchup only (Oct 21) | | Picked Oct 20 |
 | B4 | Usage by week | 1600x900 | Target share (receivers) or carry share (backs) every week, snap share under it | | Picked Oct 20 |
 | B6 | EPA by game | 1600x900 | Both offenses and both defenses game by game, against the league's middle half | | Added Oct 21 |
 
