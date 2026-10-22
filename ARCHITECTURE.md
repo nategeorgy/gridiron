@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-10-19 (recap tabs reworked; game_plays names the players on each play)
+Last updated: 2026-10-21 (tools/tweetkit: team cards, chart highlights, PNG export from the page)
 
 ---
 
@@ -73,6 +73,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `frontend/` | app | The React web app (what users see). See [§4](#4-frontend--the-react-web-app). |
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
+| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 35 card templates (game recaps, previews, weekly series including every Scatter page chart, player reply cards, teams) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
 | `render.yaml` | config | "Blueprint" telling **Render** how to build and run the backend in production. ⭐ Its `buildCommand` runs **`scripts/migrate.sh`** after installing dependencies — `preDeployCommand` is paid-only on the free plan. See the file's comments: a bare `alembic upgrade head` failed there on a pooler **checkout timeout**, not connectivity, because a build competes with the still-running previous version for connections. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
@@ -830,6 +831,16 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-10-21**: **`tools/tweetkit/` grows to 32 cards in five groups**, adding a team group (E1 to E4) and new
+  recap, preview, weekly and player cards; D4 is retired. Every chart with faces draws through one `scatterPlot`
+  and takes a highlight list, which the page edits with a name picker and `render.mjs` takes as `--highlight`. The
+  page saves a card as a PNG through the artifact `downloads` capability or copies it to the clipboard: the SVG is
+  copied with its colours written out and Inter and JetBrains Mono embedded, then drawn at 2x.
+- **2026-10-20**: **`tools/tweetkit/`**, tweet images from the local API, moved in from a scratchpad so the card
+  options and how to make them are kept. Twenty templates in four groups (recaps A1 to A5, previews B1 to B4,
+  weekly series C1 to C6, player reply cards D1 to D5), each a function that returns an SVG in the site's export
+  frame. `pull.py`, `build_data.py`, `fetch_img.py` and `build.py` make the page; `render.mjs` writes PNGs and
+  `check.mjs` runs every card against every game and player. The README lists every card and which were picked.
 - **2026-10-16**: **Recap tabs reworked.** Summary drops the win probability caption and lists each team's
   top five scorers. The Fantasy tab is gone (an old `?tab=fantasy` link opens the Box Score). Box Score
   has eleven columns per phase, ending Snap %, FPTS and Finish, on one column grid shared by its three

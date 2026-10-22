@@ -1,0 +1,10 @@
+# Pulled and generated each week: rebuild with pull.py, build_data.py, fetch_img.py, build.py
+raw/
+img/
+data.json
+img.json
+need_images.json
+index.html
+preview.html
+.chrome*/
+fonts/

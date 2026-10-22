@@ -1,0 +1,174 @@
+<title>Tweet Card Templates</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Inter and JetBrains Mono, embedded: an exported PNG is drawn from an SVG that cannot reach a web font. */
+__FONTS__
+/* Review page for tweet cards: a sticky jump bar, then four groups of cards in a two-column grid.
+   Tokens are the app's own (frontend/src/index.css), light on bare :root, dark below. */
+:root {
+  --bg: #dde3ec; --card: #ffffff; --panel: #f3f5f8; --chip: #e9edf3;
+  --rule: rgba(20,30,50,0.16); --divider: rgba(20,30,50,0.10); --border-strong: rgba(20,30,50,0.24);
+  --fg: #141821; --muted: #4a5568; --faint: #8a94a6;
+  --accent: #00b06a; --accent-text: #00925a; --accent-ink: #ffffff; --pos: #0a9d63; --neg: #dc4c4c; --warn: #b9770a; --scale-mid: #eab308;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4;
+  --position-qb: var(--series-4); --position-rb: var(--series-1); --position-wr: var(--series-3); --position-te: var(--series-5);
+  --plot-rule: rgba(20,24,33,0.7); --shade: rgba(20,30,60,0.35); --scrim: rgba(10,12,18,0.82);
+  --sans: Inter, "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0a0c; --card: #16171c; --panel: #1f2028; --chip: #2a2c35;
+    --rule: rgba(255,255,255,0.14); --divider: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.26);
+    --fg: #f2f3f6; --muted: #a8acb6; --faint: #71757f;
+    --accent: #00e389; --accent-text: #00e389; --accent-ink: #04140c; --pos: #00e389; --neg: #f87171; --warn: #f5a524; --scale-mid: #facc15;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+    --plot-rule: rgba(255,255,255,0.38); --shade: rgba(0,0,0,0.6); --scrim: rgba(0,0,0,0.82);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0a0c; --card: #16171c; --panel: #1f2028; --chip: #2a2c35;
+  --rule: rgba(255,255,255,0.14); --divider: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.26);
+  --fg: #f2f3f6; --muted: #a8acb6; --faint: #71757f;
+  --accent: #00e389; --accent-text: #00e389; --accent-ink: #04140c; --pos: #00e389; --neg: #f87171; --warn: #f5a524; --scale-mid: #facc15;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+  --plot-rule: rgba(255,255,255,0.38); --shade: rgba(0,0,0,0.6); --scrim: rgba(0,0,0,0.82);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--sans); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 28px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 760px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; padding: 3px; background: var(--card); }
+.seg button { border: 0; background: none; color: var(--muted); font: 600 13px var(--sans); padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav.jump { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); margin-bottom: 8px; }
+nav.jump a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--card); }
+section.group { margin-top: 34px; }
+.group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 16px; }
+.group-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+.group-head p { margin: 2px 0 0; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select { font: 600 14px var(--sans); color: var(--fg); background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 12px; max-width: 100%; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.quick button { font: 600 12px var(--sans); color: var(--muted); background: var(--card); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+.quick button[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 24px; align-items: start; }
+.grid figure { margin: 0; min-width: 0; }
+.grid figure.wide { grid-column: span 2; }
+.shot { border-radius: 14px; overflow: hidden; box-shadow: 0 18px 50px -24px var(--shade); border: 1px solid var(--rule); cursor: zoom-in; background: var(--card); }
+.shot svg { display: block; width: 100%; height: auto; }
+figcaption { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+figcaption b { font-size: 15px; }
+figcaption .size { font: 500 12px var(--mono); color: var(--faint); }
+figcaption .note { flex-basis: 100%; color: var(--muted); font-size: 13.5px; }
+.badge { font: 700 11px var(--sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); padding: 2px 7px; border-radius: 6px; }
+.badge.new { background: var(--chip); color: var(--fg); border: 1px solid var(--rule); }
+figcaption .actions { margin-left: auto; display: inline-flex; gap: 6px; }
+.act { font: 650 12.5px var(--sans); color: var(--fg); background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.act:hover { border-color: var(--accent); }
+.controls-row { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); }
+.ctrl { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--muted); min-width: 0; }
+.ctrl > span:first-child { font-weight: 700; color: var(--fg); }
+.ctrl select { font-size: 13px; padding: 5px 8px; }
+.ctrl.hl { flex: 1 1 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.hchip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--fg); background: var(--chip); border-radius: 999px; padding: 3px 4px 3px 10px; }
+.hchip button { border: 0; background: none; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 4px; border-radius: 999px; }
+.hchip button:hover { color: var(--neg); }
+.chips .none { font-size: 12.5px; color: var(--faint); }
+.ctrl input[type="text"] { font: 500 13px var(--sans); color: var(--fg); background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 5px 9px; width: 190px; max-width: 100%; }
+.link { border: 0; background: none; color: var(--accent-text); font: 600 12.5px var(--sans); cursor: pointer; padding: 2px 4px; }
+#tip { position: fixed; z-index: 70; display: none; flex-direction: column; gap: 2px; max-width: 280px; padding: 8px 11px; border-radius: 10px; background: var(--card); color: var(--fg); border: 1px solid var(--rule); box-shadow: 0 10px 28px -12px var(--shade); font: 500 13px var(--sans); pointer-events: none; }
+#tip.show { display: flex; }
+#tip b { font-weight: 700; }
+#tip span { color: var(--muted); font-variant-numeric: tabular-nums; }
+#tip em { font-style: normal; color: var(--accent-text); font-size: 12px; margin-top: 3px; }
+.shot [data-pid] { cursor: pointer; }
+#toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); opacity: 0; transition: opacity .2s, transform .2s; background: var(--fg); color: var(--bg); font: 600 13.5px var(--sans); padding: 10px 16px; border-radius: 10px; z-index: 60; pointer-events: none; max-width: calc(100vw - 32px); }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+#lightbox img { display: block; max-width: 96vw; max-height: 88vh; width: auto; height: auto; border-radius: 10px; }
+#lightbox .hint { color: #fff; text-align: center; font-size: 14px; margin: 10px 0 0; }
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+.callout { margin: 14px 0 0; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); color: var(--muted); font-size: 14px; }
+.callout b { color: var(--fg); }
+#lightbox { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: var(--scrim); padding: max(2vh, env(safe-area-inset-top, 0px)) max(2vw, env(safe-area-inset-right, 0px)) max(2vh, env(safe-area-inset-bottom, 0px)) max(2vw, env(safe-area-inset-left, 0px)); cursor: zoom-out; }
+#lightbox.open { display: flex; }
+#lightbox .frame { max-width: 96vw; max-height: 96vh; }
+#lightbox svg { display: block; max-width: 96vw; max-height: 96vh; width: auto; height: auto; border-radius: 10px; }
+@media (max-width: 900px) {
+  .wrap { padding-block: 20px 60px; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .grid figure.wide { grid-column: span 1; }
+  h1 { font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Tweet card options</h1>
+      <p class="lede">Real data through Week <span id="lede-week"></span>, PPR, in the site's export frame. Each card is one template: change the game, player or team and it redraws. Save PNG or Copy image under any card, in the theme you are viewing. Click a card to see it full size.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Theme">
+      <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
+      <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+    </div>
+  </header>
+  <nav class="jump">
+    <a href="#recaps">A. Game recaps</a><a href="#previews">B. Game previews</a><a href="#weekly">C. Weekly series</a><a href="#players">D. Player replies</a><a href="#teams">E. Teams</a>
+  </nav>
+
+  <section class="group" id="recaps">
+    <div class="group-head">
+      <div><h2>A. Game recaps</h2><p>Built from the recap page: summary, box score, usage and team stats.</p></div>
+      <div class="controls"><select id="recap-pick" aria-label="Recap game"></select></div>
+    </div>
+    <div class="grid" id="recap-grid"></div>
+  </section>
+
+  <section class="group" id="previews">
+    <div class="group-head">
+      <div><h2>B. Game previews</h2><p>Built from the preview page: matchup, fantasy, tale of the tape and usage trends.</p></div>
+      <div class="controls"><select id="preview-pick" aria-label="Preview game"></select></div>
+    </div>
+    <div class="grid" id="preview-grid"></div>
+  </section>
+
+  <section class="group" id="weekly">
+    <div class="group-head">
+      <div><h2>C. Weekly series</h2><p>League-wide cards that refresh every week. On the charts, hover a dot to see who it is and click it to add or remove a face.</p></div>
+    </div>
+    <div class="grid" id="weekly-grid"></div>
+  </section>
+
+  <section class="group" id="players">
+    <div class="group-head">
+      <div><h2>D. Player reply cards</h2><p>Pick anyone in the top 36 QBs, 64 RBs, 90 WRs or 36 TEs. Every card redraws for him.</p></div>
+      <div class="controls"><select id="player-pick" aria-label="Player"></select></div>
+    </div>
+    <div class="quick" id="quick"></div>
+    <div class="grid" id="player-grid" style="margin-top:16px"></div>
+  </section>
+
+  <section class="group" id="teams">
+    <div class="group-head">
+      <div><h2>E. Teams</h2><p>One team at a time: its profile, who gets the work, EPA by game and the red zone.</p></div>
+      <div class="controls"><select id="team-pick" aria-label="Team"></select></div>
+    </div>
+    <div class="grid" id="team-grid"></div>
+  </section>
+</div>
+<div id="lightbox" role="dialog" aria-label="Full size card"><div class="frame"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="tip" aria-hidden="true"></div>
+<script>window.MARK_PATHS = __MARK__; window.FONT_FACES = __FONTS_JSON__;</script>
+<script id="data" type="application/json">__DATA__</script>
+<script id="img" type="application/json">__IMG__</script>
+<script>
+__JS__
+</script>
