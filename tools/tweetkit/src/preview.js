@@ -156,7 +156,7 @@ function cardPreviewFantasy(pv) {
 // B3 ---------------------------------------------------------- Tale of the tape
 function cardTape(pv) {
   const [away, home] = pvSides(pv);
-  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: `Offense against offense, defense against defense. Season ranks of ${pv.teams_ranked}, 1st is best.` });
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: "Season ranks" });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const ids = ["epa", "suc", "p_epa", "r_epa", "explosive", "pts_drive", "rz_td", "d3", "sack_rate"];
