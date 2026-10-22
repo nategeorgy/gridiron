@@ -2,6 +2,11 @@
 
 "Top" is total points by default (``sort="total"``), or points per game.
 
+``FLEX`` pools backs, receivers and tight ends, for the home page's Floor and Ceiling
+card (October 2026), which reads each game's points from the same response. A finish
+is still at the player's own position: "WR12 that week" means the same thing in the
+pool as it does on the receivers' grid.
+
 The home page's Weekly Finishes card (October 2026) draws a player-by-week grid: each
 cell is the player's finish at his position that week, coloured by how deep a league
 starts the position. The finish is the Query Builder's (``app/query_builder.py``), which
@@ -32,6 +37,9 @@ from sqlalchemy.orm import Session
 from app.models import Game
 from app.query_builder import POSITIONS, get_frame, get_scored
 from app.scoring import ScoringConfig
+
+# The positions a request may name, and what each pools.
+POOLS = {**{position: (position,) for position in POSITIONS}, "FLEX": ("RB", "WR", "TE")}
 
 
 def _team_weeks(
@@ -65,9 +73,10 @@ def build_weekly_finishes(
     """The top ``limit`` players at ``position`` by total points (or points per game), week by week."""
     frame = get_frame(db)
     scored = get_scored(db, config)
+    codes = [POSITIONS.index(member) for member in POOLS[position]]
     mask = (
         (frame.season == season)
-        & (frame.position == POSITIONS.index(position))
+        & np.isin(frame.position, codes)
         & (frame.post == (season_type == "POST"))
     )
     rows = np.flatnonzero(mask)
@@ -102,6 +111,7 @@ def build_weekly_finishes(
         players.append({
             "player_id": person_row["player_id"],
             "name": person_row["name"],
+            "position": person_row["position"],
             "headshot_url": person_row["headshot_url"],
             "team": frame.teams.get(teams[-1][1]),
             "games": len(lines),

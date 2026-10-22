@@ -826,7 +826,9 @@ GET /api/v1/draft/rankings                   ← M9 one board's players, with ou
 POST /api/v1/draft/mock-grade                ← M9 value the rosters out of a finished
                                                mock. Needs no account
 GET /api/v1/stats/scatter                    ← M4 any two metrics (UI offers presets only)
-GET /api/v1/stats/compare                    ← M4 up to 5 players, position-intersected
+GET /api/v1/stats/compare                    ← M4 up to 5 players, position-intersected.
+                                               weeks= (an explicit set) narrows the stats,
+                                               the weekly series and the percentile pools
 GET /api/v1/metrics                          ← metric registry
 GET /api/v1/seasons                          ← seasons held + the current one.
                                                "Current" = newest season WITH STATS,
@@ -872,7 +874,9 @@ GET /api/v1/stats/trending                   ← M10 who is gaining or losing wo
                                                trailing window. ?direction=up|down
 GET /api/v1/stats/weekly-finishes            ← a position's top scorers by total points with their
                                                finish every week, byes from the schedule
-                                               (the home page grid). position=, min_games=, sort=total|ppg
+                                               (the home page grid). position= (or FLEX for
+                                               RB/WR/TE together, Floor and Ceiling's pool),
+                                               min_games=, sort=total|ppg
 
 # Explore (September 2026). Play-level views, all public, all but the Query Builder
 # served through cached_response. weeks= and situation=all|red_zone|late_downs apply.
@@ -935,8 +939,8 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   *not* the leaderboard. Rebuilt in October 2026 as **"Option C"** (it was M10's two-column
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
   **Highlighted Viz of the Week**; a row of Explore cards (team landscape, air-yard
-  distribution, record book); the week's players (Expected vs Actual and a reader-picked
-  head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
+  distribution, record book); the week's players (Floor and Ceiling, which replaced Expected
+  vs Actual in October 2026, and a reader-picked head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
   red, which replaced Trending Players and Last Week's Scoring in October 2026); and a **Week N
   Preview** (the slate,
   matchups by position, implied totals). The arrangement is data, in `constants/homeLayout.js`.
