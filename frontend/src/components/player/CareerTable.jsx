@@ -16,7 +16,7 @@ import { FinishChip } from "./FinishChip";
 import { metricTip } from "./metricTip";
 import { SIGNED_COLUMNS } from "../../constants/playerPage";
 
-export function CareerTable({ seasons, position, sections, controls, metrics, league, activeSeason, onSelectSeason, isLoading }) {
+export function CareerTable({ seasons, position, sections, controls, metrics, activeSeason, onSelectSeason, isLoading }) {
   const tooltip = useStatTooltip();
   const columns = sections.flatMap((section) => section.columns);
   const starts = new Set(sections.map((section) => section.columns[0]));
@@ -122,7 +122,6 @@ export function CareerTable({ seasons, position, sections, controls, metrics, le
                       <FinishChip
                         rank={season.position_rank}
                         position={position}
-                        league={league}
                         detail={`of ${season.pool_size} on total points · ${
                           season.position_rank_ppg == null
                             ? `not enough games to rank on PPG (needed ${season.min_games})`
@@ -161,9 +160,8 @@ export function CareerTable({ seasons, position, sections, controls, metrics, le
       )}
 
       <p className="mt-1.5 text-[10.5px] text-faint">
-        Finish is the rank in total points among {position}s that season, coloured by how deep
-        your {league.teams}-team league starts the position. Hover one for the tier and the
-        points-per-game finish.
+        Finish is the rank in total points among {position}s that season. Hover one for its band
+        and the points-per-game finish.
       </p>
       <StatTooltip tip={tooltip.tip} />
     </section>

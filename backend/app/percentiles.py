@@ -68,6 +68,7 @@ from app.scoring import ScoringConfig
 # legs are a real and large part of his value.
 PERCENTILE_POSITIONS: dict[str, tuple[str, ...]] = {
     "rushing_yards": ("RB", "QB"),
+    "rushing_yards_per_game": ("RB", "QB"),
     "rushing_tds": ("RB", "QB"),
     "rushing_first_downs": ("RB", "QB"),
     "rushing_epa": ("RB", "QB"),

@@ -1,32 +1,28 @@
 // Player profile (rebuilt in M13).
 //
-// The reading order is the order a manager asks the questions in: who is this, what did
-// he do this season, what has his career looked like, how does that rank, how does he
-// compare, and finally the receipts game by game.
+// The reading order is the order a manager asks the questions in: who is this and how
+// does his season rank (the player card, which opens the page), what did he do this
+// season, what has his career looked like, game by game, and how does he compare.
 //
-// **Everything fantasy is in the user's own league scoring** (M1 spine A) and league
-// context (M3) — including the career finishes, so a superflex league sees its own
-// history rather than someone else's PPR one.
+// **Everything fantasy is in the user's own league scoring** (M1 spine A), including the
+// career finishes, so a TE-premium league sees its own history rather than someone
+// else's PPR one.
 //
-// **One request serves the season.** The stat grid, the radar and the percentile panel
-// are three views of a single row from `/stats/intelligence`, which carries both the
-// stored columns and the query-time ones (the buy/sell indices and friends) plus a percentile for every
-// metric the position's page can show. Adding the comparison player to that same request
-// is what keeps the two halves of a matchup on identical pools.
+// **One request serves the season.** The stat grid, the player card and the head-to-head
+// are views of rows from one `/stats/intelligence` request, which carries both the stored
+// columns and the query-time ones (the buy/sell indices and friends) plus a percentile and
+// a positional rank for every metric the position's page can show. Adding the comparison
+// player to that same request is what keeps the two halves of a matchup on identical pools.
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { ScoringControl } from "../components/ScoringControl";
-import { FavoriteStar } from "../components/FavoriteStar";
-import { PositionTag } from "../components/PositionTag";
-import { Headshot } from "../components/explore/common";
 import { CareerTable } from "../components/player/CareerTable";
 import { ComparePicker } from "../components/player/ComparePicker";
-import { CompareRadar } from "../components/player/CompareRadar";
 import { GameLog, buildSeasonLog } from "../components/player/GameLog";
 import { HeadToHead } from "../components/player/HeadToHead";
-import { PercentileLadder } from "../components/player/PercentileLadder";
-import { SeasonRadar } from "../components/player/SeasonRadar";
+import { PlayerCard } from "../components/player/PlayerCard";
+import { FloorCeiling } from "../components/player/FloorCeiling";
 import { SeasonStatGrid } from "../components/player/SeasonStatGrid";
 import { TableViewBar } from "../components/player/TableViewBar";
 import { PlayerTargetCard } from "../components/explore/TargetCard";
@@ -40,58 +36,18 @@ import { useGames } from "../hooks/useGames";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
 import { useScoring } from "../hooks/useScoring";
-import { parseLeague } from "../constants/league";
+import { useSeasons } from "../hooks/useSeasons";
+import { useTeamsList } from "../hooks/useTeamStats";
+import { scoringLabel } from "../constants/scoring";
 import {
-  COMPARE_AXES,
-  H2H_ROWS,
   HEADLINE_STATS,
-  PERCENTILE_GROUPS,
   TABLE_VIEWS,
   forPosition,
-  headlineColumns,
   percentileColumns,
+  rankColumns,
   seasonBoards,
 } from "../constants/playerPage";
 import { useTableView } from "../hooks/useTableView";
-
-function ProfileHeader({ player, seasonTeam }) {
-  return (
-    <section className="glass-card flex items-center gap-4 p-5">
-      <Headshot url={player.headshot_url} name={player.name} size={80} className="rounded-full border border-edge" style={{ background: "var(--surface-2)" }} />
-      <div>
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-2xl font-bold tracking-tight text-fg">{player.name}</h1>
-          <FavoriteStar playerId={player.player_id} size="h-5 w-5" />
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-          <PositionTag position={player.position} />
-          {/* The team he played for in the season on screen, which is not the same as
-              the team that employs him now once the range reaches back to 1999 —
-              Marshall Faulk's 2001 belongs to STL, while his player record says LA. */}
-          <span className="stat-num">{seasonTeam ?? player.team_abbreviation ?? "FA"}</span>
-          {player.jersey_number != null && (
-            <span className="stat-num text-faint">#{player.jersey_number}</span>
-          )}
-          {player.age != null && <span className="stat-num text-faint">{player.age}y</span>}
-        </div>
-        {player.college_name && (
-          <div className="mt-1 text-xs text-faint">
-            {player.college_name}
-            {player.draft_year && (
-              <>
-                {" · "}
-                {player.draft_round
-                  ? `${player.draft_year} round ${player.draft_round}, pick ${player.draft_pick}`
-                  : `${player.draft_year} undrafted`}
-                {player.draft_team ? ` (${player.draft_team})` : ""}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
 
 /**
  * @param {string} [playerId] render a specific player instead of the route's.
@@ -107,9 +63,6 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
   const [scoring, setScoring] = useScoring();
   const [league] = useLeague();
   const { metrics } = useMetrics();
-  // Finish chips are tiered by how deep this league starts each position, so a QB22 week
-  // reads as unstartable in a one-quarterback league and fine in a superflex one.
-  const leagueConfig = useMemo(() => parseLeague(league), [league]);
 
   const playerQuery = usePlayer(playerId);
   const player = playerQuery.data;
@@ -131,7 +84,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
 
   const [opponent, setOpponent] = useState(null);
   const wanted = useMemo(() => percentileColumns(position), [position]);
-  const ranked = useMemo(() => headlineColumns(position), [position]);
+  const ranked = useMemo(() => rankColumns(position), [position]);
   const seasonQuery = usePlayerSeason({
     playerIds: [playerId, opponent?.player_id],
     season,
@@ -178,6 +131,16 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
     [seasonGames, scheduleQuery.data, logTeamId],
   );
 
+  // The player card's ring, logo and team name, and the head-to-head's. The header's Teams
+  // menu already loads this list, so it is a cache hit.
+  const teamsQuery = useTeamsList();
+  const teams = useMemo(
+    () => Object.fromEntries((teamsQuery.data ?? []).map((team) => [team.abbreviation, team])),
+    [teamsQuery.data],
+  );
+  const { currentSeason } = useSeasons();
+
+
   if (playerQuery.isLoading) {
     return <div className="p-6 text-center text-sm text-muted">Loading…</div>;
   }
@@ -197,6 +160,10 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
     label: String(entry.season),
   }));
   const poolSize = seasonQuery.data?.percentiles?.pool_sizes?.[position];
+  // The newest week the season's stats reach. A season still being played says "through
+  // Week N"; the card's week strip stops there either way.
+  const lastWeek = seasonQuery.data?.window?.week_to ?? 0;
+  const through = season === currentSeason ? lastWeek : null;
   // Both players are in one response, so a comparison only renders once both rows are
   // in hand — a half-drawn matchup is worse than a late one.
   const comparing = Boolean(opponent && opponentRow && row);
@@ -220,25 +187,42 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
         </Link>
       )}
 
-      <ProfileHeader player={player} seasonTeam={row?.team_abbreviation} />
+      {/* The page opens on the player card, which carries the season and scoring pickers
+          that govern everything below it. */}
+      <PlayerCard
+        player={player}
+        row={row}
+        // The team he played for in the season on screen, which is not the team that
+        // employs him now once the range reaches back: Marshall Faulk's 2001 belongs to
+        // STL, while his player record says LA.
+        team={teams[row?.team_abbreviation ?? player.team_abbreviation]}
+        position={position}
+        season={season}
+        through={through}
+        scoring={scoring}
+        log={seasonLog}
+        lastWeek={lastWeek}
+        metrics={metrics}
+        poolSize={poolSize}
+        isLoading={careerQuery.isLoading || seasonQuery.isLoading}
+        extra={<FloorCeiling log={seasonLog} lastWeek={lastWeek} position={position} />}
+        empty={season == null ? "No regular-season game data for this player." : undefined}
+        controls={
+          <>
+            {seasonOptions.length > 0 && (
+              <Select
+                label="Season"
+                value={String(season)}
+                onChange={(value) => setChosenSeason(Number(value))}
+                options={seasonOptions}
+              />
+            )}
+            <ScoringControl scoring={scoring} onChange={setScoring} label="Scoring" bare />
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-end gap-3">
-        {seasonOptions.length > 0 && (
-          <Select
-            label="Season"
-            value={String(season)}
-            onChange={(value) => setChosenSeason(Number(value))}
-            options={seasonOptions}
-          />
-        )}
-        <ScoringControl scoring={scoring} onChange={setScoring} label="Scoring" bare />
-      </div>
-
-      {season == null ? (
-        <section className="glass-card p-8 text-center text-sm text-muted">
-          No regular-season game data for this player.
-        </section>
-      ) : (
+      {season != null && (
         <>
           <SeasonStatGrid
             headline={forPosition(HEADLINE_STATS, position)}
@@ -256,8 +240,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
             sections={careerView.sections}
             controls={<TableViewBar view={careerView} title="Career" player={player.name} metrics={metrics} />}
             metrics={metrics}
-            league={leagueConfig}
-            activeSeason={season}
+                activeSeason={season}
             onSelectSeason={setChosenSeason}
             isLoading={careerQuery.isLoading}
           />
@@ -268,23 +251,9 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
             controls={<TableViewBar view={gameLogView} title="Game log" player={player.name} metrics={metrics} />}
             metrics={metrics}
             position={position}
-            league={leagueConfig}
-            season={season}
+                season={season}
             isLoading={gameLogQuery.isLoading}
           />
-
-          <div className="grid items-start gap-4 lg:grid-cols-[10fr_11fr]">
-            <SeasonRadar row={row} metrics={metrics} position={position} season={season} />
-            <PercentileLadder
-              groups={forPosition(PERCENTILE_GROUPS, position)}
-              row={row}
-              metrics={metrics}
-              position={position}
-              season={season}
-              poolSize={poolSize}
-              isLoading={seasonQuery.isLoading}
-            />
-          </div>
 
           <PlayerTargetCard player={player} season={season} />
 
@@ -303,24 +272,20 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
               </div>
 
               {comparing ? (
-                <div className="grid items-start gap-4 lg:grid-cols-2">
+                <section className="glass-card p-4 sm:p-5">
                   <HeadToHead
-                    rows={forPosition(H2H_ROWS, position)}
                     players={matchup}
-                    metrics={metrics}
+                    teams={teams}
+                    position={position}
                     season={season}
+                    scoring={scoring}
+                                metrics={metrics}
+                    kicker={`Head to head · ${season}${through ? ` through Week ${through}` : ""} · ${scoringLabel(scoring)}`}
                   />
-                  <CompareRadar
-                    axes={forPosition(COMPARE_AXES, position)}
-                    players={matchup}
-                    metrics={metrics}
-                  />
-                </div>
+                </section>
               ) : (
                 <p className="glass-card p-5 text-center text-xs text-muted">
-                  {opponent
-                    ? `No ${season} stats for ${opponent.name}.`
-                    : `Pick another ${position} to see the head-to-head and the profile comparison.`}
+                  {opponent ? `No ${season} stats for ${opponent.name}.` : `Pick another ${position} to see them head to head.`}
                 </p>
               )}
             </section>

@@ -7,9 +7,8 @@
 // far likelier to be a pass-catcher than a quarterback, and the page still renders.
 //
 // ⚠️ **Column ids must exist in the metric registry** (`GET /api/v1/metrics`) or they
-// render as their raw id. A column entry is an id or `{ id, label }` (see `columnEntry`),
-// and the game log derives the handful of per-game values no stored column holds — see
-// `gameValue` below.
+// render as their raw id. The game log derives the handful of per-game values no stored
+// column holds: see `gameValue` below.
 
 import { LEADERBOARD_TABS, presetSections } from "./leaderboards";
 
@@ -122,7 +121,7 @@ export const TABLE_VIEWS = {
   gamelog: {
     key: "log",
     defaultTab: "usage",
-    exclude: ["fantasy_points", "fantasy_ppg", "snap_share", "routes_run_per_game", "expected_fantasy_ppg"],
+    exclude: ["fantasy_points", "fantasy_ppg", "snap_share", "routes_run_per_game", "rushing_yards_per_game", "expected_fantasy_ppg"],
     presets: { fantasy: PLAYER_FANTASY },
   },
 };
@@ -166,11 +165,6 @@ export const SIGNED_COLUMNS = new Set([
   "ngs_pass_completion_pct_above_expectation",
   "ngs_pass_air_yards_differential",
 ]);
-
-/** A column entry — a metric id, or `{ id, label }` — normalised to `{ id, label? }`. */
-export function columnEntry(entry) {
-  return typeof entry === "string" ? { id: entry } : entry;
-}
 
 // Per-game values no stored column holds. ⚠️ Y/REC, Y/TGT and YPRR are NOT here: they
 // are stored per game and match their own division exactly, so the stored value is used.
@@ -232,230 +226,139 @@ export function gameValue(game, column) {
 }
 
 // ---------------------------------------------------------------------------
-// Season profile radar — slices grouped by what they measure
+// The player card and the head-to-head (October 2026): the tweet kit's D1 and D6
 // ---------------------------------------------------------------------------
-// Grouped so the shape reads as an argument rather than a list. A group's colour follows
-// the GROUP, never its position in the list — Production is the same green on a back's
-// chart (where it comes first) as on a receiver's (where it comes second), and a
-// quarterback's chart simply has no Opportunity group. Colours are `--series-*` tokens,
-// never `--accent`/`--pos`/`--neg`, which carry meanings a category must not borrow.
+// The tweet cards Nate set per position on 2026-10-21, brought onto the page in place of
+// the season radar, the percentile panel and the old head-to-head table and radar. These
+// mirror `TILE_GROUPS`, `PCT_LIST` and `STAT` in tools/tweetkit/src/player.js, and the
+// labels are his words: change one and change the other, or the card on the page and the
+// card in a tweet will disagree.
 //
-// Entries are a metric id or `{ id, label }`: a slice label has a twelfth of a circle to
-// live in, so most take a shorter label than the registry's. The tooltip-length name is
-// still the registry's.
-const OPPORTUNITY = { name: "Opportunity", color: "var(--series-1)" };
-const PRODUCTION = { name: "Production", color: "var(--series-3)" };
-const ADVANCED = { name: "Advanced", color: "var(--series-5)" };
+// A format is the registry's spec ("int", a number of decimals, "pct") or "pct0", a share
+// to the whole percent. `signed` adds an explicit "+". A label holding "{scoring}" takes
+// the scoring preset's name ("PPR points per game").
 
-export const RADAR_GROUPS = {
+// The top row, in labelled groups. A tile stat's `long` is its name on the head-to-head,
+// where it stands alone rather than under its group's heading.
+const FANTASY_TILES = {
+  name: "Fantasy points",
+  stats: [
+    { id: "fantasy_ppg", label: "Per game", long: "Points per game", format: 1 },
+    { id: "fantasy_points", label: "Total", long: "Total points", format: 1 },
+  ],
+};
+const RECEIVING_TILES = {
+  name: "Receiving",
+  stats: [
+    { id: "receptions", label: "Receptions", long: "Receptions", format: "int" },
+    { id: "receiving_yards", label: "Yards", long: "Receiving yards", format: "int" },
+    { id: "receiving_tds", label: "TDs", long: "Receiving TDs", format: "int" },
+  ],
+};
+export const CARD_TILES = {
   QB: [
+    FANTASY_TILES,
     {
-      ...PRODUCTION,
-      columns: [
-        { id: "fantasy_points", label: "Fantasy Pts" },
-        { id: "fantasy_ppg", label: "Fantasy PPG" },
-        { id: "yards_per_attempt", label: "Yards / Att" },
-        { id: "completion_pct", label: "Comp %" },
-        { id: "rushing_yards", label: "Rush Yds" },
-        { id: "rushing_tds", label: "Rush TDs" },
-      ],
-    },
-    {
-      ...ADVANCED,
-      columns: [
-        { id: "epa", label: "EPA" },
-        { id: "epa_per_play", label: "EPA / Play" },
-        // `adot` is the receiving column and is null for quarterbacks.
-        { id: "ngs_pass_intended_air_yards", label: "aDOT" },
-        { id: "cpoe", label: "CPOE" },
+      name: "Passing",
+      stats: [
+        { id: "passing_yards", label: "Yards", long: "Passing yards", format: "int" },
+        { id: "passing_tds", label: "TDs", long: "Passing TDs", format: "int" },
+        { id: "interceptions", label: "INTs", long: "Interceptions", format: "int" },
       ],
     },
   ],
   RB: [
+    FANTASY_TILES,
     {
-      ...PRODUCTION,
-      columns: [
-        { id: "fantasy_points", label: "Fantasy Pts" },
-        { id: "fantasy_ppg", label: "Fantasy PPG" },
-        { id: "fantasy_points_per_carry", label: "Pts / Carry" },
+      name: "Rushing",
+      stats: [
+        { id: "rushing_yards", label: "Yards", long: "Rushing yards", format: "int" },
+        { id: "rushing_tds", label: "TDs", long: "Rushing TDs", format: "int" },
       ],
     },
-    {
-      ...OPPORTUNITY,
-      columns: [
-        { id: "carries", label: "Carries" },
-        { id: "rush_attempt_share", label: "Rush %" },
-        { id: "rush_att_inside_5", label: "Carries In 5" },
-        { id: "targets", label: "Targets" },
-        { id: "opportunity_share", label: "Opp %" },
-      ],
-    },
-    {
-      ...ADVANCED,
-      columns: [
-        { id: "rush_yac_per_att", label: "YAC / Carry" },
-        { id: "ngs_rush_yards_over_expected_per_att", label: "RYOE / Carry" },
-        { id: "rushing_epa", label: "Rush EPA" },
-      ],
-    },
+    RECEIVING_TILES,
   ],
-  WR: [
-    {
-      ...OPPORTUNITY,
-      columns: [
-        { id: "targets", label: "Targets" },
-        { id: "target_share", label: "Target Share" },
-        { id: "red_zone_targets", label: "RZ Targets" },
-        { id: "route_participation", label: "Route %" },
-      ],
-    },
-    {
-      ...PRODUCTION,
-      columns: [
-        { id: "fantasy_points", label: "Fantasy Pts" },
-        { id: "fantasy_ppg", label: "Fantasy PPG" },
-        { id: "fantasy_points_per_route_run", label: "Pts / Route" },
-        { id: "yards_per_route_run", label: "YPRR" },
-      ],
-    },
-    {
-      ...ADVANCED,
-      columns: [
-        { id: "ngs_rec_separation", label: "Separation" },
-        { id: "adot", label: "aDOT" },
-        { id: "targets_per_route_run", label: "TPRR" },
-        { id: "receiving_epa", label: "Rec EPA" },
-      ],
-    },
-  ],
+  WR: [FANTASY_TILES, RECEIVING_TILES],
 };
-RADAR_GROUPS.TE = RADAR_GROUPS.WR;
+CARD_TILES.TE = CARD_TILES.WR;
 
-// ---------------------------------------------------------------------------
-// Percentile panel — every headline metric, grouped
-// ---------------------------------------------------------------------------
-export const PERCENTILE_GROUPS = {
+// The percentile rows. A back's route participation is his "route share".
+const POINTS_PER_GAME = { id: "fantasy_ppg", label: "{scoring} points per game", format: 1 };
+export const CARD_PERCENTILES = {
   QB: [
-    { name: "Value", columns: ["fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
-    { name: "Volume", columns: ["attempts", "dropbacks", "completions", "carries"] },
-    { name: "Production", columns: ["passing_yards", "passing_tds", "passing_first_downs", "rushing_yards", "rushing_tds"] },
-    { name: "Efficiency", columns: ["passer_rating", "cpoe", "epa_per_play", "yards_per_attempt", "completion_pct", "interceptions", "sacks_suffered"] },
-    { name: "Next Gen Stats", columns: ["ngs_pass_time_to_throw", "ngs_pass_aggressiveness", "ngs_pass_air_yards_to_sticks", "ngs_pass_completion_pct_above_expectation", "pressure_rate"] },
+    POINTS_PER_GAME,
+    { id: "completion_pct", label: "Completion %", format: "pct" },
+    { id: "passer_rating", label: "Passer rating", format: 1 },
+    { id: "yards_per_attempt", label: "Yards per attempt", format: 1 },
+    { id: "yards_per_completion", label: "Yards per completion", format: 1 },
+    // `adot` is the receiving column and is null for quarterbacks.
+    { id: "ngs_pass_intended_air_yards", label: "aDOT", format: 1 },
+    { id: "rushing_yards_per_game", label: "Rushing yards per game", format: 1 },
+    { id: "rushing_tds", label: "Rushing TDs", format: "int" },
+    { id: "ngs_pass_aggressiveness", label: "Aggressiveness", format: "pct" },
+    { id: "bad_throw_rate", label: "Bad throw %", format: "pct" },
+    { id: "cpoe", label: "CPOE", format: 1, signed: true },
+    { id: "epa_per_play", label: "EPA per play", format: 2, signed: true },
+    { id: "epa", label: "EPA total", format: 1, signed: true },
   ],
   RB: [
-    { name: "Value", columns: ["fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
-    { name: "Opportunity", columns: ["carries", "rush_attempt_share", "opportunity_share", "target_share", "snap_share", "red_zone_rush_share", "rush_att_inside_5"] },
-    { name: "Production", columns: ["rushing_yards", "rushing_tds", "rushing_first_downs", "receptions", "receiving_yards"] },
-    { name: "Efficiency", columns: ["yards_per_carry", "rushing_epa", "epa_per_play", "market_share"] },
-    { name: "Next Gen Stats", columns: ["ngs_rush_efficiency", "ngs_rush_yards_over_expected_per_att", "ngs_rush_pct_attempts_eight_defenders", "rush_yards_after_contact", "rush_broken_tackles"] },
+    POINTS_PER_GAME,
+    { id: "rush_attempt_share", label: "Rush share", format: "pct0" },
+    { id: "target_share", label: "Target share", format: "pct0" },
+    { id: "route_participation", label: "Route share", format: "pct0" },
+    { id: "rush_att_inside_5", label: "Carries inside the 5", format: "int" },
+    { id: "red_zone_targets", label: "Red zone targets", format: "int" },
+    { id: "yards_per_carry", label: "Yards per carry", format: 1 },
+    { id: "fantasy_points_per_carry", label: "Points per carry", format: 2 },
+    { id: "targets_per_route_run", label: "Targets per route run", format: "pct0" },
+    { id: "ngs_rush_yards_over_expected_per_att", label: "Rushing yards over expected per carry", format: 2, signed: true },
+    { id: "rush_ybc_per_att", label: "Yards before contact per carry", format: 1 },
+    { id: "rush_yac_per_att", label: "Yards after contact per carry", format: 1 },
+    { id: "rushing_epa", label: "Rushing EPA", format: 1, signed: true },
+    { id: "receiving_epa", label: "Receiving EPA", format: 1, signed: true },
+    { id: "epa", label: "EPA total", format: 1, signed: true },
   ],
   WR: [
-    { name: "Value", columns: ["fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected"] },
-    { name: "Opportunity", columns: ["target_share", "targets", "air_yards_share", "red_zone_targets", "routes_run", "route_participation", "wopr", "snap_share"] },
-    { name: "Production", columns: ["receiving_yards", "receptions", "receiving_tds", "receiving_first_downs", "yards_after_catch"] },
-    { name: "Efficiency", columns: ["yards_per_route_run", "targets_per_route_run", "yards_per_target", "catch_rate", "racr", "adot", "receiving_drops"] },
-    { name: "Next Gen Stats", columns: ["ngs_rec_separation", "ngs_rec_cushion", "ngs_rec_yac_above_expectation", "rec_broken_tackles"] },
+    POINTS_PER_GAME,
+    { id: "target_share", label: "Target share", format: "pct0" },
+    { id: "route_participation", label: "Route participation", format: "pct0" },
+    { id: "yards_per_reception", label: "Yards per reception", format: 1 },
+    { id: "yards_per_target", label: "Yards per target", format: 1 },
+    { id: "targets_per_route_run", label: "Targets per route run", format: "pct0" },
+    { id: "yards_per_route_run", label: "Yards per route run", format: 2 },
+    { id: "fantasy_points_per_route_run", label: "Points per route run", format: 2 },
+    { id: "adot", label: "Average depth of target", format: 1 },
+    { id: "air_yards", label: "Air yards", format: "int" },
+    { id: "air_yards_share", label: "Air yards share", format: "pct0" },
+    { id: "red_zone_targets", label: "Red zone targets", format: "int" },
+    { id: "receiving_epa", label: "Receiving EPA", format: 1, signed: true },
   ],
 };
-PERCENTILE_GROUPS.TE = PERCENTILE_GROUPS.WR;
+CARD_PERCENTILES.TE = CARD_PERCENTILES.WR;
 
-// ---------------------------------------------------------------------------
-// Compare — the head-to-head table and the radar beside it
-// ---------------------------------------------------------------------------
-// `perGame: true` divides the season total by games played, so two players with
-// different games missed are compared on rate rather than availability. Everything
-// else is the season value as the API reports it.
-export const H2H_ROWS = {
-  QB: [
-    { id: "fantasy_ppg", label: "Points / Game" },
-    { id: "attempts", label: "Attempts / Game", perGame: true },
-    { id: "passing_yards", label: "Pass Yards / Game", perGame: true },
-    { id: "passing_tds", label: "Passing TDs" },
-    { id: "interceptions", label: "Interceptions" },
-    { id: "passer_rating", label: "Passer Rating" },
-    { id: "cpoe", label: "CPOE" },
-    { id: "epa_per_play", label: "EPA / Play" },
-    { id: "rushing_yards", label: "Rush Yards / Game", perGame: true },
-    { id: "sacks_suffered", label: "Sacks Taken" },
-  ],
-  RB: [
-    { id: "fantasy_ppg", label: "Points / Game" },
-    { id: "carries", label: "Carries / Game", perGame: true },
-    { id: "rushing_yards", label: "Rush Yards / Game", perGame: true },
-    { id: "rushing_tds", label: "Rushing TDs" },
-    { id: "yards_per_carry", label: "Yards / Carry" },
-    { id: "targets", label: "Targets / Game", perGame: true },
-    { id: "receiving_yards", label: "Rec Yards / Game", perGame: true },
-    { id: "opportunity_share", label: "Opportunity Share" },
-    { id: "snap_share", label: "Snap Share" },
-    { id: "rush_att_inside_5", label: "Carries Inside 5" },
-  ],
-  WR: [
-    { id: "fantasy_ppg", label: "Points / Game" },
-    { id: "targets", label: "Targets / Game", perGame: true },
-    { id: "receptions", label: "Receptions / Game", perGame: true },
-    { id: "receiving_yards", label: "Rec Yards / Game", perGame: true },
-    { id: "receiving_tds", label: "Receiving TDs" },
-    { id: "target_share", label: "Target Share" },
-    { id: "adot", label: "aDOT" },
-    { id: "yards_per_route_run", label: "Yards / Route Run" },
-    { id: "ngs_rec_separation", label: "Separation" },
-    { id: "ngs_rec_yac_above_expectation", label: "YAC Over Expected" },
-    { id: "receiving_drops", label: "Drops" },
-  ],
-};
-H2H_ROWS.TE = H2H_ROWS.WR;
+/** The ids the player card and the head-to-head need ranked, for one position. */
+export function cardRankColumns(position) {
+  return forPosition(CARD_TILES, position).flatMap((group) => group.stats.map((stat) => stat.id));
+}
 
-// The radar beside the table. Eight axes, in the Command Center card's own order —
-// volume, then share, then output — because this is that card, on a player page.
-export const COMPARE_AXES = {
-  QB: [
-    { id: "fantasy_ppg", label: "PPG" },
-    { id: "expected_fantasy_ppg", label: "Expected" },
-    { id: "attempts", label: "Attempts" },
-    { id: "passing_yards", label: "Pass Yd" },
-    { id: "passing_tds", label: "Pass TD" },
-    { id: "rushing_yards", label: "Rush Yd" },
-    { id: "cpoe", label: "CPOE" },
-    { id: "epa_per_play", label: "EPA/Play" },
-  ],
-  RB: [
-    { id: "fantasy_ppg", label: "PPG" },
-    { id: "expected_fantasy_ppg", label: "Expected" },
-    { id: "carries", label: "Carries" },
-    { id: "targets", label: "Targets" },
-    { id: "rushing_yards", label: "Rush Yd" },
-    { id: "opportunity_share", label: "Opp%" },
-    { id: "snap_share", label: "Snap%" },
-    { id: "rush_att_inside_5", label: "In5" },
-  ],
-  WR: [
-    { id: "fantasy_ppg", label: "PPG" },
-    { id: "expected_fantasy_ppg", label: "Expected" },
-    { id: "targets", label: "Targets" },
-    { id: "receiving_yards", label: "Rec Yd" },
-    { id: "receiving_tds", label: "Rec TD" },
-    { id: "target_share", label: "Tgt Share" },
-    { id: "air_yards_share", label: "Air%" },
-    { id: "snap_share", label: "Snap%" },
-  ],
-};
-COMPARE_AXES.TE = COMPARE_AXES.WR;
+/** The ids the player card and the head-to-head need a percentile for. */
+export function cardPercentileColumns(position) {
+  return forPosition(CARD_PERCENTILES, position).map((stat) => stat.id);
+}
 
 /** Every metric the page asks the API to rank, for one position. */
 export function percentileColumns(position) {
-  // The headline shows ranks, but tints each by its percentile — same pool, so the
+  // The headline shows ranks, but tints each by its percentile: same pool, so the
   // colour and the number can never disagree about how good a stat is.
   const wanted = new Set(headlineColumns(position));
   for (const board of seasonBoards(position)) {
     for (const section of board.sections) section.columns.forEach((id) => wanted.add(id));
   }
-  for (const group of forPosition(RADAR_GROUPS, position)) {
-    group.columns.forEach((entry) => wanted.add(columnEntry(entry).id));
-  }
-  for (const group of forPosition(PERCENTILE_GROUPS, position)) {
-    group.columns.forEach((id) => wanted.add(id));
-  }
-  for (const axis of forPosition(COMPARE_AXES, position)) wanted.add(axis.id);
+  cardPercentileColumns(position).forEach((id) => wanted.add(id));
   return [...wanted];
+}
+
+/** Every metric the page asks the API for a positional rank in. */
+export function rankColumns(position) {
+  return [...new Set([...headlineColumns(position), ...cardRankColumns(position)])];
 }

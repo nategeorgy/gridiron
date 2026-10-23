@@ -15,10 +15,8 @@ import { TeamTargetCard } from "../explore/TargetCard";
 import { Headshot } from "../explore/common";
 import { useNetwork } from "../../hooks/useExplore";
 import { useGamePlays } from "../../hooks/useGames";
-import { useLeague } from "../../hooks/useLeague";
 import { useTeamBreakdown } from "../../hooks/useTeamStats";
 import { usePhone } from "../../hooks/useMediaQuery";
-import { parseLeague } from "../../constants/league";
 import { formatTeamStat } from "../../utils/teamStats";
 import { signed } from "../../utils/explore";
 import { ordinal } from "../../utils/format";
@@ -116,7 +114,6 @@ function ScoringSummary({ scoring, game, dense = false }) {
 const LEADERS = 5;
 
 function GameLeaders({ recap, game }) {
-  const league = parseLeague(useLeague()[0]);
   const logos = logosOf(game);
   const column = (team) => {
     // recap.players arrives sorted by fantasy points.
@@ -137,7 +134,7 @@ function GameLeaders({ recap, game }) {
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="stat-num text-[15px] font-extrabold text-fg">{num(player.fantasy_points)}</span>
-              <FinishChip rank={player.position_rank} position={player.position} league={league} detail={`of ${player.pool_size} that week`} />
+              <FinishChip rank={player.position_rank} position={player.position} detail={`of ${player.pool_size} that week`} />
             </div>
           </div>
         ))}
@@ -271,14 +268,14 @@ const BOX_PHASES = [
   },
 ];
 
-function BoxTable({ phase, players, league }) {
+function BoxTable({ phase, players }) {
   const rows = phase.rows(players);
   if (!rows.length) return null;
   const columns = [
     ...phase.columns,
     ["Snap %", (p) => pct(p.snap_share)],
     ["FPTS", (p) => <span className="font-bold">{num(p.fantasy_points)}</span>],
-    ["Finish", (p) => <FinishChip rank={p.position_rank} position={p.position} league={league} detail={`of ${p.pool_size} that week`} />],
+    ["Finish", (p) => <FinishChip rank={p.position_rank} position={p.position} detail={`of ${p.pool_size} that week`} />],
   ];
   return (
     <div className="overflow-x-auto">
@@ -307,10 +304,9 @@ function BoxTable({ phase, players, league }) {
 }
 
 function BoxTables({ players }) {
-  const league = parseLeague(useLeague()[0]);
   return (
     <div className="grid gap-4">
-      {BOX_PHASES.map((phase) => <BoxTable key={phase.title} phase={phase} players={players} league={league} />)}
+      {BOX_PHASES.map((phase) => <BoxTable key={phase.title} phase={phase} players={players} />)}
     </div>
   );
 }

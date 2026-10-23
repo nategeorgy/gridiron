@@ -41,8 +41,6 @@ import {
 import { scoringLabel } from "../constants/scoring";
 import { FIRST_SEASON } from "../constants";
 import { useQueryFields, useQuerySearch } from "../hooks/useExplore";
-import { useLeague } from "../hooks/useLeague";
-import { parseLeague } from "../constants/league";
 import { useScoring } from "../hooks/useScoring";
 import { useSeasons } from "../hooks/useSeasons";
 import { runQuery } from "../services/explore";
@@ -57,10 +55,6 @@ export function QueryBuilderView({ board }) {
   const [searchParams, setSearchParams] = useLiveSearchParams();
   const { seasons, currentSeason } = useSeasons();
   const [scoring, setScoring] = useScoring();
-  const [leagueSpec] = useLeague();
-  // FinishChip colours a finish by how deep the league starts the position, so it takes
-  // the parsed league rather than the spec string the API reads.
-  const league = useMemo(() => parseLeague(leagueSpec), [leagueSpec]);
   const [offset, setOffset] = useState(0);
   const [pending, setPending] = useState([]);
   const [copied, setCopied] = useState(false);
@@ -332,7 +326,7 @@ export function QueryBuilderView({ board }) {
                 title={image?.title ?? "Query Builder"}
                 subtitle={image?.subtitle}
                 note={image?.note}
-                render={() => <QueryResultsImage data={imageData} rows={imageRows} league={league} />}
+                render={() => <QueryResultsImage data={imageData} rows={imageRows} />}
                 disabled={!image || imageStale}
                 sizes={["fit"]}
                 fitScale={1}
@@ -391,7 +385,7 @@ export function QueryBuilderView({ board }) {
             <ChartState isLoading={isLoading} isError={isError} isEmpty={!data?.rows?.length} height={420}
               empty={isError ? error?.response?.data?.detail : "Nothing matches. Loosen a range or widen the seasons."} />
           ) : (
-            <ResultsTable data={data} offset={offset} league={league}
+            <ResultsTable data={data} offset={offset}
               onSort={(key) => update(data.sort === key ? { order: data.order === "desc" ? "asc" : "desc" } : { sort: key, order: null })} />
           )}
 
@@ -452,7 +446,7 @@ function gameText(row) {
   return { result: row.result, text: `${score}${place} ${row.opponent ?? ""}` };
 }
 
-function ResultsTable({ data, offset, league, onSort }) {
+function ResultsTable({ data, offset, onSort }) {
   const heading = (column) => {
     const sorted = data.sort === column.key;
     return (
@@ -467,7 +461,7 @@ function ResultsTable({ data, offset, league, onSort }) {
     const value = row[column.key];
     const style = column.filtered || data.sort === column.key ? "font-semibold text-fg" : "";
     if (column.key === "weekly_finish") {
-      return <td key={column.key} className="px-2 py-1.5 text-right"><FinishChip rank={value} position={row.position} league={league} /></td>;
+      return <td key={column.key} className="px-2 py-1.5 text-right"><FinishChip rank={value} position={row.position} /></td>;
     }
     return <td key={column.key} className={`stat-num px-2 py-1.5 text-right ${style}`}>{formatStat(value, column.format)}</td>;
   };

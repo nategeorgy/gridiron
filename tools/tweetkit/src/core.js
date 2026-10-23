@@ -116,8 +116,11 @@ function logo(abbr, x, y, size) {
 }
 
 // ---------------------------------------------------------------- finishes
-// The default 12-team 1QB/2RB/3WR/1TE/1FLEX lineup, as FinishChip.jsx tiers it.
-const DEPTH = { QB: { top: 12, starter: 12, flex: 12 }, RB: { top: 12, starter: 24, flex: 28 }, WR: { top: 12, starter: 36, flex: 42 }, TE: { top: 12, starter: 12, flex: 14 } };
+// The finish bands, set per position by Nate (October 2026): where each band ends, best
+// first. Mirrors FINISH_BANDS in frontend/src/components/player/FinishChip.jsx, so a chip
+// on a tweet is the colour it is on the site; change both together.
+const BANDS = { QB: [6, 12, 18, 24], RB: [8, 14, 20, 26], WR: [12, 24, 32, 38], TE: [5, 10, 15, 20] };
+const BAND_NAMES = ["top", "starter", "flex", "outside", "far"];
 const TONES = {
   top: { bg: mix("var(--pos)", 42), fg: mix("var(--pos)", 30, "var(--fg)") },
   starter: { bg: mix("var(--pos)", 24), fg: mix("var(--pos)", 62, "var(--fg)") },
@@ -126,13 +129,10 @@ const TONES = {
   far: { bg: mix("var(--neg)", 50), fg: mix("var(--neg)", 30, "var(--fg)") },
 };
 function tier(rank, pos) {
-  const d = DEPTH[pos] || DEPTH.WR;
   if (rank == null) return null;
-  if (rank <= d.top) return "top";
-  if (rank <= d.starter) return "starter";
-  if (rank <= d.flex) return "flex";
-  if (rank <= d.flex + 12) return "outside";
-  return "far";
+  const ends = BANDS[pos] || BANDS.WR;
+  const band = ends.findIndex((end) => rank <= end);
+  return BAND_NAMES[band === -1 ? ends.length : band];
 }
 /** A finish chip ("WR4") centred at cx. */
 function chip(rank, pos, cx, cy, o = {}) {

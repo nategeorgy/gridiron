@@ -17,7 +17,8 @@ import { cloneElement, useMemo, useState } from "react";
 
 import { useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
-import { useCompare, useNetwork, usePlayersById, useTargetBoard } from "../hooks/useExplore";
+import { useNetwork, usePlayersById, useTargetBoard } from "../hooks/useExplore";
+import { usePlayerSeason } from "../hooks/usePlayer";
 import { useSos } from "../hooks/useDraftBoard";
 import { useWeeklyFinishes } from "../hooks/useWeeklyFinishes";
 import { useTeamsList, useTeamStats } from "../hooks/useTeamStats";
@@ -30,7 +31,6 @@ import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
 import { scaledMinGames, weeksPlayed } from "../utils/qualify";
-import { parseLeague } from "../constants/league";
 import { FEATURED_MATCHUP, HIGHLIGHTED_VIZ, RECORD_BOOK, SIGNALS_SEASON } from "../constants/signals";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 import { shapeNetwork } from "../components/explore/NetworkChart";
@@ -41,7 +41,8 @@ import { AirYardsCard } from "../components/home/AirYardsCard";
 import { TeamLandscapeCard } from "../components/home/TeamLandscapeCard";
 import { RecordBookCard } from "../components/home/RecordBookCard";
 import { FINISH_LIMITS, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
-import { HeadToHeadCard, matchupMetrics } from "../components/home/HeadToHeadCard";
+import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
+import { cardPercentileColumns, cardRankColumns } from "../constants/playerPage";
 import { FloorCeilingCard } from "../components/home/FloorCeilingCard";
 import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
 import { EnvironmentsCard } from "../components/home/EnvironmentsCard";
@@ -90,9 +91,8 @@ function previewSub(games, teams) {
 export function Home() {
   const [scoring, setScoring] = useScoring();
   const [league] = useLeague();
-  const leagueConfig = useMemo(() => parseLeague(league), [league]);
   const { currentSeason: season } = useSeasons();
-  const { supportsScoring } = useMetrics();
+  const { metrics, supportsScoring } = useMetrics();
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
   const [finishPosition, setFinishPosition] = useState(FINISH_POSITIONS[1]);
@@ -145,9 +145,9 @@ export function Home() {
     { enabled: Boolean(season) },
   );
 
-  // --- Head to Head: the reader's pair rides in the URL, so a matchup is shareable. The
-  //     radar's axes follow the first player's position, which the request has to know
-  //     before it asks, so it waits for the players' positions. ---
+  // --- Head to Head: the reader's pair rides in the URL, so a matchup is shareable. Its
+  //     rows follow the first player's position, which the request has to know before it
+  //     asks, so it waits for the players' positions. The player page's request, for two. ---
   const [pairText, setPairText] = useUrlState("h2h", FEATURED_MATCHUP.players.join(","));
   const pair = useMemo(() => {
     const [first = "", second = ""] = pairText.split(",").map((id) => id.trim());
@@ -159,19 +159,15 @@ export function Home() {
   // the season.
   const featuredPair = pair.join(",") === FEATURED_MATCHUP.players.join(",");
   const matchupWeeks = featuredPair ? FEATURED_MATCHUP.weeks : undefined;
-  const matchup = useCompare(
-    useMemo(
-      () => ({
-        players: pairPosition ? pair.filter(Boolean).join(",") : "",
-        metrics: matchupMetrics(pairPosition).map((metric) => metric.id).join(","),
-        season: SIGNALS_SEASON,
-        season_type: "REG",
-        scoring,
-        ...(matchupWeeks ? { weeks: matchupWeeks } : {}),
-      }),
-      [pair, pairPosition, scoring, matchupWeeks],
-    ),
-  );
+  const matchup = usePlayerSeason({
+    playerIds: pairPosition ? pair : [],
+    season: SIGNALS_SEASON,
+    scoring,
+    league,
+    percentiles: pairPosition ? cardPercentileColumns(pairPosition) : [],
+    ranks: pairPosition ? cardRankColumns(pairPosition) : [],
+    weeks: matchupWeeks,
+  });
 
   // --- Watchlist. Rendered only once signed in *and* something is starred: an empty
   //     card here would be a permanent advert for a feature rather than a useful panel.
@@ -214,6 +210,10 @@ export function Home() {
   const teamsList = useTeamsList();
   const teamColors = useMemo(
     () => Object.fromEntries((teamsList.data ?? []).map((team) => [team.abbreviation, team.color])),
+    [teamsList.data],
+  );
+  const teamsByAbbreviation = useMemo(
+    () => Object.fromEntries((teamsList.data ?? []).map((team) => [team.abbreviation, team])),
     [teamsList.data],
   );
   const logos = useMemo(() => {
@@ -277,6 +277,11 @@ export function Home() {
         ids={pair}
         position={pairPosition}
         result={matchup.data}
+        people={pairPeople}
+        teams={teamsByAbbreviation}
+        season={SIGNALS_SEASON}
+        scoring={scoring}
+        metrics={metrics}
         isLoading={!pairPosition || matchup.isLoading}
         isError={matchup.isError}
         onChange={(next) => setPairText(next.join(","))}
@@ -286,7 +291,6 @@ export function Home() {
       <WeeklyFinishesCard
         season={finishes.data?.season ?? season}
         scoring={scoring}
-        league={leagueConfig}
         position={finishPosition}
         onPositionChange={setFinishPosition}
         minGames={minFinishGames}

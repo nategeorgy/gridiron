@@ -74,7 +74,7 @@ export function buildSeasonLog(statLines, fixtures, teamId) {
   return rows.sort((a, b) => a.week - b.week);
 }
 
-export function GameLog({ games, sections, controls, metrics, position, league, season, isLoading }) {
+export function GameLog({ games, sections, controls, metrics, position, season, isLoading }) {
   const tooltip = useStatTooltip();
   const columns = sections.flatMap((section, sectionIndex) =>
     section.columns.map((id, columnIndex) => ({
@@ -191,7 +191,6 @@ export function GameLog({ games, sections, controls, metrics, position, league, 
                           <FinishChip
                             rank={game.position_rank}
                             position={position}
-                            league={league}
                             detail={`of ${game.pool_size} ${position}s that week`}
                           />
                         </td>

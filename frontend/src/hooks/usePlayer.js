@@ -49,8 +49,11 @@ export function usePlayerCareer(playerId, scoring, seasonType = "REG") {
  *
  * `include_unqualified` is on: this is a profile, and a player who missed most of the
  * season still has a page. He is scored against the pool without shaping it.
+ *
+ * `weeks` (an explicit set, "1,2,6") narrows the season, as the home page's featured
+ * head-to-head does; the ranks and percentiles are then for those weeks.
  */
-export function usePlayerSeason({ playerIds, season, seasonType = "REG", scoring, league, percentiles, ranks }) {
+export function usePlayerSeason({ playerIds, season, seasonType = "REG", scoring, league, percentiles, ranks, weeks }) {
   const ids = (playerIds ?? []).filter(Boolean);
   const key = ids.join(",");
   const metrics = (percentiles ?? []).join(",");
@@ -58,7 +61,7 @@ export function usePlayerSeason({ playerIds, season, seasonType = "REG", scoring
   // percentiles — so "WR4" and the percentile beside it describe the same players.
   const ranked = (ranks ?? []).join(",");
   return useQuery({
-    queryKey: ["player-season", key, season, seasonType, scoring, league, metrics, ranked],
+    queryKey: ["player-season", key, season, seasonType, scoring, league, metrics, ranked, weeks],
     queryFn: () =>
       getIntelligence({
         season,
@@ -70,6 +73,7 @@ export function usePlayerSeason({ playerIds, season, seasonType = "REG", scoring
         ranks: ranked,
         include_unqualified: true,
         limit: Math.max(ids.length, 1),
+        ...(weeks ? { weeks } : {}),
       }),
     enabled: Boolean(key && season),
   });

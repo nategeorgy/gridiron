@@ -8,7 +8,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useDebounce } from "../../hooks/useDebounce";
 import { usePlayerSearch } from "../../hooks/usePlayerSearch";
-import { SIDES } from "./sides";
 
 export function ComparePicker({ position, selected, onSelect, onClear }) {
   const [query, setQuery] = useState("");
@@ -40,8 +39,7 @@ export function ComparePicker({ position, selected, onSelect, onClear }) {
       <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">Compare with</span>
 
       {selected && (
-        <span className="flex items-center gap-2 rounded-full border border-edge bg-surface-2 py-1 pl-2 pr-3 text-xs">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: SIDES[1].color }} />
+        <span className="flex items-center gap-2 rounded-full border border-edge bg-surface-2 py-1 pl-3 pr-3 text-xs">
           <span className="font-semibold text-fg">{selected.name}</span>
           <button
             type="button"
