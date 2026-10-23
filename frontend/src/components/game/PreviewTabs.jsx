@@ -7,9 +7,7 @@ import { RankChip } from "../team/RankChip";
 import { DepthChartField } from "../team/DepthChartField";
 import { CoachingStaff } from "../team/CoachingStaff";
 import { Headshot } from "../explore/common";
-import { useLeague } from "../../hooks/useLeague";
 import { useTeam } from "../../hooks/useTeamStats";
-import { parseLeague } from "../../constants/league";
 import { formatTeamStat, rankInk } from "../../utils/teamStats";
 import { ordinal } from "../../utils/format";
 import { GameTrendChart } from "./GameCharts";
@@ -245,13 +243,12 @@ function MatchupTag({ matchup, position }) {
 }
 
 function WeekChips({ player }) {
-  const league = parseLeague(useLeague()[0]);
   return (
     <div className="flex gap-1">
       {player.weeks.map((week) => (week.bye || !week.played ? (
         <span key={week.week} className="stat-num inline-block min-w-[42px] rounded-md border border-dashed border-line px-1 py-px text-center text-[10.5px] text-faint">{week.bye ? "BYE" : "—"}</span>
       ) : (
-        <FinishChip key={week.week} rank={week.position_rank} position={player.position} league={league} detail={`Week ${week.week}: ${num(week.fantasy_points)} points`} />
+        <FinishChip key={week.week} rank={week.position_rank} position={player.position} detail={`Week ${week.week}: ${num(week.fantasy_points)} points`} />
       )))}
     </div>
   );

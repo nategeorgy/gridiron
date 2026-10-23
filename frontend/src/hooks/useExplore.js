@@ -1,6 +1,6 @@
 // React Query hooks for the Explore tab.
 //
-// useScatter and useCompare are the M4 endpoints the home page still reads; the rest
+// useScatter and useCompare are the M4 endpoints (the compare popup reads the second); the rest
 // serve the Explore pages and the target maps on player and team pages. None of the
 // play-level data depends on scoring, so scoring is never part of those keys.
 import { useMemo } from "react";

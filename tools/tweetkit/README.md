@@ -125,6 +125,13 @@ also need 15+ pass attempts a game, since games played alone qualifies a backup 
 | D6 | Head to head | 1200x1500 and up | Two players at one position: D1's numbers and percentiles side by side, the better one bold | Opponent | Added Oct 21 |
 | D7 | Where the points come from | 1600x900 | Each week's points split into yards, catches, touchdowns and turnovers, with the season's split | | Added Oct 21 |
 
+D1 and D6 are also on the site (Oct 21): the player page's player card and head-to-head, and the
+home page's Head to Head (`frontend/src/components/player/PlayerCard.jsx` and `HeadToHead.jsx`).
+Their stats are `CARD_TILES` and `CARD_PERCENTILES` in `frontend/src/constants/playerPage.js`, which
+mirror `TILE_GROUPS`, `PCT_LIST` and `STAT` here: change a card's stats in both places. The site's
+quarterback rushing yards per game is a registry metric (`rushing_yards_per_game`), so `build_data.py`'s
+derived copy could read it from the API instead.
+
 D4 (season by season) was removed on Oct 21. The reply-card pool is the top 36 QBs, 64 RBs,
 90 WRs and 36 TEs by points (`CARD_DEPTH` in `pull.py`).
 
@@ -140,8 +147,10 @@ D4 (season by season) was removed on Oct 21. The reply-card pool is the top 36 Q
 ## Rules the cards follow
 
 - **Copy:** no em dashes, short plain titles. Show the scoring preset (PPR), never "your scoring".
-- **Finish chips** use the app's tiers for a 12-team 1QB/2RB/3WR/1TE/1FLEX league
-  (`components/player/FinishChip.jsx`), never a pool percentile. Team ranks of 32 are tinted
+- **Finish chips** use the site's five bands, set per position by Nate on Oct 22 (QB 1-6,
+  7-12, 13-18, 19-24, 25+; RB 8/14/20/26; WR 12/24/32/38; TE 5/10/15/20): `BANDS` in
+  `src/core.js` mirrors `FINISH_BANDS` in `components/player/FinishChip.jsx`, so change both
+  together. Never a pool percentile. Team ranks of 32 are tinted
   green toward 1st, as on the team pages; for a tendency 1st means "does this the most".
 - **Two teams on one card** get the game page's colours (`components/game/colors.js`), so
   two blue teams never draw in the same blue. On D6 the better number is bold, not coloured:

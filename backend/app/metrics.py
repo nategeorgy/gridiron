@@ -254,6 +254,9 @@ REGISTRY: list[MetricDef] = [
        description="Rushing yards per carry. Aggregated first (total yards over total "
                    "carries), so a season is not the mean of weekly averages, where "
                    "one three-carry game would count as much as a twenty-five-carry one."),
+    _m("rushing_yards_per_game", "Rushing Yards / Game", "RUSH YD/G", 1, "rushing", "derived", base="rushing_yards",
+       applies_to=["RB", "QB", "WR"],
+       description="Rushing yards per game played."),
     _m("red_zone_rush_attempts", "Red Zone Carries", "RZ CAR", "int", "rushing", "sum", applies_to=["RB", "QB"],
        description="Rushing attempts inside the opponent's 20."),
     _m("red_zone_rush_share", "Red Zone Rush Share", "RZ RUN%", "pct", "rushing", "avg", applies_to=["RB", "QB"],

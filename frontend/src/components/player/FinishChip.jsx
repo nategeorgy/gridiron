@@ -1,40 +1,38 @@
-// A positional finish ("WR4"), coloured by what that finish means in the user's league.
+// A positional finish ("WR4"), coloured by which of five bands it falls in.
 //
-// Shared by the career table and the game log so a WR9 season and a WR9 week are the
-// same colour on the same page.
+// The one place a finish becomes a colour: the career table, the game log, the player
+// card, the head-to-head, the game pages, Compare, the Query Builder and the home page's
+// Weekly Finishes all read it, so a WR9 season and a WR9 week are the same colour
+// wherever they appear, and the player card's floor and ceiling bar counts the same bands.
 //
-// **The tiers come from how deep the league starts each position, not from a fixed
-// size.** A 12-team league starts twelve quarterbacks and thirty-six receivers, so QB22
-// is a week no quarterback-needy manager could use while WR22 is an ordinary start —
-// one size of tier for every position painted them the same colour. The depth is the
-// backend's own `replacement_ranks` model (`app/league.py`) *without the bench*: the
-// dedicated starting slots (superflex counted as quarterback), plus each flex-eligible
-// position's share of the flex slots in proportion to how it is started. Bench spots are
-// left out on purpose — the question here is "was this startable", not "was he
-// rostered". Five steps, dark green through yellow to dark red. For the default 12-team
-// 1QB/2RB/3WR/1TE/1FLEX lineup:
+// **The bands are Nate's, set per position (October 2026)**, and read best to worst, in his
+// names for the colours as the dark theme shows them:
 //
-//              dark green  light green  yellow   light red  dark red
-//   QB         1–12        —            —        13–24      25+
-//   RB         1–12        13–24        25–28    29–40      41+
-//   WR         1–12        13–36        37–42    43–54      55+
-//   TE         1–12        —            13–14    15–26      27+
+//              light green  dark green  yellow   dark red  light red
+//   QB         1–6          7–12        13–18    19–24     25+
+//   RB         1–8          9–14        15–20    21–26     27+
+//   WR         1–12         13–24       25–32    33–38     39+
+//   TE         1–5          6–10        11–15    16–20     21+
 //
-// Light red is one league's worth of ranks past the starting line — the finish a manager
-// could still have picked up that week — and dark red is everything deeper. A position
-// with no starter or flex band (a one-QB league) simply skips those colours.
+// They replaced tiers derived from
+// how deep a 12-team league starts each position, which painted WR31 the same green as
+// WR13; with the league editor cut before launch, a fixed set was the honest one.
 //
 // **Never a percentile of the pool.** A weekly pool holds ~150 receivers, so a pool
 // percentile would paint WR40 as upper-half when every manager reads it as a bad week.
 //
 // The chip is a tint with coloured text rather than a solid fill: a solid fill cannot carry
 // legible small text in the light theme, and text mixed toward `--fg` darkens on light and
-// lightens on dark, holding contrast in both. "Dark" and "light" are intensity, not
-// lightness — a dark green in the dark theme would be unreadable. Yellow is `--warn`, the
-// existing caution token, rather than a new hue.
+// lightens on dark, holding contrast in both.
 
-const SLOT = { QB: "qb", RB: "rb", WR: "wr", TE: "te" };
-const FLEX_ELIGIBLE = ["RB", "WR", "TE"];
+// Where each band ends, best first: a finish at or under the first number is the top band,
+// and anything past the last is the bottom one. Positions outside the four read as WR.
+export const FINISH_BANDS = {
+  QB: [6, 12, 18, 24],
+  RB: [8, 14, 20, 26],
+  WR: [12, 24, 32, 38],
+  TE: [5, 10, 15, 20],
+};
 
 // Chosen by search rather than by eye, over both themes at once: the combination that best
 // separates neighbouring steps (max of background and text difference, OKLab ×100, worst
@@ -42,95 +40,67 @@ const FLEX_ELIGIBLE = ["RB", "WR", "TE"];
 // the yellow midpoint is the quietest step, and paired tiers match in perceived strength
 // (red reads stronger than green at the same alpha, which is why red's alphas are higher).
 // The first hand-picked version passed contrast but put light green, yellow and light red
-// within 3.5 of each other in the light theme — one wash of pale colour. Re-measure before
+// within 3.5 of each other in the light theme: one wash of pale colour. Re-measure before
 // changing any number here.
-const TONES = {
-  top: {
+const TONES = [
+  {
     background: "color-mix(in srgb, var(--pos) 42%, transparent)",
     color: "color-mix(in srgb, var(--pos) 30%, var(--fg))",
   },
-  starter: {
+  {
     background: "color-mix(in srgb, var(--pos) 24%, transparent)",
     color: "color-mix(in srgb, var(--pos) 62%, var(--fg))",
   },
-  flex: {
+  {
     background: "color-mix(in srgb, var(--warn) 8%, transparent)",
     color: "color-mix(in srgb, var(--warn) 70%, var(--fg))",
   },
-  outside: {
+  {
     background: "color-mix(in srgb, var(--neg) 30%, transparent)",
     color: "color-mix(in srgb, var(--neg) 64%, var(--fg))",
   },
-  far: {
+  {
     background: "color-mix(in srgb, var(--neg) 50%, transparent)",
     color: "color-mix(in srgb, var(--neg) 30%, var(--fg))",
   },
-};
+];
 
-/**
- * Python's `round`: halves go to the even neighbour. `Math.round` sends them up, and flex
- * shares land on .5 often (a 14-team 1RB/2WR/1TE/3FLEX league gives backs exactly 24.5),
- * so using it made the chip's cut-off disagree with the backend's by one.
- */
-function roundHalfEven(value) {
-  const floor = Math.floor(value);
-  const fraction = value - floor;
-  if (Math.abs(fraction - 0.5) > 1e-9) return Math.round(value);
-  return floor % 2 === 0 ? floor : floor + 1;
+// The same five steps as solid fills, for a bar or a cell big enough to need one (the
+// floor and ceiling bar): the chip tints are too faint to carry a bar (the yellow is 8%).
+export const BAND_FILLS = [
+  "color-mix(in srgb, var(--pos) 78%, var(--surface-solid))",
+  "color-mix(in srgb, var(--pos) 44%, var(--surface-solid))",
+  "color-mix(in srgb, var(--warn) 52%, var(--surface-solid))",
+  "color-mix(in srgb, var(--neg) 46%, var(--surface-solid))",
+  "color-mix(in srgb, var(--neg) 72%, var(--surface-solid))",
+];
+
+/** A position's five bands, best first: { label ("WR13-24"), from, to (null for the last) }. */
+export function finishBands(position) {
+  const ends = FINISH_BANDS[position] ?? FINISH_BANDS.WR;
+  return [0, 1, 2, 3, 4].map((index) => {
+    const from = index ? ends[index - 1] + 1 : 1;
+    const to = ends[index] ?? null;
+    return { from, to, label: to == null ? `${position}${from}+` : `${position}${from}-${to}` };
+  });
 }
 
-/**
- * How deep a league starts each position: `{ top, starter, flex }` rank cut-offs.
- * Mirrors `replacement_ranks` in backend/app/league.py with bench spots excluded —
- * rounding included, so the two agree on every lineup.
- */
-export function startingDepth(position, { teams, lineup }) {
-  const dedicated = (pos) => teams * (lineup[SLOT[pos]] ?? 0);
-  let starter = dedicated(position);
-  let startable = starter;
-  if (position === "QB") {
-    starter += teams * (lineup.superflex ?? 0);
-    startable = starter;
-  } else if (FLEX_ELIGIBLE.includes(position)) {
-    const flexSlots = teams * (lineup.flex ?? 0);
-    const eligible = FLEX_ELIGIBLE.reduce((total, pos) => total + dedicated(pos), 0);
-    const share = !flexSlots ? 0 : eligible ? dedicated(position) / eligible : 1 / FLEX_ELIGIBLE.length;
-    startable = starter + flexSlots * share;
-  }
-  const flex = Math.max(roundHalfEven(startable), 1);
-  const top = Math.min(teams, flex);
-  return { top, starter: Math.min(Math.max(starter, top), flex), flex };
+/** Which band (0 best, 4 worst) a finish falls in. */
+export function finishBand(rank, position) {
+  const ends = FINISH_BANDS[position] ?? FINISH_BANDS.WR;
+  const index = ends.findIndex((end) => rank <= end);
+  return index === -1 ? ends.length : index;
 }
 
-/** Which tier a rank falls in, and how to describe it. */
-export function finishTier(rank, position, league) {
-  const depth = startingDepth(position, league);
-  if (rank <= depth.top) {
-    return { ...TONES.top, label: `${position}1 tier (${position}1–${depth.top})` };
-  }
-  if (rank <= depth.starter) {
-    return { ...TONES.starter, label: `starter range (${position}${depth.top + 1}–${depth.starter})` };
-  }
-  if (rank <= depth.flex) {
-    return { ...TONES.flex, label: `flex range (${position}${depth.starter + 1}–${depth.flex})` };
-  }
-  const plural = (count) => `${count} ${position}${count === 1 ? "" : "s"}`;
-  const shallowEdge = depth.flex + league.teams;
-  if (rank <= shallowEdge) {
-    return {
-      ...TONES.outside,
-      label: `just outside the ${plural(depth.flex)} a ${league.teams}-team league starts (${position}${depth.flex + 1}–${shallowEdge})`,
-    };
-  }
-  return {
-    ...TONES.far,
-    label: `well outside the ${plural(depth.flex)} a ${league.teams}-team league starts (${position}${shallowEdge + 1}+)`,
-  };
+/** A finish's band, chip colours and description. */
+export function finishTier(rank, position) {
+  const band = finishBand(rank, position);
+  return { ...TONES[band], band, label: `${finishBands(position)[band].label} band` };
 }
 
-export function FinishChip({ rank, position, league, detail }) {
+export function FinishChip({ rank, position, detail }) {
   if (rank == null) return <span className="stat-num text-faint">—</span>;
-  const tier = finishTier(rank, position, league);
+  const tier = finishTier(rank, position);
   return (
     <span
       className="stat-num inline-block min-w-[42px] rounded-md px-1.5 py-px text-center text-[11.5px] font-semibold"

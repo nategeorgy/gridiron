@@ -1414,6 +1414,15 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       defense or kicking box score. ⚠️ **Production needs `ingest_plays.py --seasons 2025 2026`,
       `ingest_injuries.py --seasons 2025 2026`, `ingest_teams.py` and `ingest_schedules.py` run once
       after merge** to fill the new tables and columns
+- [x] Player cards on the site (October 2026). The tweet kit's player card (D1) opens the player
+      page, replacing its header, season radar and percentile panel, with the season and scoring
+      pickers in its head (`components/player/PlayerCard.jsx`). From lg it splits in two, the
+      percentile list on the right and a Floor and ceiling section under the weekly finish on the
+      left (`components/player/FloorCeiling.jsx`). Every finish on the site, and on a tweet,
+      is now coloured by five bands Nate set per position (`FINISH_BANDS`), and
+      its head-to-head (D6) replaces the margin table and radars on the player page and the home
+      page's Head to Head (`components/player/HeadToHead.jsx`). One new registry metric,
+      `rushing_yards_per_game`, for the quarterback card. No migration
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is
@@ -2023,7 +2032,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   rail or a narrow card goes through `ScrollTable`, which sets one
 - **`--series-4` (gold) cannot take white text.** It measures 2.17:1 in the light theme,
   nowhere near the 4.5:1 floor. Any badge or fill built on a series hue needs its ink
-  chosen per hue rather than inheriting one white — see `components/home/HeadToHeadCard.jsx`
+  chosen per hue rather than inheriting one white. The home head-to-head's gold badge did
+  this until October 2026, when the tweet kit's card replaced it
 - **A career finish needs two pools, not one** (M13). Total-points rank includes everyone
   who played — a season cut short still produced what it produced, and hiding it
   misrepresents the career — while the per-game rank includes only players who cleared
@@ -2035,9 +2045,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   that obvious immediately
 - **A player page's season row comes from `/stats/intelligence`, not the leaderboard**
   (M13) — the same reason six boards do. VORP and the query-time columns exist only on the
-  scored rows, and that endpoint also returns percentiles, so one request feeds the stat
-  grid, the radar and the percentile panel. Putting the *comparison* player in the same
-  request is what guarantees both halves of a matchup were ranked against identical pools
+  scored rows, and that endpoint also returns percentiles and ranks, so one request feeds
+  the stat grid, the player card and the head-to-head. Putting the *comparison* player in
+  the same request is what guarantees both halves of a matchup were ranked against identical
+  pools. The home page's Head to Head makes the same request for its pair
+- **The player card and the head-to-head are the tweet kit's D1 and D6** (October 2026).
+  `CARD_TILES` and `CARD_PERCENTILES` in `constants/playerPage.js` mirror `TILE_GROUPS`,
+  `PCT_LIST` and `STAT` in `tools/tweetkit/src/player.js`, which Nate set per position: change
+  one and change the other, or the site and a tweet disagree about the same player
 - **A comparison picker on a player page is restricted to that player's position** (M13).
   Every axis beside it is a percentile within a position pool, so a receiver's target share
   against a quarterback's is two questions sharing an axis. `/explore/compare` deliberately
@@ -2061,22 +2076,21 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   twin of the engine filling `fantasy_points` on the same line), so it re-ranks in the
   caller's scoring: Trey McBride's 2025 week 1 is TE12 in PPR, TE17 in standard and TE8
   with a TE premium
-- **A finish is coloured by how deep the league starts that position, never by a
-  percentile of its pool** (`components/player/FinishChip.jsx`). A weekly pool holds ~150
-  receivers, so a pool percentile paints WR40 as upper-half when every manager reads it as a
-  bad week. And one tier size for every position was also wrong: a 12-team league starts 12
-  quarterbacks and 36+ receivers, so QB22 is unstartable where WR22 is ordinary.
-  `startingDepth` mirrors `replacement_ranks` in `app/league.py` **without the bench** (the
-  question is "startable", not "rostered") — and must stay in step with it, **rounding
-  included**: flex shares land on .5 (a 14-team 1RB/2WR/1TE/3FLEX league gives backs 24.5),
-  and `Math.round` disagreed with Python's half-to-even `round` by one until it was
-  mirrored. Five steps: dark green / light green / yellow / light red (one league's worth
-  of ranks past the starting line) / dark red. ⚠️ **The tint values were searched, not
-  picked** — a hand-picked set passed contrast yet put three middle steps within 3.5 of each
-  other in the light theme (pale tints on white converge), and the unconstrained optimum
-  made yellow as loud as the extremes. Re-run the measurement before changing a number The chip is a tint with text mixed toward `--fg`, not a solid fill: a solid
-  `--pos` fill cannot carry legible small text in the light theme (the first version
-  measured 4.23:1)
+- **A finish is coloured by fixed bands set per position, never by a percentile of its
+  pool** (`FINISH_BANDS` in `components/player/FinishChip.jsx`, Nate's, October 2026): QB
+  1-6 / 7-12 / 13-18 / 19-24 / 25+, RB 8/14/20/26, WR 12/24/32/38, TE 5/10/15/20. Every
+  surface that colours a finish reads them (chips, the player card's floor and ceiling bar,
+  Compare, the Query Builder, the home Weekly Finishes grid), and the tweet kit's `BANDS`
+  in `tools/tweetkit/src/core.js` mirrors them: change both together. A weekly pool holds
+  ~150 receivers, so a pool percentile paints WR40 as upper-half when every manager reads it
+  as a bad week. The bands replaced tiers derived from how deep a 12-team league starts each
+  position (`startingDepth`, now gone), which painted WR31 the same green as WR13. Five
+  steps, best to worst; ⚠️ **the tint values were searched, not picked**: a hand-picked set
+  passed contrast yet put three middle steps within 3.5 of each other in the light theme
+  (pale tints on white converge), and the unconstrained optimum made yellow as loud as the
+  extremes. Re-run the measurement before changing a number. The chip is a tint with text
+  mixed toward `--fg`, not a solid fill: a solid `--pos` fill cannot carry legible small
+  text in the light theme (the first version measured 4.23:1)
 - **A positional rank comes from the percentile's pool, never from a leaderboard's
   row order** (M13). `PercentileIndex.ranks_for_row` counts the qualified players strictly
   better than this one, direction-corrected, so ties share a rank and "QB1" in
@@ -2125,8 +2139,8 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   would override a nested SVG's placement. The URL and handle printed on every image
   are `constants/brand.js`
 - ⚠️ **`useLeague()` returns the spec string, not a league.** Anything that reads
-  `teams` or `lineup` (`FinishChip`, `finishTier`) needs `parseLeague(spec)` first; the
-  Query Builder's first build passed the string and blanked the page
+  `teams` or `lineup` needs `parseLeague(spec)` first; the Query Builder's first build
+  passed the string to the finish chips (which then read the league) and blanked the page
 - **Game pages start at `FIRST_GAME_PAGE_SEASON` (2025)**, a scope decision mirrored in three
   places (`pipeline/seasons.py`, `backend/app/models/game_detail.py`, `frontend/src/constants/index.js`;
   `tests/test_game_pages.py` fails if they drift). An older game is a 404 and gets no link. Widening it

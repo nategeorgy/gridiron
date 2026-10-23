@@ -101,6 +101,7 @@ export const METRICS = {
   cpoe: { label: "CPOE", short: "CPOE", format: FORMATS.one },
   epa: { label: "EPA", short: "EPA", format: FORMATS.one },
   rushing_yards: { label: "Rushing Yards", short: "RUSH YD", format: FORMATS.int },
+  rushing_yards_per_game: { label: "Rushing Yards / Game", short: "RUSH YD/G", format: FORMATS.one },
   rushing_tds: { label: "Rushing TDs", short: "RUSH TD", format: FORMATS.int },
   carries: { label: "Carries", short: "CAR", format: FORMATS.int },
   red_zone_rush_attempts: { label: "Red Zone Carries", short: "RZ CAR", format: FORMATS.int },

@@ -26,7 +26,6 @@ import {
   COMPARE_EXAMPLES, MAX_COMPARED, WEEKLY_STATS, compareGroup, compareKind, formatCompared, parseCompared,
 } from "../constants/compare";
 import { LEADERBOARD_TABS, hasPreset, poolColumns, presetSections } from "../constants/leaderboards";
-import { parseLeague } from "../constants/league";
 import { scoringLabel } from "../constants/scoring";
 import { usePlayersById } from "../hooks/useExplore";
 import { useDebounce } from "../hooks/useDebounce";
@@ -68,7 +67,6 @@ export function CompareView({ board }) {
   const [weekly, setWeekly] = useUrlState("weekly", "fantasy_points", WEEKLY_STATS.map((entry) => entry.value));
   const [scoring, setScoring] = useScoring();
   const [leagueSpec] = useLeague();
-  const leagueConfig = useMemo(() => parseLeague(leagueSpec), [leagueSpec]);
   const { metrics } = useMetrics();
 
   // No `players` at all opens on the receivers example; an empty one is an empty page.
@@ -205,7 +203,7 @@ export function CompareView({ board }) {
 
       <div className="grid gap-3 sm:grid-cols-2 min-[1100px]:grid-cols-5">
         {slots.map((slot) => (
-          <PlayerCard key={slot.key} slot={slot} league={leagueConfig} weeksLabel={weeksLabel}
+          <PlayerCard key={slot.key} slot={slot} weeksLabel={weeksLabel}
             onSeason={(season) => setSlotSeason(slot.index, season)} onRemove={() => removeSlot(slot.index)} />
         ))}
         {slots.length < MAX_COMPARED && <AddPlayerCard onAdd={addPlayer} />}
@@ -232,7 +230,7 @@ export function CompareView({ board }) {
           <CompareVisuals slots={slots} kind={kind} weeks={weeks} scoring={scoring} league={leagueSpec} metrics={metrics} />
 
           <WeeklyCard slots={slots} weeks={weeks} stat={weekly} onStat={setWeekly} />
-          <FinishesCard slots={slots} weeks={weeks} league={leagueConfig} scoring={scoring} />
+          <FinishesCard slots={slots} weeks={weeks} scoring={scoring} />
         </>
       )}
     </div>
@@ -261,7 +259,7 @@ function MiniStat({ label, children }) {
   );
 }
 
-function PlayerCard({ slot, league, weeksLabel, onSeason, onRemove }) {
+function PlayerCard({ slot, weeksLabel, onSeason, onRemove }) {
   const seasons = slot.careerSeasons.length ? slot.careerSeasons : [slot.season];
   return (
     <section className="glass-card relative grid content-start gap-2.5 p-3">
@@ -288,7 +286,7 @@ function PlayerCard({ slot, league, weeksLabel, onSeason, onRemove }) {
         <MiniStat label="FPTS">{formatStat(slot.row?.fantasy_points, 1)}</MiniStat>
         <MiniStat label="FPPG">{formatStat(slot.row?.fantasy_ppg, 1)}</MiniStat>
         <MiniStat label="Finish">
-          {slot.row?.ranks?.fantasy_points ? <FinishChip rank={slot.row.ranks.fantasy_points} position={slot.position} league={league} /> : "—"}
+          {slot.row?.ranks?.fantasy_points ? <FinishChip rank={slot.row.ranks.fantasy_points} position={slot.position} /> : "—"}
         </MiniStat>
       </div>
       <div className="stat-num text-[11px] text-faint">
@@ -553,7 +551,7 @@ function WeeklyCard({ slots, weeks, stat, onStat }) {
   );
 }
 
-function FinishesCard({ slots, weeks, league, scoring }) {
+function FinishesCard({ slots, weeks, scoring }) {
   const shown = weekRange(slots, weeks);
   const template = `150px repeat(${shown.length}, minmax(24px, 1fr)) 64px 64px`;
   return (
@@ -578,7 +576,7 @@ function FinishesCard({ slots, weeks, league, scoring }) {
               }
               if (line.position_rank <= 12) top12 += 1;
               if (line.position_rank <= 24) top24 += 1;
-              const tier = finishTier(line.position_rank, slot.position, league);
+              const tier = finishTier(line.position_rank, slot.position);
               return (
                 <div key={week} className="grid h-[26px] place-items-center rounded-md font-semibold"
                   style={{ background: tier.background, color: tier.color }}

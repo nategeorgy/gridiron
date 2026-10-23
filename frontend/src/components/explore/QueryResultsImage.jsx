@@ -11,8 +11,7 @@
 // widths are measured from the text they hold, and any room left over at the minimum
 // width goes to the player column, which keeps the stats together on the right.
 //
-// Rendered offscreen with no providers (see composeImage), so it takes the parsed
-// league from the page rather than reading a hook.
+// Rendered offscreen with no providers (see composeImage), so it reads no hooks.
 import { ClipDef, SvgHeadshot, useClipId } from "./SvgHeadshot";
 import { finishTier } from "../player/FinishChip";
 import { positionColor } from "../../utils/explore";
@@ -55,9 +54,8 @@ const headerLabel = (column, sorted, order) =>
 /**
  * @param data    the search response (grain, mode, columns, sort, order)
  * @param rows    the rows to draw, in order
- * @param league  the parsed league, for weekly-finish colours
  */
-export function QueryResultsImage({ data, rows, league }) {
+export function QueryResultsImage({ data, rows }) {
   const clipId = useClipId();
   const count = data.mode === "count";
   const games = data.grain === "games" && !count;
@@ -164,7 +162,7 @@ export function QueryResultsImage({ data, rows, league }) {
               const { key, format, filtered } = column.column;
               const value = row[key];
               if (key === "weekly_finish" && value != null) {
-                const tier = finishTier(value, row.position, league);
+                const tier = finishTier(value, row.position);
                 const right = statX(column);
                 return (
                   <g key={key}>
