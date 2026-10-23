@@ -21,6 +21,28 @@ week only when it is rebuilt and published again.
 For a change to the cards themselves, ask Claude in any session; the code is here and
 this README is the catalog.
 
+## Thursday night (and Monday morning)
+
+The recaps do not have to wait for Tuesday. nflverse publishes a game's play-by-play,
+stat lines, expected points, snaps and Next Gen numbers by the next morning (PFR and FTN
+charting come later, and no recap card needs them). Load that week into your local
+database, add the routes export, and refresh:
+
+```bash
+cd pipeline
+python ingest_schedules.py
+for s in ingest_stats ingest_expected ingest_usage ingest_team_stats ingest_plays; do python $s.py --seasons 2026 --weeks 7; done
+python ingest_routes.py --file data/routes/2026-w07-tnf.xlsx --dry-run   # then without --dry-run
+cd ../tools/tweetkit && ./refresh.sh
+```
+
+`pull.py` recaps the coming week's games already played alongside the last full week, and
+the page opens on the newest one. Everything else stays on the last full week. Season
+numbers, game logs and the weekly cards stop there, so "through Week 6" stays true, and the
+slate cards (C2, C3) keep every team. On a week only partly played, A1 and A2 show no
+finishes and A5 no "against the week" ranks, since they would rank one game; each card says
+so.
+
 ## Two ways to make an image
 
 **The page.** https://claude.ai/artifact/4L9cX5h9qxcWZnysXjVTG4 (private; publish `index.html`
@@ -96,6 +118,7 @@ means Nate chose it to post. **Controls** are what the page and `render.mjs` let
 | A7 | Points against expected | 1600x900 | Every player in the game: points against what his targets and carries were worth | Faces, numbers | Added Oct 21 |
 | A8 | Every snap | 1600x900 | The EPA of every pass and run on the game clock, one lane per offense, EPA per play and success rate beside each, the four biggest plays numbered and described | | Added Oct 23 |
 | A9 | Passing charts | 1600x900 | Both starting quarterbacks' targeted throws by depth and side, with each one's line, depth of throw and EPA per target | | Added Oct 23 |
+| A10 | Routes and targets | 1600x900 | Every route runner: routes and share of the team's dropbacks, targets, targets and yards per route run. Needs that week's routes export loaded | | Added Oct 23 |
 
 On every chart, hovering a dot on the page shows who it is and his numbers, and clicking it
 adds or removes his face (on C1, highlights the team). The hover targets draw nothing in a PNG.

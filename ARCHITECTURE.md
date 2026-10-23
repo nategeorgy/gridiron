@@ -73,7 +73,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `frontend/` | app | The React web app (what users see). See [§4](#4-frontend--the-react-web-app). |
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
-| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 48 card templates (game recaps, previews, weekly series including every Scatter page chart, player reply cards, teams) drawn as SVG from the **local** API. On every scatter you pick players or teams and their actual values print on the chart and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
+| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 49 card templates (game recaps, previews, weekly series including every Scatter page chart, player reply cards, teams) drawn as SVG from the **local** API. On every scatter you pick players or teams and their actual values print on the chart and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
 | `render.yaml` | config | "Blueprint" telling **Render** how to build and run the backend in production. ⭐ Its `buildCommand` runs **`scripts/migrate.sh`** after installing dependencies — `preDeployCommand` is paid-only on the free plan. See the file's comments: a bare `alembic upgrade head` failed there on a pooler **checkout timeout**, not connectivity, because a build competes with the still-running previous version for connections. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
@@ -830,6 +830,9 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-10-23**: **The tweet kit recaps Thursday night early.** `pull.py` recaps the coming week's played games
+  beside the last full week, season pulls stop at that week, and a partly played week's cards hide week-relative
+  ranks. A10 shows a game's routes from the weekly export. 49 cards.
 - **2026-10-23**: **`tools/tweetkit/` grows to 48 cards**, thirteen of them on NFL numbers rather than fantasy
   ones: every snap's EPA (A8), both passing charts (A9), how two teams play (B7), team scatters (C14),
   quarterback efficiency (C15), before and after contact (C16), Next Gen scatters (C17), every offense's

@@ -42,6 +42,10 @@ intel_early = load("intel_early")
 intel_late = load("intel_late")
 week_top = load("week_top")
 players_raw = load("players")
+# A player's game log stops at the newest fully played week: a Thursday line is a week's
+# finish ranked within one game, and would land in C9's totals.
+for raw_player in players_raw.values():
+    raw_player["log"] = [g for g in raw_player["log"] if g["week"] <= RECAP_WEEK]
 
 team_list = teams_raw["data"] if isinstance(teams_raw, dict) else teams_raw
 TEAMS = {}
@@ -77,7 +81,8 @@ RECAP_PLAYER = ["player_id", "name", "position", "team", "fantasy_points", "expe
                 "passing_yards", "passing_tds", "interceptions", "sacks_suffered", "carries", "rushing_yards",
                 "rushing_tds", "targets", "receptions", "receiving_yards", "receiving_tds", "snap_share",
                 "target_share", "air_yards", "routes_run", "epa", "fumbles_lost", "red_zone_targets",
-                "rush_att_inside_10", "adot", "yards_after_catch", "passing_epa", "points_by_phase"]
+                "rush_att_inside_10", "adot", "yards_after_catch", "passing_epa", "points_by_phase",
+                "route_participation", "targets_per_route_run", "yards_per_route_run"]
 
 TEAM_BOX = ["points", "plays", "yards", "yards_per_play", "first_downs", "passing_yards", "rushing_yards",
             "third_down_conversions", "third_down_attempts", "fourth_down_conversions", "fourth_down_attempts",
@@ -166,8 +171,12 @@ def passer_throws(raw_throws, players):
     return out
 
 
+# The recap week's games, then any of the coming week's already played (pull.py's early
+# recaps). An early game's week is only partly played, so its week-relative ranks (a
+# finish, a team number "ranked against the week") would rank one game: they are marked.
+recap_games = games[str(RECAP_WEEK)] + [g for g in games[str(PREVIEW_WEEK)] if g["game_id"] in recaps_raw]
 recaps = []
-for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get("kickoff_time") or "")):
+for game in sorted(recap_games, key=lambda g: (g["game_date"], g.get("kickoff_time") or "")):
     gid = game["game_id"]
     raw = recaps_raw[gid]
     h, rc = raw["header"], raw["recap"]
@@ -194,6 +203,7 @@ for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get(
         "league": rc["league"],
         "passers": rc["passers"],
         "plays": plays, "big_plays": big,
+        "partial": game["week"] != RECAP_WEEK,
         "throws": passer_throws(raw.get("throws", {}), rc["players"]),
     })
 

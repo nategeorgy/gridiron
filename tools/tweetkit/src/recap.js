@@ -126,7 +126,7 @@ function cardFinal(g) {
   y += 300 + 50;
   // Top fantasy scorers
   s += T(pad, y, "Top fantasy scorers", { size: 25, weight: 750 });
-  s += T(w - pad, y, "PPR · finish among the week's players at his position", { size: 18, anchor: "end", fill: "var(--muted)" });
+  s += T(w - pad, y, g.partial ? "PPR" : "PPR · finish among the week's players at his position", { size: 18, anchor: "end", fill: "var(--muted)" });
   y += 26;
   const colW = (w - pad * 2 - 28) / 2;
   [away, home].forEach((team, i) => {
@@ -139,7 +139,8 @@ function cardFinal(g) {
       s += T(x0 + 104, ry + 46, fit(p.name, colW - 230, 24, 700), { size: 24, weight: 700 });
       s += T(x0 + 104, ry + 78, fit(`${p.position} · ${statLine(p, true)}`, colW - 220, 17, 500), { size: 17, fill: "var(--muted)" });
       s += T(x0 + colW - 22, ry + 52, num(p.fantasy_points), { size: 34, weight: 800, anchor: "end", mono: true });
-      s += chip(p.position_rank, p.position, x0 + colW - 62, ry + 80, { size: 16, h: 26 });
+      // A finish ranks the week; with the week only partly played it would rank one game.
+      if (!g.partial) s += chip(p.position_rank, p.position, x0 + colW - 62, ry + 80, { size: 16, h: 26 });
     });
   });
   return wrapCard(fr, s);
@@ -147,7 +148,7 @@ function cardFinal(g) {
 
 // A2 ------------------------------------------------------- Fantasy box score
 function cardBox(g) {
-  const fr = frame(1200, 1500, { kicker: `${g.header.week_label} · PPR`, title: `${scoreTitle(g)}: fantasy points`, subtitle: "Bar: points this game. Tick: his average coming in." });
+  const fr = frame(1200, 1500, { kicker: `${g.header.week_label} · PPR`, title: `${scoreTitle(g)}: fantasy points`, subtitle: `Bar: points this game. Tick: his average coming in.${g.partial ? " Finishes once the week is played." : ""}` });
   const [away, home] = sidesOf(g);
   const colors = gameColors(away, home);
   const { pad, w } = fr;
@@ -162,7 +163,7 @@ function cardBox(g) {
   s += T(bx0, y + 10, "0", { size: 15, anchor: "middle", fill: "var(--faint)", mono: true });
   for (let v = 10; v <= top; v += 10) s += T(x(v), y + 10, v, { size: 15, anchor: "middle", fill: "var(--faint)", mono: true });
   s += T(976, y + 10, "PPR", { size: 15, weight: 700, anchor: "end", fill: "var(--faint)" });
-  s += T(1040, y + 10, "FINISH", { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" });
+  if (!g.partial) s += T(1040, y + 10, "FINISH", { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" });
   s += T(w - pad, y + 10, "VS AVG", { size: 15, weight: 700, anchor: "end", fill: "var(--faint)" });
   y += 26;
   [away, home].forEach((team, ti) => {
@@ -182,7 +183,7 @@ function cardBox(g) {
       const has = p.games_coming_in > 0 && p.average_coming_in != null;
       if (has) s += R(x(Math.max(0, p.average_coming_in)) - 2.5, mid - 18, 5, 36, { rx: 2.5, fill: "var(--fg)" });
       s += T(976, mid + 8, num(p.fantasy_points), { size: 24, weight: 800, anchor: "end", mono: true });
-      s += chip(p.position_rank, p.position, 1040, mid, { size: 16, h: 28 });
+      if (!g.partial) s += chip(p.position_rank, p.position, 1040, mid, { size: 16, h: 28 });
       if (has) {
         const d = p.fantasy_points - p.average_coming_in;
         s += T(w - pad, mid + 7, signed(d), { size: 20, weight: 700, anchor: "end", mono: true, fill: mix(d >= 0 ? "var(--pos)" : "var(--neg)", 72, "var(--fg)") });
@@ -285,7 +286,8 @@ function cardTouches(g) {
 function cardTeamStats(g) {
   const [away, home] = sidesOf(g);
   const n = g.ranks.teams;
-  const fr = frame(1200, 1500, { kicker: g.header.week_label, title: `${scoreTitle(g)}: team stats`, subtitle: `Chip: rank among the ${n} teams that played in ${g.header.week_label}` });
+  const fr = frame(1200, 1500, { kicker: g.header.week_label, title: `${scoreTitle(g)}: team stats`,
+    subtitle: g.partial ? `The rest of ${g.header.week_label} is still to come, so these are not ranked yet` : `Chip: rank among the ${n} teams that played in ${g.header.week_label}` });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const b = g.box, rk = g.ranks.metrics;
@@ -324,7 +326,7 @@ function cardTeamStats(g) {
       const left = ti === 0;
       const vx = left ? pad + 124 : w - pad - 124;
       s += T(vx, ry + rowH / 2 + 10, fmt(team), { size: 28, weight: better === team ? 800 : 600, anchor: left ? "start" : "end", mono: true, fill: better === team ? teamText(colors[team]) : "var(--fg)" });
-      if (rankKey && rk[rankKey]?.[team]) {
+      if (!g.partial && rankKey && rk[rankKey]?.[team]) {
         const rank = rk[rankKey][team][1];
         const label = ord(rank);
         const cw = 70, cx = left ? pad + 20 + cw / 2 : w - pad - 20 - cw / 2;
@@ -447,12 +449,13 @@ function cardEverySnap(g) {
     const top = y0 + side * (laneH + gap), mid = top + laneH / 2;
     const h = lin(0, cap, 0, laneH / 2 - 8);
     const mine = plays.filter((p) => p[1] === side);
-    const epa = mine.reduce((a, p) => a + p[2], 0), success = mine.filter((p) => p[2] > 0).length;
+    // The labels read the team box, so they match A5's numbers for the same game.
+    const box = g.box?.[team] || {};
     s += R(tx0 - 10, top, tx1 - tx0 + 20, laneH, { rx: 14, fill: "var(--panel)" });
     s += L(tx0, mid, tx1, mid, { stroke: "var(--plot-rule)", sw: 1.2 });
     s += logo(team, pad, mid - 54, 44) + T(pad + 56, mid - 22, nickname(team), { size: 24, weight: 800, fill: teamText(colors[team]) });
-    s += T(pad, mid + 18, `${signed(mine.length ? epa / mine.length : null, 2)} EPA/play`, { size: 19, weight: 750, mono: true });
-    s += T(pad, mid + 44, `${pct(mine.length ? success / mine.length : null)} success · ${mine.length} plays`, { size: 16, fill: "var(--muted)" });
+    s += T(pad, mid + 18, `${signed(box.epa_per_play, 2)} EPA/play`, { size: 19, weight: 750, mono: true });
+    s += T(pad, mid + 44, `${pct(box.success_rate)} success · ${box.plays ?? mine.length} plays`, { size: 16, fill: "var(--muted)" });
     for (const [t, , e, kind, td, to] of mine) {
       const v = Math.max(-cap, Math.min(cap, e));
       const bx = x(t);
@@ -537,5 +540,61 @@ function cardPassingCharts(g) {
       s += `<circle class="hit" cx="${num(cx, 1)}" cy="${num(cy, 1)}" r="12" fill="transparent" data-tip="${esc(`${ay} air yards, ${loc}|${int ? "Intercepted" : comp ? `Complete, ${yards} yards${td ? ", touchdown" : ""}` : "Incomplete"}|EPA ${signed(epa, 2)}`)}"/>`;
     });
   });
+  return wrapCard(fr, s);
+}
+
+// A10 ------------------------------------------------------- Routes and targets
+// Who ran the routes, and what each route earned. Share is routes over the team's dropbacks
+// (scrambles included), as ingest_routes.py stores it; TPRR and YPRR divide this game's
+// targets and yards by its routes.
+function cardRoutesGame(g) {
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · ${finalWord(g)}, ${g.header.away.score}-${g.header.home.score}`, title: `${nickname(away)} at ${nickname(home)}: who ran the routes`,
+    subtitle: "Routes run and their share of the team's dropbacks, and what each route earned" });
+  const { pad, w } = fr;
+  const runners = g.players.filter((p) => (p.routes_run ?? 0) > 0);
+  if (!runners.length) return wrapCard(fr, T(pad, fr.top + 40, "No routes loaded for this game yet.", { size: 24, fill: "var(--muted)" }));
+  const panelW = (w - pad * 2 - 50) / 2;
+  let s = "";
+  [away, home].forEach((team, pi) => {
+    const x0 = pad + pi * (panelW + 50);
+    const rows = runners.filter((p) => p.team === team).sort((a, b) => b.routes_run - a.routes_run).slice(0, 9);
+    let y = fr.top - 4;
+    s += logo(team, x0, y, 40) + T(x0 + 50, y + 30, TEAMS[team]?.name || team, { size: 24, weight: 750, fill: teamText(colors[team]) });
+    y += 62;
+    const cols = { bar0: x0 + 236, bar1: x0 + 430, tgt: x0 + 488, tprr: x0 + 566, line: x0 + 660, yprr: x0 + panelW };
+    const head = (x, label, anchor = "end") => T(x, y, label, { size: 13, weight: 750, anchor, fill: "var(--faint)", ls: 1.1 });
+    s += head(cols.bar0, "ROUTES · SHARE", "start") + head(cols.tgt, "TGT") + head(cols.tprr, "TPRR") + head(cols.line, "REC-YDS") + head(cols.yprr, "YPRR");
+    y += 14;
+    const rowH = Math.min(62, (fr.bottom - y - 30) / Math.max(rows.length, 1));
+    const most = Math.max(...rows.map((p) => p.routes_run));
+    const tprrOf = (p) => (p.routes_run ? p.targets / p.routes_run : null);
+    const best = rows.filter((p) => p.routes_run >= 10).sort((a, b) => tprrOf(b) - tprrOf(a))[0]?.player_id;
+    rows.forEach((p, i) => {
+      const cy = y + i * rowH + rowH / 2;
+      if (i % 2 === 0) s += R(x0 - 8, cy - rowH / 2 + 2, panelW + 16, rowH - 4, { rx: 10, fill: "var(--panel)" });
+      s += face(p.player_id, x0 + 20, cy, Math.min(20, rowH * 0.36), colors[team], p.name);
+      const nm = fit(shortName(p.name), 150, 18, 700);
+      s += T(x0 + 50, cy + 6, nm, { size: 18, weight: 700 });
+      s += T(x0 + 50 + textWidth(nm, 18, 700) + 7, cy + 6, p.position, { size: 12, weight: 800, fill: posColor(p.position) });
+      const share = p.route_participation;
+      const frac = share ?? p.routes_run / most;
+      s += R(cols.bar0, cy - 11, cols.bar1 - cols.bar0, 22, { rx: 6, fill: "var(--chip)" });
+      s += R(cols.bar0, cy - 11, (cols.bar1 - cols.bar0) * Math.min(1, frac), 22, { rx: 6, fill: colors[team], opacity: 0.85 });
+      // The label sits inside a bar long enough to hold it, else just past its end.
+      const label = `${p.routes_run}${share != null ? ` · ${pct(share)}` : ""}`, fill = (cols.bar1 - cols.bar0) * Math.min(1, frac);
+      const inside = fill >= textWidth(label, 14, 800, true) + 16;
+      s += T(inside ? cols.bar0 + 8 : cols.bar0 + fill + 8, cy + 6, label, { size: 14, weight: 800, mono: true, fill: inside ? "#ffffff" : "var(--fg)" });
+      const tprr = tprrOf(p), yprr = p.routes_run ? (p.receiving_yards ?? 0) / p.routes_run : null;
+      const thin = p.routes_run < 10;
+      s += T(cols.tgt, cy + 6, p.targets ?? 0, { size: 18, weight: 800, anchor: "end", mono: true });
+      s += T(cols.tprr, cy + 6, pct(tprr), { size: 17, weight: p.player_id === best ? 800 : 650, anchor: "end", mono: true, fill: thin ? "var(--faint)" : p.player_id === best ? teamText(colors[team]) : "var(--fg)" });
+      s += T(cols.line, cy + 6, `${p.receptions ?? 0}-${p.receiving_yards ?? 0}${p.receiving_tds ? `-${p.receiving_tds}` : ""}`, { size: 16, weight: 600, anchor: "end", mono: true, fill: "var(--muted)" });
+      s += T(cols.yprr, cy + 6, num(yprr, 2), { size: 17, weight: 650, anchor: "end", mono: true, fill: thin ? "var(--faint)" : "var(--fg)" });
+    });
+  });
+  s += L(w / 2, fr.top + 40, w / 2, fr.bottom - 26, { stroke: "var(--rule)" });
+  s += T(pad, fr.bottom - 2, "Share: routes over the team's dropbacks, scrambles included. TPRR and YPRR: per route run, this game. Grey: under 10 routes.", { size: 15, fill: "var(--muted)" });
   return wrapCard(fr, s);
 }

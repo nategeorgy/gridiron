@@ -3,6 +3,11 @@
     python3 pull.py                 # the newest fully played week, and the week after it
     python3 pull.py --week 6        # recaps for Week 6, previews for Week 7
 
+A game of the coming week that has already been played (Thursday night, by Friday) is
+recapped too; it stays in the previews, so the week's slate cards (C2, C3) keep every
+team. Everything season-long stops at the newest fully played week, so a Friday run's
+"through Week 6" stays true.
+
 Needs the backend running on localhost:8000 (uvicorn app.main:app --port 8000).
 """
 import argparse
@@ -107,6 +112,11 @@ def main():
     for week in (RECAP_WEEK, PREVIEW_WEEK):
         games[week] = get("/games", season=SEASON, week=week, limit=50)["data"]
     out["games"] = games
+    # The coming week's games already played (Thursday night) are recapped early.
+    played = lambda game: game.get("home_score") is not None and game.get("away_score") is not None
+    early = [game for game in games[PREVIEW_WEEK] if played(game)]
+    # Season-long pulls stop at the newest fully played week, early games or not.
+    weeks_all = ",".join(str(w) for w in range(1, RECAP_WEEK + 1))
 
     def recap(game):
         gid = game["game_id"]
@@ -122,28 +132,29 @@ def main():
         return gid, {"header": get(f"/games/{gid}"), "preview": get(f"/games/{gid}/preview", scoring="ppr")}
 
     with ThreadPoolExecutor(4) as pool:
-        out["recaps"] = dict(pool.map(recap, games[RECAP_WEEK]))
+        out["recaps"] = dict(pool.map(recap, games[RECAP_WEEK] + early))
         out["previews"] = dict(pool.map(preview, games[PREVIEW_WEEK]))
-    print("recaps", len(out["recaps"]), "previews", len(out["previews"]), file=sys.stderr)
+    print("recaps", len(out["recaps"]), f"({len(early)} early from Week {PREVIEW_WEEK})" if early else "",
+          "previews", len(out["previews"]), file=sys.stderr)
 
     out["teams"] = get("/teams")
-    out["team_stats"] = get("/teams/stats", season=SEASON)
+    out["team_stats"] = get("/teams/stats", season=SEASON, weeks=weeks_all)
     # Every team's season through each week, for the landscape trail.
     out["team_stats_through"] = {}
     for last in range(1, RECAP_WEEK + 1):
         weeks = ",".join(str(w) for w in range(1, last + 1))
         out["team_stats_through"][last] = get("/teams/stats", season=SEASON, weeks=weeks)
 
-    weeks_all = ",".join(str(w) for w in range(1, RECAP_WEEK + 1))
-    early = ",".join(str(w) for w in range(1, RECAP_WEEK - 2))
+    early_weeks = ",".join(str(w) for w in range(1, RECAP_WEEK - 2))
     late = ",".join(str(w) for w in range(RECAP_WEEK - 2, RECAP_WEEK + 1))
     out["intel"], out["intel_early"], out["intel_late"], out["week_top"] = {}, {}, {}, {}
     for position in POSITIONS:
         pct = ",".join(dict.fromkeys(PERCENTILES[position] + ADVANCED[position]))
         ranks = ",".join(dict.fromkeys(RANKS[position] + ADVANCED[position]))
-        out["intel"][position] = every_row("/stats/intelligence", season=SEASON, position=position, metric="fantasy_points",
-                                           scoring="ppr", include_unqualified="true", percentiles=pct, ranks=ranks)
-        out["intel_early"][position] = get("/stats/intelligence", season=SEASON, weeks=early, position=position,
+        out["intel"][position] = every_row("/stats/intelligence", season=SEASON, weeks=weeks_all, position=position,
+                                           metric="fantasy_points", scoring="ppr", include_unqualified="true",
+                                           percentiles=pct, ranks=ranks)
+        out["intel_early"][position] = get("/stats/intelligence", season=SEASON, weeks=early_weeks, position=position,
                                            metric="fantasy_points", scoring="ppr", limit=200,
                                            include_unqualified="true")["data"]
         out["intel_late"][position] = get("/stats/intelligence", season=SEASON, weeks=late, position=position,
@@ -155,7 +166,7 @@ def main():
 
     # Team cards: each team's EPA by game, and every skill player's share of the work by week.
     def breakdown(team):
-        return team["abbreviation"], get(f"/teams/{team['team_id']}/breakdown", season=SEASON)
+        return team["abbreviation"], get(f"/teams/{team['team_id']}/breakdown", season=SEASON, weeks=weeks_all)
     team_list = [t for t in out["team_stats"]["teams"]]
     with ThreadPoolExecutor(6) as pool:
         out["breakdowns"] = dict(pool.map(breakdown, team_list))
@@ -169,10 +180,10 @@ def main():
     # Every target each team threw (E6's zones) and every passer's network, for his games with
     # each team he played for (D9).
     def team_targets(team):
-        return team["abbreviation"], get(f"/explore/teams/{team['team_id']}/targets", season=SEASON)
+        return team["abbreviation"], get(f"/explore/teams/{team['team_id']}/targets", season=SEASON, weeks=weeks_all)
 
     def network(entry):
-        return f"{entry['player_id']}|{entry['team']}", get("/explore/network", season=SEASON,
+        return f"{entry['player_id']}|{entry['team']}", get("/explore/network", season=SEASON, weeks=weeks_all,
                                                               passer_id=entry["player_id"], team=entry["team"])
     with ThreadPoolExecutor(6) as pool:
         out["team_targets"] = dict(pool.map(team_targets, team_list))
@@ -193,9 +204,9 @@ def main():
             "career": get(f"/players/{pid}/career", scoring="ppr")["data"],
         }
         role = "passer" if position == "QB" else "receiver"
-        data["targets"] = get(f"/explore/players/{pid}/targets", season=SEASON, role=role)
+        data["targets"] = get(f"/explore/players/{pid}/targets", season=SEASON, weeks=weeks_all, role=role)
         if position in ("RB", "QB"):
-            data["runs"] = get(f"/explore/players/{pid}/runs", season=SEASON)
+            data["runs"] = get(f"/explore/players/{pid}/runs", season=SEASON, weeks=weeks_all)
         return pid, data
 
     with ThreadPoolExecutor(6) as pool:

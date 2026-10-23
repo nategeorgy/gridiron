@@ -40,6 +40,7 @@ const GROUPS = {
       controls: facesAndNumbers((g) => rows(g.players.map((p) => ({ ...p, team_abbreviation: p.team }))), (g) => defaultGameExpected(g)) },
     { id: "A8", name: "Every snap", fn: cardEverySnap, wide: true, isNew: true, note: "The EPA of every pass and run on the game clock, one lane per offense, with the four biggest plays numbered and described." },
     { id: "A9", name: "Passing charts", fn: cardPassingCharts, wide: true, isNew: true, note: "Both starting quarterbacks' targeted throws by depth and side, with their lines, depth of throw and EPA per target." },
+    { id: "A10", name: "Routes and targets", fn: cardRoutesGame, wide: true, isNew: true, note: "Every route runner's routes and share of the team's dropbacks, with targets and yards per route run. Needs the week's routes export loaded." },
   ],
   preview: [
     { id: "B1", name: "Matchup", fn: cardMatchup, note: "Line, implied totals, last five against the spread, four players to watch per side." },
@@ -109,11 +110,13 @@ const NOTES = {
   recap: "<b>My picks:</b> A1 after every game you post about. A4 when the story is who got the work. A7 when someone ran hot or cold against his usage.",
 };
 
-// Open on the week's highest-scoring game, the preview with the highest total, and the
-// team with the best point margin.
+// Open on the week's highest-scoring game (or, with the next week under way, its newest
+// game: Thursday night), the preview with the highest total, and the team with the best
+// point margin.
 const topIndex = (list, value) => list.reduce((best, item, i) => (value(item) > value(list[best]) ? i : best), 0);
+const earlyRecap = DATA.recaps.map((g, i) => [g, i]).filter(([g]) => g.partial).pop()?.[1];
 const state = {
-  recap: topIndex(DATA.recaps, (g) => (g.header.away.score ?? 0) + (g.header.home.score ?? 0)),
+  recap: earlyRecap ?? topIndex(DATA.recaps, (g) => (g.header.away.score ?? 0) + (g.header.home.score ?? 0)),
   preview: topIndex(DATA.previews, (g) => g.header.total_line ?? 0),
   player: null,
   team: Object.values(DATA.teams_cards).sort((a, b) => (b.stats.pdiff?.o?.[0] ?? 0) - (a.stats.pdiff?.o?.[0] ?? 0))[0]?.team,
@@ -328,7 +331,9 @@ function setup() {
   document.getElementById("lede-week").textContent = DATA.recap_week;
   const recapPick = document.getElementById("recap-pick");
   recapPick.setAttribute("aria-label", `Week ${DATA.recap_week} game`);
-  recapPick.innerHTML = DATA.recaps.map((g, i) => `<option value="${i}">${g.header.away.abbreviation} ${g.header.away.score} @ ${g.header.home.abbreviation} ${g.header.home.score}</option>`).join("");
+  // With an early game from the next week, each game names its week.
+  const weekTag = DATA.recaps.some((g) => g.partial) ? (g) => `W${g.header.week} · ` : () => "";
+  recapPick.innerHTML = DATA.recaps.map((g, i) => `<option value="${i}">${weekTag(g)}${g.header.away.abbreviation} ${g.header.away.score} @ ${g.header.home.abbreviation} ${g.header.home.score}</option>`).join("");
   recapPick.value = state.recap;
   recapPick.addEventListener("change", () => { state.recap = Number(recapPick.value); renderGroup("recap"); });
 
