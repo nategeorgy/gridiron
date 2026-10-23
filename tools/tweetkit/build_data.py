@@ -3,7 +3,7 @@ import json
 import os
 from bisect import bisect_left, bisect_right
 
-from pull import PERCENTILES, RANKS
+from pull import ADVANCED, PERCENTILES, RANKS
 import re
 import urllib.parse
 import urllib.request
@@ -117,6 +117,55 @@ def short_text(text):
     return text[:60].rstrip() + "..."
 
 
+def game_clock(quarter, clock, season_type="REG"):
+    """Seconds into the game, the recap's own convention (app/game_pages.py elapsed)."""
+    if quarter is None or not clock:
+        return None
+    minutes, seconds = clock.split(":")
+    left = int(minutes) * 60 + int(seconds)
+    if quarter <= 4:
+        return (quarter - 1) * 900 + (900 - left)
+    period = 600 if season_type == "REG" else 900
+    return 3600 + (quarter - 5) * period + (period - left)
+
+
+def game_plays(raw_plays, away, season_type):
+    """A8: every pass and run as [seconds, 0 away / 1 home, EPA, kind, touchdown, turnover],
+    and the six that moved EPA most, described."""
+    plays, big = [], []
+    for play in raw_plays:
+        if play["type"] not in ("pass", "run") or play.get("epa") is None:
+            continue
+        t = game_clock(play["quarter"], play["clock"], season_type)
+        side = 0 if play["team"] == away else 1
+        plays.append([t, side, r(play["epa"]), play["type"][0], int(bool(play["touchdown"])), int(bool(play["turnover"]))])
+        text = short_text(play["text"])
+        # A lost fumble is the whole story of the play; the short form would drop it.
+        if play["turnover"] and "INTERCEPT" not in play["text"].upper() and "FUMBLE" in play["text"].upper():
+            text += ", fumble lost"
+        big.append({"t": t, "quarter": play["quarter"], "clock": play["clock"], "team": play["team"], "epa": r(play["epa"]), "text": text})
+    big = sorted(big, key=lambda b: -abs(b["epa"]))[:6]
+    return plays, big
+
+
+def passer_throws(raw_throws, players):
+    """A9: each passer's targeted throws that week, his line and his tally."""
+    line = {p["player_id"]: p for p in players}
+    out = {}
+    for pid, t in raw_throws.items():
+        me = line.get(pid, {})
+        out[pid] = {
+            "name": t["player"]["name"], "team": me.get("team"),
+            "line": pick(me, ["completions", "attempts", "passing_yards", "passing_tds", "interceptions", "sacks_suffered",
+                              "passing_epa", "carries", "rushing_yards"]),
+            "throws": [[x["air_yards"], x["location"], int(bool(x["complete"])), int(bool(x["touchdown"])),
+                        int(bool(x["interception"])), x["yards"], r(x["epa"], 2)] for x in t.get("targets", [])],
+            "sum": pick(t.get("summary") or {}, ["targets", "receptions", "yards", "touchdowns", "interceptions", "adot",
+                                                 "epa_per_target", "air_yards"]),
+        }
+    return out
+
+
 recaps = []
 for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get("kickoff_time") or "")):
     gid = game["game_id"]
@@ -124,6 +173,7 @@ for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get(
     h, rc = raw["header"], raw["recap"]
     for p in rc["players"]:
         note_face(p)
+    plays, big = game_plays(raw.get("plays", []), h["away"]["abbreviation"], h.get("season_type") or "REG")
     recaps.append({
         "id": gid,
         "header": header(h),
@@ -143,6 +193,8 @@ for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get(
         "touches": rc["touches"],
         "league": rc["league"],
         "passers": rc["passers"],
+        "plays": plays, "big_plays": big,
+        "throws": passer_throws(raw.get("throws", {}), rc["players"]),
     })
 
 PREVIEW_PLAYER = ["player_id", "name", "position", "team", "games", "fantasy_points", "fantasy_ppg",
@@ -341,6 +393,11 @@ for position, metrics in DERIVED.items():
             if value is not None and pool:
                 derived.setdefault(row["player_id"], {})[metric] = (value, *rank_and_percentile(value, pool))
 
+# How many players each advanced metric is ranked among: the qualified players at the
+# position with a value, the pool app/percentiles.py ranks within.
+ranked_pool = {position: {m: sum(1 for row in intel[position] if row.get("qualified") and row.get(m) is not None)
+                          for m in ADVANCED[position]} for position in ADVANCED}
+
 players = {}
 for pid, raw in players_raw.items():
     profile = raw["profile"]
@@ -378,6 +435,15 @@ for pid, raw in players_raw.items():
         entry["season"][metric] = r(value, 4)
         entry["ranks"][metric] = rank
         entry["pct"][metric] = percentile
+    # D8's advanced rows: value, percentile and rank from the API, and how many were ranked.
+    entry["adv"] = {
+        "v": pick(season, ADVANCED[position], 4),
+        "p": {m: (season.get("percentiles") or {}).get(m) for m in ADVANCED[position]},
+        "r": {m: (season.get("ranks") or {}).get(m) for m in ADVANCED[position]},
+        "n": {m: ranked_pool[position].get(m) for m in ADVANCED[position]},
+        "games": season.get("games_played"), "dropbacks": season.get("dropbacks"), "carries": season.get("carries"),
+        "targets": season.get("targets"), "sacks": season.get("sacks_suffered"),
+    }
     players[pid] = entry
 
 # ---------------------------------------------------------------- teams (E)
@@ -428,6 +494,10 @@ for team in team_stats["teams"]:
         "redzone": redzone,
         "trend": {k: [pick(x, ["week", "value", "opponent", "home", "points_for", "points_against", "league_q25", "league_q75",
                                "league_to_date"]) for x in bd.get("trend", {}).get(k, [])] for k in ("off", "def", "net")},
+        "lanes": [pick(x, ["key", "plays", "share", "share_rank", "epa", "epa_rank", "league_share", "league_epa", "successes", "yards"], 4)
+                  for x in bd.get("run_lanes", [])],
+        "depth": [pick(x, ["key", "plays", "share", "share_rank", "epa", "epa_rank", "league_share", "league_epa", "completions"], 4)
+                  for x in bd.get("pass_depth", [])],
     }
 team_means = {mid: {side: team_stats_values[mid].get(f"{side}_mean") for side in ("o", "d")} for mid in TEAM_METRICS
               if mid in team_stats_values}
@@ -473,6 +543,134 @@ for position, depth in FINISH_DEPTH.items():
         "weeks": {g["week"]: [g.get("position_rank"), r(g.get("fantasy_points"), 1)] for g in p["log"]},
     } for p in rows]
 
+# --------------------------------------------------- the league, team by team
+# C14, C18, E5, B7: every team's value and rank for the metrics those cards draw, both
+# sides, with the league means. Personnel groupings are left out (not cleared for 2026).
+LEAGUE_METRICS = ["epa", "suc", "p_epa", "p_suc", "r_epa", "r_suc", "explosive", "ypp", "pts_drive", "three_out",
+                  "to_drive", "start", "rz_td", "d3", "d4_go", "tov_g", "plays_g", "sec_snap", "cpoe", "adot", "yac",
+                  "x_pass", "sack_rate", "int_rate", "intw", "catchable", "drop", "ypc", "stuff", "x_run", "box8", "gap_in",
+                  "gap_tk", "gap_out", "pass_rate", "n_pass", "proe", "gun", "under", "empty", "motion", "nohud", "pa", "rpo",
+                  "screen", "blitz", "rushers", "ppg", "pdiff", "net_epa"]
+team_league = {
+    "teams": [t["abbreviation"] for t in team_stats["teams"]],
+    "metrics": {
+        m["id"]: {
+            **pick(m, ["label", "short", "fmt", "better", "label_o", "label_d"]),
+            **{side: team_stats_values[m["id"]].get(side) for side in ("o", "d") if team_stats_values[m["id"]].get(side)},
+            "o_mean": team_stats_values[m["id"]].get("o_mean"), "d_mean": team_stats_values[m["id"]].get("d_mean"),
+        }
+        for m in team_stats["metrics"] if m["id"] in LEAGUE_METRICS and m["id"] in team_stats_values
+    },
+}
+
+# ------------------------------------------------------------- passing networks
+# D9: every passer's targets by receiver, for his games with each team. Keyed "id|team".
+networks_raw = load("networks")
+networks = {}
+for key, nw in networks_raw.items():
+    passer_id, team = key.split("|")
+    note_face(nw["passer"])
+    # An untracked receiver (a fullback, a two-way player) has no id: he stays in "others".
+    receivers = sorted((x for x in nw.get("receivers", []) if x.get("player_id")), key=lambda x: -x["targets"])
+    for x in receivers[:10]:
+        note_face(x)
+    networks[key] = {
+        "passer": pick(nw["passer"], ["player_id", "name", "games", "completions", "attempts", "passing_yards", "passing_tds",
+                                      "interceptions", "cpoe"]),
+        "team": team,
+        "totals": pick(nw["totals"], ["targets", "receptions", "yards", "touchdowns", "interceptions", "epa", "air_yards",
+                                      "charted", "locations", "depth"], 2),
+        "receivers": [pick(x, ["player_id", "name", "position", "targets", "receptions", "yards", "touchdowns", "interceptions",
+                               "epa", "adot", "epa_per_target", "locations", "depth"], 3) for x in receivers[:10]],
+        "others": nw["totals"]["targets"] - sum(x["targets"] for x in receivers[:10]),
+    }
+
+# ---------------------------------------------------------------- passing zones
+# E6: every target each team threw, by depth and side: [targets, catches, yards, TDs, INTs,
+# EPA]. Zone k is depth * 3 + side, as in app/explore.py, so the league totals line up.
+SIDES = ["left", "middle", "right"]
+
+
+def depth_index(air_yards):
+    if air_yards is None:
+        return None
+    return 0 if air_yards < 0 else 1 if air_yards < 10 else 2 if air_yards < 20 else 3
+
+
+def zone_tally(targets):
+    zones = [[0, 0, 0, 0, 0, 0.0] for _ in range(12)]
+    for t in targets:
+        depth = depth_index(t.get("air_yards"))
+        if depth is None or t.get("location") not in SIDES:
+            continue
+        cell = zones[depth * 3 + SIDES.index(t["location"])]
+        cell[0] += 1
+        cell[1] += int(bool(t["complete"]))
+        cell[2] += t.get("yards") or 0
+        cell[3] += int(bool(t["touchdown"]))
+        cell[4] += int(bool(t["interception"]))
+        cell[5] += t.get("epa") or 0.0
+    return [[*cell[:5], round(cell[5], 2)] for cell in zones]
+
+
+team_targets = load("team_targets")
+team_zones = {}
+league_cells = [[0, 0, 0, 0, 0, 0.0] for _ in range(12)]
+for abbr, tt in team_targets.items():
+    zones = zone_tally(tt.get("targets", []))
+    for k, cell in enumerate(zones):
+        league_cells[k] = [a + b for a, b in zip(league_cells[k], cell)]
+    # Who caught the passes in each zone: summed over the team's passers' networks.
+    by_receiver = {}
+    for key, nw in networks_raw.items():
+        if key.split("|")[1] != abbr:
+            continue
+        for x in nw.get("receivers", []):
+            if not x.get("player_id"):
+                continue
+            mine = by_receiver.setdefault(x["player_id"], {"player_id": x["player_id"], "name": x["name"],
+                                                          "position": x["position"], "zones": [0] * 12, "targets": 0})
+            mine["zones"] = [a + b for a, b in zip(mine["zones"], x.get("zones") or [0] * 12)]
+            mine["targets"] += x["targets"]
+    leaders = []
+    for k in range(12):
+        top = max(by_receiver.values(), key=lambda x: x["zones"][k], default=None)
+        leaders.append([top["player_id"], top["name"], top["position"], top["zones"][k]] if top and top["zones"][k] else None)
+        if top and top["zones"][k]:
+            note_face(top)
+    team_zones[abbr] = {"zones": zones, "leaders": leaders,
+                        "sum": pick(tt.get("summary") or {}, ["targets", "receptions", "yards", "touchdowns", "interceptions",
+                                                              "adot", "epa_per_target", "games"])}
+league_zones = [[*cell[:5], round(cell[5], 2)] for cell in league_cells]
+
+# -------------------------------------------------------------- advanced pools
+# C15: qualified quarterbacks with 15+ attempts a game. C16: the backs with the most carries.
+# C17: every qualified player at each position with the Next Gen and charting fields.
+qb_ladder = [pick(row, ["player_id", "name", "team_abbreviation", "games_played", "attempts", "dropbacks", "epa_per_play",
+                        "cpoe", "passing_yards", "passing_tds", "interceptions", "sacks_suffered", "yards_per_attempt"], 4)
+             for row in intel["QB"] if row.get("qualified") and (row.get("attempts") or 0) >= 15 * (row.get("games_played") or 1)
+             and row.get("epa_per_play") is not None]
+rb_contact = [pick(row, ["player_id", "name", "team_abbreviation", "games_played", "carries", "rushing_yards", "yards_per_carry",
+                         "rush_ybc_per_att", "rush_yac_per_att", "ngs_rush_yards_over_expected_per_att",
+                         "ngs_rush_yards_over_expected", "rush_broken_tackles", "rushing_epa"], 3)
+              for row in sorted(intel["RB"], key=lambda row: -(row.get("carries") or 0))
+              if row.get("qualified") and row.get("rush_ybc_per_att") is not None][:30]
+NGS_FIELDS = {
+    "QB": ["ngs_pass_time_to_throw", "ngs_pass_aggressiveness", "ngs_pass_air_yards_to_sticks", "ngs_pass_intended_air_yards",
+           "pressure_rate", "bad_throw_rate", "epa_per_play", "cpoe", "attempts"],
+    "RB": ["ngs_rush_pct_attempts_eight_defenders", "ngs_rush_yards_over_expected_per_att", "ngs_rush_time_to_los",
+           "ngs_rush_efficiency", "rush_ybc_per_att", "rush_yac_per_att", "carries", "yards_per_carry"],
+    "WR": ["ngs_rec_cushion", "ngs_rec_separation", "ngs_rec_yac_above_expectation", "adot", "catch_rate",
+           "receiving_drop_rate", "targets", "yards_per_target"],
+}
+NGS_FIELDS["TE"] = NGS_FIELDS["WR"]
+ngs_pool = {
+    position: [pick(row, ["player_id", "name", "team_abbreviation", "games_played", "fantasy_points"] + fields, 4)
+               for row in sorted((r for r in intel[position] if r.get("qualified")), key=lambda r: -(r.get("fantasy_points") or 0))
+               if position != "QB" or (row.get("attempts") or 0) >= 15 * (row.get("games_played") or 1)]
+    for position, fields in NGS_FIELDS.items()
+}
+
 # Week's best, risers and RB faces not in the card pool still need a headshot.
 needed = set()
 for rows in week_rows.values():
@@ -482,6 +680,10 @@ needed |= {row["player_id"] for row in rb_work}
 needed |= {row["player_id"] for row in routes_pool}
 needed |= {row["player_id"] for rows in scatter_pool.values() for row in rows}
 needed |= {row["player_id"] for rows in xva_pool.values() for row in rows}
+needed |= {row["player_id"] for rows in ngs_pool.values() for row in rows}
+needed |= {row["player_id"] for row in qb_ladder + rb_contact}
+needed |= {x["player_id"] for nw in networks.values() for x in nw["receivers"]}
+needed |= {leader[0] for tz in team_zones.values() for leader in tz["leaders"] if leader}
 for card in teams_cards.values():
     needed |= {row["player_id"] for row in card["top"] + card["redzone"] + card["share"]["tgt"] + card["share"]["car"]}
 missing = sorted(pid for pid in needed if pid not in headshots)
@@ -512,6 +714,8 @@ data = {
     "players": players,
     "teams_cards": teams_cards, "team_means": team_means, "team_metric_meta": metric_meta,
     "routes_pool": routes_pool, "xva_pool": xva_pool, "finishes": finishes, "scatter_pool": scatter_pool,
+    "team_league": team_league, "networks": networks, "team_zones": team_zones, "league_zones": league_zones,
+    "qb_ladder": qb_ladder, "rb_contact": rb_contact, "ngs_pool": ngs_pool,
 }
 with open(os.path.join(HERE, "data.json"), "w") as handle:
     json.dump(data, handle, separators=(",", ":"))

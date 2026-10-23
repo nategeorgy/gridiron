@@ -283,3 +283,64 @@ function cardTrend(pv) {
   });
   return wrapCard(fr, s);
 }
+
+// B7 ------------------------------------------------------------ How they play
+// Tendencies, not grades: each strip runs less to more (or slower to faster), all 32 teams
+// as dots and both of this game's teams on it. [id, side, label, format, [left, right] words]
+const PLAY_ROWS = {
+  Offense: [["proe", "o", "Pass rate over expected", (v) => signed(v, 1)], ["n_pass", "o", "Neutral pass rate", (v) => pct(v)],
+    ["sec_snap", "o", "Seconds per snap, neutral", (v) => num(v, 1), ["Slower", "Faster"]], ["gun", "o", "Shotgun rate", (v) => pct(v)],
+    ["motion", "o", "Motion rate", (v) => pct(v)], ["pa", "o", "Play action rate", (v) => pct(v)], ["screen", "o", "Screen rate", (v) => pct(v)],
+    ["adot", "o", "Air yards per pass", (v) => num(v, 1), ["Shorter", "Deeper"]]],
+  Defense: [["blitz", "d", "Blitz rate", (v) => pct(v)], ["rushers", "d", "Pass rushers per dropback", (v) => num(v, 2)], ["box8", "d", "Stacked box rate", (v) => pct(v)],
+    ["proe", "d", "Pass over expected against", (v) => signed(v, 1)], ["adot", "d", "Air yards per pass allowed", (v) => num(v, 1), ["Shorter", "Deeper"]],
+    ["sec_snap", "d", "Seconds per snap against", (v) => num(v, 1), ["Slower", "Faster"]]],
+};
+function cardHowTheyPlay(pv) {
+  const [away, home] = pvSides(pv);
+  const colors = gameColors(away, home);
+  const league = DATA.team_league;
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: `${pvTitle(pv)}: how they play`, subtitle: "Where each team sits among all 32 on its tendencies. Dots: the rest of the league." });
+  const { pad, w } = fr;
+  const panelW = (w - pad * 2 - 60) / 2;
+  let s = "";
+  Object.entries(PLAY_ROWS).forEach(([title, rows], pi) => {
+    const x0 = pad + pi * (panelW + 60);
+    let y = fr.top - 4;
+    s += T(x0, y + 24, title, { size: 25, weight: 800 });
+    // Column heads: each team's value, in the matchup's colours.
+    const vx = [x0 + panelW - 108, x0 + panelW - 20];
+    [away, home].forEach((team, k) => { s += logo(team, vx[k] - 30, y, 30); });
+    y += 44;
+    const labelW = 230, sx0 = x0 + labelW, sx1 = x0 + panelW - 180;
+    const rowH = (fr.bottom - y) / rows.length;
+    rows.forEach(([id, side, label, fmt, words], i) => {
+      const m = league.metrics[id];
+      const cy = y + i * rowH + rowH / 2;
+      if (i % 2 === 0) s += R(x0 - 10, cy - rowH / 2 + 2, panelW + 20, rowH - 4, { rx: 10, fill: "var(--panel)" });
+      const lb = fitSize(label, labelW - 16, [18, 16, 15], 600);
+      s += T(x0, cy + 6, lb.text, { size: lb.size, weight: 600, fill: "var(--muted)" });
+      const values = Object.entries(m?.[side] || {}).filter(([, v]) => v && v[0] != null);
+      if (!values.length) return;
+      const nums = values.map(([, v]) => v[0]), lo = Math.min(...nums), hi = Math.max(...nums);
+      const flip = !!words && id === "sec_snap"; // fewer seconds is faster, so faster runs right
+      const x = flip ? lin(hi, lo, sx0 + 12, sx1 - 12) : lin(lo, hi, sx0 + 12, sx1 - 12);
+      s += L(sx0, cy, sx1, cy, { stroke: "var(--rule)", sw: 2, cap: "round" });
+      const [left, right] = words || ["Less", "More"];
+      s += T(sx0, cy + rowH / 2 - 6, left, { size: 12, weight: 700, fill: "var(--faint)" }) + T(sx1, cy + rowH / 2 - 6, right, { size: 12, weight: 700, anchor: "end", fill: "var(--faint)" });
+      for (const [team, v] of values) if (team !== away && team !== home) s += C(x(v[0]), cy, 4.5, { fill: "var(--faint)", opacity: 0.7 });
+      const mine = [away, home].map((team) => [team, m[side]?.[team]]).filter(([, v]) => v);
+      const close = mine.length === 2 && Math.abs(x(mine[0][1][0]) - x(mine[1][1][0])) < 30;
+      mine.forEach(([team, v], k) => {
+        const dy = close ? (k ? 9 : -9) : 0;
+        s += C(x(v[0]), cy + dy, 15, { fill: "var(--card)", stroke: colors[team], sw: 2.5 }) + logo(team, x(v[0]) - 11, cy + dy - 11, 22);
+      });
+      [away, home].forEach((team, k) => {
+        const v = m[side]?.[team];
+        s += T(vx[k], cy + 6, v ? fmt(v[0]) : "-", { size: 17, weight: 750, anchor: "end", mono: true, fill: teamText(colors[team]) });
+      });
+    });
+  });
+  s += L(w / 2, fr.top + 40, w / 2, fr.bottom, { stroke: "var(--rule)" });
+  return wrapCard(fr, s);
+}

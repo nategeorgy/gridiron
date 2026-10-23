@@ -43,6 +43,20 @@ RANKS = {
 }
 RANKS["TE"] = RANKS["WR"]
 PERCENTILES["TE"] = PERCENTILES["WR"]
+# D8's advanced rows, ranked and percentiled within the position like D1's. Asked for in the
+# same request as D1's, so both read one pool.
+ADVANCED = {
+    "QB": ["epa_per_play", "cpoe", "passer_rating", "yards_per_attempt", "ngs_pass_completion_pct_above_expectation",
+           "ngs_pass_intended_air_yards", "ngs_pass_air_yards_to_sticks", "ngs_pass_aggressiveness",
+           "ngs_pass_time_to_throw", "pressure_rate", "bad_throw_rate", "rushing_epa", "rushing_yards_per_game"],
+    "RB": ["rushing_epa", "yards_per_carry", "ngs_rush_yards_over_expected_per_att", "ngs_rush_pct_over_expected",
+           "rush_ybc_per_att", "rush_yac_per_att", "rush_broken_tackles", "ngs_rush_efficiency", "ngs_rush_time_to_los",
+           "ngs_rush_pct_attempts_eight_defenders", "receiving_epa", "yards_per_target", "catch_rate"],
+    "WR": ["receiving_epa", "yards_per_target", "catch_rate", "adot", "air_yards_share", "target_share",
+           "ngs_rec_separation", "ngs_rec_cushion", "ngs_rec_yac_above_expectation", "receiving_drop_rate",
+           "passer_rating_when_targeted", "rec_broken_tackles"],
+}
+ADVANCED["TE"] = ADVANCED["WR"]
 
 
 def get(path, **params):
@@ -96,7 +110,12 @@ def main():
 
     def recap(game):
         gid = game["game_id"]
-        return gid, {"header": get(f"/games/{gid}"), "recap": get(f"/games/{gid}/recap", scoring="ppr")}
+        rc = get(f"/games/{gid}/recap", scoring="ppr")
+        # Each passer's throws that week (A9) and every play (A8).
+        throws = {pid: get(f"/explore/players/{pid}/targets", season=SEASON, weeks=game["week"], role="passer")
+                  for ids in rc["passers"].values() for pid in ids}
+        return gid, {"header": get(f"/games/{gid}"), "recap": rc, "plays": get(f"/games/{gid}/plays")["plays"],
+                     "throws": throws}
 
     def preview(game):
         gid = game["game_id"]
@@ -120,10 +139,10 @@ def main():
     late = ",".join(str(w) for w in range(RECAP_WEEK - 2, RECAP_WEEK + 1))
     out["intel"], out["intel_early"], out["intel_late"], out["week_top"] = {}, {}, {}, {}
     for position in POSITIONS:
-        pct = ",".join(PERCENTILES[position])
+        pct = ",".join(dict.fromkeys(PERCENTILES[position] + ADVANCED[position]))
+        ranks = ",".join(dict.fromkeys(RANKS[position] + ADVANCED[position]))
         out["intel"][position] = every_row("/stats/intelligence", season=SEASON, position=position, metric="fantasy_points",
-                                           scoring="ppr", include_unqualified="true", percentiles=pct,
-                                           ranks=",".join(RANKS[position]))
+                                           scoring="ppr", include_unqualified="true", percentiles=pct, ranks=ranks)
         out["intel_early"][position] = get("/stats/intelligence", season=SEASON, weeks=early, position=position,
                                            metric="fantasy_points", scoring="ppr", limit=200,
                                            include_unqualified="true")["data"]
@@ -146,6 +165,19 @@ def main():
         for week in range(1, RECAP_WEEK + 1)
     }
     print("breakdowns", len(out["breakdowns"]), "weekly boards", len(out["weekly_boards"]), file=sys.stderr)
+
+    # Every target each team threw (E6's zones) and every passer's network, for his games with
+    # each team he played for (D9).
+    def team_targets(team):
+        return team["abbreviation"], get(f"/explore/teams/{team['team_id']}/targets", season=SEASON)
+
+    def network(entry):
+        return f"{entry['player_id']}|{entry['team']}", get("/explore/network", season=SEASON,
+                                                              passer_id=entry["player_id"], team=entry["team"])
+    with ThreadPoolExecutor(6) as pool:
+        out["team_targets"] = dict(pool.map(team_targets, team_list))
+        out["networks"] = dict(pool.map(network, get("/explore/passers", season=SEASON)["data"]))
+    print("team targets", len(out["team_targets"]), "networks", len(out["networks"]), file=sys.stderr)
 
     # The reply-card pool: the top N at each position by total points.
     pool_ids = []

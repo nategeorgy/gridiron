@@ -6,6 +6,7 @@
 //   node render.mjs C1,C3,C4 --scale 1 --out /tmp/check
 //   node render.mjs E1,E2 --team DET
 //   node render.mjs C8 --opt pos=RB --highlight "Bijan Robinson,Jahmyr Gibbs"
+//   node render.mjs C12 --numbers "Puka Nacua,Ja'Marr Chase"   (their faces and actual values)
 //   node render.mjs D6 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba"
 //
 // Defaults: both themes, 2x (a 1200x1500 card becomes 2400x3000), and the repo's
@@ -22,7 +23,7 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const args = process.argv.slice(2);
 const flag = (name, fallback) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : fallback; };
 const cards = (args.find((a) => !a.startsWith("--") && !args[args.indexOf(a) - 1]?.startsWith("--")) || "").split(",").filter(Boolean);
-if (!cards.length) { console.error("usage: node render.mjs A4,A5 [--game ID] [--player NAME] [--team ABBR] [--opt key=value] [--highlight \"Name,Name\"] [--themes dark,light] [--scale 2] [--out DIR]"); process.exit(1); }
+if (!cards.length) { console.error("usage: node render.mjs A4,A5 [--game ID] [--player NAME] [--team ABBR] [--opt key=value] [--highlight \"Name,Name\"] [--numbers \"Name,Name\"] [--themes dark,light] [--scale 2] [--out DIR]"); process.exit(1); }
 if (!existsSync(join(HERE, "preview.html"))) { console.error("preview.html is missing: run python3 build.py first"); process.exit(1); }
 
 const meta = JSON.parse(readFileSync(join(HERE, "data.json"), "utf8"));
@@ -32,6 +33,7 @@ const game = flag("game", "");
 const player = flag("player", "");
 const team = flag("team", "");
 const highlight = flag("highlight", null);
+const numbers = flag("numbers", null);
 const opts = args.flatMap((a, i) => (a === "--opt" ? [args[i + 1]] : [])).map((kv) => kv.split("=")).filter(([k, v]) => k && v != null);
 const out = resolve(flag("out", join(HERE, "..", "..", "tweets", `${meta.season}-w${String(meta.recap_week).padStart(2, "0")}`)));
 mkdirSync(out, { recursive: true });
@@ -66,6 +68,7 @@ for (const card of cards) {
     if (player) query.set("player", player);
     if (team) query.set("team", team);
     if (highlight != null) query.set("hl", highlight);
+    if (numbers != null) query.set("nums", numbers);
     for (const [k, v] of opts) query.set(`opt.${k}`, v);
     await send("Page.navigate", { url: `file://${join(HERE, "preview.html")}?${query}` });
     let ready = false;

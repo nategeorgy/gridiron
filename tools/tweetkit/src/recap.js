@@ -407,7 +407,7 @@ function cardGameExpected(g, opts = {}) {
   const pool = g.players.filter((p) => (p.expected_fantasy_points ?? 0) >= 1 || p.fantasy_points >= 1);
   const s = scatterPlot(fr, {
     points: pool.map((p) => ({ id: p.player_id, x: p.expected_fantasy_points ?? 0, y: p.fantasy_points, name: p.name, face: p.player_id, color: colors[p.team] })),
-    highlight: opts.hl ?? defaultGameExpected(g), xstep: 5, ystep: 5, xfmt: (v) => num(v, 0), yfmt: (v) => num(v, 0), diagonal: true,
+    highlight: opts.hl ?? defaultGameExpected(g), numbers: opts.nums, xstep: 5, ystep: 5, xfmt: (v) => num(v, 0), yfmt: (v) => num(v, 0), xtip: (v) => num(v, 1), ytip: (v) => num(v, 1), xshort: "xPTS", yshort: "PTS", diagonal: true,
     xlabel: "Expected points →", ylabel: "Points →", r: 27,
     key: `Dashed: points equal to expected. ${nickname(away)} and ${nickname(home)} in their colours`,
     quadrants: [null, ["Beat his expected", mix("var(--pos)", 72, "var(--fg)")], ["Fell short", mix("var(--neg)", 72, "var(--fg)")], null],
@@ -419,4 +419,123 @@ function defaultGameExpected(g) {
   const top = (team) => g.players.filter((p) => p.team === team).sort((a, b) => b.fantasy_points - a.fantasy_points).slice(0, 4);
   const short = [...g.players].sort((a, b) => (a.fantasy_points - (a.expected_fantasy_points ?? 0)) - (b.fantasy_points - (b.expected_fantasy_points ?? 0))).slice(0, 2);
   return [...new Set([...top(away), ...top(home), ...short].map((p) => p.player_id))];
+}
+
+// A8 -------------------------------------------------------------- Every snap
+function cardEverySnap(g) {
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · ${finalWord(g)}, ${g.header.away.score}-${g.header.home.score}`, title: `${nickname(away)} at ${nickname(home)}: every snap`,
+    subtitle: "EPA of every pass and run on the game clock. Up is good for the offense; numbered: the biggest plays." });
+  const { pad, w } = fr;
+  const plays = g.plays || [];
+  const end = Math.max(3600, ...plays.map((p) => p[0] ?? 0));
+  const tx0 = pad + 250, tx1 = w - pad;
+  const x = lin(0, end, tx0, tx1);
+  const laneH = 196, gap = 30, y0 = fr.top + 6;
+  const cap = 4;
+  let s = "";
+  const quarters = [[1, 0, 900], [2, 900, 1800], [3, 1800, 2700], [4, 2700, 3600]];
+  if (end > 3600) quarters.push([5, 3600, end]);
+  for (const [q, a, b] of quarters) {
+    if (q > 1) s += L(x(a), y0 - 4, x(a), y0 + laneH * 2 + gap + 4, { stroke: "var(--rule)", dash: "4 6" });
+    s += T((x(a) + x(b)) / 2, y0 + laneH * 2 + gap + 32, periodName(q, quarters.length), { size: 16, weight: 700, anchor: "middle", fill: "var(--faint)" });
+  }
+  const big = (g.big_plays || []).slice(0, 4);
+  const numbered = new Set(big.map((b) => `${b.team}|${b.t}`));
+  [away, home].forEach((team, side) => {
+    const top = y0 + side * (laneH + gap), mid = top + laneH / 2;
+    const h = lin(0, cap, 0, laneH / 2 - 8);
+    const mine = plays.filter((p) => p[1] === side);
+    const epa = mine.reduce((a, p) => a + p[2], 0), success = mine.filter((p) => p[2] > 0).length;
+    s += R(tx0 - 10, top, tx1 - tx0 + 20, laneH, { rx: 14, fill: "var(--panel)" });
+    s += L(tx0, mid, tx1, mid, { stroke: "var(--plot-rule)", sw: 1.2 });
+    s += logo(team, pad, mid - 54, 44) + T(pad + 56, mid - 22, nickname(team), { size: 24, weight: 800, fill: teamText(colors[team]) });
+    s += T(pad, mid + 18, `${signed(mine.length ? epa / mine.length : null, 2)} EPA/play`, { size: 19, weight: 750, mono: true });
+    s += T(pad, mid + 44, `${pct(mine.length ? success / mine.length : null)} success · ${mine.length} plays`, { size: 16, fill: "var(--muted)" });
+    for (const [t, , e, kind, td, to] of mine) {
+      const v = Math.max(-cap, Math.min(cap, e));
+      const bx = x(t);
+      s += R(bx - 2, v >= 0 ? mid - h(v) : mid, 4, Math.max(1.5, h(Math.abs(v))), { rx: 1.5, fill: v >= 0 ? colors[team] : mix(colors[team], 38) });
+      // A numbered play's description says what happened, so it takes no TD or TO mark.
+      const told = numbered.has(`${team}|${t}`);
+      if (td && !told) s += T(bx, mid - h(Math.max(0, v)) - 8, "TD", { size: 12, weight: 800, anchor: "middle", fill: "var(--fg)" });
+      if (to && !told) s += T(bx, mid + h(Math.abs(Math.min(0, v))) + 18, "TO", { size: 12, weight: 800, anchor: "middle", fill: mix("var(--neg)", 70, "var(--fg)") });
+      // Hover: the play's clock and EPA.
+      s += `<rect class="hit" x="${num(bx - 4, 1)}" y="${num(top, 1)}" width="8" height="${laneH}" fill="transparent" data-tip="${esc(`${nickname(team)} ${kind === "p" ? "pass" : "run"}|EPA ${signed(e, 2)}${td ? " · touchdown" : ""}${to ? " · turnover" : ""}`)}"/>`;
+    }
+    for (const [k, b] of big.entries()) {
+      if (b.team !== team) continue;
+      const v = Math.max(-cap, Math.min(cap, b.epa));
+      const by = v >= 0 ? mid - h(v) - 22 : mid + h(-v) + 22;
+      s += C(x(b.t), Math.max(top + 14, Math.min(top + laneH - 14, by)), 12, { fill: "var(--card)", stroke: "var(--fg)", sw: 2 }) + T(x(b.t), Math.max(top + 14, Math.min(top + laneH - 14, by)) + 5, k + 1, { size: 14, weight: 800, anchor: "middle" });
+    }
+  });
+  // The numbered plays, described.
+  const ly = y0 + laneH * 2 + gap + 62, colW = (w - pad * 2) / 2;
+  big.forEach((b, k) => {
+    const lx = pad + (k % 2) * colW, cy = ly + Math.floor(k / 2) * 34;
+    s += C(lx + 12, cy - 6, 12, { fill: "var(--card)", stroke: "var(--fg)", sw: 2 }) + T(lx + 12, cy - 1, k + 1, { size: 14, weight: 800, anchor: "middle" });
+    s += T(lx + 34, cy, `${periodName(b.quarter, quarters.length)} ${b.clock.replace(/^0/, "")}`, { size: 16, weight: 700, mono: true, fill: "var(--muted)" });
+    s += logo(b.team, lx + 124, cy - 18, 24);
+    s += T(lx + 156, cy, fit(b.text, colW - 270, 17, 600), { size: 17, weight: 600 });
+    s += T(lx + colW - 30, cy, signed(b.epa, 2), { size: 17, weight: 800, anchor: "end", mono: true, fill: mix(b.epa >= 0 ? "var(--pos)" : "var(--neg)", 60, "var(--fg)") });
+  });
+  return wrapCard(fr, s);
+}
+
+// A9 ------------------------------------------------------------- Passing charts
+function cardPassingCharts(g) {
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · ${finalWord(g)}, ${g.header.away.score}-${g.header.home.score}`, title: `${nickname(away)} at ${nickname(home)}: passing charts`,
+    subtitle: "Every targeted throw by depth past the line and side of the field" });
+  const { pad, w } = fr;
+  const panelW = (w - pad * 2 - 40) / 2;
+  let s = legendRow(w - pad - 640, fr.top - 54, [
+    [(cx, cy) => C(cx, cy, 9, { fill: "var(--muted)" }), "Complete"], [(cx, cy) => C(cx, cy, 9, { fill: "var(--card)", stroke: "var(--muted)", sw: 2.5 }), "Incomplete"],
+    [(cx, cy) => C(cx, cy, 8, { fill: "var(--muted)" }) + C(cx, cy, 14, { stroke: "var(--fg)", sw: 2.5 }), "Touchdown"],
+    [(cx, cy) => L(cx - 7, cy - 7, cx + 7, cy + 7, { stroke: "var(--neg)", sw: 3.5, cap: "round" }) + L(cx - 7, cy + 7, cx + 7, cy - 7, { stroke: "var(--neg)", sw: 3.5, cap: "round" }), "Interception"],
+  ], 17).svg;
+  [away, home].forEach((team, side) => {
+    const x0 = pad + side * (panelW + 40);
+    const ids = (g.passers[team] || []).filter((id) => g.throws?.[id]);
+    const pid = ids.sort((a, b) => g.throws[b].throws.length - g.throws[a].throws.length)[0];
+    const th = pid ? g.throws[pid] : null;
+    const color = colors[team];
+    if (!th) { s += T(x0, fr.top + 40, `${nickname(team)}: no throws charted`, { size: 20, fill: "var(--muted)" }); return; }
+    const ln = th.line || {};
+    s += face(pid, x0 + 30, fr.top + 24, 30, color, th.name);
+    s += T(x0 + 72, fr.top + 18, th.name, { size: 22, weight: 800 });
+    s += T(x0 + 72, fr.top + 44, `${ln.completions ?? "-"}/${ln.attempts ?? "-"} · ${ln.passing_yards ?? "-"} yds · ${ln.passing_tds ?? 0} TD · ${ln.interceptions ?? 0} INT${ln.sacks_suffered ? ` · ${ln.sacks_suffered} sacked` : ""}`, { size: 16, weight: 600, mono: true, fill: "var(--muted)" });
+    const deep = th.throws.filter((t) => t[0] != null && t[0] >= 20).length;
+    s += T(x0 + panelW, fr.top + 18, `aDOT ${num(th.sum?.adot, 1)}`, { size: 18, weight: 800, anchor: "end", mono: true });
+    s += T(x0 + panelW, fr.top + 44, `${deep} deep · ${signed(th.sum?.epa_per_target, 2)} EPA/target`, { size: 15, anchor: "end", mono: true, fill: "var(--muted)" });
+    const throws = th.throws.filter((t) => t[0] != null && t[1]);
+    const deepest = Math.max(30, Math.ceil(Math.max(0, ...throws.map((t) => t[0])) / 10) * 10);
+    const fx0 = x0, fx1 = x0 + panelW, fy0 = fr.top + 72, fy1 = fr.bottom - 28;
+    const y = lin(-10, deepest, fy1, fy0);
+    s += R(fx0, fy0, fx1 - fx0, fy1 - fy0, { rx: 16, fill: "var(--panel)" });
+    for (let v = -10; v <= deepest; v += 10) {
+      s += L(fx0, y(v), fx1, y(v), { stroke: v === 0 ? "var(--accent)" : "var(--divider)", sw: v === 0 ? 3 : 1.2 });
+      if (v > 0) s += T(fx0 + 12, y(v) + 20, `${v}`, { size: 15, weight: 700, mono: true, fill: "var(--faint)" });
+    }
+    s += T(fx0 + 12, y(0) - 8, "LOS", { size: 14, weight: 800, fill: "var(--accent-text)" });
+    const third = (fx1 - fx0) / 3;
+    for (const k of [1, 2]) s += L(fx0 + third * k, fy0, fx0 + third * k, fy1, { stroke: "var(--rule)", dash: "6 8" });
+    ["Left", "Middle", "Right"].forEach((label, k) => { s += T(fx0 + third * k + third / 2, fy1 + 22, label, { size: 15, weight: 700, anchor: "middle", fill: "var(--muted)" }); });
+    const cols = { left: 0, middle: 1, right: 2 };
+    throws.forEach((t, i) => {
+      const [ay, loc, comp, td, int, yards, epa] = t;
+      const cx = fx0 + third * cols[loc] + third * (0.12 + 0.76 * hash01(i, 3 + side));
+      const cy = y(Math.max(-9, Math.min(deepest, ay + (hash01(i, 5) - 0.5) * 0.8)));
+      if (int) s += L(cx - 9, cy - 9, cx + 9, cy + 9, { stroke: "var(--neg)", sw: 4, cap: "round" }) + L(cx - 9, cy + 9, cx + 9, cy - 9, { stroke: "var(--neg)", sw: 4, cap: "round" });
+      else {
+        if (td) s += C(cx, cy, 16, { stroke: "var(--fg)", sw: 3 });
+        s += C(cx, cy, 9.5, { fill: comp ? color : "var(--card)", stroke: color, sw: comp ? 1.5 : 2.5, opacity: comp ? 0.92 : 1 });
+      }
+      s += `<circle class="hit" cx="${num(cx, 1)}" cy="${num(cy, 1)}" r="12" fill="transparent" data-tip="${esc(`${ay} air yards, ${loc}|${int ? "Intercepted" : comp ? `Complete, ${yards} yards${td ? ", touchdown" : ""}` : "Incomplete"}|EPA ${signed(epa, 2)}`)}"/>`;
+    });
+  });
+  return wrapCard(fr, s);
 }

@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-10-21 (the tweet kit's player card and head-to-head on the player page and the home page)
+Last updated: 2026-10-23 (the tweet kit grows to 48 cards, and every scatter can print the picked players' or teams' numbers)
 
 ---
 
@@ -73,7 +73,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `frontend/` | app | The React web app (what users see). See [§4](#4-frontend--the-react-web-app). |
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
-| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 35 card templates (game recaps, previews, weekly series including every Scatter page chart, player reply cards, teams) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
+| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 48 card templates (game recaps, previews, weekly series including every Scatter page chart, player reply cards, teams) drawn as SVG from the **local** API. On every scatter you pick players or teams and their actual values print on the chart and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
 | `render.yaml` | config | "Blueprint" telling **Render** how to build and run the backend in production. ⭐ Its `buildCommand` runs **`scripts/migrate.sh`** after installing dependencies — `preDeployCommand` is paid-only on the free plan. See the file's comments: a bare `alembic upgrade head` failed there on a pooler **checkout timeout**, not connectivity, because a build competes with the still-running previous version for connections. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
@@ -830,6 +830,13 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-10-23**: **`tools/tweetkit/` grows to 48 cards**, thirteen of them on NFL numbers rather than fantasy
+  ones: every snap's EPA (A8), both passing charts (A9), how two teams play (B7), team scatters (C14),
+  quarterback efficiency (C15), before and after contact (C16), Next Gen scatters (C17), every offense's
+  tendencies (C18), advanced percentiles (D8), a passing network (D9), and where a team ranks, throws and
+  runs (E5 to E7). Every scatter now has a **Numbers** pick beside Faces (a team chart's Highlight carries
+  them), placed without moving any other marker (`placeTags` in `src/core.js`). `pull.py` adds each game's
+  plays and passers' throws, every passer's network and every team's targets; no new files.
 - **2026-10-21**: **The tweet kit's player cards come to the site.** D1 becomes `components/player/PlayerCard.jsx`
   on the player page, replacing `SeasonRadar.jsx` and `PercentileLadder.jsx`; D6 becomes the rebuilt
   `components/player/HeadToHead.jsx`, replacing the margin table and `CompareRadar.jsx` on the player page and the

@@ -511,3 +511,142 @@ function cardSources(pid) {
   });
   return wrapCard(fr, s);
 }
+
+// D8 ------------------------------------------------------ Advanced percentiles
+// NFL numbers rather than fantasy ones, grouped by what they measure. A style row (depth,
+// time to throw, cushion) is neither good nor bad, so it is drawn in one neutral hue with
+// what each end means, and carries no rank. [id, label, format, ends for a style row]
+const ADV_ROWS = {
+  QB: [
+    ["Efficiency", [["epa_per_play", "EPA per play", s2], ["cpoe", "Completion % over expected", s1], ["ngs_pass_completion_pct_above_expectation", "Next Gen CPOE", s1], ["passer_rating", "Passer rating", n1], ["yards_per_attempt", "Yards per attempt", n1]]],
+    ["How he throws", [["ngs_pass_intended_air_yards", "Depth of throw", n1, ["Short", "Deep"]], ["ngs_pass_air_yards_to_sticks", "Air yards past the sticks", s1, ["Short of them", "Past them"]],
+      ["ngs_pass_aggressiveness", "Throws into tight windows", p1, ["Fewer", "More"]], ["ngs_pass_time_to_throw", "Time to throw, seconds", n2, ["Quick", "Holds it"]]]],
+    ["In the pocket", [["pressure_rate", "Pressure rate faced", p1], ["bad_throw_rate", "Bad throw rate", p1]]],
+    ["Running", [["rushing_epa", "Rushing EPA", n1], ["rushing_yards_per_game", "Rushing yards per game", n1]]],
+  ],
+  RB: [
+    ["Efficiency", [["rushing_epa", "Rushing EPA", n1], ["yards_per_carry", "Yards per carry", n1], ["ngs_rush_yards_over_expected_per_att", "Rush yards over expected per carry", s2], ["ngs_rush_pct_over_expected", "Carries beating expected", p1]]],
+    ["Who makes the yards", [["rush_ybc_per_att", "Yards before contact per carry", n2], ["rush_yac_per_att", "Yards after contact per carry", n2], ["rush_broken_tackles", "Broken tackles", n0]]],
+    ["How he runs", [["ngs_rush_time_to_los", "Time to the line, seconds", n2, ["Patient", "Quick"]], ["ngs_rush_efficiency", "Distance run per yard gained", n2, ["East-west", "North-south"]],
+      ["ngs_rush_pct_attempts_eight_defenders", "Carries against 8+ in the box", p1, ["Fewer", "More"]]]],
+    ["Receiving", [["receiving_epa", "Receiving EPA", n1], ["yards_per_target", "Yards per target", n1], ["catch_rate", "Catch rate", p1]]],
+  ],
+  WR: [
+    ["Efficiency", [["receiving_epa", "Receiving EPA", n1], ["yards_per_target", "Yards per target", n1], ["catch_rate", "Catch rate", p1], ["passer_rating_when_targeted", "Passer rating when targeted", n1]]],
+    ["Getting open", [["ngs_rec_separation", "Separation at the catch, yards", n2], ["ngs_rec_yac_above_expectation", "YAC over expected per catch", s2], ["rec_broken_tackles", "Broken tackles", n0],
+      ["ngs_rec_cushion", "Cushion at the snap, yards", n2, ["Pressed", "Off coverage"]]]],
+    ["Role", [["target_share", "Target share", p1], ["air_yards_share", "Air yards share", p1], ["adot", "Depth of target", n1, ["Short", "Deep"]]]],
+    ["Hands", [["receiving_drop_rate", "Drop rate", p1]]],
+  ],
+};
+ADV_ROWS.TE = ADV_ROWS.WR;
+function cardAdvanced(pid) {
+  const p = DATA.players[pid];
+  const adv = p.adv || { v: {}, p: {}, r: {}, n: {} };
+  const groups = ADV_ROWS[p.pos];
+  const rowsN = groups.reduce((a, [, list]) => a + list.length, 0);
+  const fr = frame(1200, 1500, { noHeader: true });
+  const { pad, w } = fr;
+  let s = mark(w - pad - 46 * MARK_ASPECT, pad - 4, 46);
+  s += playerHead(p, fr, { top: 66 });
+  const volume = p.pos === "QB" ? `${num(adv.dropbacks, 0)} dropbacks` : p.pos === "RB" ? `${adv.carries ?? 0} carries` : `${adv.targets ?? 0} targets`;
+  let y = 304;
+  s += T(pad, y, `${DATA.season} through Week ${DATA.recap_week} · ${adv.games ?? "-"} games · ${volume}`.toUpperCase(), { size: 18, weight: 750, fill: "var(--accent-text)", ls: 2 });
+  s += T(w - pad, y, `Percentile among ${POS_NAME[p.pos]}`, { size: 17, anchor: "end", fill: "var(--muted)" });
+  y += 30;
+  const rowH = Math.min(60, (fr.bottom - y - groups.length * 46 - 30) / rowsN);
+  const bx0 = 610, bx1 = w - pad - 150;
+  const at = lin(0, 100, bx0, bx1);
+  for (const [title, list] of groups) {
+    s += T(pad, y + 28, title.toUpperCase(), { size: 16, weight: 800, fill: "var(--faint)", ls: 1.6 });
+    y += 42;
+    list.forEach(([id, label, f, ends], i) => {
+      const cy = y + i * rowH + rowH / 2;
+      if (i % 2 === 0) s += R(pad - 10, cy - rowH / 2 + 3, w - pad * 2 + 20, rowH - 6, { rx: 14, fill: "var(--panel)" });
+      const lb = fitSize(label, bx0 - pad - 150, [20, 18, 16], 600);
+      s += T(pad, cy + 7, lb.text, { size: lb.size, weight: 600, fill: "var(--muted)" });
+      const v = adv.v[id], pc = adv.p[id];
+      s += T(bx0 - 30, cy + 8, v == null ? "-" : f(v), { size: 22, weight: 800, anchor: "end", mono: true });
+      s += L(bx0, cy, bx1, cy, { stroke: "var(--rule)", sw: 8, cap: "round" });
+      if (pc == null) { s += T(bx1, cy + 7, "Not ranked", { size: 16, anchor: "end", fill: "var(--faint)" }); return; }
+      const color = ends ? "var(--series-1)" : pctColor(pc);
+      if (!ends) s += L(bx0, cy, at(pc), cy, { stroke: color, sw: 8, cap: "round" });
+      s += C(at(pc), cy, 20, { fill: mix(color, 30, "var(--card)"), stroke: color, sw: 3 }) + T(at(pc), cy + 7, pc, { size: 18, weight: 800, anchor: "middle", mono: true });
+      if (ends) {
+        s += T(bx0, cy + 30, ends[0], { size: 13, weight: 700, fill: "var(--faint)" }) + T(bx1, cy + 30, ends[1], { size: 13, weight: 700, anchor: "end", fill: "var(--faint)" });
+      } else if (adv.r[id]) {
+        s += T(w - pad, cy + 7, `${ord(adv.r[id])} of ${adv.n[id] ?? "-"}`, { size: 17, weight: 700, anchor: "end", mono: true, fill: "var(--muted)" });
+      }
+    });
+    y += list.length * rowH + 4;
+  }
+  s += T(pad, fr.bottom - 2, "Qualified players this season. Blue rows describe a style, not a grade. Next Gen Stats, PFR charting, nflverse EPA.", { size: 15, fill: "var(--muted)" });
+  return wrapCard(fr, s);
+}
+
+// D9 ---------------------------------------------------------- Passing network
+/** The network a player belongs to: a quarterback's own, or his team's quarterback who throws to him most. */
+function networkFor(p) {
+  const nets = Object.entries(DATA.networks);
+  if (p.pos === "QB") return (nets.find(([k]) => k === `${p.id}|${p.team}`) || nets.filter(([k]) => k.startsWith(`${p.id}|`)).sort((a, b) => b[1].totals.targets - a[1].totals.targets)[0])?.[1];
+  const mine = nets.map(([, n]) => [n, n.receivers.find((x) => x.player_id === p.id)?.targets ?? 0]).filter(([, t]) => t);
+  return mine.sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+function cardNetwork(pid) {
+  const p = DATA.players[pid];
+  const net = networkFor(p);
+  const qb = net?.passer;
+  const fr = frame(1600, 900, { kicker: `${DATA.season} · Weeks 1-${DATA.recap_week} · ${TEAMS[net?.team]?.name || p.team}`, title: qb ? `Who ${lastName(qb.name)} throws to` : `${p.name}: passing network`,
+    subtitle: "Every receiver he targets. Line width: targets. Line colour: EPA per target. Bar: where his targets are thrown." });
+  const { pad, w } = fr;
+  if (!net) return wrapCard(fr, T(pad, fr.top + 40, "No passing network for this player yet.", { size: 24, fill: "var(--muted)" }));
+  const color = teamColor(net.team), tot = net.totals;
+  const list = net.receivers.slice(0, 10);
+  const maxT = Math.max(...list.map((r) => r.targets));
+  const tone = (e) => (e == null ? "var(--muted)" : mix(e >= 0 ? "var(--pos)" : "var(--neg)", Math.round(40 + Math.min(1, Math.abs(e) / 0.5) * 60), "var(--muted)"));
+  // The quarterback on the left, his receivers stacked on the right, most targets first.
+  const qx = pad + 110, qy = (fr.top + fr.bottom) / 2 + 10;
+  const nx = pad + 470, y0 = fr.top + 40, rh = (fr.bottom - y0) / list.length;
+  const cols = { tgt: nx + 340, line: nx + 478, adot: nx + 574, epa: nx + 684, bar0: nx + 730, bar1: w - pad };
+  let s = "";
+  s += T(cols.tgt, y0 - 14, "TARGETS", { size: 13, weight: 750, anchor: "end", fill: "var(--faint)", ls: 1.1 });
+  s += T(cols.line, y0 - 14, "REC-YDS-TD", { size: 13, weight: 750, anchor: "end", fill: "var(--faint)", ls: 1.1 });
+  s += T(cols.adot, y0 - 14, "aDOT", { size: 13, weight: 750, anchor: "end", fill: "var(--faint)", ls: 1.1 });
+  s += T(cols.epa, y0 - 14, "EPA/TGT", { size: 13, weight: 750, anchor: "end", fill: "var(--faint)", ls: 1.1 });
+  const DEPTH_TONES = [22, 42, 66, 92];
+  const depthNames = ["Behind", "0-9", "10-19", "20+"];
+  const bw = (cols.bar1 - cols.bar0) / 4;
+  depthNames.forEach((d, k) => { s += T(cols.bar0 + bw * k + bw / 2, y0 - 14, d, { size: 13, weight: 750, anchor: "middle", fill: "var(--faint)" }); });
+  // Links under everything, the biggest last.
+  const rowY = (i) => y0 + i * rh + rh / 2;
+  [...list.keys()].sort((a, b) => list[a].targets - list[b].targets).forEach((i) => {
+    const r = list[i], ty = rowY(i), sw = 3 + 24 * (r.targets / maxT);
+    s += `<path d="M${qx + 60},${qy} C${qx + 220},${qy} ${nx - 170},${ty} ${nx - 26},${ty}" fill="none" stroke="${tone(r.epa_per_target)}" stroke-width="${num(sw, 1)}" stroke-linecap="round" opacity="0.82"/>`;
+  });
+  s += face(qb.player_id, qx, qy, 62, color, qb.name);
+  s += T(qx, qy + 98, lastName(qb.name), { size: 24, weight: 800, anchor: "middle" });
+  s += T(qx, qy + 124, `${qb.completions}/${qb.attempts} · ${qb.passing_yards} yds`, { size: 16, weight: 600, anchor: "middle", mono: true, fill: "var(--muted)" });
+  s += T(qx, qy + 146, `${qb.passing_tds} TD · ${qb.interceptions} INT`, { size: 16, weight: 600, anchor: "middle", mono: true, fill: "var(--muted)" });
+  list.forEach((r, i) => {
+    const cy = rowY(i), me = r.player_id === p.id;
+    s += R(nx - 34, cy - rh / 2 + 3, w - pad - nx + 42, rh - 6, { rx: 12, fill: me ? mix("var(--accent)", 16) : i % 2 === 0 ? "var(--panel)" : "transparent" });
+    s += face(r.player_id, nx, cy, Math.min(22, rh * 0.4), me ? "var(--accent)" : color, r.name);
+    const nm = fit(r.name, 186, 18, me ? 800 : 700);
+    s += T(nx + 34, cy + 6, nm, { size: 18, weight: me ? 800 : 700 });
+    s += T(nx + 34 + textWidth(nm, 18, me ? 800 : 700) + 8, cy + 6, r.position, { size: 13, weight: 800, fill: posColor(r.position) });
+    s += T(cols.tgt - 52, cy + 6, `${r.targets}`, { size: 18, weight: 800, anchor: "end", mono: true });
+    s += T(cols.tgt, cy + 6, pct(r.targets / tot.targets), { size: 14, anchor: "end", mono: true, fill: "var(--faint)" });
+    s += T(cols.line, cy + 6, `${r.receptions}-${r.yards}-${r.touchdowns}`, { size: 16, weight: 600, anchor: "end", mono: true, fill: "var(--muted)" });
+    s += T(cols.adot, cy + 6, num(r.adot, 1), { size: 16, weight: 650, anchor: "end", mono: true, fill: "var(--muted)" });
+    s += T(cols.epa, cy + 6, signed(r.epa_per_target, 2), { size: 17, weight: 800, anchor: "end", mono: true, fill: mix(r.epa_per_target >= 0 ? "var(--pos)" : "var(--neg)", 60, "var(--fg)") });
+    // Where his targets are thrown: the share at each depth, darker deeper.
+    const depth = r.depth || [0, 0, 0, 0], charted = depth.reduce((a, b) => a + b, 0) || 1;
+    depth.forEach((n, k) => {
+      const share = n / charted, bx = cols.bar0 + bw * k;
+      s += R(bx + 3, cy - rh * 0.3, bw - 6, rh * 0.6, { rx: 6, fill: mix("var(--series-1)", Math.round(6 + share * 0.9 * DEPTH_TONES[k] + (share ? 6 : 0))) });
+      s += T(bx + bw / 2, cy + 5, share ? pct(share) : "-", { size: 13, weight: 700, anchor: "middle", mono: true, fill: share ? "var(--fg)" : "var(--faint)" });
+    });
+  });
+  if (net.others) s += T(qx, fr.bottom - 4, `Everyone else: ${net.others} targets`, { size: 15, anchor: "middle", fill: "var(--faint)" });
+  return wrapCard(fr, s);
+}

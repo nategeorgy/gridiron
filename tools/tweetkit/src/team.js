@@ -189,3 +189,163 @@ function cardTeamRedZone(abbr) {
   });
   return wrapCard(fr, s);
 }
+
+/** A team metric's value for one side as text, in the metric's own format. */
+const leagueFmt = (id, v) => teamFmt(v, DATA.team_league.metrics[id]?.fmt);
+
+// E5 ------------------------------------------------------------ Where they rank
+// Each metric as a strip of all 32 teams, better to the right, with this team's logo on it.
+const FINGERPRINT = [
+  ["epa", "EPA per play"], ["suc", "Success rate"], ["p_epa", "EPA per dropback"], ["r_epa", "EPA per designed run"],
+  ["explosive", "Explosive play rate"], ["pts_drive", "Points per drive"], ["three_out", "Three-and-out rate"],
+  ["rz_td", "Red zone TD rate"], ["d3", "Third down rate"], ["sack_rate", "Sack rate"], ["to_drive", "Turnovers per drive"],
+];
+function cardFingerprint(abbr) {
+  const t = DATA.teams_cards[abbr];
+  const league = DATA.team_league;
+  const rowH = 43;
+  const fr = frame(1200, 1500, { noHeader: true });
+  const { pad, w } = fr;
+  let s = teamHead(t, fr, `${DATA.season} through Week ${DATA.recap_week} · where they rank`);
+  let y = 248;
+  const labelW = 250, sx0 = pad + labelW, sx1 = w - pad - 190;
+  [["o", "Offense"], ["d", "Defense"]].forEach(([side, title]) => {
+    s += T(pad, y + 24, title, { size: 26, weight: 800 });
+    s += T(sx0, y + 24, "Worst", { size: 15, weight: 700, fill: "var(--faint)" }) + T(sx1, y + 24, "Best", { size: 15, weight: 700, anchor: "end", fill: "var(--faint)" });
+    s += T(w - pad - 120, y + 24, side === "o" ? "VALUE" : "ALLOWED", { size: 14, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1.2 }) + T(w - pad - 30, y + 24, "RANK", { size: 14, weight: 750, anchor: "end", fill: "var(--faint)", ls: 1.2 });
+    y += 40;
+    FINGERPRINT.forEach(([id, label], i) => {
+      const m = league.metrics[id];
+      const values = Object.entries(m?.[side] || {}).filter(([, v]) => v && v[0] != null);
+      const cy = y + i * rowH + rowH / 2;
+      if (i % 2 === 0) s += R(pad - 10, cy - rowH / 2 + 2, w - pad * 2 + 20, rowH - 4, { rx: 10, fill: "var(--panel)" });
+      s += T(pad, cy + 7, label, { size: 19, weight: 600, fill: "var(--muted)" });
+      if (!values.length) return;
+      const nums = values.map(([, v]) => v[0]);
+      const lo = Math.min(...nums), hi = Math.max(...nums);
+      // Better to the right: flip where a lower number is better for this side.
+      const flip = (m.better?.[side] ?? 1) < 0;
+      const x = flip ? lin(hi, lo, sx0 + 14, sx1 - 14) : lin(lo, hi, sx0 + 14, sx1 - 14);
+      s += L(sx0, cy, sx1, cy, { stroke: "var(--rule)", sw: 2, cap: "round" });
+      const mean = m[`${side}_mean`];
+      if (mean != null) s += L(x(mean), cy - 11, x(mean), cy + 11, { stroke: "var(--plot-rule)", sw: 2 });
+      for (const [team, v] of values) if (team !== abbr) s += C(x(v[0]), cy, 5, { fill: "var(--faint)", opacity: 0.7 });
+      const mine = m[side]?.[abbr];
+      if (mine) {
+        s += C(x(mine[0]), cy, 17, { fill: "var(--card)", stroke: teamColor(abbr), sw: 2.5 }) + logo(abbr, x(mine[0]) - 13, cy - 13, 26);
+        s += T(w - pad - 120, cy + 7, leagueFmt(id, mine[0]), { size: 19, weight: 750, anchor: "middle", mono: true });
+        s += rankChip(mine[1], values.length, w - pad - 46, cy, { w: 60, h: 26, size: 15 });
+      }
+    });
+    y += FINGERPRINT.length * rowH + 28;
+  });
+  s += T(pad, fr.bottom - 2, "Dots: the other 31 teams. Tick: league average. Ranks of 32, 1st is best.", { size: 17, fill: "var(--muted)" });
+  return wrapCard(fr, s);
+}
+
+// E6 ------------------------------------------------------------ Where they throw
+const DEPTHS = [["deep", "20+ yards"], ["intermediate", "10-19 yards"], ["short", "0-9 yards"], ["behind", "Behind the line"]];
+function cardPassZones(abbr) {
+  const z = DATA.team_zones[abbr], lz = DATA.league_zones;
+  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${DATA.recap_week}`, title: "Where they throw", subtitle: "Every target by depth and side: EPA per target against the league in that zone, and who gets the ball there" });
+  const { pad, w } = fr;
+  const fx0 = pad, fx1 = pad + 1010, fy0 = fr.top + 6, fy1 = fr.bottom - 40;
+  const cw = (fx1 - fx0 - 110) / 3, rh = (fy1 - fy0) / 4;
+  const total = z.zones.reduce((a, c) => a + c[0], 0) || 1, ltotal = lz.reduce((a, c) => a + c[0], 0) || 1;
+  let s = R(fx0 + 110, fy0, fx1 - fx0 - 110, fy1 - fy0, { rx: 16, fill: "var(--panel)" });
+  ["Left", "Middle", "Right"].forEach((side, k) => { s += T(fx0 + 110 + cw * k + cw / 2, fy1 + 30, side, { size: 18, weight: 700, anchor: "middle", fill: "var(--muted)" }); });
+  DEPTHS.forEach(([, label], row) => {
+    const depth = 3 - row, cy = fy0 + rh * row + rh / 2;
+    const [a, b] = label.split(" ").length > 2 ? [label.split(" ").slice(0, 2).join(" "), label.split(" ").slice(2).join(" ")] : [label, ""];
+    s += T(fx0 + 96, cy + (b ? -4 : 6), a, { size: 17, weight: 700, anchor: "end", fill: "var(--muted)" });
+    if (b) s += T(fx0 + 96, cy + 18, b, { size: 17, weight: 700, anchor: "end", fill: "var(--muted)" });
+    for (let side = 0; side < 3; side++) {
+      const k = depth * 3 + side, cell = z.zones[k], lc = lz[k];
+      const x0 = fx0 + 110 + cw * side, y0 = fy0 + rh * row;
+      const epa = cell[0] ? cell[5] / cell[0] : null, lepa = lc[0] ? lc[5] / lc[0] : null;
+      const diff = epa != null && lepa != null ? epa - lepa : null;
+      if (cell[0]) s += R(x0 + 5, y0 + 5, cw - 10, rh - 10, { rx: 12, fill: diff == null ? "var(--chip)" : mix(diff >= 0 ? "var(--pos)" : "var(--neg)", Math.round(8 + Math.min(1, Math.abs(diff) / 0.5) * 34)) });
+      s += T(x0 + 22, y0 + 40, cell[0] ? signed(epa, 2) : "-", { size: 30, weight: 800, mono: true });
+      s += T(x0 + 22, y0 + 64, cell[0] ? `EPA/target · lg ${signed(lepa, 2)}` : "No targets", { size: 14, weight: 600, fill: "var(--muted)" });
+      if (cell[0]) s += T(x0 + 22, y0 + rh - 22, `${cell[0]} tgt · ${pct(cell[0] / total)} · ${pct(cell[1] / cell[0])} caught`, { size: 15, weight: 650, mono: true, fill: "var(--muted)" });
+      const leader = z.leaders[k];
+      if (leader) {
+        s += face(leader[0], x0 + cw - 42, y0 + 42, 24, teamColor(abbr), leader[1]);
+        s += T(x0 + cw - 74, y0 + 36, fit(lastName(leader[1]), cw - 170, 15, 700), { size: 15, weight: 700, anchor: "end" });
+        s += T(x0 + cw - 74, y0 + 56, `${leader[3]} tgt`, { size: 14, anchor: "end", mono: true, fill: "var(--muted)" });
+      }
+    }
+  });
+  s += L(fx0 + 110, fy0 + rh * 3, fx1, fy0 + rh * 3, { stroke: "var(--accent)", sw: 3 }) + T(fx0 + 96, fy0 + rh * 3 + 6, "LOS", { size: 14, weight: 800, anchor: "end", fill: "var(--accent-text)" });
+  // Side panel: the team's totals against the league.
+  const px = fx1 + 50, sum = z.sum;
+  const leagueTargets = ltotal, leagueEpa = lz.reduce((a, c) => a + c[5], 0) / leagueTargets;
+  const deep = (z.zones[9][0] + z.zones[10][0] + z.zones[11][0]) / total, ldeep = (lz[9][0] + lz[10][0] + lz[11][0]) / leagueTargets;
+  // The league's air yards per target: every team's, weighted by its targets.
+  const all = Object.values(DATA.team_zones).map((tz) => tz.sum).filter((x) => x.adot != null && x.targets);
+  const ladot = all.reduce((a, x) => a + x.adot * x.targets, 0) / all.reduce((a, x) => a + x.targets, 0);
+  const rows = [
+    ["EPA per target", signed(sum.epa_per_target, 2), `League ${signed(leagueEpa, 2)}`],
+    ["Air yards per target", num(sum.adot, 1), `League ${num(ladot, 1)}`],
+    ["Catch rate", pct(sum.receptions / (sum.targets || 1)), `League ${pct(lz.reduce((a, c) => a + c[1], 0) / leagueTargets)}`],
+    ["Deep share (20+)", pct(deep), `League ${pct(ldeep)}`],
+    ["Targets, TD, INT", `${sum.targets} · ${sum.touchdowns} · ${sum.interceptions}`, ""],
+  ];
+  const boxH = (fy1 - fy0 - 4 * 12) / rows.length;
+  let py = fy0;
+  rows.forEach(([label, value, note]) => {
+    s += R(px, py, w - pad - px, boxH, { rx: 18, fill: "var(--panel)" });
+    s += T(px + 22, py + 30, label.toUpperCase(), { size: 14, weight: 750, fill: "var(--faint)", ls: 1.1 });
+    s += T(px + 22, py + boxH - 22, value, { size: 32, weight: 800, mono: true });
+    if (note) s += T(w - pad - 22, py + boxH - 24, note, { size: 16, anchor: "end", fill: "var(--muted)" });
+    py += boxH + 12;
+  });
+  return wrapCard(fr, s);
+}
+
+// E7 ------------------------------------------------------------- Where they run
+// The gaps as play-by-play names them: a run "left tackle" goes at the left tackle, so each
+// lineman sits in the middle of his gap's column and the ends run outside the tackles.
+const LANE_KEYS = [["left_end", "Left end", ""], ["left_tackle", "Left tackle", "LT"], ["left_guard", "Left guard", "LG"], ["middle", "Middle", "C"],
+  ["right_guard", "Right guard", "RG"], ["right_tackle", "Right tackle", "RT"], ["right_end", "Right end", ""]];
+function cardRunGaps(abbr) {
+  const t = DATA.teams_cards[abbr];
+  const lanes = LANE_KEYS.map(([key, label, man]) => ({ key, label, man, l: (t.lanes || []).find((x) => x.key === key) }));
+  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${DATA.recap_week}`, title: "Where they run", subtitle: "Designed runs by gap: share of the runs (bar) against the league (line), and how each gap is going" });
+  const { pad, w } = fr;
+  const cw = (w - pad * 2) / lanes.length;
+  const color = teamColor(abbr);
+  const barTop = fr.top + 34, barBottom = fr.top + 216;
+  const maxShare = Math.max(0.3, ...lanes.map((x) => Math.max(x.l?.share ?? 0, x.l?.league_share ?? 0)));
+  const h = lin(0, maxShare, 0, barBottom - barTop);
+  let s = "";
+  lanes.forEach(({ l }, i) => {
+    const cx = pad + cw * i + cw / 2;
+    if (!l) return;
+    s += R(cx - cw * 0.28, barBottom - h(l.share), cw * 0.56, h(l.share), { rx: 8, fill: color, opacity: 0.88 });
+    s += L(cx - cw * 0.36, barBottom - h(l.league_share), cx + cw * 0.36, barBottom - h(l.league_share), { stroke: "var(--fg)", sw: 4, cap: "round" });
+    s += T(cx, barBottom - Math.max(h(l.share), h(l.league_share)) - 12, pct(l.share), { size: 22, weight: 800, anchor: "middle", mono: true });
+  });
+  const ly = barBottom + 36;
+  s += L(pad, ly, w - pad, ly, { stroke: "var(--rule)", sw: 1.5 });
+  lanes.forEach(({ man }, i) => {
+    const cx = pad + cw * i + cw / 2;
+    if (man) s += R(cx - 20, ly - 18, 40, 36, { rx: 8, fill: "var(--chip)", stroke: "var(--border-strong)", sw: 2 }) + T(cx, ly + 6, man, { size: 14, weight: 800, anchor: "middle", fill: "var(--muted)" });
+    else s += T(cx, ly + 6, i === 0 ? "← outside" : "outside →", { size: 14, weight: 700, anchor: "middle", fill: "var(--faint)" });
+  });
+  lanes.forEach(({ label, l }, i) => {
+    const cx = pad + cw * i + cw / 2;
+    s += T(cx, ly + 50, label, { size: 17, weight: 700, anchor: "middle", fill: "var(--muted)" });
+    if (!l) return;
+    const y0 = ly + 66, ph = fr.bottom - y0;
+    s += R(cx - cw / 2 + 8, y0, cw - 16, ph, { rx: 16, fill: "var(--panel)" });
+    const epaColor = rankColor(l.epa_rank, 32);
+    s += T(cx, y0 + 40, signed(l.epa, 2), { size: 28, weight: 800, anchor: "middle", mono: true, fill: mix(epaColor, 55, "var(--fg)") });
+    s += T(cx, y0 + 62, `EPA/run · ${ord(l.epa_rank)}`, { size: 14, weight: 650, anchor: "middle", fill: "var(--muted)" });
+    s += T(cx, y0 + 112, num(l.yards, 1), { size: 24, weight: 800, anchor: "middle", mono: true });
+    s += T(cx, y0 + 132, "yards per carry", { size: 14, anchor: "middle", fill: "var(--muted)" });
+    s += T(cx, y0 + 182, pct(l.successes), { size: 24, weight: 800, anchor: "middle", mono: true });
+    s += T(cx, y0 + 202, `success · ${num(l.plays, 0)} runs`, { size: 14, anchor: "middle", fill: "var(--muted)" });
+  });
+  return wrapCard(fr, s);
+}

@@ -1,7 +1,7 @@
 // C: weekly recurring cards.
 const median = (xs) => { const a = xs.filter((v) => v != null).sort((p, q) => p - q); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
 
-/** Push overlapping markers apart, each tethered to its anchor. */
+/** Push overlapping markers apart, each tethered to its anchor. An item may carry its own bounds. */
 function relax(items, { r, bounds, iterations = 120 }) {
   for (const it of items) { it.x = it.ax; it.y = it.ay; }
   for (let k = 0; k < iterations; k++) {
@@ -20,7 +20,8 @@ function relax(items, { r, bounds, iterations = 120 }) {
     }
     for (const it of items) {
       it.x += (it.ax - it.x) * 0.04; it.y += (it.ay - it.y) * 0.04;
-      if (bounds) { it.x = Math.max(bounds.x0, Math.min(bounds.x1, it.x)); it.y = Math.max(bounds.y0, Math.min(bounds.y1, it.y)); }
+      const b = it.bounds || bounds;
+      if (b) { it.x = Math.max(b.x0, Math.min(b.x1, it.x)); it.y = Math.max(b.y0, Math.min(b.y1, it.y)); }
     }
   }
   return items;
@@ -34,45 +35,22 @@ function axisTicks(lo, hi, step) {
 
 // C1 ------------------------------------------------------------ Landscape
 function cardLandscape(_, opts = {}) {
-  const picked = new Set(opts.hl || []);
   const wk = DATA.recap_week;
   const fr = frame(1600, 900, { kicker: `Through Week ${wk}`, title: "NFL team landscape", subtitle: "Offensive EPA per play versus defensive EPA per play" });
-  const { pad, w } = fr;
   const teams = DATA.landscape;
   const xs = teams.map((t) => t.off[0]), ys = teams.map((t) => t.def[0]);
-  const xr = [Math.min(...xs) - 0.03, Math.max(...xs) + 0.03], yr = [Math.min(...ys) - 0.03, Math.max(...ys) + 0.03];
-  const px0 = pad + 70, px1 = w - pad - 10, py0 = fr.top + 6, py1 = fr.bottom - 50;
-  const x = lin(xr[0], xr[1], px0, px1);
-  const y = lin(yr[0], yr[1], py0, py1); // lower EPA allowed sits higher
-  let s = "";
-  const mx = DATA.league_means.off, my = DATA.league_means.def;
-  s += R(x(mx), py0, px1 - x(mx), y(my) - py0, { fill: mix("var(--pos)", 6) });
-  s += R(px0, y(my), x(mx) - px0, py1 - y(my), { fill: mix("var(--neg)", 6) });
-  for (const v of axisTicks(xr[0], xr[1], 0.1)) {
-    s += L(x(v), py0, x(v), py1, { stroke: "var(--divider)" }) + T(x(v), py1 + 30, signed(v, 1), { size: 18, anchor: "middle", mono: true, fill: "var(--faint)" });
-  }
-  for (const v of axisTicks(yr[0], yr[1], 0.1)) {
-    s += L(px0, y(v), px1, y(v), { stroke: "var(--divider)" }) + T(px0 - 12, y(v) + 6, signed(v, 1), { size: 18, anchor: "end", mono: true, fill: "var(--faint)" });
-  }
-  s += L(x(mx), py0, x(mx), py1, { stroke: "var(--plot-rule)", dash: "8 7", sw: 1.5 }) + L(px0, y(my), px1, y(my), { stroke: "var(--plot-rule)", dash: "8 7", sw: 1.5 });
-  s += T((px0 + px1) / 2, py1 + 62, "Offense: EPA per play →", { size: 19, weight: 650, anchor: "middle", fill: "var(--muted)" });
-  s += `<text transform="translate(${pad + 8},${(py0 + py1) / 2}) rotate(-90)" text-anchor="middle" font-size="19" font-weight="650" fill="var(--muted)">Defense: EPA per play allowed (better ↑)</text>`;
-  const size = 58;
-  const items = teams.map((t) => ({ t, ax: x(t.off[0]), ay: y(t.def[0]), r: size * 0.42 }));
-  relax(items, { r: size * 0.42, bounds: { x0: px0 + size / 2, x1: px1 - size / 2, y0: py0 + size / 2, y1: py1 - size / 2 }, iterations: 80 });
-  for (const it of items) {
-    if (Math.hypot(it.x - it.ax, it.y - it.ay) > 10) s += L(it.ax, it.ay, it.x, it.y, { stroke: "var(--muted)", sw: 1.2 }) + C(it.ax, it.ay, 3, { fill: "var(--muted)" });
-    const on = !picked.size || picked.has(it.t.team);
-    s += on ? logo(it.t.team, it.x - size / 2, it.y - size / 2, size) : `<g opacity="0.22">${logo(it.t.team, it.x - size / 2, it.y - size / 2, size)}</g>`;
-  }
-  for (const it of items) {
-    const t = it.t, tip = [TEAMS[t.team]?.name || t.team, `Offense: ${signed(t.off[0], 2)} EPA per play (${ord(t.off[1])})`, `Defense: ${signed(t.def[0], 2)} allowed (${ord(t.def[1])})`].join("|");
-    s += `<rect class="hit" x="${num(it.x - size / 2, 1)}" y="${num(it.y - size / 2, 1)}" width="${size}" height="${size}" fill="transparent" data-pid="${t.team}" data-tip="${esc(tip)}"/>`;
-  }
-  const boxes = items.map((it) => [it.x - size / 2, it.y - size / 2, it.x + size / 2, it.y + size / 2]);
-  s += quadrantLabels({ px0, px1, py0, py1, mx: x(mx), my: y(my), boxes, labels: [
-    ["Good offense, good defense", mix("var(--pos)", 72, "var(--fg)")], ["Bad offense, good defense"],
-    ["Good offense, bad defense"], ["Bad offense, bad defense", mix("var(--neg)", 72, "var(--fg)")]] });
+  const s = logoScatter(fr, {
+    points: teams.map((t) => ({ id: t.team, x: t.off[0], y: t.def[0], xrank: t.off[1], yrank: t.def[1],
+      tip: [TEAMS[t.team]?.name || t.team, `Offense: ${signed(t.off[0], 2)} EPA per play (${ord(t.off[1])})`, `Defense: ${signed(t.def[0], 2)} allowed (${ord(t.def[1])})`].join("|") })),
+    picked: opts.hl || [],
+    xr: [Math.min(...xs) - 0.03, Math.max(...xs) + 0.03], yr: [Math.min(...ys) - 0.03, Math.max(...ys) + 0.03],
+    xstep: 0.1, ystep: 0.1, xfmt: (v) => signed(v, 1), yfmt: (v) => signed(v, 1), xtip: (v) => signed(v, 2), ytip: (v) => signed(v, 2),
+    yflip: true, // lower EPA allowed sits higher
+    refX: DATA.league_means.off, refY: DATA.league_means.def, shade: true,
+    xlabel: "Offense: EPA per play →", ylabel: "Defense: EPA per play allowed (better ↑)", xshort: "OFF", yshort: "DEF",
+    quadrants: [["Good offense, good defense", mix("var(--pos)", 72, "var(--fg)")], ["Bad offense, good defense"],
+      ["Good offense, bad defense"], ["Bad offense, bad defense", mix("var(--neg)", 72, "var(--fg)")]],
+  });
   return wrapCard(fr, s);
 }
 
@@ -268,7 +246,7 @@ function cardBackfield(_, opts = {}) {
   const fr = frame(1600, 900, { kicker: `Weeks 1-${wk}`, title: "Running back workload", subtitle: "Share of team carries against share of team targets" });
   const s = scatterPlot(fr, {
     points: pool.map((p) => ({ id: p.player_id, x: p.rush_attempt_share, y: p.target_share, name: p.name, team: p.team_abbreviation, face: p.player_id, color: teamColor(p.team_abbreviation) })),
-    highlight: opts.hl ?? defaultBackfield(), xstep: 0.1, ystep: 0.05, xfmt: pct, yfmt: pct,
+    highlight: opts.hl ?? defaultBackfield(), numbers: opts.nums, xstep: 0.1, ystep: 0.05, xfmt: pct, yfmt: pct, xtip: (v) => pct(v, 1), ytip: (v) => pct(v, 1), xshort: "CAR", yshort: "TGT",
     yr: [0, Math.ceil(Math.max(...pool.map((p) => p.target_share)) * 20) / 20],
     refX: median(pool.map((p) => p.rush_attempt_share)), refY: median(pool.map((p) => p.target_share)),
     xlabel: "Carry share \u2192", ylabel: "Target share \u2192",
@@ -286,7 +264,7 @@ function cardRoutes(_, opts = {}) {
   const fr = frame(1600, 900, { kicker: `Weeks 1-${wk} \u00b7 Receivers`, title: "Who is earning targets", subtitle: "Route participation against targets per route run" });
   const s = scatterPlot(fr, {
     points: pool.map((p) => ({ id: p.player_id, x: p.route_participation, y: p.targets_per_route_run, name: p.name, team: p.team_abbreviation, face: p.player_id, color: teamColor(p.team_abbreviation) })),
-    highlight: opts.hl ?? defaultRoutes(), xstep: 0.1, ystep: 0.05, xfmt: pct, yfmt: pct,
+    highlight: opts.hl ?? defaultRoutes(), numbers: opts.nums, xstep: 0.1, ystep: 0.05, xfmt: pct, yfmt: pct, xtip: (v) => pct(v, 1), ytip: (v) => pct(v, 1), xshort: "RTE", yshort: "TPRR",
     xr: [0.5, 1], refX: median(pool.map((p) => p.route_participation)), refY: median(pool.map((p) => p.targets_per_route_run)),
     xlabel: "Route participation \u2192", ylabel: "Targets per route run \u2192",
     key: `Medians of the ${pool.length} receivers with 50+ routes and 50%+ route participation`,
@@ -309,7 +287,7 @@ function cardExpected(_, opts = {}) {
   const fr = frame(1600, 900, { kicker: `Weeks 1-${wk} \u00b7 PPR`, title: `Points against expected: ${XVA_POS[pos]}`, subtitle: "Points per game against expected points per game. Above the line: scoring more than his work predicts." });
   const s = scatterPlot(fr, {
     points: pool.map((p) => ({ id: p.player_id, x: p.expected_fantasy_ppg, y: p.fantasy_ppg, name: p.name, team: p.team_abbreviation, face: p.player_id, color: teamColor(p.team_abbreviation) })),
-    highlight: opts.hl ?? defaultExpected(pos), xstep: 5, ystep: 5, xfmt: (v) => num(v, 0), yfmt: (v) => num(v, 0), xtip: (v) => num(v, 1), ytip: (v) => num(v, 1), diagonal: true,
+    highlight: opts.hl ?? defaultExpected(pos), numbers: opts.nums, xshort: "xPPG", yshort: "PPG", xstep: 5, ystep: 5, xfmt: (v) => num(v, 0), yfmt: (v) => num(v, 0), xtip: (v) => num(v, 1), ytip: (v) => num(v, 1), diagonal: true,
     xlabel: "Expected points per game \u2192", ylabel: "Points per game \u2192",
     key: `Dashed: points equal to expected. ${pool.length} qualified ${XVA_POS[pos]} with 5+ expected points per game`,
     quadrants: [null, ["Scoring above his work", mix("var(--pos)", 72, "var(--fg)")], ["Scoring below his work", mix("var(--neg)", 72, "var(--fg)")], null],
@@ -360,26 +338,26 @@ function cardFinishes(_, opts = {}) {
 // C10 to C13 ---------------------------------------------- The Scatter page's charts
 // The app's Scatter page (frontend/src/constants/scatters.js), as tweet cards: one card
 // per position, the question as the title, its axes, bubble size and corner names.
-// [label, tick format, value format]
+// [label, tick format, value format, short label for a point's numbers]
 const SM = {
-  expected_fantasy_ppg: ["Expected points per game", (v) => num(v, 0), (v) => num(v, 1)],
-  fantasy_ppg: ["Points per game", (v) => num(v, 0), (v) => num(v, 1)],
-  adot: ["Average depth of target", (v) => num(v, 0), (v) => num(v, 1)],
-  target_share: ["Target share", (v) => pct(v), (v) => pct(v, 1)],
-  yards_per_route_run: ["Yards per route run", (v) => num(v, 1), (v) => num(v, 2)],
-  targets_per_route_run: ["Targets per route run", (v) => pct(v), (v) => pct(v, 1)],
-  red_zone_targets: ["Red zone targets", (v) => num(v, 0), (v) => num(v, 0)],
-  receiving_tds: ["Receiving TDs", (v) => num(v, 0), (v) => num(v, 0)],
-  route_participation: ["Route participation", (v) => pct(v), (v) => pct(v, 1)],
-  cpoe: ["Completion % over expected", (v) => signed(v, 0), (v) => signed(v, 1)],
-  epa_per_play: ["EPA per play", (v) => signed(v, 2), (v) => signed(v, 2)],
-  attempts: ["Pass attempts", (v) => num(v, 0), (v) => num(v, 0)],
-  ngs_pass_intended_air_yards: ["Average depth of throw", (v) => num(v, 0), (v) => num(v, 1)],
-  rush_attempt_share: ["Carry share", (v) => pct(v), (v) => pct(v, 1)],
-  rush_att_inside_5: ["Carries inside the 5", (v) => num(v, 0), (v) => num(v, 0)],
-  rushing_tds: ["Rushing TDs", (v) => num(v, 0), (v) => num(v, 0)],
-  rush_yac_per_att: ["Yards after contact per carry", (v) => num(v, 1), (v) => num(v, 2)],
-  ngs_rush_yards_over_expected_per_att: ["Rush yards over expected per carry", (v) => signed(v, 1), (v) => signed(v, 2)],
+  expected_fantasy_ppg: ["Expected points per game", (v) => num(v, 0), (v) => num(v, 1), "xPPG"],
+  fantasy_ppg: ["Points per game", (v) => num(v, 0), (v) => num(v, 1), "PPG"],
+  adot: ["Average depth of target", (v) => num(v, 0), (v) => num(v, 1), "aDOT"],
+  target_share: ["Target share", (v) => pct(v), (v) => pct(v, 1), "TGT"],
+  yards_per_route_run: ["Yards per route run", (v) => num(v, 1), (v) => num(v, 2), "YPRR"],
+  targets_per_route_run: ["Targets per route run", (v) => pct(v), (v) => pct(v, 1), "TPRR"],
+  red_zone_targets: ["Red zone targets", (v) => num(v, 0), (v) => num(v, 0), "RZ TGT"],
+  receiving_tds: ["Receiving TDs", (v) => num(v, 0), (v) => num(v, 0), "TD"],
+  route_participation: ["Route participation", (v) => pct(v), (v) => pct(v, 1), "RTE"],
+  cpoe: ["Completion % over expected", (v) => signed(v, 0), (v) => signed(v, 1), "CPOE"],
+  epa_per_play: ["EPA per play", (v) => signed(v, 2), (v) => signed(v, 2), "EPA"],
+  attempts: ["Pass attempts", (v) => num(v, 0), (v) => num(v, 0), "ATT"],
+  ngs_pass_intended_air_yards: ["Average depth of throw", (v) => num(v, 0), (v) => num(v, 1), "aDOT"],
+  rush_attempt_share: ["Carry share", (v) => pct(v), (v) => pct(v, 1), "CAR"],
+  rush_att_inside_5: ["Carries inside the 5", (v) => num(v, 0), (v) => num(v, 0), "IN-5"],
+  rushing_tds: ["Rushing TDs", (v) => num(v, 0), (v) => num(v, 0), "TD"],
+  rush_yac_per_att: ["Yards after contact per carry", (v) => num(v, 1), (v) => num(v, 2), "YAC"],
+  ngs_rush_yards_over_expected_per_att: ["Rush yards over expected per carry", (v) => signed(v, 1), (v) => signed(v, 2), "RYOE"],
 };
 const XVA = (id) => ({ id, label: "Expected vs actual PPG", question: "Who is scoring what his opportunity was worth?", x: "expected_fantasy_ppg", y: "fantasy_ppg", identity: true,
   corners: { topLeft: "Scoring above his opportunity", bottomRight: "Opportunity says more is coming" } });
@@ -443,12 +421,300 @@ function cardScatter(pos, opts) {
   const xs = rows.map((r) => r[preset.x]), ys = rows.map((r) => r[preset.y]);
   const s = scatterPlot(fr, {
     points: rows.map((r) => ({ id: r.player_id, x: r[preset.x], y: r[preset.y], z: preset.size ? r[preset.size] : null, name: r.name, team: r.team_abbreviation, face: r.player_id, color: teamColor(r.team_abbreviation) })),
-    highlight: opts.hl ?? defaultScatterFaces(pos, opts), xstep: "auto", ystep: "auto", xfmt, yfmt, xtip, ytip,
+    highlight: opts.hl ?? defaultScatterFaces(pos, opts), numbers: opts.nums, xstep: "auto", ystep: "auto", xfmt, yfmt, xtip, ytip, xshort: SM[preset.x][3], yshort: SM[preset.y][3],
     zlabel: preset.size ? SM[preset.size][0] : null, ztip: preset.size ? SM[preset.size][2] : null,
     diagonal: !!preset.identity, refX: preset.identity ? null : median(xs), refY: preset.identity ? null : median(ys),
     xlabel: `${xl} →`, ylabel: `${yl} →`,
     key: preset.identity ? `Dashed: scoring exactly as expected. ${who[0].toUpperCase()}${who.slice(1)}` : `Dashed: medians of ${who}`,
     quadrants: [c.topRight ? [c.topRight, mix("var(--pos)", 72, "var(--fg)")] : null, c.topLeft ? [c.topLeft] : null, c.bottomRight ? [c.bottomRight] : null, c.bottomLeft ? [c.bottomLeft, mix("var(--neg)", 72, "var(--fg)")] : null],
   });
+  return wrapCard(fr, s);
+}
+
+// C14 --------------------------------------------------------- Team scatter plots
+// Team questions on real football numbers, every team as its logo. Each axis is a team
+// metric and a side ("o" the offense, "d" what the defense allowed), turned so better is
+// right and up; a tendency with no better direction keeps its natural order. An axis may
+// name its direction ("faster") where "more" would mislead.
+const TEAM_SCATTERS = [
+  { id: "pass-run", label: "Passing vs rushing EPA", question: "Who can throw it, and who can run it?",
+    x: ["p_epa", "o", "EPA per dropback", "PASS"], y: ["r_epa", "o", "EPA per designed run", "RUN"],
+    corners: { tr: "Both work", tl: "The run game works", br: "The passing game carries them", bl: "Neither works" } },
+  { id: "proe", label: "Pass rate over expected vs EPA per dropback", question: "Who throws more than the situation calls for, and does it work?",
+    x: ["proe", "o", "Pass rate over expected", "PROE"], y: ["p_epa", "o", "EPA per dropback", "EPA/DB"],
+    corners: { tr: "Throws a lot, and it works", tl: "Efficient, but leans on the run", br: "Throws a lot, and it does not work" } },
+  { id: "steady", label: "Success rate vs explosive play rate", question: "Steady, explosive, or both?",
+    x: ["suc", "o", "Success rate", "SR"], y: ["explosive", "o", "Explosive play rate", "XPL"],
+    corners: { tr: "Steady and explosive", tl: "Big plays, little else", br: "Moves the chains, few big plays", bl: "Neither" } },
+  { id: "bend", label: "Defense: success rate vs explosive plays allowed", question: "Which defenses bend but don't break?",
+    x: ["suc", "d", "Success rate allowed", "SR"], y: ["explosive", "d", "Explosive play rate allowed", "XPL"],
+    corners: { tr: "Wins the down, no big plays", tl: "Bends, does not break", br: "Wins the down, gives up big plays", bl: "Bends and breaks" } },
+  { id: "def-pass-run", label: "Defense: pass vs run EPA allowed", question: "Which defenses stop the pass, and which stop the run?",
+    x: ["p_epa", "d", "EPA per dropback allowed", "PASS"], y: ["r_epa", "d", "EPA per designed run allowed", "RUN"],
+    corners: { tr: "Stops both", tl: "Stops the run", br: "Stops the pass", bl: "Stops neither" } },
+  { id: "big-plays", label: "Explosive plays for and against", question: "Who wins the big-play battle?",
+    x: ["explosive", "o", "Explosive play rate, offense", "OFF"], y: ["explosive", "d", "Explosive play rate allowed, defense", "DEF"],
+    corners: { tr: "Hits them, allows few", tl: "Allows few, hits few", br: "Hits them, allows them", bl: "Allows them, hits few" } },
+  { id: "protection", label: "Sack rate vs EPA per dropback", question: "Who keeps the quarterback clean, and does it help?",
+    x: ["sack_rate", "o", "Sack rate", "SACK"], y: ["p_epa", "o", "EPA per dropback", "EPA/DB"],
+    corners: { tr: "Clean pocket, efficient passing", tl: "Efficient despite the sacks", bl: "Sacked and inefficient" } },
+  { id: "pace", label: "Neutral pace vs neutral pass rate", question: "Who plays fast, and who throws when the game is close?",
+    x: ["sec_snap", "o", "Seconds per snap in neutral situations", "PACE", "faster"], y: ["n_pass", "o", "Neutral pass rate", "PASS"],
+    tendency: true, rankNote: "Ranks: 1st is the fastest pace, or the most passing", corners: { tr: "Fast and pass-first", tl: "Slow and pass-first", br: "Fast and run-first", bl: "Slow and run-first" } },
+  { id: "pre-snap", label: "Motion rate vs play action rate", question: "Who moves before the snap, and who fakes the handoff?",
+    x: ["motion", "o", "Motion rate", "MOTION"], y: ["pa", "o", "Play action rate", "PA"],
+    tendency: true, corners: { tr: "Motion and play action", bl: "Little of either" } },
+];
+const teamScatterPreset = (id) => TEAM_SCATTERS.find((t) => t.id === id) ?? TEAM_SCATTERS[0];
+/** Tick and value formats for a team metric's format code. */
+function teamAxisFmt(fmt) {
+  if (fmt?.startsWith("pct")) return [(v) => pct(v), (v) => pct(v, 1)];
+  if (fmt === "sgn2") return [(v) => signed(v, 2), (v) => signed(v, 2)];
+  if (fmt === "pp1") return [(v) => signed(v, 0), (v) => signed(v, 1)];
+  if (fmt === "num2") return [(v) => num(v, 1), (v) => num(v, 2)];
+  return [(v) => num(v, 0), (v) => num(v, 1)];
+}
+function cardTeamScatter(_, opts = {}) {
+  const wk = DATA.recap_week;
+  const preset = teamScatterPreset(opts.chart);
+  const league = DATA.team_league;
+  const axis = ([id, side, label, short, word]) => {
+    const m = league.metrics[id];
+    const better = m.better?.[side] ?? 0;
+    const [fmt, tip] = teamAxisFmt(m.fmt);
+    return { id, side, label, short, word, values: m[side] || {}, mean: m[`${side}_mean`], flip: better < 0, better, fmt, tip };
+  };
+  const ax = axis(preset.x), ay = axis(preset.y);
+  const arrow = (a, dir) => (a.word ? `${a.label} (${a.word} ${dir})` : a.better && !preset.tendency ? `${a.label} (better ${dir})` : `${a.label} ${dir}`);
+  const fr = frame(1600, 900, { kicker: `Through Week ${wk} · All 32 teams`, title: preset.question, subtitle: `${ax.label} against ${lowerFirst(ay.label)}` });
+  const c = preset.corners || {};
+  const good = (text) => (text ? [text, preset.tendency ? null : mix("var(--pos)", 72, "var(--fg)")] : null);
+  const bad = (text) => (text ? [text, preset.tendency ? null : mix("var(--neg)", 72, "var(--fg)")] : null);
+  const s = logoScatter(fr, {
+    points: league.teams.map((team) => {
+      const vx = ax.values[team], vy = ay.values[team];
+      return { id: team, x: vx?.[0], y: vy?.[0], xrank: vx?.[1], yrank: vy?.[1],
+        tip: [TEAMS[team]?.name || team, `${ax.label}: ${ax.tip(vx?.[0])} (${ord(vx?.[1])})`, `${ay.label}: ${ay.tip(vy?.[0])} (${ord(vy?.[1])})`].join("|") };
+    }),
+    picked: opts.hl || [], xstep: "auto", ystep: "auto", xfmt: ax.fmt, yfmt: ay.fmt, xtip: ax.tip, ytip: ay.tip,
+    xflip: ax.flip, yflip: ay.flip, refX: ax.mean, refY: ay.mean, size: 56,
+    xlabel: arrow(ax, "→"), ylabel: arrow(ay, "↑"), xshort: ax.short, yshort: ay.short,
+    key: `Dashed: league averages. ${preset.rankNote ?? (preset.tendency ? "Ranks: 1st does it the most" : "Ranks: 1st is best")}`,
+    quadrants: [good(c.tr), c.tl ? [c.tl] : null, c.br ? [c.br] : null, bad(c.bl)],
+  });
+  return wrapCard(fr, s);
+}
+
+/** A bar from zero, right for positive and left for negative, tinted by sign. */
+function divergingBar(x, zero, cy, h, value, o = {}) {
+  if (value == null) return T(zero, cy + 6, "-", { size: 16, anchor: "middle", fill: "var(--faint)" });
+  const end = x(value), tone = value >= 0 ? "var(--pos)" : "var(--neg)";
+  let s = R(Math.min(zero, end), cy - h / 2, Math.abs(end - zero), h, { rx: 4, fill: mix(tone, o.strength ?? 55) });
+  const label = o.fmt(value), right = value >= 0;
+  s += T(end + (right ? 8 : -8), cy + 6, label, { size: o.size ?? 16, weight: 750, anchor: right ? "start" : "end", mono: true, fill: mix(tone, 55, "var(--fg)") });
+  return s;
+}
+
+// C15 ------------------------------------------------------- Quarterback efficiency
+function cardQbLadder() {
+  const wk = DATA.recap_week;
+  const rows = [...DATA.qb_ladder].sort((a, b) => b.epa_per_play - a.epa_per_play).slice(0, 34);
+  const fr = frame(1200, 1500, { kicker: `Weeks 1-${wk} · Quarterbacks`, title: "Quarterback efficiency", subtitle: "EPA per play and completion % over expected, 15+ attempts a game. Sorted by EPA." });
+  const { pad, w } = fr;
+  const nameW = 330, gap = 40;
+  const ex0 = pad + nameW, ex1 = ex0 + 380, cx0 = ex1 + gap, cx1 = w - pad;
+  const emax = Math.max(0.4, ...rows.map((r) => Math.abs(r.epa_per_play))) * 1.08, cmax = Math.max(8, ...rows.map((r) => Math.abs(r.cpoe ?? 0))) * 1.12;
+  const ex = lin(-emax, emax, ex0 + 40, ex1 - 40), cxs = lin(-cmax, cmax, cx0 + 40, cx1 - 40);
+  let y = fr.top + 2;
+  let s = T((ex0 + ex1) / 2, y + 8, "EPA PER PLAY", { size: 15, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1.4 });
+  s += T((cx0 + cx1) / 2, y + 8, "CPOE", { size: 15, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1.4 });
+  y += 26;
+  const rowH = (fr.bottom - y - 30) / rows.length;
+  const epaMid = median(rows.map((r) => r.epa_per_play)), cpoeMid = median(rows.map((r) => r.cpoe));
+  s += L(ex(0), y, ex(0), y + rowH * rows.length, { stroke: "var(--plot-rule)", sw: 1.2 }) + L(cxs(0), y, cxs(0), y + rowH * rows.length, { stroke: "var(--plot-rule)", sw: 1.2 });
+  s += L(ex(epaMid), y, ex(epaMid), y + rowH * rows.length, { stroke: "var(--plot-rule)", dash: "5 6", sw: 1.2 }) + L(cxs(cpoeMid), y, cxs(cpoeMid), y + rowH * rows.length, { stroke: "var(--plot-rule)", dash: "5 6", sw: 1.2 });
+  rows.forEach((r, i) => {
+    const cy = y + i * rowH + rowH / 2;
+    if (i % 2 === 0) s += R(pad - 8, cy - rowH / 2 + 1, w - pad * 2 + 16, rowH - 2, { rx: 8, fill: "var(--panel)" });
+    s += T(pad + 18, cy + 6, i + 1, { size: 15, weight: 700, anchor: "end", mono: true, fill: "var(--faint)" });
+    s += face(r.player_id, pad + 44, cy, rowH * 0.4, teamColor(r.team_abbreviation), r.name);
+    s += T(pad + 44 + rowH * 0.4 + 12, cy + 6, fit(r.name, nameW - 140, 17, 650), { size: 17, weight: 650 });
+    s += logo(r.team_abbreviation, ex0 - 34, cy - 12, 24);
+    s += divergingBar(ex, ex(0), cy, rowH * 0.56, r.epa_per_play, { fmt: (v) => signed(v, 2), size: 15 });
+    s += divergingBar(cxs, cxs(0), cy, rowH * 0.56, r.cpoe, { fmt: (v) => signed(v, 1), size: 15 });
+  });
+  s += T(pad, fr.bottom - 2, `Dashed: the median of these ${rows.length}. EPA per play counts passes, sacks and runs.`, { size: 16, fill: "var(--muted)" });
+  return wrapCard(fr, s);
+}
+
+// C16 --------------------------------------------------- Before and after contact
+function cardContact() {
+  const wk = DATA.recap_week;
+  const rows = [...DATA.rb_contact].sort((a, b) => b.rush_yac_per_att - a.rush_yac_per_att);
+  const fr = frame(1200, 1500, { kicker: `Weeks 1-${wk} · Running backs`, title: "Who is creating his own yards?", subtitle: `Yards per carry split at first contact. The ${rows.length} backs with the most carries.` });
+  const { pad, w } = fr;
+  const BEFORE = "var(--series-1)", AFTER = "var(--series-4)";
+  let s = legendRow(pad, fr.top + 6, [
+    [(cx, cy) => R(cx - 9, cy - 9, 18, 18, { rx: 4, fill: BEFORE }), "Before contact: the blocking"],
+    [(cx, cy) => R(cx - 9, cy - 9, 18, 18, { rx: 4, fill: AFTER }), "After contact: the back"],
+  ], 18).svg;
+  const nameW = 300, bx0 = pad + nameW, bx1 = w - pad - 250;
+  const max = Math.ceil(Math.max(...rows.map((r) => (r.rush_ybc_per_att || 0) + (r.rush_yac_per_att || 0))));
+  const x = lin(0, max, bx0, bx1);
+  let y = fr.top + 50;
+  s += T(w - pad - 170, y, "RYOE", { size: 14, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1.2 }) + T(w - pad - 70, y, "BROKEN", { size: 14, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1.2 });
+  s += T(w - pad - 170, y + 17, "PER CARRY", { size: 12, weight: 700, anchor: "middle", fill: "var(--faint)" }) + T(w - pad - 70, y + 17, "TACKLES", { size: 12, weight: 700, anchor: "middle", fill: "var(--faint)" });
+  for (let v = 0; v <= max; v += 1) s += T(x(v), y + 10, v, { size: 14, anchor: "middle", mono: true, fill: "var(--faint)" });
+  y += 30;
+  const rowH = (fr.bottom - y - 34) / rows.length;
+  for (let v = 1; v <= max; v += 1) s += L(x(v), y, x(v), y + rowH * rows.length, { stroke: "var(--divider)" });
+  rows.forEach((r, i) => {
+    const cy = y + i * rowH + rowH / 2, bh = rowH * 0.62;
+    if (i % 2 === 0) s += R(pad - 8, cy - rowH / 2 + 1, w - pad * 2 + 16, rowH - 2, { rx: 8, fill: "var(--panel)" });
+    s += face(r.player_id, pad + 18, cy, rowH * 0.42, teamColor(r.team_abbreviation), r.name);
+    s += T(pad + 18 + rowH * 0.42 + 12, cy + 6, fit(r.name, nameW - 110, 17, 650), { size: 17, weight: 650 });
+    s += T(bx0 - 14, cy + 5, r.team_abbreviation, { size: 13, weight: 700, anchor: "end", fill: "var(--faint)" });
+    const a = r.rush_ybc_per_att || 0, b = r.rush_yac_per_att || 0;
+    s += R(x(0), cy - bh / 2, x(a) - x(0) - 1, bh, { rx: 3, fill: BEFORE });
+    s += R(x(a) + 1, cy - bh / 2, x(a + b) - x(a) - 1, bh, { rx: 3, fill: AFTER });
+    if (x(a) - x(0) > 44) s += T((x(0) + x(a)) / 2, cy + 5, num(a, 1), { size: 14, weight: 750, anchor: "middle", mono: true, fill: "#ffffff" });
+    if (x(a + b) - x(a) > 44) s += T((x(a) + x(a + b)) / 2, cy + 5, num(b, 1), { size: 14, weight: 750, anchor: "middle", mono: true, fill: "#0b0d12" });
+    s += T(x(a + b) + 8, cy + 6, num(a + b, 1), { size: 16, weight: 800, mono: true });
+    const ryoe = r.ngs_rush_yards_over_expected_per_att;
+    s += T(w - pad - 170, cy + 6, ryoe == null ? "-" : signed(ryoe, 2), { size: 16, weight: 750, anchor: "middle", mono: true, fill: ryoe == null ? "var(--faint)" : mix(ryoe >= 0 ? "var(--pos)" : "var(--neg)", 60, "var(--fg)") });
+    s += T(w - pad - 70, cy + 6, r.rush_broken_tackles ?? "-", { size: 16, weight: 650, anchor: "middle", mono: true, fill: "var(--muted)" });
+  });
+  s += T(pad, fr.bottom - 2, "Sorted by yards after contact. RYOE: rush yards over expected per carry (Next Gen Stats). Contact: PFR charting.", { size: 15, fill: "var(--muted)" });
+  return wrapCard(fr, s);
+}
+
+// C17 --------------------------------------------------- Next Gen scatter plots
+// Player-tracking and charting questions the site's Scatter page does not ask. Tweet kit
+// only, so unlike C10 to C13 they mirror nothing. [label, tick format, value format, short]
+const NM = {
+  ngs_pass_time_to_throw: ["Time to throw, seconds", (v) => num(v, 1), (v) => num(v, 2), "TTT"],
+  ngs_pass_aggressiveness: ["Aggressiveness: throws into tight windows", (v) => pct(v), (v) => pct(v, 1), "AGG"],
+  ngs_pass_air_yards_to_sticks: ["Air yards past the sticks", (v) => signed(v, 0), (v) => signed(v, 1), "STICKS"],
+  ngs_pass_intended_air_yards: ["Average depth of throw", (v) => num(v, 0), (v) => num(v, 1), "aDOT"],
+  pressure_rate: ["Pressure rate faced", (v) => pct(v), (v) => pct(v, 1), "PRESS"],
+  bad_throw_rate: ["Bad throw rate", (v) => pct(v), (v) => pct(v, 1), "BAD"],
+  epa_per_play: ["EPA per play", (v) => signed(v, 2), (v) => signed(v, 2), "EPA"],
+  cpoe: ["Completion % over expected", (v) => signed(v, 0), (v) => signed(v, 1), "CPOE"],
+  ngs_rush_pct_attempts_eight_defenders: ["Carries against 8+ in the box", (v) => pct(v), (v) => pct(v, 1), "8+ BOX"],
+  ngs_rush_yards_over_expected_per_att: ["Rush yards over expected per carry", (v) => signed(v, 1), (v) => signed(v, 2), "RYOE"],
+  ngs_rush_time_to_los: ["Time to the line of scrimmage, seconds", (v) => num(v, 1), (v) => num(v, 2), "TLOS"],
+  rush_ybc_per_att: ["Yards before contact per carry", (v) => num(v, 1), (v) => num(v, 2), "YBC"],
+  rush_yac_per_att: ["Yards after contact per carry", (v) => num(v, 1), (v) => num(v, 2), "YAC"],
+  ngs_rec_cushion: ["Cushion at the snap, yards", (v) => num(v, 1), (v) => num(v, 2), "CUSH"],
+  ngs_rec_separation: ["Separation at the catch point, yards", (v) => num(v, 1), (v) => num(v, 2), "SEP"],
+  ngs_rec_yac_above_expectation: ["YAC over expected per catch", (v) => signed(v, 1), (v) => signed(v, 2), "YACOE"],
+  adot: ["Average depth of target", (v) => num(v, 0), (v) => num(v, 1), "aDOT"],
+  catch_rate: ["Catch rate", (v) => pct(v), (v) => pct(v, 1), "CATCH"],
+};
+// A corner is [text, "pos" | "neg"] when it is good or bad news, or bare text for a style.
+const NGS_RECEIVER = (p) => [
+  { id: `${p.toLowerCase()}-open`, label: `${p}: Cushion vs separation`, question: "Who gets open, and how much room do corners give him?", x: "ngs_rec_cushion", y: "ngs_rec_separation", size: "targets",
+    corners: { topLeft: ["Pressed and still open", "pos"], topRight: "Room at the snap, and open", bottomLeft: ["Pressed and covered", "neg"] } },
+  { id: `${p.toLowerCase()}-yac`, label: `${p}: Depth vs YAC over expected`, question: "Deep threat or yards-after-catch creator?", x: "adot", y: "ngs_rec_yac_above_expectation", size: "targets",
+    corners: { topLeft: "Creates after the catch", topRight: ["Deep, and still adds after the catch", "pos"] } },
+  { id: `${p.toLowerCase()}-hands`, label: `${p}: Depth vs catch rate`, question: "Who catches the ball at every depth?", x: "adot", y: "catch_rate", size: "targets",
+    corners: { topRight: ["Deep and reliable", "pos"], bottomRight: "Deep, low catch rate", topLeft: "Short and reliable" } },
+];
+const NGS_SCATTERS = [
+  { pos: "QB", id: "qb-hold", label: "QB: Time to throw vs aggressiveness", question: "Who holds it, and who throws into tight windows?", x: "ngs_pass_time_to_throw", y: "ngs_pass_aggressiveness", size: "attempts",
+    corners: { topRight: "Holds it, throws into tight windows", bottomLeft: "Gets it out fast and safe", topLeft: "Quick and aggressive", bottomRight: "Holds it, throws to open men" } },
+  { pos: "QB", id: "qb-sticks", label: "QB: Air yards past the sticks vs EPA", question: "Who throws past the sticks, and does it pay?", x: "ngs_pass_air_yards_to_sticks", y: "epa_per_play", size: "attempts",
+    corners: { topRight: ["Past the sticks, and it pays", "pos"], topLeft: "Short of the sticks, still efficient", bottomRight: "Past the sticks, not efficient" } },
+  { pos: "QB", id: "qb-pressure", label: "QB: Pressure faced vs EPA", question: "Who stays efficient under pressure?", x: "pressure_rate", y: "epa_per_play", size: "attempts",
+    corners: { topRight: ["Pressured and still efficient", "pos"], bottomRight: ["Pressured and struggling", "neg"], topLeft: "Clean pocket, efficient" } },
+  { pos: "QB", id: "qb-accuracy", label: "QB: Bad throw rate vs CPOE", question: "Accurate by the charting and by the model?", x: "bad_throw_rate", y: "cpoe", size: "attempts",
+    corners: { topLeft: ["Accurate both ways", "pos"], bottomRight: ["Inaccurate both ways", "neg"] } },
+  { pos: "RB", id: "rb-boxes", label: "RB: Stacked boxes vs RYOE", question: "Who still gains against stacked boxes?", x: "ngs_rush_pct_attempts_eight_defenders", y: "ngs_rush_yards_over_expected_per_att", size: "carries",
+    corners: { topRight: ["Stacked boxes, still gaining", "pos"], bottomRight: ["Stacked boxes, stuffed", "neg"], topLeft: "Light boxes, gaining" } },
+  { pos: "RB", id: "rb-contact", label: "RB: Before vs after contact", question: "Is it the blocking, or the back?", x: "rush_ybc_per_att", y: "rush_yac_per_att", size: "carries",
+    corners: { topLeft: "The back is doing it", bottomRight: "The line is doing it", topRight: ["Both", "pos"], bottomLeft: ["Neither", "neg"] } },
+  { pos: "RB", id: "rb-hole", label: "RB: Time to the line vs RYOE", question: "Who hits the hole, and does it work?", x: "ngs_rush_time_to_los", y: "ngs_rush_yards_over_expected_per_att", size: "carries", xflip: true,
+    corners: { topRight: ["Hits it fast, and gains", "pos"], topLeft: "Patient, and gains", bottomRight: "Hits it fast, little gain" } },
+  ...NGS_RECEIVER("WR").map((c) => ({ ...c, pos: "WR" })),
+  ...NGS_RECEIVER("TE").map((c) => ({ ...c, pos: "TE" })),
+];
+const ngsPreset = (id) => NGS_SCATTERS.find((c) => c.id === id) ?? NGS_SCATTERS[0];
+const cornerLabel = (c) => (!c ? null : typeof c === "string" ? [c] : [c[0], mix(c[1] === "neg" ? "var(--neg)" : "var(--pos)", 72, "var(--fg)")]);
+function ngsRows(preset, cap) {
+  const rows = (DATA.ngs_pool[preset.pos] || []).filter((r) => r[preset.x] != null && r[preset.y] != null);
+  return cap === "all" ? rows : rows.slice(0, Number(cap) || 50);
+}
+function defaultNgsFaces(opts) {
+  const preset = ngsPreset(opts.chart);
+  const rows = ngsRows(preset, opts.cap);
+  if (!rows.length) return [];
+  const xs = rows.map((r) => r[preset.x]), ys = rows.map((r) => r[preset.y]);
+  const sx = (Math.max(...xs) - Math.min(...xs)) || 1, sy = (Math.max(...ys) - Math.min(...ys)) || 1, mx = median(xs), my = median(ys);
+  const far = [...rows].sort((a, b) => Math.hypot((b[preset.x] - mx) / sx, (b[preset.y] - my) / sy) - Math.hypot((a[preset.x] - mx) / sx, (a[preset.y] - my) / sy));
+  return [...new Set([...rows.slice(0, 8), ...far.slice(0, 6)].map((r) => r.player_id))];
+}
+function cardNgsScatter(_, opts) {
+  const wk = DATA.recap_week;
+  const preset = ngsPreset(opts.chart);
+  const rows = ngsRows(preset, opts.cap);
+  const pos = preset.pos;
+  const [xl, xfmt, xtip, xshort] = NM[preset.x], [yl, yfmt, ytip, yshort] = NM[preset.y];
+  const who = opts.cap === "all" ? `all ${rows.length} qualified ${POS_PLURAL[pos]}` : `the top ${rows.length} ${POS_PLURAL[pos]} in points`;
+  const size = { attempts: "pass attempts", carries: "carries", targets: "targets" }[preset.size];
+  const fr = frame(1600, 900, { kicker: `Weeks 1-${wk} · ${POS_PLURAL[pos]} · Next Gen Stats and charting`, title: preset.question, subtitle: `${xl} against ${lowerFirst(yl)}${size ? `. Dot size: ${size}` : ""}` });
+  const c = preset.corners || {};
+  const s = scatterPlot(fr, {
+    points: rows.map((r) => ({ id: r.player_id, x: r[preset.x], y: r[preset.y], z: preset.size ? r[preset.size] : null, name: r.name, team: r.team_abbreviation, face: r.player_id, color: teamColor(r.team_abbreviation) })),
+    highlight: opts.hl ?? defaultNgsFaces(opts), numbers: opts.nums, xstep: "auto", ystep: "auto", xfmt, yfmt, xtip, ytip, xshort, yshort,
+    xflip: !!preset.xflip, zlabel: size ? size[0].toUpperCase() + size.slice(1) : null, ztip: (v) => num(v, 0),
+    refX: median(rows.map((r) => r[preset.x])), refY: median(rows.map((r) => r[preset.y])),
+    xlabel: `${xl} ${preset.xflip ? "(quicker →)" : "→"}`, ylabel: `${yl} →`, key: `Dashed: medians of ${who}`,
+    quadrants: [c.topRight, c.topLeft, c.bottomRight, c.bottomLeft].map(cornerLabel),
+  });
+  return wrapCard(fr, s);
+}
+
+// C18 ---------------------------------------------------- How every offense plays
+// Tendencies, not grades, so one hue: darker does it more (or plays faster).
+const TENDENCY_COLS = [
+  ["proe", "Pass over", "expected", (v) => signed(v, 1)], ["n_pass", "Neutral", "pass rate", (v) => pct(v)],
+  ["sec_snap", "Seconds", "per snap", (v) => num(v, 1)], ["gun", "Shotgun", "", (v) => pct(v)], ["motion", "Motion", "", (v) => pct(v)],
+  ["pa", "Play", "action", (v) => pct(v)], ["rpo", "RPO", "", (v) => pct(v)], ["screen", "Screen", "", (v) => pct(v)],
+  ["nohud", "No", "huddle", (v) => pct(v)], ["adot", "Air yards", "per pass", (v) => num(v, 1)],
+];
+function cardTendencies(_, opts = {}) {
+  const wk = DATA.recap_week;
+  const league = DATA.team_league;
+  const sortBy = TENDENCY_COLS.find((c) => c[0] === opts.sort) ?? TENDENCY_COLS[0];
+  const fr = frame(1200, 1500, { kicker: `Through Week ${wk} · All 32 offenses`, title: "How every offense plays", subtitle: `Darker: does it more, or plays faster. Sorted by ${lowerFirst(`${sortBy[1]} ${sortBy[2]}`.trim())}.` });
+  const { pad, w } = fr;
+  const rank = (id, team) => league.metrics[id]?.o?.[team]?.[1];
+  const teams = [...league.teams].sort((a, b) => (rank(sortBy[0], a) ?? 99) - (rank(sortBy[0], b) ?? 99));
+  const lead = 150, cw = (w - pad * 2 - lead) / TENDENCY_COLS.length;
+  let y = fr.top - 6;
+  let s = "";
+  TENDENCY_COLS.forEach(([id, l1, l2], i) => {
+    const cx = pad + lead + cw * i + cw / 2, on = id === sortBy[0];
+    s += T(cx, y + 12, l1, { size: 15, weight: on ? 800 : 700, anchor: "middle", fill: on ? "var(--fg)" : "var(--muted)" });
+    if (l2) s += T(cx, y + 31, l2, { size: 15, weight: on ? 800 : 700, anchor: "middle", fill: on ? "var(--fg)" : "var(--muted)" });
+    if (on) s += R(cx - 22, y + 40, 44, 4, { rx: 2, fill: "var(--accent)" });
+  });
+  y += 52;
+  const rowH = (fr.bottom - y - 28) / teams.length;
+  teams.forEach((team, r) => {
+    const cy = y + r * rowH + rowH / 2;
+    s += T(pad + 14, cy + 5, r + 1, { size: 14, weight: 700, anchor: "end", mono: true, fill: "var(--faint)" });
+    s += logo(team, pad + 24, cy - rowH * 0.4, rowH * 0.8);
+    s += T(pad + 30 + rowH * 0.8, cy + 6, team, { size: 17, weight: 800 });
+    TENDENCY_COLS.forEach(([id, , , fmt], i) => {
+      const cell = league.metrics[id]?.o?.[team];
+      const x0 = pad + lead + cw * i;
+      if (!cell) { s += T(x0 + cw / 2, cy + 5, "-", { size: 15, anchor: "middle", fill: "var(--faint)" }); return; }
+      const strength = Math.round(6 + 64 * (1 - (cell[1] - 1) / 31));
+      s += R(x0 + 3, cy - rowH / 2 + 2, cw - 6, rowH - 4, { rx: 6, fill: mix("var(--series-1)", strength) });
+      s += T(x0 + cw / 2, cy + 6, fmt(cell[0]), { size: 15, weight: 700, anchor: "middle", mono: true });
+    });
+  });
+  s += T(pad, fr.bottom - 2, "Pass over expected: pass rate above what the down, distance and score call for. Pace and pass rate: neutral situations.", { size: 15, fill: "var(--muted)" });
   return wrapCard(fr, s);
 }

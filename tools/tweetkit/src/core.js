@@ -16,7 +16,11 @@ const theme = () => {
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const num = (v, d = 1) => (v == null || Number.isNaN(v) ? "-" : Number(v).toFixed(d));
 const pct = (v, d = 0) => (v == null ? "-" : `${(v * 100).toFixed(d)}%`);
-const signed = (v, d = 1) => (v == null ? "-" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(d)}`);
+const signed = (v, d = 1) => {
+  if (v == null) return "-";
+  const shown = Math.abs(v).toFixed(d);
+  return `${Number(shown) === 0 ? "" : v > 0 ? "+" : "−"}${shown}`;
+};
 const ord = (n) => {
   if (n == null) return "-";
   const s = ["th", "st", "nd", "rd"], v = n % 100;
@@ -320,11 +324,70 @@ function rankChip(rank, of, cx, cy, o = {}) {
 }
 
 /**
+ * A point's label: its name, and under it (when `line` is given) its actual values, e.g.
+ * "aDOT 11.2 · TGT 31.5%". Centred on cx with its top at y. Returns { svg, w, h }.
+ */
+function valueTag(cx, y, name, line, ring) {
+  const nw = textWidth(name, 15, 700), lw = line ? textWidth(line, 14, 600, true) : 0;
+  const w = Math.max(nw, lw) + (line ? 18 : 10), h = line ? 42 : 20;
+  let svg = R(cx - w / 2, y, w, h, { rx: line ? 9 : 6, fill: "var(--card)", opacity: line ? 0.94 : 0.86, ...(line ? { stroke: ring, sw: 1.5 } : {}) });
+  svg += T(cx, y + 15, name, { size: 15, weight: 700, anchor: "middle" });
+  if (line) svg += T(cx, y + 34, line, { size: 14, weight: 600, anchor: "middle", mono: true, fill: "var(--muted)" });
+  return { svg, w, h };
+}
+/**
+ * Put each tag where it covers the least of the chart (other markers, tags already placed,
+ * and lightly, dots): beside its marker (below, above, right, left), then at its corners,
+ * then pushed further out, each costing a little more so the nearest clear spot wins.
+ * Markers never move, so picking a point leaves the rest of the chart where it was.
+ * tags: [{cx, cy, half, w, h}], half being the marker's half-size. Sets tag.box, and
+ * tag.far when it sits away from its marker and wants a connector.
+ */
+function placeTags(tags, { markers = [], dots = [], bounds }) {
+  const area = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  const placed = [];
+  for (const t of tags) {
+    const slide = (x0) => Math.max(bounds.x0, Math.min(bounds.x1 - t.w, x0));
+    const { cx, cy, half, w, h } = t;
+    const near = [[slide(cx - w / 2), cy + half + 4], [slide(cx - w / 2), cy - half - 4 - h], [cx + half + 8, cy - h / 2], [cx - half - 8 - w, cy - h / 2]];
+    const corners = [[cx + half * 0.7, cy + half * 0.7], [cx + half * 0.7, cy - half * 0.7 - h], [cx - half * 0.7 - w, cy + half * 0.7], [cx - half * 0.7 - w, cy - half * 0.7 - h]];
+    const out = 36;
+    const far = [[slide(cx - w / 2), cy + half + 4 + out], [slide(cx - w / 2), cy - half - 4 - h - out], [cx + half + 8 + out, cy - h / 2], [cx - half - 8 - w - out, cy - h / 2]];
+    const spots = [...near.map((p, k) => [...p, k * 40, false]), ...corners.map((p, k) => [...p, 180 + k * 20, false]), ...far.map((p, k) => [...p, 420 + k * 20, true])];
+    let best = null;
+    for (const [x0, y0, pref, isFar] of spots) {
+      const box = [x0, y0, x0 + w, y0 + h];
+      const room = [x0 - 4, y0 - 4, x0 + w + 4, y0 + h + 4]; // scored with a little air around it
+      let cost = pref;
+      for (const m of markers) if (m !== t.marker) cost += area(room, m);
+      for (const d of dots) cost += area(room, d) * 0.3;
+      for (const p of placed) cost += area(room, p) * 3;
+      cost += 2000 * (Math.max(0, bounds.x0 - box[0]) + Math.max(0, box[2] - bounds.x1) + Math.max(0, bounds.y0 - box[1]) + Math.max(0, box[3] - bounds.y1));
+      if (!best || cost < best.cost) best = { cost, box, far: isFar };
+    }
+    t.box = best.box;
+    t.far = best.far;
+    placed.push(best.box);
+  }
+  return tags;
+}
+/** A thin line from a marker to a tag set away from it, to the nearest point of the tag. */
+function tagConnector(t) {
+  const [x0, y0, x1, y1] = t.box;
+  const px = Math.max(x0, Math.min(x1, t.cx)), py = Math.max(y0, Math.min(y1, t.cy));
+  return L(t.cx, t.cy, px, py, { stroke: "var(--muted)", sw: 1.4 });
+}
+/** "aDOT 11.2 · TGT 31.5%": a point's x and y in its chart's short labels. */
+const valueLine = (cfg, p) => `${cfg.xshort} ${(cfg.xtip ?? cfg.xfmt)(p.x)} · ${cfg.yshort} ${(cfg.ytip ?? cfg.yfmt)(p.y)}`;
+
+/**
  * A scatter card's plot: grid, tick labels, a par diagonal or dashed reference lines, the
  * key, axis titles, every point as a dot, and the highlighted ones as faces with names,
  * nudged apart and tied back to their dot. points: [{id, x, y, name, face, color}];
- * highlight: ids in the order to draw; quadrants: four labels (or null) for the corners
- * top right, top left, bottom right, bottom left.
+ * highlight: ids in the order to draw; numbers: ids whose faces also print their actual
+ * x and y (in xshort/yshort); quadrants: four labels (or null) for the corners top right,
+ * top left, bottom right, bottom left. xflip/yflip run an axis high to low, for a stat
+ * where lower is better.
  */
 /** A tick step that gives about six ticks across [lo, hi]. */
 function niceStep(lo, hi, ticks = 6) {
@@ -341,7 +404,8 @@ function scatterPlot(fr, cfg) {
   if (cfg.ystep === "auto") cfg = { ...cfg, ystep: niceStep(Math.min(...pts.map((p) => p.y)), Math.max(...pts.map((p) => p.y))) };
   const xr = cfg.xr ?? span(pts.map((p) => p.x), cfg.xstep), yr = cfg.yr ?? span(pts.map((p) => p.y), cfg.ystep);
   if (cfg.diagonal) { const lo = Math.min(xr[0], yr[0]), hi = Math.max(xr[1], yr[1]); xr[0] = yr[0] = lo; xr[1] = yr[1] = hi; }
-  const x = lin(xr[0], xr[1], px0, px1), y = lin(yr[0], yr[1], py1, py0);
+  const x = cfg.xflip ? lin(xr[1], xr[0], px0, px1) : lin(xr[0], xr[1], px0, px1);
+  const y = cfg.yflip ? lin(yr[1], yr[0], py1, py0) : lin(yr[0], yr[1], py1, py0);
   const dashed = { stroke: "var(--plot-rule)", dash: "8 7", sw: 1.5 };
   let s = "";
   for (const v of axisTicks(xr[0], xr[1], cfg.xstep)) s += L(x(v), py0, x(v), py1) + T(x(v), py1 + 30, cfg.xfmt(v), { size: 18, anchor: "middle", mono: true, fill: "var(--faint)" });
@@ -355,7 +419,9 @@ function scatterPlot(fr, cfg) {
     const kw = textWidth(cfg.key, 17);
     s += L(px1 - kw - 52, fr.top + 8, px1 - kw - 18, fr.top + 8, dashed) + T(px1, fr.top + 14, cfg.key, { size: 17, anchor: "end", fill: "var(--muted)" });
   }
-  const hl = cfg.highlight.filter((id) => pts.some((p) => p.id === id));
+  // A point with its numbers shown always gets a face too.
+  const numbered = new Set((cfg.numbers || []).filter((id) => pts.some((p) => p.id === id)));
+  const hl = [...new Set([...cfg.highlight, ...numbered])].filter((id) => pts.some((p) => p.id === id));
   const hlSet = new Set(hl);
   // Bubble size, where the chart has one, on the dots only: faces stay one size.
   const sizes = pts.map((p) => p.z).filter((v) => v != null);
@@ -366,27 +432,104 @@ function scatterPlot(fr, cfg) {
   relax(items, { r: r + 15, bounds: { x0: px0 + r + 10, x1: px1 - r - 10, y0: py0 + r + drop, y1: py1 - r - 10 } });
   for (const it of items) { it.y -= drop; it.ay -= drop; }
   for (const it of items) if (Math.hypot(it.x - it.ax, it.y - it.ay) > 8) s += L(it.ax, it.ay, it.x, it.y, { stroke: "var(--muted)", sw: 1.4 }) + C(it.ax, it.ay, 4, { fill: "var(--muted)" });
-  if (cfg.quadrants) {
-    const boxes = items.map((it) => [it.x - r, it.y - r, it.x + r, it.y + r + 22]);
-    s += quadrantLabels({ px0, px1, py0, py1, mx: cfg.refX != null ? x(cfg.refX) : (px0 + px1) / 2, my: cfg.refY != null ? y(cfg.refY) : (py0 + py1) / 2, boxes, labels: cfg.quadrants });
-  }
+  // A face with its numbers trades its name for a two-line tag, put where it covers least.
   const surnames = {};
   for (const it of items) surnames[lastName(it.p.name)] = (surnames[lastName(it.p.name)] || 0) + 1;
+  const nameOf = (it) => (surnames[lastName(it.p.name)] > 1 ? shortName(it.p.name) : lastName(it.p.name));
+  for (const it of items) it.marker = [it.x - r, it.y - r, it.x + r, it.y + r];
+  const tags = items.filter((it) => numbered.has(it.p.id)).map((it) => {
+    const tag = valueTag(0, 0, nameOf(it), valueLine(cfg, it.p), "");
+    return { it, cx: it.x, cy: it.y, half: r - 1, w: tag.w, h: tag.h, marker: it.marker };
+  });
+  const names = items.filter((it) => !numbered.has(it.p.id)).map((it) => { const w = textWidth(nameOf(it), 15, 700) + 10; return [it.x - w / 2, it.y + r + 3, it.x + w / 2, it.y + r + 23]; });
+  placeTags(tags, { markers: [...items.map((it) => it.marker), ...names], dots: pts.filter((p) => !hlSet.has(p.id)).map((p) => [x(p.x) - 7, y(p.y) - 7, x(p.x) + 7, y(p.y) + 7]), bounds: { x0: px0, x1: px1, y0: py0, y1: py1 } });
+  for (const t of tags) if (t.far) s += tagConnector(t);
+  if (cfg.quadrants) {
+    const boxes = [...items.map((it) => [it.x - r, it.y - r, it.x + r, it.y + r + 22]), ...tags.map((t) => t.box)];
+    s += quadrantLabels({ px0, px1, py0, py1, mx: cfg.refX != null ? x(cfg.refX) : (px0 + px1) / 2, my: cfg.refY != null ? y(cfg.refY) : (py0 + py1) / 2, boxes, labels: cfg.quadrants });
+  }
   for (const it of items) {
     s += face(it.p.face, it.x, it.y, r, it.p.color, it.p.name);
-    const nm = surnames[lastName(it.p.name)] > 1 ? shortName(it.p.name) : lastName(it.p.name);
-    const tw = textWidth(nm, 15, 700) + 10;
-    s += R(it.x - tw / 2, it.y + r + 3, tw, 20, { rx: 6, fill: "var(--card)", opacity: 0.86 }) + T(it.x, it.y + r + 18, nm, { size: 15, weight: 700, anchor: "middle" });
+    if (!numbered.has(it.p.id)) s += valueTag(it.x, it.y + r + 3, nameOf(it), null).svg;
   }
-  // Invisible hover targets on the review page: who each point is, and a click adds or
-  // removes his face. They draw nothing in a PNG.
-  const name = (label) => String(label).replace(/\s*→\s*$/, "");
+  for (const t of tags) s += valueTag((t.box[0] + t.box[2]) / 2, t.box[1], nameOf(t.it), valueLine(cfg, t.it.p), t.it.p.color).svg;
+  // Invisible hover targets on the review page: who each point is, and a click cycles his
+  // face and numbers (clickStep in app.js). They draw nothing in a PNG. An axis label's
+  // direction ("→", "(quicker →)") is dropped from the tooltip.
+  const name = (label) => String(label).replace(/\s*\([^)]*[→↑]\)\s*$/, "").replace(/\s*[→↑]\s*$/, "");
   const tipOf = (p) => (p.tip ?? [`${p.name}${p.team ? ` (${p.team})` : ""}`, `${name(cfg.xlabel)}: ${(cfg.xtip ?? cfg.xfmt)(p.x)}`, `${name(cfg.ylabel)}: ${(cfg.ytip ?? cfg.yfmt)(p.y)}`,
     ...(p.z != null && cfg.zlabel ? [`${cfg.zlabel}: ${(cfg.ztip ?? num)(p.z)}`] : [])]).join("|");
   const placed = Object.fromEntries(items.map((it) => [it.p.id, it]));
   for (const p of pts) {
     const it = placed[p.id];
     s += `<circle class="hit" cx="${num(it ? it.x : x(p.x), 1)}" cy="${num(it ? it.y : y(p.y), 1)}" r="${it ? r + 3 : Math.max(11, dotR(p) + 3)}" fill="transparent" data-pid="${esc(p.id)}" data-tip="${esc(tipOf(p))}"/>`;
+  }
+  return s;
+}
+
+/**
+ * A team scatter: every team as its logo. Picked teams (`picked`) stay bright and carry a
+ * tag with their actual values and ranks; the rest fade. Nothing picked: every logo bright.
+ * points: [{id, x, y, tip, xrank, yrank}]. xr/yr fix the ranges (else padded to the data);
+ * xflip/yflip run an axis high to low; refX/refY draw dashed reference lines; shade tints
+ * the top-right and bottom-left quadrants; quadrants as in scatterPlot.
+ */
+function logoScatter(fr, cfg) {
+  const { pad, w } = fr;
+  const px0 = pad + 70, px1 = w - pad - 10, py0 = fr.top + (cfg.key ? 34 : 6), py1 = fr.bottom - 50;
+  const pts = cfg.points.filter((p) => p.x != null && p.y != null);
+  const padded = (vals, step) => {
+    const lo = Math.min(...vals), hi = Math.max(...vals), m = (hi - lo) * 0.06 || step;
+    return [lo - m, hi + m];
+  };
+  const xstep = cfg.xstep === "auto" || cfg.xstep == null ? niceStep(Math.min(...pts.map((p) => p.x)), Math.max(...pts.map((p) => p.x))) : cfg.xstep;
+  const ystep = cfg.ystep === "auto" || cfg.ystep == null ? niceStep(Math.min(...pts.map((p) => p.y)), Math.max(...pts.map((p) => p.y))) : cfg.ystep;
+  const xr = cfg.xr ?? padded(pts.map((p) => p.x), xstep), yr = cfg.yr ?? padded(pts.map((p) => p.y), ystep);
+  const x = cfg.xflip ? lin(xr[1], xr[0], px0, px1) : lin(xr[0], xr[1], px0, px1);
+  const y = cfg.yflip ? lin(yr[1], yr[0], py1, py0) : lin(yr[0], yr[1], py1, py0);
+  const dashed = { stroke: "var(--plot-rule)", dash: "8 7", sw: 1.5 };
+  const mx = cfg.refX != null ? x(cfg.refX) : (px0 + px1) / 2, my = cfg.refY != null ? y(cfg.refY) : (py0 + py1) / 2;
+  let s = "";
+  if (cfg.shade) s += R(mx, py0, px1 - mx, my - py0, { fill: mix("var(--pos)", 6) }) + R(px0, my, mx - px0, py1 - my, { fill: mix("var(--neg)", 6) });
+  for (const v of axisTicks(xr[0], xr[1], xstep)) s += L(x(v), py0, x(v), py1) + T(x(v), py1 + 30, cfg.xfmt(v), { size: 18, anchor: "middle", mono: true, fill: "var(--faint)" });
+  for (const v of axisTicks(yr[0], yr[1], ystep)) s += L(px0, y(v), px1, y(v)) + T(px0 - 12, y(v) + 6, cfg.yfmt(v), { size: 18, anchor: "end", mono: true, fill: "var(--faint)" });
+  if (cfg.refX != null) s += L(mx, py0, mx, py1, dashed);
+  if (cfg.refY != null) s += L(px0, my, px1, my, dashed);
+  s += T((px0 + px1) / 2, py1 + 62, cfg.xlabel, { size: 19, weight: 650, anchor: "middle", fill: "var(--muted)" });
+  s += `<text transform="translate(${pad + 8},${(py0 + py1) / 2}) rotate(-90)" text-anchor="middle" font-size="19" font-weight="650" fill="var(--muted)">${esc(cfg.ylabel)}</text>`;
+  if (cfg.key) {
+    const kw = textWidth(cfg.key, 17);
+    s += L(px1 - kw - 52, fr.top + 8, px1 - kw - 18, fr.top + 8, dashed) + T(px1, fr.top + 14, cfg.key, { size: 17, anchor: "end", fill: "var(--muted)" });
+  }
+  const size = cfg.size ?? 58;
+  const picked = new Set((cfg.picked || []).filter((id) => pts.some((p) => p.id === id)));
+  const part = (v, fmt, rank) => `${fmt(v)}${rank ? ` (${ord(rank)})` : ""}`;
+  const lineOf = (p) => `${cfg.xshort} ${part(p.x, cfg.xtip ?? cfg.xfmt, p.xrank)} · ${cfg.yshort} ${part(p.y, cfg.ytip ?? cfg.yfmt, p.yrank)}`;
+  const items = pts.map((p) => ({ p, ax: x(p.x), ay: y(p.y), r: size * 0.42 }));
+  relax(items, { r: size * 0.42, bounds: { x0: px0 + size / 2, x1: px1 - size / 2, y0: py0 + size / 2, y1: py1 - size / 2 }, iterations: 80 });
+  for (const it of items) it.marker = [it.x - size * 0.42, it.y - size * 0.42, it.x + size * 0.42, it.y + size * 0.42];
+  const tags = items.filter((it) => picked.has(it.p.id)).map((it) => {
+    const tag = valueTag(0, 0, nickname(it.p.id), lineOf(it.p), "");
+    return { it, cx: it.x, cy: it.y, half: size * 0.42, w: tag.w, h: tag.h, marker: it.marker };
+  });
+  placeTags(tags, { markers: items.map((it) => it.marker), bounds: { x0: px0, x1: px1, y0: py0, y1: py1 } });
+  const draw = (it) => {
+    let out = "";
+    if (Math.hypot(it.x - it.ax, it.y - it.ay) > 10) out += L(it.ax, it.ay, it.x, it.y, { stroke: "var(--muted)", sw: 1.2 }) + C(it.ax, it.ay, 3, { fill: "var(--muted)" });
+    const img = logo(it.p.id, it.x - size / 2, it.y - size / 2, size);
+    return out + (!picked.size || picked.has(it.p.id) ? img : `<g opacity="0.22">${img}</g>`);
+  };
+  // Faded logos first, then the picked ones, then their tags, so a tag is never drawn under a logo.
+  for (const it of items) if (!picked.has(it.p.id)) s += draw(it);
+  for (const t of tags) if (t.far) s += tagConnector(t);
+  for (const it of items) if (picked.has(it.p.id)) s += draw(it);
+  for (const t of tags) s += valueTag((t.box[0] + t.box[2]) / 2, t.box[1], nickname(t.it.p.id), lineOf(t.it.p), teamColor(t.it.p.id)).svg;
+  for (const it of items) {
+    s += `<rect class="hit" x="${num(it.x - size / 2, 1)}" y="${num(it.y - size / 2, 1)}" width="${size}" height="${size}" fill="transparent" data-pid="${it.p.id}" data-tip="${esc(it.p.tip)}"/>`;
+  }
+  if (cfg.quadrants) {
+    const boxes = [...items.map((it) => [it.x - size / 2, it.y - size / 2, it.x + size / 2, it.y + size / 2]), ...tags.map((t) => t.box)];
+    s += quadrantLabels({ px0, px1, py0, py1, mx, my, boxes, labels: cfg.quadrants });
   }
   return s;
 }

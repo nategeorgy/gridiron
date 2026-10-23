@@ -9,14 +9,22 @@ const FINISH_OPTIONS = [["QB", "Quarterbacks"], ["RB", "Running backs"], ["WR", 
 const teamPool = () => DATA.landscape.map((t) => ({ id: t.team, name: TEAMS[t.team]?.name || t.team }));
 const rows = (list) => list.map((p) => ({ id: p.player_id, name: p.name, team: p.team_abbreviation ?? p.team }));
 const CAP_OPTIONS = [["25", "Top 25 in points"], ["50", "Top 50 in points"], ["100", "Top 100 in points"], ["all", "Every qualified player"]];
+/**
+ * A scatter's Faces control and its Numbers control: the players picked under Numbers get a
+ * face and their actual values printed under it. Both draw from the same pool.
+ */
+const facesAndNumbers = (pool, defaults) => [
+  { key: "hl", type: "highlight", label: "Faces", pool, defaults },
+  { key: "nums", type: "numbers", label: "Numbers", pool, defaults: () => [] },
+];
 /** One card per position for the app's Scatter page charts. */
 const scatterCard = (pos, id) => ({
   id, name: `${pos} scatter plots`, fn: (_, opts) => cardScatter(pos, opts), wide: true, isNew: true,
-  note: `Every ${pos} chart on the site's Scatter page. Hover a dot to see who it is; click it to add or remove his face.`,
+  note: `Every ${pos} chart on the site's Scatter page. Hover a dot to see who it is; click it for his face, again for his numbers, again to clear.`,
   controls: [
     { key: "chart", type: "select", label: "Chart", options: SCATTERS[pos].map((s) => [s.id, s.label]), defaults: () => SCATTERS[pos][0].id },
     { key: "cap", type: "select", label: "Players", options: CAP_OPTIONS, defaults: () => "50" },
-    { key: "hl", type: "highlight", label: "Faces", pool: (_, o) => rows(scatterRows(pos, scatterPreset(pos, o.chart), o.cap)), defaults: (_, o) => defaultScatterFaces(pos, o) },
+    ...facesAndNumbers((_, o) => rows(scatterRows(pos, scatterPreset(pos, o.chart), o.cap)), (_, o) => defaultScatterFaces(pos, o)),
   ],
 });
 
@@ -29,7 +37,9 @@ const GROUPS = {
     { id: "A5", name: "Team stats", fn: cardTeamStats, pick: true, note: "The team box with each number ranked against the week, and EPA per play by quarter." },
     { id: "A6", name: "Drive chart", fn: cardDrives, isNew: true, note: "Every possession from where it started toward the end zone, with how it ended." },
     { id: "A7", name: "Points against expected", fn: cardGameExpected, wide: true, isNew: true, note: "Every player in the game: what he scored against what his work was worth.",
-      controls: [{ key: "hl", type: "highlight", label: "Faces", pool: (g) => rows(g.players.map((p) => ({ ...p, team_abbreviation: p.team }))), defaults: (g) => defaultGameExpected(g) }] },
+      controls: facesAndNumbers((g) => rows(g.players.map((p) => ({ ...p, team_abbreviation: p.team }))), (g) => defaultGameExpected(g)) },
+    { id: "A8", name: "Every snap", fn: cardEverySnap, wide: true, isNew: true, note: "The EPA of every pass and run on the game clock, one lane per offense, with the four biggest plays numbered and described." },
+    { id: "A9", name: "Passing charts", fn: cardPassingCharts, wide: true, isNew: true, note: "Both starting quarterbacks' targeted throws by depth and side, with their lines, depth of throw and EPA per target." },
   ],
   preview: [
     { id: "B1", name: "Matchup", fn: cardMatchup, note: "Line, implied totals, last five against the spread, four players to watch per side." },
@@ -37,26 +47,42 @@ const GROUPS = {
     { id: "B3", name: "Tale of the tape", fn: cardTape, wide: true, pick: true, note: "Both offenses side by side, then both defenses, rank against rank." },
     { id: "B4", name: "Usage by week", fn: cardPreviewUsage, wide: true, pick: true, note: "Target and carry share every week for each team's main pieces, with snap share under each." },
     { id: "B6", name: "EPA by game", fn: cardTrend, wide: true, isNew: true, note: "Both offenses and both defenses game by game this season, against the league's middle half." },
+    { id: "B7", name: "How they play", fn: cardHowTheyPlay, wide: true, isNew: true, note: "Both teams' tendencies against the league: pass rate over expected, pace, motion, play action on offense; blitzes, rushers and stacked boxes on defense." },
   ],
   weekly: [
-    { id: "C1", name: "Team landscape", fn: cardLandscape, wide: true, pick: true, note: "Offense against defense EPA for all 32 teams. Hover a logo for the numbers; click it to highlight that team and fade the rest.",
+    { id: "C1", name: "Team landscape", fn: cardLandscape, wide: true, pick: true, note: "Offense against defense EPA for all 32 teams. Hover a logo for the numbers; click it (or pick it below) to highlight that team with its numbers and fade the rest.",
       controls: [{ key: "hl", type: "highlight", label: "Highlight", pool: teamPool, defaults: () => [] }] },
     { id: "C2", name: "Implied team totals", fn: cardImplied, note: "Every offense on the slate ranked by its implied total. Thursday, once lines settle." },
     { id: "C3", name: "Matchups by position", fn: cardMatchupMap, pick: true, note: "Points each opponent allows to QB, RB, WR and TE, for every offense on the slate." },
     { id: "C4", name: "Top scorers", fn: cardWeekTop, pick: true, note: "The week's top ten at each position. Monday night or Tuesday morning." },
     { id: "C5", name: "Usage risers and fallers", fn: cardRisers, pick: true, note: "Biggest moves in expected points per game, last three weeks against the three before. Full games only." },
     { id: "C6", name: "Running back workload", fn: cardBackfield, wide: true, pick: true, note: "Carry share against target share for every back.",
-      controls: [{ key: "hl", type: "highlight", label: "Faces", pool: () => rows(DATA.rb_work), defaults: () => defaultBackfield() }] },
+      controls: facesAndNumbers(() => rows(DATA.rb_work), () => defaultBackfield()) },
     { id: "C7", name: "Who is earning targets", fn: cardRoutes, wide: true, isNew: true, note: "Route participation against targets per route run for every receiver with 50+ routes.",
-      controls: [{ key: "hl", type: "highlight", label: "Faces", pool: () => rows(DATA.routes_pool), defaults: () => defaultRoutes() }] },
+      controls: facesAndNumbers(() => rows(DATA.routes_pool), () => defaultRoutes()) },
     { id: "C8", name: "Points against expected", fn: cardExpected, wide: true, isNew: true, note: "Points per game against expected points per game, by position. Above the line is running hot.",
       controls: [
-        { key: "pos", type: "select", label: "Position", options: POS_OPTIONS, defaults: () => "WR", resets: ["hl"] },
-        { key: "hl", type: "highlight", label: "Faces", pool: (_, o) => rows(DATA.xva_pool[o.pos]), defaults: (_, o) => defaultExpected(o.pos) },
+        { key: "pos", type: "select", label: "Position", options: POS_OPTIONS, defaults: () => "WR", resets: ["hl", "nums"] },
+        ...facesAndNumbers((_, o) => rows(DATA.xva_pool[o.pos]), (_, o) => defaultExpected(o.pos)),
       ] },
     { id: "C9", name: "Weekly finishes", fn: cardFinishes, isNew: true, note: "A position's top scorers and where each finished every week, in starting-lineup colours.",
       controls: [{ key: "pos", type: "select", label: "Position", options: FINISH_OPTIONS, defaults: () => "WR" }] },
     scatterCard("QB", "C10"), scatterCard("RB", "C11"), scatterCard("WR", "C12"), scatterCard("TE", "C13"),
+    { id: "C14", name: "Team scatter plots", fn: cardTeamScatter, wide: true, isNew: true, note: "Nine team questions on EPA, success, explosive plays, pace and tendencies, every team as its logo. Pick teams to highlight them with their numbers and ranks.",
+      controls: [
+        { key: "chart", type: "select", label: "Chart", options: TEAM_SCATTERS.map((t) => [t.id, t.label]), defaults: () => TEAM_SCATTERS[0].id },
+        { key: "hl", type: "highlight", label: "Highlight", pool: teamPool, defaults: () => [] },
+      ] },
+    { id: "C15", name: "Quarterback efficiency", fn: cardQbLadder, isNew: true, note: "Every starter's EPA per play beside his completion % over expected, best to worst." },
+    { id: "C16", name: "Before and after contact", fn: cardContact, isNew: true, note: "Each back's yards per carry split at first contact: the line's share and his own, with rush yards over expected." },
+    { id: "C17", name: "Next Gen scatter plots", fn: cardNgsScatter, wide: true, isNew: true, note: "Tracking and charting questions for every position: time to throw, pressure, stacked boxes, separation, YAC over expected.",
+      controls: [
+        { key: "chart", type: "select", label: "Chart", options: NGS_SCATTERS.map((c) => [c.id, c.label]), defaults: () => NGS_SCATTERS[0].id },
+        { key: "cap", type: "select", label: "Players", options: CAP_OPTIONS, defaults: () => "50" },
+        ...facesAndNumbers((_, o) => rows(ngsRows(ngsPreset(o.chart), o.cap)), (_, o) => defaultNgsFaces(o)),
+      ] },
+    { id: "C18", name: "How every offense plays", fn: cardTendencies, isNew: true, note: "All 32 offenses' tendencies in one table: pass rate over expected, pace, shotgun, motion, play action, RPO, screens, no huddle, depth.",
+      controls: [{ key: "sort", type: "select", label: "Sort by", options: TENDENCY_COLS.map((c) => [c[0], `${c[1]} ${c[2]}`.trim()]), defaults: () => "proe" }] },
   ],
   player: [
     { id: "D1", name: "Player profile", fn: cardProfile, pick: true, note: "Stat tiles grouped by phase, percentiles among his position, every week's finish." },
@@ -66,12 +92,17 @@ const GROUPS = {
     { id: "D3", name: "Usage by week", fn: cardUsage, wide: true, pick: true, note: "Snap, route, target and air yards share (carry share for backs, volume for quarterbacks)." },
     { id: "D7", name: "Where the points come from", fn: cardSources, wide: true, isNew: true, note: "Each week's points split into yards, catches and touchdowns, with the season's split beside it." },
     { id: "D5", name: "Every target", fn: cardTargets, note: "Each target by depth and side. Quarterbacks get every throw, backs get every carry by gap." },
+    { id: "D8", name: "Advanced percentiles", fn: cardAdvanced, isNew: true, note: "NFL numbers, not fantasy ones: efficiency, Next Gen tracking and PFR charting, each a percentile among his position. Blue rows are a style, not a grade." },
+    { id: "D9", name: "Passing network", fn: cardNetwork, wide: true, isNew: true, note: "Who the quarterback throws to: each receiver at his depth and side, line width for targets, colour for EPA. A receiver's card shows his quarterback's network with him marked." },
   ],
   team: [
     { id: "E1", name: "Team profile", fn: cardTeamProfile, isNew: true, note: "Scoring, EPA, offense against defense, how they play and fantasy points by position, all ranked." },
     { id: "E2", name: "Who gets the work", fn: cardTeamShare, wide: true, isNew: true, note: "Each week's share of the targets and carries, by player." },
     { id: "E3", name: "EPA game by game", fn: cardTeamTrend, wide: true, isNew: true, note: "Offense and defense EPA per play in every game, with the result." },
     { id: "E4", name: "Red zone pecking order", fn: cardTeamRedZone, wide: true, isNew: true, note: "Who gets the targets and carries inside the 20, and each player's share." },
+    { id: "E5", name: "Where they rank", fn: cardFingerprint, isNew: true, note: "Eleven efficiency numbers on offense and defense, each a strip of all 32 teams with this one's logo on it." },
+    { id: "E6", name: "Where they throw", fn: cardPassZones, wide: true, isNew: true, note: "Every target in twelve zones by depth and side: EPA per target against the league there, and who gets the ball." },
+    { id: "E7", name: "Where they run", fn: cardRunGaps, wide: true, isNew: true, note: "Designed runs by gap along the line: share against the league, EPA, yards per carry and success rate." },
   ],
 };
 const NOTES = {
@@ -122,7 +153,7 @@ function controlsHtml(card, arg, opts) {
     const pool = c.pool(arg, opts);
     const named = Object.fromEntries(pool.map((p) => [p.id, p]));
     const listId = `dl-${card.id}`;
-    const chips = (opts[c.key] || []).filter((id) => named[id]).map((id) => `<span class="hchip">${esc(named[id].name)}<button type="button" data-remove="${esc(id)}" aria-label="Remove ${esc(named[id].name)}">×</button></span>`).join("");
+    const chips = (opts[c.key] || []).filter((id) => named[id]).map((id) => `<span class="hchip">${esc(named[id].name)}<button type="button" data-remove="${esc(id)}" data-key="${c.key}" aria-label="Remove ${esc(named[id].name)}">×</button></span>`).join("");
     return `<div class="ctrl hl"><span>${c.label}</span><div class="chips">${chips || '<span class="none">None</span>'}</div>
       <input type="text" list="${listId}" data-add="${c.key}" placeholder="Add a name" aria-label="Add to ${c.label.toLowerCase()}">
       <datalist id="${listId}">${pool.filter((p) => !(opts[c.key] || []).includes(p.id)).map((p) => `<option value="${esc(p.name)}${p.team ? ` (${p.team})` : ""}"></option>`).join("")}</datalist>
@@ -219,7 +250,7 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
 function subjectFor(group, card, arg) {
   const base = group === "player" ? playerName(arg) : group === "team" ? arg : arg?.id ?? `week-${DATA.recap_week}`;
   const o = optsFor(card, arg);
-  const extra = (card.controls || []).filter((c) => c.type !== "highlight").map((c) => (c.type === "player" ? `vs ${playerName(o[c.key])}` : o[c.key]));
+  const extra = (card.controls || []).filter((c) => c.type !== "highlight" && c.type !== "numbers").map((c) => (c.type === "player" ? `vs ${playerName(o[c.key])}` : o[c.key]));
   return [base, ...extra].join(" ");
 }
 function fileName(group, card) {
@@ -266,6 +297,24 @@ function copyCard(svgEl) {
   } catch (error) {
     toast("Copying images is blocked here. Use Save PNG.");
   }
+}
+
+/**
+ * What a click on a chart point does next, and the hint that says so. With a Numbers
+ * control the click cycles: add his face, then show his numbers, then take both off.
+ * A team chart has one Highlight control, and a click turns it on or off.
+ */
+function clickStep(card, arg, id) {
+  const o = optsFor(card, arg);
+  const faces = card.controls.find((c) => c.type === "highlight"), nums = card.controls.find((c) => c.type === "numbers");
+  const f = o[faces.key] || [], n = nums ? o[nums.key] || [] : [];
+  const team = !!TEAMS[id];
+  if (!nums) return f.includes(id)
+    ? { next: { [faces.key]: f.filter((x) => x !== id) }, hint: team ? "Click to undo the highlight" : "Click to remove his face" }
+    : { next: { [faces.key]: [...f, id] }, hint: team ? "Click to highlight this team and show its numbers" : "Click to add his face" };
+  if (!f.includes(id) && !n.includes(id)) return { next: { [faces.key]: [...f, id] }, hint: "Click to add his face" };
+  if (!n.includes(id)) return { next: { [nums.key]: [...n, id] }, hint: "Click again to show his numbers" };
+  return { next: { [faces.key]: f.filter((x) => x !== id), [nums.key]: n.filter((x) => x !== id) }, hint: "Click to remove his face and numbers" };
 }
 
 // --------------------------------------------------------------------- setup
@@ -348,9 +397,8 @@ function setup() {
     const pick = card && dot && (card.controls || []).find((c) => c.type === "highlight");
     if (pick) {
       const arg = GROUP_ARG[group]();
-      const now = optsFor(card, arg)[pick.key] || [];
-      const id = dot.dataset.pid;
-      setOpt(card, arg, pick.key, now.includes(id) ? now.filter((x) => x !== id) : [...now, id]);
+      const step = clickStep(card, arg, dot.dataset.pid);
+      for (const [key, ids] of Object.entries(step.next)) setOpt(card, arg, key, ids);
       hideTip();
       return rerenderCard(group, card);
     }
@@ -358,7 +406,7 @@ function setup() {
       const arg = GROUP_ARG[group]();
       const key = (attr) => e.target.closest(`[${attr}]`)?.getAttribute(attr);
       if (key("data-remove")) {
-        const control = card.controls.find((c) => c.type === "highlight");
+        const control = card.controls.find((c) => c.key === e.target.closest("[data-remove]").dataset.key);
         setOpt(card, arg, control.key, (optsFor(card, arg)[control.key] || []).filter((id) => id !== key("data-remove")));
         return rerenderCard(group, card);
       }
@@ -379,8 +427,9 @@ function setup() {
     const lines = hit.dataset.tip.split("|");
     const inCard = cardFromEvent(e).card;
     const canPick = inCard && (inCard.controls || []).some((c) => c.type === "highlight");
+    const hint = canPick ? clickStep(inCard, GROUP_ARG[Object.keys(GROUPS).find((g) => GROUPS[g].includes(inCard))](), hit.dataset.pid).hint : "";
     const tip = document.getElementById("tip");
-    tip.innerHTML = `<b>${esc(lines[0])}</b>${lines.slice(1).map((l) => `<span>${esc(l)}</span>`).join("")}${canPick ? `<em>${TEAMS[hit.dataset.pid] ? "Click to highlight this team, or undo it" : "Click to add or remove his face"}</em>` : ""}`;
+    tip.innerHTML = `<b>${esc(lines[0])}</b>${lines.slice(1).map((l) => `<span>${esc(l)}</span>`).join("")}${hint ? `<em>${hint}</em>` : ""}`;
     tip.classList.add("show");
     const { innerWidth: vw, innerHeight: vh } = window;
     const r = tip.getBoundingClientRect();
@@ -410,13 +459,13 @@ if (params.get("card")) {
   if (params.get("team") && DATA.teams_cards[params.get("team").toUpperCase()]) state.team = params.get("team").toUpperCase();
   const arg = GROUP_ARG[group]();
   for (const [k, v] of params) if (k.startsWith("opt.")) setOpt(card, arg, k.slice(4), k === "opt.vs" ? findPlayer(v) : v);
-  if (params.get("hl") != null) {
-    const control = (card.controls || []).find((c) => c.type === "highlight");
-    if (control) {
-      const pool = control.pool(arg, optsFor(card, arg));
-      const want = params.get("hl").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-      setOpt(card, arg, control.key, want.map((w) => pool.find((p) => p.id.toLowerCase() === w || p.name.toLowerCase() === w)?.id).filter(Boolean));
-    }
+  for (const [param, type] of [["hl", "highlight"], ["nums", "numbers"]]) {
+    if (params.get(param) == null) continue;
+    const control = (card.controls || []).find((c) => c.type === type);
+    if (!control) continue;
+    const pool = control.pool(arg, optsFor(card, arg));
+    const want = params.get(param).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    setOpt(card, arg, control.key, want.map((w) => pool.find((p) => p.id.toLowerCase() === w || p.name.toLowerCase() === w)?.id).filter(Boolean));
   }
   fontsReady.then(() => {
     // Keep the page's <style> (it lives in the body now): drop only the review chrome.

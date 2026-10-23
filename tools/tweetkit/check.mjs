@@ -34,8 +34,13 @@ const bad = await ev(`(() => {
       for (const card of cards) {
         const select = (card.controls || []).find((c) => c.type === 'select');
         const hl = (card.controls || []).find((c) => c.key === 'hl');
-        if (select) for (const [v] of select.options) run(card, arg, (arg?.id ?? arg ?? group) + ' ' + v, { [select.key]: v, ...(hl ? { hl: hl.defaults(arg, { [select.key]: v }) } : {}) });
-        else run(card, arg, arg?.id ?? arg ?? group);
+        const nums = (card.controls || []).find((c) => c.type === 'numbers');
+        // With a Numbers control, also draw three players' (or teams') values on every chart.
+        const withNums = (o) => (nums ? [{}, { nums: nums.pool(arg, { ...optsFor(card, arg), ...o }).slice(0, 3).map((p) => p.id) }] : [{}]);
+        const teamHl = hl && !nums && hl.label === 'Highlight';
+        const extra = (o) => [...withNums(o), ...(teamHl ? [{ hl: hl.pool(arg, o).slice(0, 3).map((p) => p.id) }] : [])];
+        if (select) for (const [v] of select.options) for (const x of extra({ [select.key]: v })) run(card, arg, (arg?.id ?? arg ?? group) + ' ' + v, { [select.key]: v, ...(hl ? { hl: hl.defaults(arg, { [select.key]: v }) } : {}), ...x });
+        else for (const x of extra({})) run(card, arg, arg?.id ?? arg ?? group, x);
       }
     }
   }
