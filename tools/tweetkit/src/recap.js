@@ -287,7 +287,7 @@ function cardTeamStats(g) {
   const [away, home] = sidesOf(g);
   const n = g.ranks.teams;
   const fr = frame(1200, 1500, { kicker: g.header.week_label, title: `${scoreTitle(g)}: team stats`,
-    subtitle: g.partial ? `The rest of ${g.header.week_label} is still to come, so these are not ranked yet` : `Chip: rank among the ${n} teams that played in ${g.header.week_label}` });
+    subtitle: g.partial ? null : `Chip: rank among the ${n} teams that played in ${g.header.week_label}` });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const b = g.box, rk = g.ranks.metrics;
