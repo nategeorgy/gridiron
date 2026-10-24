@@ -46,7 +46,9 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
 .seg button { border: 0; background: none; color: var(--muted); font: 600 13px var(--sans); padding: 7px 14px; border-radius: 999px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-nav.jump { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); margin-bottom: 8px; }
+nav.jump { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 0; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); margin-bottom: 8px; }
+nav.jump .seg { margin-left: auto; }
+nav.jump .seg button { padding: 4px 12px; }
 nav.jump a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--card); }
 section.group { margin-top: 34px; }
 .group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 16px; }
@@ -114,13 +116,13 @@ figcaption .actions { margin-left: auto; display: inline-flex; gap: 6px; }
       <h1>Tweet card options</h1>
       <p class="lede">Real data through Week <span id="lede-week"></span>, PPR, in the site's export frame. Each card is one template: change the game, player or team and it redraws. Save PNG or Copy image under any card, in the theme you are viewing. Click a card to see it full size.</p>
     </div>
+  </header>
+  <nav class="jump">
+    <a href="#recaps">A. Game recaps</a><a href="#previews">B. Game previews</a><a href="#weekly">C. Weekly series</a><a href="#players">D. Player replies</a><a href="#teams">E. Teams</a>
     <div class="seg" role="group" aria-label="Theme">
       <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
       <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
     </div>
-  </header>
-  <nav class="jump">
-    <a href="#recaps">A. Game recaps</a><a href="#previews">B. Game previews</a><a href="#weekly">C. Weekly series</a><a href="#players">D. Player replies</a><a href="#teams">E. Teams</a>
   </nav>
 
   <section class="group" id="recaps">
