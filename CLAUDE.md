@@ -938,12 +938,14 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**,
   *not* the leaderboard. Rebuilt in October 2026 as **"Option C"** (it was M10's two-column
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
-  **Highlighted Viz of the Week**; a row of Explore cards (team landscape, air-yard
-  distribution, record book); the week's players (Floor and Ceiling, which replaced Expected
+  **Highlighted Viz of the Week**; a **featured game recap** (who got the ball and every
+  possession, which replaced the team landscape and air-yard cards in October 2026) beside the
+  Record Book; the week's players (Floor and Ceiling, which replaced Expected
   vs Actual in October 2026, and a reader-picked head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
   red, which replaced Trending Players and Last Week's Scoring in October 2026); and a **Week N
   Preview** (the slate,
-  matchups by position, implied totals). The arrangement is data, in `constants/homeLayout.js`.
+  matchups by position, and the featured game's tale of the tape, which replaced implied totals).
+  The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
   in the code and in these docs. The nav holds **five dropdowns**: **Insight**
   (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
@@ -1423,6 +1425,16 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       its head-to-head (D6) replaces the margin table and radars on the player page and the home
       page's Head to Head (`components/player/HeadToHead.jsx`). One new registry metric,
       `rushing_yards_per_game`, for the quarterback card. No migration
+- [x] Featured games on the home page (October 2026). One game just played and one coming up,
+      picked in `FEATURED_GAMES` (`constants/signals.js`); a pick outside the scoreboard's weeks
+      falls back to the closest finish and the biggest total, so the week flipping first never
+      shows last week's game. The recap takes the two slots Team Landscape and Air-Yard
+      Distribution had: **who got the ball** and **every possession**, the game page's
+      `TouchTimeline` and `DriveChart`. The preview's **tale of the tape** (`TapeTracks`, the
+      tweet kit's B3 as rank tracks) replaces Week N Environments. The charts draw at their card's
+      measured width (`useElementWidth`), since three across a card runs from 320px to 500px.
+      Chosen from the tweet card mockups. Frontend only; the three retired cards stay in
+      `components/home/`
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is

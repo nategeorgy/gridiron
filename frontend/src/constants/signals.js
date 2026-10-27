@@ -27,6 +27,20 @@ export const FEATURED_MATCHUP = {
 };
 
 /**
+ * The featured games (October 2026): a game just played, drawn as who got the ball and
+ * every possession in the row under the Highlighted Viz, and a game coming up, drawn as
+ * the tale of the tape in the Week N Preview. Game ids as /games names them.
+ *
+ * A pick only shows while its game is in the week the scoreboard calls last (the recap)
+ * or next (the preview). Otherwise the page takes the closest finish and the biggest
+ * total, so the week flipping before these are re-picked never shows last week's game.
+ */
+export const FEATURED_GAMES = {
+  recap: "2026_07_GB_DET", // Packers 17 at Lions 20
+  preview: "2026_08_BAL_BUF", // Ravens at Bills, a 53.5 total
+};
+
+/**
  * Highlighted Viz of the Week (October 2026): one Explore chart, large, at the top of the
  * page. `kind` names the chart so a later week can feature something other than a
  * passing network; today "network" is the only kind the card draws. As with the picks
