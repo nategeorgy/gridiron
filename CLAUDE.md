@@ -938,11 +938,12 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**,
   *not* the leaderboard. Rebuilt in October 2026 as **"Option C"** (it was M10's two-column
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
-  **Highlighted Viz of the Week**; a **featured game recap** (who got the ball and every
-  possession, which replaced the team landscape and air-yard cards in October 2026) beside the
-  Record Book; the week's players (Floor and Ceiling, which replaced Expected
+  **Highlighted Viz of the Week**; a **featured game recap** (targets and carries beside every
+  possession, which replaced the team landscape and air-yard cards in October 2026); the week's
+  players (Floor and Ceiling, which replaced Expected
   vs Actual in October 2026, and a reader-picked head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
-  red, which replaced Trending Players and Last Week's Scoring in October 2026); and a **Week N
+  red, which replaced Trending Players and Last Week's Scoring in October 2026), cut at the coming
+  week and sharing its band with the **Record Book**; and a **Week N
   Preview** (the slate,
   matchups by position, and the featured game's tale of the tape, which replaced implied totals).
   The arrangement is data, in `constants/homeLayout.js`.
@@ -1429,10 +1430,11 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       picked in `FEATURED_GAMES` (`constants/signals.js`); a pick outside the scoreboard's weeks
       falls back to the closest finish and the biggest total, so the week flipping first never
       shows last week's game. The recap takes the two slots Team Landscape and Air-Yard
-      Distribution had: **who got the ball** and **every possession**, the game page's
-      `TouchTimeline` and `DriveChart`. The preview's **tale of the tape** (`TapeTracks`, the
+      Distribution had: **targets and carries** (the kit's "Who got the ball") and **every
+      possession**, the game page's `TouchTimeline` and `DriveChart`, as their own row. The Record
+      Book moved beside Weekly Finishes, whose grid now stops at the coming week. The preview's **tale of the tape** (`TapeTracks`, the
       tweet kit's B3 as rank tracks) replaces Week N Environments. The charts draw at their card's
-      measured width (`useElementWidth`), since three across a card runs from 320px to 500px.
+      measured width (`useElementWidth`), so they read in the narrow column and on a phone.
       Chosen from the tweet card mockups. Frontend only; the three retired cards stay in
       `components/home/`
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)

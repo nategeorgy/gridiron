@@ -1,12 +1,12 @@
 // The featured games (October 2026): one game just played and one coming up, drawn with
-// the game page's own charts. The recap is two cards in the row under the Highlighted Viz
-// (who got the ball, and every possession); the preview is the tale of the tape in the
-// Week N Preview. Chosen from the tweet kit's A4, A6 and B3 cards.
+// the game page's own charts. The recap is the row under the Highlighted Viz (targets and
+// carries, and every possession); the preview is the tale of the tape in the Week N
+// Preview. Chosen from the tweet kit's A4 ("Who got the ball"), A6 and B3 cards.
 //
 // The games are `FEATURED_GAMES` in constants/signals.js; Home falls back to the closest
 // finish and the biggest total when a pick is not in the scoreboard's weeks. Each chart
-// draws at its card's measured width (`useElementWidth`): three across, a card runs from
-// about 320px to 500px, and the game page's desktop box shrunk to that set its labels at 5px.
+// draws at its card's measured width (`useElementWidth`): the narrow column and a phone run
+// from about 340px to 550px, and the game page's desktop box shrunk to that set its labels at 5px.
 import { useMemo } from "react";
 import { Card, CardHead, CardLink, CardState } from "./primitives";
 import { DriveChart, TapeTracks, TouchTimeline } from "../game/GameCharts";
@@ -50,13 +50,13 @@ function TouchKey() {
 }
 
 /** Every target and carry each team's busiest players got, on the game clock. */
-export function WhoGotTheBallCard({ game, recap, isLoading, isError }) {
+export function TargetsAndCarriesCard({ game, recap, isLoading, isError }) {
   const [frame, width] = useElementWidth();
   const colors = useMemo(() => gameColors(game?.away, game?.home), [game]);
   const ready = Boolean(game?.has_plays && recap?.touches?.length);
   return (
     <Card>
-      <CardHead title="Who got the ball" sub={game ? `${game.week_label} · ${matchupLine(game)}` : undefined} />
+      <CardHead title="Targets and carries" sub={game ? `${game.week_label} · ${matchupLine(game)}` : undefined} />
       <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} rows={6}
         empty="This game's targets and carries arrive with the morning update." />
       <div ref={frame} className="grid gap-3">

@@ -4,13 +4,14 @@
 // data (https://claude.ai/artifact/556KvBCx8M7HNvYyy2RNbb):
 //
 //   1. a score ticker and the Highlighted Viz of the Week, full width;
-//   2. a row of three: the featured game recap (who got the ball, every possession) and
-//      the record book. The recap replaced the team landscape and air yards cards in
-//      October 2026;
+//   2. the featured game recap: targets and carries in the wide column, every possession
+//      in the narrow one. It replaced the team landscape and air yards cards in October
+//      2026;
 //   3. the two familiar columns: the week's players on the left, the head-to-head on
 //      the right;
-//   4. Weekly Finishes, full width (October 2026, replacing Trending Players): its grid
-//      runs to eighteen weeks, which only the full width holds without scrolling;
+//   4. Weekly Finishes beside the record book (October 2026). The grid stops at the coming
+//      week rather than running to eighteen, which is what lets it share the band; late in
+//      a season it scrolls inside its card;
 //   5. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
 //      beside the featured game's tale of the tape (which replaced implied totals in
 //      October 2026).
@@ -37,12 +38,11 @@ export const HOME_LAYOUT = {
   bands: [
     { kind: "full", cards: ["ticker"] },
     { kind: "full", cards: ["highlightedViz"] },
-    // Three across from 1,100px (about 345px each there, the width each card is built to
-    // read at), two across with the odd one out spanning both below that, one on a phone.
-    // The two recap charts draw at their card's measured width, so they hold at all three.
-    { kind: "grid", cards: ["whoGotTheBall", "possessions", "recordBook"] },
+    // The two recap charts draw at their card's measured width. (`grid`, three across from
+    // 1,100px, is still a band kind; nothing uses it since this row became two columns.)
+    { kind: "columns", cards: [["targetsAndCarries"], ["possessions"]] },
     { kind: "columns", cards: [["myPlayers", "floorCeiling"], ["headToHead"]] },
-    { kind: "full", cards: ["weeklyFinishes"] },
+    { kind: "columns", cards: [["weeklyFinishes"], ["recordBook"]] },
     { kind: "full", cards: ["previewHeading"] },
     { kind: "full", cards: ["slate"] },
     { kind: "columns", cards: [["matchups"], ["taleOfTheTape"]] },

@@ -4,10 +4,10 @@
 //
 //   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
 //      Explore chart;
-//   2. the featured game recap (who got the ball, every possession) and the record book;
+//   2. the featured game recap: targets and carries beside every possession;
 //   3. the week's players: the watchlist and Floor and Ceiling on the left, a
 //      reader-picked Head to Head on the right;
-//   4. Weekly Finishes: a position's top scorers and where each finished every week;
+//   4. Weekly Finishes, through the coming week, beside the record book;
 //   5. the Week N Preview: the slate, then matchups by position and the featured game's
 //      tale of the tape.
 //
@@ -38,7 +38,7 @@ import { shapeNetwork } from "../components/explore/NetworkChart";
 
 import { ScoreTicker } from "../components/home/ScoreTicker";
 import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
-import { PossessionsCard, TaleOfTheTapeCard, WhoGotTheBallCard } from "../components/home/FeaturedGameCards";
+import { PossessionsCard, TaleOfTheTapeCard, TargetsAndCarriesCard } from "../components/home/FeaturedGameCards";
 import { RecordBookCard } from "../components/home/RecordBookCard";
 import { FINISH_LIMITS, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
 import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
@@ -254,8 +254,8 @@ export function Home() {
         isError={network.isError}
       />
     ),
-    whoGotTheBall: (
-      <WhoGotTheBallCard game={recapGame.data} recap={recap.data} isLoading={recapLoading} isError={recapError} />
+    targetsAndCarries: (
+      <TargetsAndCarriesCard game={recapGame.data} recap={recap.data} isLoading={recapLoading} isError={recapError} />
     ),
     possessions: (
       <PossessionsCard game={recapGame.data} recap={recap.data} isLoading={recapLoading} isError={recapError} />

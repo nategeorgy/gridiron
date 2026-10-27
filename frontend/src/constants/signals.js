@@ -86,13 +86,5 @@ export const RECORD_BOOK = {
       format: 0,
       query: { grain: "seasons", positions: "TE", last_week: 7, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
     },
-    {
-      // One of 24 such games since 2009, and the first this season.
-      kind: "count",
-      playerId: "00-0035261", // Tony Pollard
-      title: "25+ carries, 125+ rushing yards and 3 rushing TDs",
-      query: { grain: "games", positions: "RB", where: "carries:25:,rushing_yards:125:,rushing_tds:3:", sort: "fantasy_points", order: "desc", limit: 50 },
-      line: (row) => `${row.carries} carries, ${row.rushing_yards} yds, ${row.rushing_tds} TD`,
-    },
   ],
 };

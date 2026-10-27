@@ -11,7 +11,9 @@
 // anchored on how deep a 12-team league starts the position until October 2026.
 //
 // Byes come from the schedule, so a hatched cell is a bye, a dot is a game missed, and a
-// blank cell is a game not played yet: the rest of the season, and Monday night on a Monday.
+// blank cell is a game not played yet (Monday night on a Monday). The grid stops at the
+// coming week, the one after `last_week`, so its byes show and the rest of the season does
+// not: the card shares its band with the Record Book (October 2026).
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -35,6 +37,8 @@ const SORTS = {
 };
 
 const CELL = "stat-num grid h-6 w-[38px] place-items-center rounded-md text-[11.5px] font-semibold";
+// The table's minimum width: the player column and the four sums, plus one cell a week.
+const TABLE_BASE = 360, WEEK_WIDTH = 41;
 
 /** Weeks in the best band, and weeks in the worst. */
 function summarize(row, position) {
@@ -102,7 +106,8 @@ function ScaleKey({ position }) {
 
 export function WeeklyFinishesCard({ season, scoring, position, onPositionChange, minGames, result, isLoading, isError }) {
   const [sort, setSort] = useState({ key: "total", descending: true });
-  const weeks = result?.weeks ?? [];
+  const lastWeek = result?.last_week ?? 0;
+  const weeks = (result?.weeks ?? []).filter((week) => week <= lastWeek + 1);
   const top = finishBands(position)[0].to;
 
   const rows = useMemo(() => {
@@ -147,7 +152,7 @@ export function WeeklyFinishesCard({ season, scoring, position, onPositionChange
       <CardState isLoading={isLoading} isError={isError} isEmpty={rows.length === 0} empty="No games played yet this season." rows={8} />
       {rows.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-separate border-spacing-y-[3px] text-left text-sm">
+          <table className="w-full border-separate border-spacing-y-[3px] text-left text-sm" style={{ minWidth: TABLE_BASE + weeks.length * WEEK_WIDTH }}>
             <thead>
               <tr>
                 <th className="pin-col w-px whitespace-nowrap pb-2 pl-1 text-[9.5px] font-bold uppercase tracking-[0.07em] text-faint">Player</th>
@@ -155,7 +160,7 @@ export function WeeklyFinishesCard({ season, scoring, position, onPositionChange
                   <th
                     key={week}
                     className={`stat-num pb-2 text-center text-[10px] font-semibold ${
-                      week <= (result?.last_week ?? 0) ? "text-muted" : "text-faint"
+                      week <= lastWeek ? "text-muted" : "text-faint"
                     }`}
                   >
                     {week}
