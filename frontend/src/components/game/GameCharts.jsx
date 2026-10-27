@@ -273,12 +273,14 @@ export function TouchTimeline({ touches, players, color, end, periods, seasonTyp
  *
  * Like TouchTimeline, a measured `width` draws the chart at that size: below 700px the
  * rows tighten and the plays and yards column goes, since the bar already shows the yards.
+ * `rowHeight` sets the rows' height instead, for a card that fills a given height.
  */
-export function DriveChart({ drives, colors, away, logos, periods, width }) {
+export function DriveChart({ drives, colors, away, logos, periods, width, rowHeight }) {
   const phone = usePhone();
   if (!drives?.length) return null;
   const narrow = width ? width < 700 : phone;
-  const W = width || (phone ? 380 : 1320), rowH = width && narrow ? 22 : 26;
+  const W = width || (phone ? 380 : 1320), rowH = rowHeight || (width && narrow ? 22 : 26);
+  const barH = Math.min(rowH / 2, 15);
   const pad = !narrow ? { l: 132, r: 300, t: 26, b: 8 } : width ? { l: 88, r: 92, t: 24, b: 6 } : { l: 70, r: 64, t: 26, b: 8 };
   const logoSize = width && narrow ? 16 : 18;
   const textY = rowH / 2 + 4;
@@ -313,7 +315,7 @@ export function DriveChart({ drives, colors, away, logos, periods, width }) {
             {divider && <line x1="0" x2={W} y1={yy} y2={yy} stroke="var(--border-strong)" />}
             {logos?.[drive.team] && <image href={logos[drive.team]} x="2" y={yy + (rowH - logoSize) / 2} width={logoSize} height={logoSize} />}
             <text x={logoSize + 8} y={yy + textY} fontSize={width && narrow ? 10.5 : 11.5} fontWeight="600" fill="var(--muted)" fontFamily={MONO}>{clock}</text>
-            <rect x={Math.min(start, finish)} y={yy + rowH / 4} width={Math.max(3, Math.abs(finish - start))} height={rowH / 2} rx="4"
+            <rect x={Math.min(start, finish)} y={yy + (rowH - barH) / 2} width={Math.max(3, Math.abs(finish - start))} height={barH} rx="4"
               fill={scored ? color : "var(--surface-2)"} stroke={color} strokeWidth="1.4">
               <title>{`${drive.team} · ${drive.result} · ${drive.plays} plays, ${drive.yards} yards, ${top}`}</title>
             </rect>
@@ -385,7 +387,7 @@ export function GameTrendChart({ trend, away, home, colors, metric = "net" }) {
 // The tale of the tape's rows, in the tweet kit's order (B3), with labels short enough
 // for a narrow card. The preview's own `tape` carries more; these are the ones that say
 // who should move the ball.
-const TAPE_ROWS = [
+export const TAPE_ROWS = [
   ["epa", "EPA per play"],
   ["suc", "Success rate"],
   ["p_epa", "EPA per dropback"],
@@ -401,16 +403,17 @@ const TAPE_ROWS = [
  * One offense against the defense it faces, as rank tracks (the tweet kit's B3): each
  * stat a track from 1st to last, the offense's season rank and the defense's on it, joined
  * in the colour of whichever side has the edge. `tape` is the preview's rows, `colors`
- * maps each team to its game colour, and `width` is the card's measured width.
+ * maps each team to its game colour, `width` is the card's measured width, and
+ * `rowHeight` (25 by default) lets a card that fills a given height space the rows out.
  */
-export function TapeTracks({ tape, ranked, offense, defense, colors, logos, width }) {
+export function TapeTracks({ tape, ranked, offense, defense, colors, logos, width, rowHeight = 25 }) {
   if (!width) return null;
   const rows = TAPE_ROWS.map(([id, label]) => {
     const row = tape?.find((item) => item.id === id);
     return row && { ...row, short: label };
   }).filter(Boolean);
   const narrow = width < 420;
-  const labelW = narrow ? 100 : 122, rankW = 36, rowH = 25, top = 18;
+  const labelW = narrow ? 100 : 122, rankW = 36, rowH = rowHeight, top = 18;
   const tx0 = labelW + 12, tx1 = width - rankW * 2 - 14;
   const x = lin(1, ranked, tx0, tx1);
   const H = top + rows.length * rowH + 2;

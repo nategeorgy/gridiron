@@ -7,17 +7,24 @@
 //   2. the featured game recap: targets and carries in the wide column, every possession
 //      in the narrow one. It replaced the team landscape and air yards cards in October
 //      2026;
-//   3. the two familiar columns: the week's players on the left, the head-to-head on
-//      the right;
-//   4. Weekly Finishes beside the record book (October 2026). The grid stops at the coming
-//      week rather than running to eighteen, which is what lets it share the band; late in
-//      a season it scrolls inside its card;
-//   5. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
+//   3. the season: Floor and Ceiling over Weekly Finishes on the left, the head-to-head
+//      over the record book on the right (the watchlist across the top when signed in).
+//      Weekly Finishes stops at the coming week rather than running to eighteen, and late
+//      in a season it scrolls inside its card;
+//   4. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
 //      beside the featured game's tale of the tape (which replaced implied totals in
 //      October 2026).
 //
 // The arrangement is data rather than JSX for the same reason it always was: it is
 // chosen by measuring, and a config is cheaper to rearrange than a page.
+//
+// ⚠️ **No band may end with a gap under one column** (October 2026). Home stretches both
+// columns to the taller, and one card per band fills the difference with rows of its own
+// (`FillBox` in components/home/primitives.jsx): Every possession's drive rows grow,
+// Weekly Finishes lists more players, and Matchups lists more teams. Heights a fixed size
+// cannot match keep moving (the featured pair's position, a game's drive count, signing
+// in), which is why the fill is measured rather than tuned. A new pairing needs one card
+// that can fill, placed last in its column.
 //
 // Two measurements hold:
 //
@@ -41,8 +48,12 @@ export const HOME_LAYOUT = {
     // The two recap charts draw at their card's measured width. (`grid`, three across from
     // 1,100px, is still a band kind; nothing uses it since this row became two columns.)
     { kind: "columns", cards: [["targetsAndCarries"], ["possessions"]] },
-    { kind: "columns", cards: [["myPlayers", "floorCeiling"], ["headToHead"]] },
-    { kind: "columns", cards: [["weeklyFinishes"], ["recordBook"]] },
+    // The watchlist only renders signed in with something starred, and runs across the top
+    // of the season band then, so it never unbalances the columns below it.
+    { kind: "full", cards: ["myPlayers"] },
+    // Weekly Finishes fills what Head to Head and the Record Book leave under Floor and
+    // Ceiling: about 14 rows beside a receiver pair, 19 beside backs.
+    { kind: "columns", cards: [["floorCeiling", "weeklyFinishes"], ["headToHead", "recordBook"]] },
     { kind: "full", cards: ["previewHeading"] },
     { kind: "full", cards: ["slate"] },
     { kind: "columns", cards: [["matchups"], ["taleOfTheTape"]] },

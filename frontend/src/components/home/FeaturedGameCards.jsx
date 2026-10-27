@@ -8,11 +8,18 @@
 // draws at its card's measured width (`useElementWidth`): the narrow column and a phone run
 // from about 340px to 550px, and the game page's desktop box shrunk to that set its labels at 5px.
 import { useMemo } from "react";
-import { Card, CardHead, CardLink, CardState } from "./primitives";
-import { DriveChart, TapeTracks, TouchTimeline } from "../game/GameCharts";
+import { Card, CardHead, CardLink, CardState, FillBox } from "./primitives";
+import { DriveChart, TAPE_ROWS, TapeTracks, TouchTimeline } from "../game/GameCharts";
 import { gameColors, teamText } from "../game/colors";
 import { gamePath } from "../game/GameLink";
 import { useElementWidth } from "../../hooks/useElementWidth";
+
+// Every possession's rows: 22px at the least, as tall as 34px when the card beside it
+// leaves room, and the chart's 30px of axis and padding.
+const DRIVE_ROW = { min: 22, max: 34 }, DRIVE_PAD = 30;
+// The tale of the tape's rows, 25px to 36px, and the rest of its two panels, measured: a
+// 22px team line and 6px under it, 20px of track labels, and 16px between the panels.
+const TAPE_ROW = { min: 25, max: 36 }, TAPE_FIXED = 2 * (22 + 6 + 20) + 16;
 
 const nickname = (team) => (team?.name ?? team?.abbreviation ?? "").split(" ").slice(-1)[0];
 const sides = (game) => (game ? [game.away, game.home] : []);
@@ -80,22 +87,26 @@ export function TargetsAndCarriesCard({ game, recap, isLoading, isError }) {
   );
 }
 
-/** Every drive from where it started toward the end zone, in game order. */
+/** Every drive from where it started toward the end zone, in game order. The rows grow to
+ *  fill the card when Targets and carries beside it is the taller of the two. */
 export function PossessionsCard({ game, recap, isLoading, isError }) {
-  const [frame, width] = useElementWidth();
   const colors = useMemo(() => gameColors(game?.away, game?.home), [game]);
   const ready = Boolean(game?.has_plays && recap?.drives?.length);
+  const drives = recap?.drives ?? [];
   return (
     <Card>
       <CardHead title="Every possession" sub={game ? `${game.week_label} · ${matchupLine(game)}` : undefined} />
       <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} rows={8}
         empty="This game's drives arrive with the morning update." />
-      <div ref={frame}>
-        {ready && width > 0 && (
-          <DriveChart drives={recap.drives} colors={colors} away={game.away.abbreviation} logos={logosOf(game)}
-            periods={game.periods?.length} width={width} />
-        )}
-      </div>
+      {ready && (
+        <FillBox minHeight={DRIVE_PAD + drives.length * DRIVE_ROW.min}>
+          {({ width, height }) => (
+            <DriveChart drives={drives} colors={colors} away={game.away.abbreviation} logos={logosOf(game)}
+              periods={game.periods?.length} width={width}
+              rowHeight={Math.max(DRIVE_ROW.min, Math.min(DRIVE_ROW.max, Math.floor((height - DRIVE_PAD) / drives.length)))} />
+          )}
+        </FillBox>
+      )}
       {ready && (
         <p className="mt-2 text-[10.5px] text-faint">
           Each drive from where it started toward the end zone on the right. Solid bars scored.
@@ -106,9 +117,9 @@ export function PossessionsCard({ game, recap, isLoading, isError }) {
   );
 }
 
-/** Each offense against the defense it faces, rank against rank. */
+/** Each offense against the defense it faces, rank against rank. The rows space out to fill
+ *  the card when Matchups beside it is the taller of the two (two by two below 1,280px). */
 export function TaleOfTheTapeCard({ game, preview, isLoading, isError }) {
-  const [frame, width] = useElementWidth();
   const colors = useMemo(() => {
     const pair = gameColors(game?.away, game?.home);
     return game ? { [game.away.abbreviation]: pair.away, [game.home.abbreviation]: pair.home } : {};
@@ -121,19 +132,28 @@ export function TaleOfTheTapeCard({ game, preview, isLoading, isError }) {
     <Card>
       <CardHead title="Tale of the Tape" sub={game ? `${game.week_label} · ${matchupLine(game)}` : undefined} />
       <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} rows={8} empty="No game to preview yet." />
-      <div ref={frame} className="grid gap-4">
-        {ready && width > 0 && [[game.away, game.home], [game.home, game.away]].map(([offense, defense]) => (
-          <div key={offense.abbreviation}>
-            <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <TeamLabel team={offense} color={colors[offense.abbreviation]}>{offense.abbreviation} offense</TeamLabel>
-              <span className="mb-1 text-[11px] text-faint">vs</span>
-              <TeamLabel team={defense} color={colors[defense.abbreviation]}>{defense.abbreviation} defense</TeamLabel>
-            </div>
-            <TapeTracks tape={preview.tape} ranked={ranked} offense={offense.abbreviation} defense={defense.abbreviation}
-              colors={colors} logos={logosOf(game)} width={width} />
-          </div>
-        ))}
-      </div>
+      {ready && (
+        <FillBox minHeight={TAPE_FIXED + 2 * TAPE_ROWS.length * TAPE_ROW.min}>
+          {({ width, height }) => {
+            const rowHeight = Math.max(TAPE_ROW.min, Math.min(TAPE_ROW.max, Math.floor((height - TAPE_FIXED) / (2 * TAPE_ROWS.length))));
+            return (
+              <div className="grid gap-4">
+                {[[game.away, game.home], [game.home, game.away]].map(([offense, defense]) => (
+                  <div key={offense.abbreviation}>
+                    <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <TeamLabel team={offense} color={colors[offense.abbreviation]}>{offense.abbreviation} offense</TeamLabel>
+                      <span className="mb-1 text-[11px] text-faint">vs</span>
+                      <TeamLabel team={defense} color={colors[defense.abbreviation]}>{defense.abbreviation} defense</TeamLabel>
+                    </div>
+                    <TapeTracks tape={preview.tape} ranked={ranked} offense={offense.abbreviation} defense={defense.abbreviation}
+                      colors={colors} logos={logosOf(game)} width={width} rowHeight={rowHeight} />
+                  </div>
+                ))}
+              </div>
+            );
+          }}
+        </FillBox>
+      )}
       {ready && (
         <p className="mt-2 text-[10.5px] text-faint">
           Season ranks of {ranked}{basis}, 1st is best. The line takes the colour of the side with the edge.

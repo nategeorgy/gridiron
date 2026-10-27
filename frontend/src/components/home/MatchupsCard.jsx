@@ -9,12 +9,26 @@
 // of a season the defensive numbers are last season's.
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
+import { Card, CardHead, CardLink, CardState, FillBox, Tabs } from "./primitives";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { PositionTag } from "../PositionTag";
 import { formatStat } from "../../utils/format";
 
+// Four teams a list at the least. When the band stretches the card (the tale of the tape
+// beside it is taller), each list takes as many more as fit. A position's column is 76.5px
+// of tag and labels plus two lists of 33.5px rows, measured; the columns sit four across
+// from 1,280px, two across from 640px, and one at a time on a phone.
 const SHOWN = 4;
+const COLUMN_FIXED = 76.5, ROW = 33.5, GRID_GAP = 16;
 export const MATCHUP_POSITIONS = ["QB", "RB", "WR", "TE"];
+
+/** How many teams each list shows in `height`, with `gridRows` rows of position columns. */
+function listLength(height, gridRows, teams) {
+  const column = (height - (gridRows - 1) * GRID_GAP) / gridRows;
+  const fits = Math.floor((column - COLUMN_FIXED) / (2 * ROW));
+  // Never so many that a team is both easiest and toughest.
+  return Math.max(SHOWN, Math.min(fits, Math.floor(teams / 2)));
+}
 
 function tint(difficulty) {
   const distance = Math.min(Math.abs(difficulty - 50) / 50, 1);
@@ -68,6 +82,10 @@ export function MatchupsCard({ week, season, boards, logos, isLoading, isError }
   const basis = boards.WR?.basis ?? boards.RB?.basis;
   // A phone shows one position at a time: all four stacked ran about 1,100px.
   const [phonePosition, setPhonePosition] = useState("WR");
+  const fourAcross = useMediaQuery("(min-width: 1280px)");
+  const twoAcross = useMediaQuery("(min-width: 640px)") && !fourAcross;
+  const gridRows = twoAcross ? 2 : 1;
+  const teams = Math.min(...lists.map((list) => list.rows.length).filter(Boolean));
 
   return (
     <Card>
@@ -80,11 +98,15 @@ export function MatchupsCard({ week, season, boards, logos, isLoading, isError }
       </CardHead>
       <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} empty="No priced matchups for this week yet." rows={6} />
       {ready && (
+        <FillBox minHeight={gridRows * (COLUMN_FIXED + 2 * SHOWN * ROW) + (gridRows - 1) * GRID_GAP}>
+          {({ height }) => {
+            const shown = listLength(height, gridRows, teams);
+            return (
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
           {lists.map(({ position, rows }) => (
             <div key={position} className={`min-w-0 ${position === phonePosition ? "" : "max-sm:hidden"}`}>
               <PositionTag position={position} />
-              {[["Easiest", rows.slice(0, SHOWN), "--pos"], ["Toughest", rows.slice(-SHOWN).reverse(), "--neg"]].map(([label, entries, token]) => (
+              {[["Easiest", rows.slice(0, shown), "--pos"], ["Toughest", rows.slice(-shown).reverse(), "--neg"]].map(([label, entries, token]) => (
                 <div key={label} className="mt-2">
                   <div className="pb-1 text-[9.5px] font-bold uppercase tracking-[0.07em]" style={{ color: `color-mix(in srgb, var(${token}) 60%, var(--fg))` }}>
                     {label}
@@ -95,6 +117,9 @@ export function MatchupsCard({ week, season, boards, logos, isLoading, isError }
             </div>
           ))}
         </div>
+            );
+          }}
+        </FillBox>
       )}
       {ready && (
         <p className="mt-3 text-[10.5px] text-faint">

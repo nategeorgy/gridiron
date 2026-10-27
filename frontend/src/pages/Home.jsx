@@ -5,11 +5,14 @@
 //   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
 //      Explore chart;
 //   2. the featured game recap: targets and carries beside every possession;
-//   3. the week's players: the watchlist and Floor and Ceiling on the left, a
-//      reader-picked Head to Head on the right;
-//   4. Weekly Finishes, through the coming week, beside the record book;
-//   5. the Week N Preview: the slate, then matchups by position and the featured game's
+//   3. the season: the watchlist across the top when signed in, then Floor and Ceiling
+//      and Weekly Finishes beside a reader-picked Head to Head and the Record Book;
+//   4. the Week N Preview: the slate, then matchups by position and the featured game's
 //      tale of the tape.
+//
+// **No band ends with a gap under one column** (October 2026). Both columns stretch to
+// the taller one, and one card in each band (Every possession, Weekly Finishes, Matchups)
+// fills the difference with more of its own rows (`FillBox`).
 //
 // **Two seasons are in play from January to September.** The fantasy cards describe the
 // last season *played*; the ticker and the week-ahead cards describe the schedule, which
@@ -29,6 +32,7 @@ import { useScoring } from "../hooks/useScoring";
 import { ScoringPill } from "../components/ScoringPill";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
 import { scaledMinGames, weeksPlayed } from "../utils/qualify";
@@ -40,7 +44,7 @@ import { ScoreTicker } from "../components/home/ScoreTicker";
 import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
 import { PossessionsCard, TaleOfTheTapeCard, TargetsAndCarriesCard } from "../components/home/FeaturedGameCards";
 import { RecordBookCard } from "../components/home/RecordBookCard";
-import { FINISH_LIMITS, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
+import { FINISH_FETCH, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
 import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
 import { cardPercentileColumns, cardRankColumns } from "../constants/playerPage";
 import { FloorCeilingCard } from "../components/home/FloorCeilingCard";
@@ -105,6 +109,8 @@ export function Home() {
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
   const [finishPosition, setFinishPosition] = useState(FINISH_POSITIONS[1]);
+  // The two-column bands start here (homeLayout.js); below it every card is its natural height.
+  const twoColumns = useMediaQuery(`(min-width: ${HOME_LAYOUT.columns[0].from}px)`);
 
   // --- The scoreboard: the ticker's finals, and the week ahead for the bottom band.
   //     Which two weeks those are is the server's call. ---
@@ -153,7 +159,7 @@ export function Home() {
         position: finishPosition,
         scoring,
         min_games: minFinishGames,
-        limit: FINISH_LIMITS[finishPosition],
+        limit: FINISH_FETCH,
         sort: "total",
       }),
       [season, finishPosition, scoring, minFinishGames],
@@ -307,6 +313,7 @@ export function Home() {
         result={finishes.data}
         isLoading={finishes.isLoading}
         isError={finishes.isError}
+        fill={twoColumns}
       />
     ),
     previewHeading: upcoming?.games?.length ? (
@@ -377,12 +384,14 @@ export function Home() {
               </div>
             );
           }
+          // Both columns stretch to the band's height and each column's last card takes what
+          // is left, so a shorter column never leaves a gap under it.
           return (
-            <div key={index} className="grid grid-cols-1 items-start gap-4" data-home-columns="">
+            <div key={index} className="grid grid-cols-1 items-stretch gap-4" data-home-columns="">
               {band.cards.map((keys, column) => {
                 const contents = present(keys);
                 return contents.length ? (
-                  <div key={column} className="grid min-w-0 gap-4">{contents}</div>
+                  <div key={column} className="flex min-w-0 flex-col gap-4 [&>*:last-child]:flex-1">{contents}</div>
                 ) : (
                   <div key={column} className="hidden" />
                 );

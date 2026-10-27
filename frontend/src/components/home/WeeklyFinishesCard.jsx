@@ -14,18 +14,28 @@
 // blank cell is a game not played yet (Monday night on a Monday). The grid stops at the
 // coming week, the one after `last_week`, so its byes show and the rest of the season does
 // not: the card shares its band with the Record Book (October 2026).
+//
+// **How many players it lists depends on where it sits.** On one column it shows the
+// position's usual count (`FINISH_LIMITS`). Beside Head to Head and the Record Book it
+// takes `fill` and shows as many as the band's height leaves room for, ten at the least,
+// so neither column ends short of the other. Either way the rows are the most points first,
+// re-sorted only within what is shown.
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { Card, CardHead, CardLink, CardState, Tabs } from "./primitives";
+import { Card, CardHead, CardLink, CardState, FillBox, Tabs } from "./primitives";
 import { Headshot } from "../explore/common";
 import { finishBand, finishBands, finishTier } from "../player/FinishChip";
 import { formatStat, shortName } from "../../utils/format";
 import { scoringLabel } from "../../constants/scoring";
 
 export const FINISH_POSITIONS = ["QB", "RB", "WR", "TE"];
-/** Rows per position: the deep positions get more, since a league starts more of them. */
+/** Rows per position on one column: the deep positions get more, since a league starts more of them. */
 export const FINISH_LIMITS = { QB: 20, RB: 30, WR: 30, TE: 20 };
+/** What the page asks for: enough for any height the band can give. */
+export const FINISH_FETCH = 40;
+// The fewest rows a filled card shows, and the table's measured header and row pitch.
+const FILL_MIN_ROWS = 10, HEAD_H = 34, ROW_H = 29;
 const TABS = FINISH_POSITIONS.map((value) => ({ value, label: value }));
 
 // The sortable columns on the right, and the direction each one is best in.
@@ -104,21 +114,26 @@ function ScaleKey({ position }) {
   );
 }
 
-export function WeeklyFinishesCard({ season, scoring, position, onPositionChange, minGames, result, isLoading, isError }) {
+export function WeeklyFinishesCard({ season, scoring, position, onPositionChange, minGames, result, isLoading, isError, fill = false }) {
   const [sort, setSort] = useState({ key: "total", descending: true });
   const lastWeek = result?.last_week ?? 0;
   const weeks = (result?.weeks ?? []).filter((week) => week <= lastWeek + 1);
   const top = finishBands(position)[0].to;
 
-  const rows = useMemo(() => {
-    const withSummary = (result?.data ?? []).map((row) => ({ ...row, ...summarize(row, position) }));
+  const allRows = useMemo(
+    () => (result?.data ?? []).map((row) => ({ ...row, ...summarize(row, position) })),
+    [result, position],
+  );
+  /** The first `count` by total points, in the chosen order. Ties keep the endpoint's order. */
+  const shownRows = (count) => {
     const value = (row) => ({ total: row.fantasy_points, ppg: row.fantasy_ppg, top: row.top, duds: row.duds })[sort.key];
-    // Ties keep the endpoint's order, which is total points.
-    return withSummary
+    return allRows
+      .slice(0, count)
       .map((row, index) => ({ row, index }))
       .sort((a, b) => (sort.descending ? value(b.row) - value(a.row) : value(a.row) - value(b.row)) || a.index - b.index)
       .map(({ row }) => row);
-  }, [result, position, sort]);
+  };
+  const tableWidth = TABLE_BASE + weeks.length * WEEK_WIDTH;
 
   const onSort = (key) =>
     setSort((current) =>
@@ -149,10 +164,19 @@ export function WeeklyFinishesCard({ season, scoring, position, onPositionChange
       <CardHead title="Weekly Finishes" sub={sub}>
         <Tabs options={TABS} value={position} onChange={onPositionChange} label="Position" />
       </CardHead>
-      <CardState isLoading={isLoading} isError={isError} isEmpty={rows.length === 0} empty="No games played yet this season." rows={8} />
-      {rows.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-y-[3px] text-left text-sm" style={{ minWidth: TABLE_BASE + weeks.length * WEEK_WIDTH }}>
+      <CardState isLoading={isLoading} isError={isError} isEmpty={allRows.length === 0} empty="No games played yet this season." rows={8} />
+      {allRows.length > 0 && (
+        <FillBox
+          minHeight={HEAD_H + Math.min(allRows.length, fill ? FILL_MIN_ROWS : FINISH_LIMITS[position]) * ROW_H}
+          className="overflow-x-auto overflow-y-hidden"
+        >
+          {({ width, height }) => {
+            // A table wider than its box scrolls, and a scrollbar that takes space takes it
+            // from the last row.
+            const room = height - HEAD_H - (tableWidth > width ? 14 : 0);
+            const rows = shownRows(fill ? Math.max(FILL_MIN_ROWS, Math.floor(room / ROW_H)) : FINISH_LIMITS[position]);
+            return (
+          <table className="w-full border-separate border-spacing-y-[3px] text-left text-sm" style={{ minWidth: tableWidth }}>
             <thead>
               <tr>
                 <th className="pin-col w-px whitespace-nowrap pb-2 pl-1 text-[9.5px] font-bold uppercase tracking-[0.07em] text-faint">Player</th>
@@ -201,9 +225,11 @@ export function WeeklyFinishesCard({ season, scoring, position, onPositionChange
               ))}
             </tbody>
           </table>
-        </div>
+            );
+          }}
+        </FillBox>
       )}
-      {rows.length > 0 && (
+      {allRows.length > 0 && (
         <div className="mt-3 pb-3">
           <ScaleKey position={position} />
         </div>

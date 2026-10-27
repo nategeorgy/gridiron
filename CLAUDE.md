@@ -1437,6 +1437,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       measured width (`useElementWidth`), so they read in the narrow column and on a phone.
       Chosen from the tweet card mockups. Frontend only; the three retired cards stay in
       `components/home/`
+- [x] No gaps on the home page (October 2026). Every two-column band stretches both columns to
+      the taller one, and one card per band fills the difference with more of its own rows
+      (`FillBox` in `components/home/primitives.jsx`): drive rows and tape rows grow, Weekly
+      Finishes lists more players, Matchups more teams. The season band is now Floor and Ceiling
+      and Weekly Finishes beside Head to Head and the Record Book. ⚠️ **A new two-column pairing
+      needs one card that can fill, last in its column**, or the gap comes back. Measured at
+      1,060 to 1,600px with a receiver pair, a back pair and every Weekly Finishes tab: no column
+      ends short, and no card holds more than about a row of spare space
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is

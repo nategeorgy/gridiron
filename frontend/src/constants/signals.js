@@ -50,8 +50,8 @@ export const HIGHLIGHTED_VIZ = {
   kind: "network",
   season: 2026,
   // The season so far. Name `weeks` (e.g. "4") to feature a single week instead.
-  passerId: "00-0036442", // Joe Burrow
-  team: "CIN",
+  passerId: "00-0039918", // Caleb Williams
+  team: "CHI",
 };
 
 /**
