@@ -103,7 +103,8 @@ def main():
         return gid, {"header": get(f"/games/{gid}"), "preview": get(f"/games/{gid}/preview", scoring="ppr")}
 
     with ThreadPoolExecutor(4) as pool:
-        out["recaps"] = dict(pool.map(recap, games[RECAP_WEEK]))
+        # Only games already played: a week can be recapped before Monday night is.
+        out["recaps"] = dict(pool.map(recap, [g for g in games[RECAP_WEEK] if g["played"]]))
         out["previews"] = dict(pool.map(preview, games[PREVIEW_WEEK]))
     print("recaps", len(out["recaps"]), "previews", len(out["previews"]), file=sys.stderr)
 

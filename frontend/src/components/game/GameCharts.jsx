@@ -6,6 +6,8 @@
 // through teamText so it reads on both themes.
 import { usePhone } from "../../hooks/useMediaQuery";
 import { lastName, signed } from "../../utils/explore";
+import { ordinal } from "../../utils/format";
+import { formatTeamStat } from "../../utils/teamStats";
 import { teamText } from "./colors";
 
 const MONO = "'JetBrains Mono', ui-monospace, monospace";
@@ -191,22 +193,28 @@ const TOUCH_ROWS = 7;
  * row per player, circles for targets (filled when caught), squares for carries, a ring
  * in the accent for a touchdown. `end` is the game's last second, so both teams' charts
  * share one clock.
+ *
+ * A caller that measures its card passes `width`, and the chart draws at that size:
+ * surnames below 640px, and the target and carry counts kept down to 420px. Without it,
+ * the game page's two boxes.
  */
-export function TouchTimeline({ touches, players, color, end, periods, seasonType }) {
+export function TouchTimeline({ touches, players, color, end, periods, seasonType, width }) {
   const phone = usePhone();
   const counts = {};
   for (const touch of touches) counts[touch.player] = (counts[touch.player] ?? 0) + 1;
   const rows = players.filter((p) => (counts[p.player_id] ?? 0) >= 2)
     .sort((a, b) => counts[b.player_id] - counts[a.player_id]).slice(0, TOUCH_ROWS);
   if (!rows.length) return null;
-  const W = phone ? 380 : 1180, rowH = phone ? 30 : 34;
-  const pad = phone ? { l: 98, r: 8, t: 22, b: 4 } : { l: 180, r: 120, t: 22, b: 4 };
+  const narrow = width ? width < 640 : phone;
+  const showCounts = width ? width >= 420 : !phone;
+  const W = width || (phone ? 380 : 1180), rowH = narrow ? 30 : 34;
+  const pad = !narrow ? { l: 180, r: 120, t: 22, b: 4 } : showCounts ? { l: 112, r: 84, t: 22, b: 4 } : { l: 98, r: 8, t: 22, b: 4 };
   const H = pad.t + rows.length * rowH + pad.b;
   const total = Math.max(end, 3600);
   const x = lin(0, total, pad.l, W - pad.r);
   const quarters = [[1, 0, 900], [2, 900, 1800], [3, 1800, 2700], [4, 2700, 3600]];
   if (total > 3600) quarters.push([5, 3600, total]);
-  const mark = phone ? 4 : 5.5;
+  const mark = narrow ? 4 : 5.5;
   const clock = (t) => {
     const quarter = t >= 3600 ? 5 : Math.min(4, Math.floor(t / 900) + 1);
     // A regular-season overtime is ten minutes, a playoff one fifteen.
@@ -229,11 +237,11 @@ export function TouchTimeline({ touches, players, color, end, periods, seasonTyp
         return (
           <g key={player.player_id}>
             <line x1={pad.l} x2={W - pad.r} y1={cy} y2={cy} stroke="var(--divider)" />
-            <Face player={player} cx={12} cy={cy} r={phone ? 9 : 11} ring={color} />
-            <text x={phone ? 26 : 30} y={cy + 4} fontSize={phone ? 11 : 12.5} fontWeight="600" fill="var(--fg)">{phone ? lastName(player.name) : player.name}</text>
-            {!phone && (
-              <text x={W - pad.r + 14} y={cy + 4} fontSize="11.5" fill="var(--muted)" fontFamily={MONO}>
-                <tspan fontWeight="700" fill="var(--fg)">{targets}</tspan> tgt · <tspan fontWeight="700" fill="var(--fg)">{mine.length - targets}</tspan> car
+            <Face player={player} cx={12} cy={cy} r={narrow ? 9 : 11} ring={color} />
+            <text x={narrow ? 26 : 30} y={cy + 4} fontSize={narrow ? 11 : 12.5} fontWeight="600" fill="var(--fg)">{narrow ? lastName(player.name) : player.name}</text>
+            {showCounts && (
+              <text x={W - pad.r + (narrow ? 8 : 14)} y={cy + 4} fontSize={narrow ? 10.5 : 11.5} fill="var(--muted)" fontFamily={MONO}>
+                <tspan fontWeight="700" fill="var(--fg)">{targets}</tspan> tgt{narrow ? " " : " · "}<tspan fontWeight="700" fill="var(--fg)">{mine.length - targets}</tspan> car
               </text>
             )}
             {mine.map((touch, at) => {
@@ -262,12 +270,20 @@ export function TouchTimeline({ touches, players, color, end, periods, seasonTyp
 /**
  * Every drive as a bar from where it started to where it ended, all running toward the
  * end zone on the right. Scoring drives are solid, the rest outlined.
+ *
+ * Like TouchTimeline, a measured `width` draws the chart at that size: below 700px the
+ * rows tighten and the plays and yards column goes, since the bar already shows the yards.
+ * `rowHeight` sets the rows' height instead, for a card that fills a given height.
  */
-export function DriveChart({ drives, colors, away, logos, periods }) {
+export function DriveChart({ drives, colors, away, logos, periods, width, rowHeight }) {
   const phone = usePhone();
   if (!drives?.length) return null;
-  const W = phone ? 380 : 1320, rowH = 26;
-  const pad = phone ? { l: 70, r: 64, t: 26, b: 8 } : { l: 132, r: 300, t: 26, b: 8 };
+  const narrow = width ? width < 700 : phone;
+  const W = width || (phone ? 380 : 1320), rowH = rowHeight || (width && narrow ? 22 : 26);
+  const barH = Math.min(rowH / 2, 15);
+  const pad = !narrow ? { l: 132, r: 300, t: 26, b: 8 } : width ? { l: 88, r: 92, t: 24, b: 6 } : { l: 70, r: 64, t: 26, b: 8 };
+  const logoSize = width && narrow ? 16 : 18;
+  const textY = rowH / 2 + 4;
   const H = pad.t + drives.length * rowH + pad.b;
   const x = lin(0, 100, pad.l, W - pad.r);
   const lines = [];
@@ -279,7 +295,7 @@ export function DriveChart({ drives, colors, away, logos, periods }) {
       {lines.map((yard) => (
         <g key={yard}>
           <line x1={x(yard)} x2={x(yard)} y1={pad.t - 4} y2={H - pad.b} stroke={yard === 50 ? "var(--plot-rule)" : "var(--divider)"} />
-          {(!phone || yard % 20 === 10 || yard === 50) && (
+          {(!narrow || yard % 20 === 10 || yard === 50) && (
             <text x={x(yard)} y={pad.t - 10} textAnchor="middle" fontSize="10" fill="var(--faint)" fontFamily={MONO}>{yard <= 50 ? yard : 100 - yard}</text>
           )}
         </g>
@@ -297,18 +313,18 @@ export function DriveChart({ drives, colors, away, logos, periods }) {
         return (
           <g key={drive.drive}>
             {divider && <line x1="0" x2={W} y1={yy} y2={yy} stroke="var(--border-strong)" />}
-            {logos?.[drive.team] && <image href={logos[drive.team]} x="2" y={yy + 4} width="18" height="18" />}
-            <text x="26" y={yy + 17} fontSize="11.5" fontWeight="600" fill="var(--muted)" fontFamily={MONO}>{clock}</text>
-            <rect x={Math.min(start, finish)} y={yy + 6.5} width={Math.max(3, Math.abs(finish - start))} height={rowH - 13} rx="4"
+            {logos?.[drive.team] && <image href={logos[drive.team]} x="2" y={yy + (rowH - logoSize) / 2} width={logoSize} height={logoSize} />}
+            <text x={logoSize + 8} y={yy + textY} fontSize={width && narrow ? 10.5 : 11.5} fontWeight="600" fill="var(--muted)" fontFamily={MONO}>{clock}</text>
+            <rect x={Math.min(start, finish)} y={yy + (rowH - barH) / 2} width={Math.max(3, Math.abs(finish - start))} height={barH} rx="4"
               fill={scored ? color : "var(--surface-2)"} stroke={color} strokeWidth="1.4">
               <title>{`${drive.team} · ${drive.result} · ${drive.plays} plays, ${drive.yards} yards, ${top}`}</title>
             </rect>
             <circle cx={start} cy={yy + rowH / 2} r="3" fill="var(--fg)" />
-            <text x={x(108) + 10} y={yy + 17} fontSize="12" fontWeight={scored ? 800 : 600} fill={scored ? "var(--fg)" : "var(--muted)"}>
+            <text x={x(108) + 10} y={yy + textY} fontSize={width && narrow ? 11 : 12} fontWeight={scored ? 800 : 600} fill={scored ? "var(--fg)" : "var(--muted)"}>
               {short}{drive.points ? <tspan fill="var(--faint)" fontWeight="600">{` +${drive.points}`}</tspan> : null}
             </text>
-            {!phone && (
-              <text x={W - 4} y={yy + 17} textAnchor="end" fontSize="11" fill="var(--faint)" fontFamily={MONO}>{`${drive.plays} plays · ${drive.yards} yds · ${top}`}</text>
+            {!narrow && (
+              <text x={W - 4} y={yy + textY} textAnchor="end" fontSize="11" fill="var(--faint)" fontFamily={MONO}>{`${drive.plays} plays · ${drive.yards} yds · ${top}`}</text>
             )}
           </g>
         );
@@ -367,3 +383,78 @@ export function GameTrendChart({ trend, away, home, colors, metric = "net" }) {
     </svg>
   );
 }
+
+// The tale of the tape's rows, in the tweet kit's order (B3), with labels short enough
+// for a narrow card. The preview's own `tape` carries more; these are the ones that say
+// who should move the ball.
+export const TAPE_ROWS = [
+  ["epa", "EPA per play"],
+  ["suc", "Success rate"],
+  ["p_epa", "EPA per dropback"],
+  ["r_epa", "EPA per run"],
+  ["explosive", "Explosive rate"],
+  ["pts_drive", "Points per drive"],
+  ["rz_td", "Red zone TD rate"],
+  ["d3", "Third down rate"],
+  ["sack_rate", "Sack rate"],
+];
+
+/**
+ * One offense against the defense it faces, as rank tracks (the tweet kit's B3): each
+ * stat a track from 1st to last, the offense's season rank and the defense's on it, joined
+ * in the colour of whichever side has the edge. `tape` is the preview's rows, `colors`
+ * maps each team to its game colour, `width` is the card's measured width, and
+ * `rowHeight` (25 by default) lets a card that fills a given height space the rows out.
+ */
+export function TapeTracks({ tape, ranked, offense, defense, colors, logos, width, rowHeight = 25 }) {
+  if (!width) return null;
+  const rows = TAPE_ROWS.map(([id, label]) => {
+    const row = tape?.find((item) => item.id === id);
+    return row && { ...row, short: label };
+  }).filter(Boolean);
+  const narrow = width < 420;
+  const labelW = narrow ? 100 : 122, rankW = 36, rowH = rowHeight, top = 18;
+  const tx0 = labelW + 12, tx1 = width - rankW * 2 - 14;
+  const x = lin(1, ranked, tx0, tx1);
+  const H = top + rows.length * rowH + 2;
+  const marker = 9.5;
+  return (
+    <svg viewBox={`0 0 ${width} ${H}`} className="block h-auto w-full" role="img" aria-label={`${offense} offense against ${defense} defense`}>
+      <text x={tx0} y="11" fontSize="10" fontWeight="700" fill="var(--faint)">Best</text>
+      <text x={tx1} y="11" textAnchor="end" fontSize="10" fontWeight="700" fill="var(--faint)">{`${ordinal(ranked)}`}</text>
+      {[offense, defense].map((team, index) => (
+        <text key={team} x={tx1 + 14 + rankW * index + rankW / 2} y="11" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--faint)">{team}</text>
+      ))}
+      {rows.map((row, index) => {
+        const cy = top + index * rowH + rowH / 2;
+        const off = row.o?.[offense], def = row.d?.[defense];
+        const edge = off && def ? (off[1] < def[1] ? offense : def[1] < off[1] ? defense : null) : null;
+        const close = off && def && Math.abs(x(off[1]) - x(def[1])) < marker * 2 + 2;
+        const tip = `${row.label}: ${offense} offense ${off ? `${formatTeamStat(off[0], row.fmt)} (${ordinal(off[1])})` : "no rank"}, ${defense} defense ${def ? `${formatTeamStat(def[0], row.fmt)} (${ordinal(def[1])})` : "no rank"}`;
+        return (
+          <g key={row.id}>
+            <title>{tip}</title>
+            <text x="0" y={cy + 4} fontSize={narrow ? 11 : 11.5} fontWeight="600" fill="var(--muted)">{row.short}</text>
+            <line x1={tx0} x2={tx1} y1={cy} y2={cy} stroke="var(--divider)" strokeWidth="4" strokeLinecap="round" />
+            {off && def && (
+              <line x1={x(off[1])} x2={x(def[1])} y1={cy} y2={cy} stroke={edge ? colors[edge] : "var(--muted)"} strokeWidth="4" strokeLinecap="round" opacity="0.85" />
+            )}
+            {[[defense, def, close ? 4.5 : 0], [offense, off, close ? -4.5 : 0]].map(([team, cell, dy]) => cell && (
+              <g key={team}>
+                <circle cx={x(cell[1])} cy={cy + dy} r={marker} fill="var(--surface-solid)" stroke={colors[team]} strokeWidth="1.8" />
+                {logos?.[team] && <image href={logos[team]} x={x(cell[1]) - 6.5} y={cy + dy - 6.5} width="13" height="13" />}
+              </g>
+            ))}
+            {[[offense, off], [defense, def]].map(([team, cell], column) => (
+              <text key={team} x={tx1 + 14 + rankW * column + rankW / 2} y={cy + 4} textAnchor="middle" fontSize="11.5" fontWeight="700" fontFamily={MONO}
+                fill={edge === team ? teamText(colors[team]) : "var(--fg)"}>
+                {ordinal(cell?.[1])}
+              </text>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+

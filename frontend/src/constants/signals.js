@@ -22,10 +22,22 @@ export const SIGNALS_SEASON = 2026;
  * included; a pair the reader picks gets the whole season again.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0039491", "00-0040124"], // Jalen Coker, Tetairoa McMillan
-  // Week 3 is left out: Coker played 36% of the snaps. Carolina's bye was Week 5.
-  weeks: "1,2,6",
-  caption: `${SIGNALS_SEASON} · Weeks 1, 2 and 6`,
+  players: ["00-0040735", "00-0039919"], // Luther Burden III, Rome Odunze
+  caption: `${SIGNALS_SEASON} season`,
+};
+
+/**
+ * The featured games (October 2026): a game just played, drawn as who got the ball and
+ * every possession in the row under the Highlighted Viz, and a game coming up, drawn as
+ * the tale of the tape in the Week N Preview. Game ids as /games names them.
+ *
+ * A pick only shows while its game is in the week the scoreboard calls last (the recap)
+ * or next (the preview). Otherwise the page takes the closest finish and the biggest
+ * total, so the week flipping before these are re-picked never shows last week's game.
+ */
+export const FEATURED_GAMES = {
+  recap: "2026_07_GB_DET", // Packers 17 at Lions 20
+  preview: "2026_08_BAL_BUF", // Ravens at Bills, a 53.5 total
 };
 
 /**
@@ -55,35 +67,33 @@ export const HIGHLIGHTED_VIZ = {
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 6,
+  week: 7,
   entries: [
     {
-      // Second only to Wes Welker's 2011 in PPR and half-PPR; third in standard, where
-      // Tyreek Hill's 2023 passes both.
+      // A record in PPR, half-PPR and standard, ahead of Cooper Kupp's 2021 and Tyreek
+      // Hill's 2023. Wes Welker's 2011, ahead of him through Week 6, had its bye in Week 7.
       kind: "leaders",
       playerId: "00-0038543", // Jaxon Smith-Njigba
-      title: "Most fantasy points by a wide receiver through Week 6",
-      query: { grain: "seasons", positions: "WR", last_week: 6, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
+      title: "Most fantasy points by a wide receiver through Week 7",
+      query: { grain: "seasons", positions: "WR", last_week: 7, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
     },
     {
-      // A record in PPR and half-PPR, ahead of Christian McCaffrey's 2019 (30.2); third in
-      // standard, behind Todd Gurley (2018) and Derrick Henry (2021). The four-game floor
-      // keeps a two-game start off the list.
+      // 59, a record ahead of Zach Ertz's 57 in 2018. His 78 targets tie Ertz's for the most.
       kind: "leaders",
-      playerId: "00-0039139", // Jahmyr Gibbs
-      title: "Most fantasy points per game by a running back through Week 6",
-      stat: "fantasy_ppg",
-      format: 1,
-      query: { grain: "seasons", positions: "RB", last_week: 6, where: "fantasy_ppg::,games:4:", sort: "fantasy_ppg", order: "desc", limit: 3 },
+      playerId: "00-0037744", // Trey McBride
+      title: "Most catches by a tight end through Week 7",
+      stat: "receptions",
+      format: 0,
+      query: { grain: "seasons", positions: "TE", last_week: 7, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
     },
     {
-      // The others are Michael Crabtree (Week 15, 2017) and Austin Ekeler (Week 6, 2022).
+      // One of 15 such games since 2009, and the only one this season. The open ranges on
+      // catches and touchdowns are there so the rows carry them for the line.
       kind: "count",
-      playerId: "00-0040129", // Emeka Egbuka
-      title: "16+ targets and fewer than 50 receiving yards",
-      seasonCount: false,
-      query: { grain: "games", positions: "RB,WR,TE", where: "targets:16:,receiving_yards::49,receptions::", sort: "targets", order: "desc", limit: 50 },
-      line: (row) => `${row.targets} targets, ${row.receptions} catches, ${row.receiving_yards} yds`,
+      playerId: "00-0040735", // Luther Burden III
+      title: "130+ receiving yards on 4 or fewer targets",
+      query: { grain: "games", positions: "RB,WR,TE", where: "receiving_yards:130:,targets::4,receptions::,receiving_tds::", sort: "receiving_yards", order: "desc", limit: 50 },
+      line: (row) => `${row.receptions} catches on ${row.targets} targets, ${row.receiving_yards} yds, ${row.receiving_tds} TD`,
     },
   ],
 };

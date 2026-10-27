@@ -938,12 +938,15 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
 - **Home = Command Center** — the home page (`/`) is a fantasy **Command Center**,
   *not* the leaderboard. Rebuilt in October 2026 as **"Option C"** (it was M10's two-column
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
-  **Highlighted Viz of the Week**; a row of Explore cards (team landscape, air-yard
-  distribution, record book); the week's players (Floor and Ceiling, which replaced Expected
+  **Highlighted Viz of the Week**; a **featured game recap** (targets and carries beside every
+  possession, which replaced the team landscape and air-yard cards in October 2026); the week's
+  players (Floor and Ceiling, which replaced Expected
   vs Actual in October 2026, and a reader-picked head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
-  red, which replaced Trending Players and Last Week's Scoring in October 2026); and a **Week N
+  red, which replaced Trending Players and Last Week's Scoring in October 2026), cut at the coming
+  week and sharing its band with the **Record Book**; and a **Week N
   Preview** (the slate,
-  matchups by position, implied totals). The arrangement is data, in `constants/homeLayout.js`.
+  matchups by position, and the featured game's tale of the tape, which replaced implied totals).
+  The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
   in the code and in these docs. The nav holds **five dropdowns**: **Insight**
   (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
@@ -1423,6 +1426,25 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       its head-to-head (D6) replaces the margin table and radars on the player page and the home
       page's Head to Head (`components/player/HeadToHead.jsx`). One new registry metric,
       `rushing_yards_per_game`, for the quarterback card. No migration
+- [x] Featured games on the home page (October 2026). One game just played and one coming up,
+      picked in `FEATURED_GAMES` (`constants/signals.js`); a pick outside the scoreboard's weeks
+      falls back to the closest finish and the biggest total, so the week flipping first never
+      shows last week's game. The recap takes the two slots Team Landscape and Air-Yard
+      Distribution had: **targets and carries** (the kit's "Who got the ball") and **every
+      possession**, the game page's `TouchTimeline` and `DriveChart`, as their own row. The Record
+      Book moved beside Weekly Finishes, whose grid now stops at the coming week. The preview's **tale of the tape** (`TapeTracks`, the
+      tweet kit's B3 as rank tracks) replaces Week N Environments. The charts draw at their card's
+      measured width (`useElementWidth`), so they read in the narrow column and on a phone.
+      Chosen from the tweet card mockups. Frontend only; the three retired cards stay in
+      `components/home/`
+- [x] No gaps on the home page (October 2026). Every two-column band stretches both columns to
+      the taller one, and one card per band fills the difference with more of its own rows
+      (`FillBox` in `components/home/primitives.jsx`): drive rows and tape rows grow, Weekly
+      Finishes lists more players, Matchups more teams. The season band is now Floor and Ceiling
+      and Weekly Finishes beside Head to Head and the Record Book. ⚠️ **A new two-column pairing
+      needs one card that can fill, last in its column**, or the gap comes back. Measured at
+      1,060 to 1,600px with a receiver pair, a back pair and every Weekly Finishes tab: no column
+      ends short, and no card holds more than about a row of spare space
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is

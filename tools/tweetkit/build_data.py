@@ -120,6 +120,8 @@ def short_text(text):
 recaps = []
 for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get("kickoff_time") or "")):
     gid = game["game_id"]
+    if gid not in recaps_raw:  # not played yet
+        continue
     raw = recaps_raw[gid]
     h, rc = raw["header"], raw["recap"]
     for p in rc["players"]:

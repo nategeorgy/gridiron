@@ -6,9 +6,29 @@
 // different treatments of the same thing.
 import { Link } from "react-router-dom";
 import { PositionTag } from "../PositionTag";
+import { useElementSize } from "../../hooks/useElementSize";
 
 export function Card({ children, className = "" }) {
   return <section className={`glass-card flex min-w-0 flex-col p-4 ${className}`}>{children}</section>;
+}
+
+/**
+ * The part of a card that takes whatever height its band leaves it (October 2026).
+ *
+ * The home page's two-column bands stretch both columns to the taller one so no gap opens
+ * under a shorter card, and one card in each band then fills the space with more of its own
+ * rows rather than blank space. The contents are drawn in an absolutely placed box, so they
+ * never prop the band open: the band's height comes from the cards' natural heights and
+ * `minHeight`, and `children(size)` lays out for the size that leaves. Nothing measured
+ * feeds back into the layout it was measured from, so it cannot oscillate.
+ */
+export function FillBox({ minHeight, className = "", children }) {
+  const [ref, size] = useElementSize();
+  return (
+    <div ref={ref} className="relative flex-1" style={{ minHeight }}>
+      {size.height > 0 && <div className={`absolute inset-0 ${className}`}>{children(size)}</div>}
+    </div>
+  );
 }
 
 export function CardHead({ title, sub, children }) {
@@ -77,9 +97,11 @@ export function CardState({ isLoading, isError, isEmpty, empty = "Nothing to sho
   return null;
 }
 
+// `mt-auto` keeps the link at the foot of a card its band has stretched, so any spare
+// height sits above the link rather than below it.
 export function CardLink({ to, children }) {
   return (
-    <div className="mt-3">
+    <div className="mt-auto pt-3">
       <Link to={to} className="inline-block py-1.5 text-[11.5px] font-semibold text-muted transition hover:text-accent">
         {children} →
       </Link>

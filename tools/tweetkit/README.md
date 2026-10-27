@@ -13,7 +13,9 @@ week only when it is rebuilt and published again.
 1. Once your local database has the new week (Tuesday, after Monday night's game is loaded),
    start the backend from the main checkout: `cd backend && .venv/bin/uvicorn app.main:app --port 8000`.
 2. Run `tools/tweetkit/refresh.sh`. It pulls the newest fully played week (recaps) and the
-   week after it (previews), rebuilds the page and checks every card.
+   week after it (previews), rebuilds the page and checks every card. To refresh before
+   Monday night is in, name the week (`refresh.sh --week 7`): games not yet played are left
+   out of the recap picker.
 3. Ask Claude to publish `tools/tweetkit/index.html` to the review page below with
    `capabilities: {downloads: true}`. Publishing to the same link keeps it; publishing
    without the link makes a new page.

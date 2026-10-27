@@ -4,48 +4,51 @@
 //
 //   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
 //      Explore chart;
-//   2. a row of Explore cards: the team landscape, air yards, the record book;
-//   3. the week's players: the watchlist and Floor and Ceiling on the left, a
-//      reader-picked Head to Head on the right;
-//   4. Weekly Finishes: a position's top scorers and where each finished every week;
-//   5. the Week N Preview: the slate, then matchups by position and implied team totals.
+//   2. the featured game recap: targets and carries beside every possession;
+//   3. the season: the watchlist across the top when signed in, then Floor and Ceiling
+//      and Weekly Finishes beside a reader-picked Head to Head and the Record Book;
+//   4. the Week N Preview: the slate, then matchups by position and the featured game's
+//      tale of the tape.
+//
+// **No band ends with a gap under one column** (October 2026). Both columns stretch to
+// the taller one, and one card in each band (Every possession, Weekly Finishes, Matchups)
+// fills the difference with more of its own rows (`FillBox`).
 //
 // **Two seasons are in play from January to September.** The fantasy cards describe the
 // last season *played*; the ticker and the week-ahead cards describe the schedule, which
 // runs a year ahead. Every card names its own season rather than the page claiming one.
 import { cloneElement, useMemo, useState } from "react";
 
-import { useScoreboard } from "../hooks/useGames";
+import { useGame, useGamePreview, useGameRecap, useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
-import { useNetwork, usePlayersById, useTargetBoard } from "../hooks/useExplore";
+import { useNetwork, usePlayersById } from "../hooks/useExplore";
 import { usePlayerSeason } from "../hooks/usePlayer";
 import { useSos } from "../hooks/useDraftBoard";
 import { useWeeklyFinishes } from "../hooks/useWeeklyFinishes";
-import { useTeamsList, useTeamStats } from "../hooks/useTeamStats";
+import { useTeamsList } from "../hooks/useTeamStats";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
 import { useScoring } from "../hooks/useScoring";
 import { ScoringPill } from "../components/ScoringPill";
 import { useLeague } from "../hooks/useLeague";
 import { useMetrics } from "../hooks/useMetrics";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSeasons } from "../hooks/useSeasons";
 import { useUrlState } from "../hooks/useUrlState";
 import { scaledMinGames, weeksPlayed } from "../utils/qualify";
-import { FEATURED_MATCHUP, HIGHLIGHTED_VIZ, RECORD_BOOK, SIGNALS_SEASON } from "../constants/signals";
+import { FEATURED_GAMES, FEATURED_MATCHUP, HIGHLIGHTED_VIZ, RECORD_BOOK, SIGNALS_SEASON } from "../constants/signals";
 import { HOME_LAYOUT } from "../constants/homeLayout";
 import { shapeNetwork } from "../components/explore/NetworkChart";
 
 import { ScoreTicker } from "../components/home/ScoreTicker";
 import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
-import { AirYardsCard } from "../components/home/AirYardsCard";
-import { TeamLandscapeCard } from "../components/home/TeamLandscapeCard";
+import { PossessionsCard, TaleOfTheTapeCard, TargetsAndCarriesCard } from "../components/home/FeaturedGameCards";
 import { RecordBookCard } from "../components/home/RecordBookCard";
-import { FINISH_LIMITS, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
+import { FINISH_FETCH, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
 import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
 import { cardPercentileColumns, cardRankColumns } from "../constants/playerPage";
 import { FloorCeilingCard } from "../components/home/FloorCeilingCard";
 import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
-import { EnvironmentsCard } from "../components/home/EnvironmentsCard";
 import { SlateCard } from "../components/home/SlateCard";
 import { BandHeading } from "../components/home/BandHeading";
 import { dateParts } from "../components/schedule/kickoff";
@@ -53,9 +56,6 @@ import { MyPlayersCard } from "../components/home/BoardCards";
 
 // The same fixed-PPR fallback the leaderboard uses when the backend cannot score yet.
 const FANTASY_FALLBACK = { fantasy_points: "fantasy_points_ppr", fantasy_ppg: "fantasy_ppg_ppr" };
-
-// The air-yard card's floor: Target Analysis's own 25-target minimum.
-const AIR_YARDS_MIN_TARGETS = 25;
 
 // The watchlist card's seven stat columns, ranked within each player's own position for
 // the season (M12's `percentiles=`). The pool is the whole league at that position, not
@@ -88,6 +88,19 @@ function previewSub(games, teams) {
   return `${span} · ${byes.length ? `Byes: ${byes.join(", ")}` : "No byes"}`;
 }
 
+/**
+ * A featured game: the pick while it is one of `games` (the scoreboard's last or next
+ * week), and otherwise the game `fallback` chooses from them.
+ */
+function featuredGame(pick, games, fallback) {
+  if (!games?.length) return undefined;
+  if (games.some((game) => game.game_id === pick)) return pick;
+  return fallback(games)?.game_id;
+}
+const closestFinish = (games) =>
+  games.filter((game) => game.played).sort((a, b) => Math.abs(a.home_score - a.away_score) - Math.abs(b.home_score - b.away_score))[0];
+const biggestTotal = (games) => [...games].sort((a, b) => (b.total_line ?? -1) - (a.total_line ?? -1))[0];
+
 export function Home() {
   const [scoring, setScoring] = useScoring();
   const [league] = useLeague();
@@ -96,6 +109,8 @@ export function Home() {
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
   const [finishPosition, setFinishPosition] = useState(FINISH_POSITIONS[1]);
+  // The two-column bands start here (homeLayout.js); below it every card is its natural height.
+  const twoColumns = useMediaQuery(`(min-width: ${HOME_LAYOUT.columns[0].from}px)`);
 
   // --- The scoreboard: the ticker's finals, and the week ahead for the bottom band.
   //     Which two weeks those are is the server's call. ---
@@ -112,9 +127,16 @@ export function Home() {
   });
   const networkShape = useMemo(() => shapeNetwork(network.data, 7, 1), [network.data]);
 
-  // --- The Explore row. ---
-  const airYards = useTargetBoard({ season, positions: "WR", min_targets: AIR_YARDS_MIN_TARGETS });
-  const teamBoard = useTeamStats({ season, scoring });
+  // --- The featured games: a recap of one just played and a preview of one coming up.
+  //     Every request is one the game page makes, so opening the game is a cache hit. ---
+  const recapId = featuredGame(FEATURED_GAMES.recap, lastPlayed?.games, closestFinish);
+  const previewId = featuredGame(FEATURED_GAMES.preview, upcoming?.games, biggestTotal);
+  const recapGame = useGame(recapId);
+  const recap = useGameRecap(recapId, scoring);
+  const previewGame = useGame(previewId);
+  const preview = useGamePreview(previewId, scoring);
+  const recapLoading = scoreboard.isLoading || recapGame.isLoading || recap.isLoading;
+  const recapError = scoreboard.isError || recapGame.isError || recap.isError;
 
   // --- Floor and Ceiling: every game of the top FLEX scorers by points per game. The
   //     games floor is stated for a full season (12 of 18) and scaled to the weeks played.
@@ -137,7 +159,7 @@ export function Home() {
         position: finishPosition,
         scoring,
         min_games: minFinishGames,
-        limit: FINISH_LIMITS[finishPosition],
+        limit: FINISH_FETCH,
         sort: "total",
       }),
       [season, finishPosition, scoring, minFinishGames],
@@ -238,17 +260,11 @@ export function Home() {
         isError={network.isError}
       />
     ),
-    airYards: (
-      <AirYardsCard
-        season={season}
-        minTargets={AIR_YARDS_MIN_TARGETS}
-        players={airYards.data?.players}
-        isLoading={airYards.isLoading}
-        isError={airYards.isError}
-      />
+    targetsAndCarries: (
+      <TargetsAndCarriesCard game={recapGame.data} recap={recap.data} isLoading={recapLoading} isError={recapError} />
     ),
-    landscape: (
-      <TeamLandscapeCard board={teamBoard.data} season={season} isLoading={teamBoard.isLoading} isError={teamBoard.isError} />
+    possessions: (
+      <PossessionsCard game={recapGame.data} recap={recap.data} isLoading={recapLoading} isError={recapError} />
     ),
     recordBook: <RecordBookCard book={RECORD_BOOK} scoring={scoring} />,
     myPlayers:
@@ -297,6 +313,7 @@ export function Home() {
         result={finishes.data}
         isLoading={finishes.isLoading}
         isError={finishes.isError}
+        fill={twoColumns}
       />
     ),
     previewHeading: upcoming?.games?.length ? (
@@ -315,8 +332,13 @@ export function Home() {
         isError={MATCHUP_POSITIONS.every((position) => sosBoards[position].isError)}
       />
     ),
-    environments: (
-      <EnvironmentsCard upcoming={upcoming} isLoading={scoreboard.isLoading} isError={scoreboard.isError} />
+    taleOfTheTape: (
+      <TaleOfTheTapeCard
+        game={previewGame.data}
+        preview={preview.data}
+        isLoading={scoreboard.isLoading || previewGame.isLoading || preview.isLoading}
+        isError={scoreboard.isError || previewGame.isError || preview.isError}
+      />
     ),
   };
 
@@ -362,12 +384,14 @@ export function Home() {
               </div>
             );
           }
+          // Both columns stretch to the band's height and each column's last card takes what
+          // is left, so a shorter column never leaves a gap under it.
           return (
-            <div key={index} className="grid grid-cols-1 items-start gap-4" data-home-columns="">
+            <div key={index} className="grid grid-cols-1 items-stretch gap-4" data-home-columns="">
               {band.cards.map((keys, column) => {
                 const contents = present(keys);
                 return contents.length ? (
-                  <div key={column} className="grid min-w-0 gap-4">{contents}</div>
+                  <div key={column} className="flex min-w-0 flex-col gap-4 [&>*:last-child]:flex-1">{contents}</div>
                 ) : (
                   <div key={column} className="hidden" />
                 );
