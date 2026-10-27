@@ -86,5 +86,14 @@ export const RECORD_BOOK = {
       format: 0,
       query: { grain: "seasons", positions: "TE", last_week: 7, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
     },
+    {
+      // One of 15 such games since 2009, and the only one this season. The open ranges on
+      // catches and touchdowns are there so the rows carry them for the line.
+      kind: "count",
+      playerId: "00-0040735", // Luther Burden III
+      title: "130+ receiving yards on 4 or fewer targets",
+      query: { grain: "games", positions: "RB,WR,TE", where: "receiving_yards:130:,targets::4,receptions::,receiving_tds::", sort: "receiving_yards", order: "desc", limit: 50 },
+      line: (row) => `${row.receptions} catches on ${row.targets} targets, ${row.receiving_yards} yds, ${row.receiving_tds} TD`,
+    },
   ],
 };
