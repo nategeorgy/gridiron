@@ -155,7 +155,7 @@ function cardMatchupMap() {
   const lead = 290, cw = (w - pad * 2 - lead) / positions.length;
   let s = "";
   positions.forEach((p, i) => { s += T(pad + lead + cw * i + cw / 2, y, p, { size: 20, weight: 800, anchor: "middle", fill: posColor(p) }); });
-  s += T(pad + 220, y, "IMPLIED", { size: 14, weight: 700, anchor: "end", fill: "var(--faint)" });
+  s += T(pad + 250, y, "IMPLIED", { size: 14, weight: 700, anchor: "end", fill: "var(--faint)" });
   y += 16;
   const rowH = (fr.bottom - y - 40) / rows.length;
   rows.forEach((r, i) => {
@@ -164,7 +164,7 @@ function cardMatchupMap() {
     s += logo(r.team, pad, cy - 16, 32);
     s += T(pad + 42, cy + 7, r.team, { size: 20, weight: 800 });
     s += T(pad + 104, cy + 7, `${r.home ? "vs" : "@"} ${r.opp}`, { size: 18, fill: "var(--muted)" });
-    s += T(pad + 220, cy + 7, implied(r.implied), { size: 18, weight: 650, anchor: "end", mono: true, fill: "var(--muted)" });
+    s += T(pad + 250, cy + 7, implied(r.implied), { size: 18, weight: 650, anchor: "end", mono: true, fill: "var(--muted)" });
     positions.forEach((p, pi) => {
       const cell = r.pv.pa.defenses?.[r.opp]?.[p];
       const cx = pad + lead + cw * pi;
@@ -222,7 +222,11 @@ function cardWeekTop() {
 function driver(m) {
   if (m.position === "RB") {
     const dc = (m.c1 ?? 0) - (m.c0 ?? 0), dt = (m.t1 ?? 0) - (m.t0 ?? 0);
-    return Math.abs(dc) >= Math.abs(dt) * 1.5 ? `Carry share ${pct(m.c0)} → ${pct(m.c1)}` : `Target share ${pct(m.t0)} → ${pct(m.t1)}`;
+    // Name the share that moved the same way as expected points: a back whose carries rose
+    // while his targets fell is a riser on carries, however the two sizes compare.
+    const withMove = (d) => (m.x1 > m.x0 ? d > 0 : d < 0);
+    const carries = withMove(dc) !== withMove(dt) ? withMove(dc) : Math.abs(dc) >= Math.abs(dt) * 1.5;
+    return carries ? `Carry share ${pct(m.c0)} → ${pct(m.c1)}` : `Target share ${pct(m.t0)} → ${pct(m.t1)}`;
   }
   return `Target share ${pct(m.t0)} → ${pct(m.t1)}${Math.abs((m.s1 ?? 0) - (m.s0 ?? 0)) >= 0.1 ? `, snaps ${pct(m.s0)} → ${pct(m.s1)}` : ""}`;
 }
