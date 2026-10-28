@@ -55,7 +55,15 @@ node render.mjs C8 --opt pos=RB --highlight "Bijan Robinson,Jahmyr Gibbs"
 node render.mjs D1,D3 --player "Jaxon Smith-Njigba"
 node render.mjs D6 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba"
 node render.mjs E1,E2,E3,E4 --team DET
+node render.mjs A12 --game 2026_07_GB_DET --opt who="Jahmyr Gibbs"
+node render.mjs F1 --opt qb="Jared Goff" --opt tf=last4 --opt sit=red_zone
+node render.mjs F2 --opt grp=TE --opt view=ridge --opt tf=last3
+node render.mjs F3 --opt stat=rush_yds --opt pos=RB --opt per=game
+node render.mjs C12 --opt chart=wr-yprr --opt tf=last1
 ```
+
+A player control (`who`, `vs`, `qb`) takes a name or an id. Timeframes are `season`, `last4`, `last3`,
+`last2` and `last1` (the newest week).
 
 `--themes dark` renders one theme, `--scale 1` a quick small copy, `--out DIR` somewhere
 else. A player can be named or given by id. `--highlight ""` clears a chart's faces. Files are
@@ -78,6 +86,11 @@ means Nate chose it to post. **Controls** are what the page and `render.mjs` let
 | A5 | Team stats | 1200x1500 | Team box, each number ranked against the week, plus EPA per play by quarter | | Picked Oct 20 |
 | A6 | Drive chart | 1200x1500 | Every possession from where it started toward the end zone, with how it ended | | Added Oct 21 |
 | A7 | Points against expected | 1600x900 | Every player in the game: points against what his targets and carries were worth | Faces | Added Oct 21 |
+| A8 | Score and scoring plays | 1600x900 | Each team's score through the game as a step line, every scoring play numbered and listed | | Added Oct 28, no fantasy |
+| A9 | Box score | 1200x1500 | Passing, rushing and receiving lines for both teams, then yards, first downs, third downs, turnovers, sacks and possession | | Added Oct 28, no fantasy |
+| A10 | Passing networks | 1600x900 | Both quarterbacks' networks for the game: each receiver's share, depth and side, coloured by EPA per target | | Added Oct 28, no fantasy |
+| A11 | Passing charts | 1600x900 | Every targeted pass from both quarterbacks by depth and side, with completions, touchdowns and picks | | Added Oct 28, no fantasy |
+| A12 | Standout | 1600x900 | One player's line with his rank among the position that week, then every touch on the game clock (a quarterback's throws on the field) | Player | Added Oct 28, no fantasy |
 
 On every chart, hovering a dot on the page shows who it is and his numbers, and clicking it
 adds or removes his face (on C1, highlights the team). The hover targets draw nothing in a PNG.
@@ -88,9 +101,11 @@ adds or removes his face (on C1, highlights the team). The hover targets draw no
 |---|---|---|---|---|---|
 | B1 | Matchup | 1200x1500 | Line, implied totals, last five against the spread, four players to watch a side | | |
 | B2 | Fantasy matchup | 1200x1500 | PPG, expected PPG, weekly finishes, soft or tough matchup tag | | |
-| B3 | Tale of the tape | 1600x900 | Each offense's rank against the rank of the defense it faces. Titled with the matchup only (Oct 21) | | Picked Oct 20 |
+| B3 | Tale of the tape | 1600x900 | Offense against offense on the left, defense against defense on the right: both teams on one rank track per stat (reworked Oct 28). Titled with the matchup only | | Picked Oct 20 |
 | B4 | Usage by week | 1600x900 | Target share (receivers) or carry share (backs) every week, snap share under it | | Picked Oct 20 |
 | B6 | EPA by game | 1600x900 | Both offenses and both defenses game by game, against the league's middle half | | Added Oct 21 |
+| B7 | Quarterback matchup | 1200x1500 | The two quarterbacks as D9: real-life box score with ranks, then percentiles, the better one bold | | Added Oct 28, no fantasy |
+| B8 | How they play | 1600x900 | Tendencies on rank tracks (1st does it the most): pass rate, pace, motion, play action and more on offense; blitz, rushers, stacked boxes and what opponents do against them on defense | | Added Oct 28, no fantasy |
 
 ### C. Weekly series (no argument)
 
@@ -105,16 +120,17 @@ adds or removes his face (on C1, highlights the team). The hover targets draw no
 | C7 | Who is earning targets | 1600x900 | Route participation against targets per route run, receivers with 50+ routes and 50%+ participation | Faces | Added Oct 21 |
 | C8 | Points against expected | 1600x900 | Points per game against expected points per game, by position | Position, faces | Added Oct 21 |
 | C9 | Weekly finishes | 1200x1500 and up | A position's top scorers (QB 20, RB 30, WR 36, TE 20) and every week's finish | Position | Added Oct 21 |
-| C10 | QB scatter plots | 1600x900 | The site's Scatter page, quarterbacks: CPOE vs EPA, expected vs actual, depth vs CPOE | Chart, players, faces | Added Oct 21 |
-| C11 | RB scatter plots | 1600x900 | Carry share vs route %, expected vs actual, inside-5 carries vs TDs, yards after contact vs RYOE, target share vs YPRR | Chart, players, faces | Added Oct 21 |
-| C12 | WR scatter plots | 1600x900 | aDOT vs target share, expected vs actual, target share vs YPRR, TPRR vs YPRR, red zone targets vs TDs, route % vs TPRR | Chart, players, faces | Added Oct 21 |
-| C13 | TE scatter plots | 1600x900 | The same six charts as C12, for tight ends | Chart, players, faces | Added Oct 21 |
+| C10 | QB scatter plots | 1600x900 | The site's Scatter page, quarterbacks: CPOE vs EPA, expected vs actual, depth vs CPOE | Chart, timeframe, players, faces | Added Oct 21 |
+| C11 | RB scatter plots | 1600x900 | Carry share vs route %, expected vs actual, inside-5 carries vs TDs, yards after contact vs RYOE, target share vs YPRR | Chart, timeframe, players, faces | Added Oct 21 |
+| C12 | WR scatter plots | 1600x900 | aDOT vs target share, expected vs actual, target share vs YPRR, TPRR vs YPRR, red zone targets vs TDs, route % vs TPRR | Chart, timeframe, players, faces | Added Oct 21 |
+| C13 | TE scatter plots | 1600x900 | The same six charts as C12, for tight ends | Chart, timeframe, players, faces | Added Oct 21 |
 
 C10 to C13 are the presets in `frontend/src/constants/scatters.js`, mirrored in `SCATTERS` in
 `src/weekly.js`: add a chart to the site and it needs adding here too. Each plots the top 50
 qualified players in points by default (25, 100 or all), titled with the chart's question,
 dashed medians (or the scoring-as-expected diagonal) and the site's corner names. Quarterbacks
 also need 15+ pass attempts a game, since games played alone qualifies a backup with one throw.
+The timeframe (Oct 28) re-reads the qualified players for those weeks, as the site's timeframe filter does.
 
 ### D. Player reply cards (`--player`)
 
@@ -126,6 +142,9 @@ also need 15+ pass attempts a game, since games played alone qualifies a backup 
 | D5 | Every target | 1200x1500 | Every target by depth and side. QBs get every targeted pass, backs every carry by gap | | |
 | D6 | Head to head | 1200x1500 and up | Two players at one position: D1's numbers and percentiles side by side, the better one bold | Opponent | Added Oct 21 |
 | D7 | Where the points come from | 1600x900 | Each week's points split into yards, catches, touchdowns and turnovers, with the season's split | | Added Oct 21 |
+| D8 | Player card, real stats | 1200x1500 and up | D1 with no fantasy points: the box score as tiles with ranks, real-life percentile rows (`NFL_TILES`, `NFL_PCT_LIST` in `src/player.js`, `NFL_PERCENTILES` in `pull.py`), and yards game by game | | Added Oct 28, no fantasy |
+| D9 | Head to head, real stats | 1200x1500 and up | D6 with D8's numbers | Opponent | Added Oct 28, no fantasy |
+| D10 | Game by game | 1600x900 | Yards every game (backs split rushing and receiving) with touchdowns, the opponent and the result, and the season line with ranks | | Added Oct 28, no fantasy |
 
 D1 and D6 are also on the site (Oct 21): the player page's player card and head-to-head, and the
 home page's Head to Head (`frontend/src/components/player/PlayerCard.jsx` and `HeadToHead.jsx`).
@@ -145,6 +164,19 @@ D4 (season by season) was removed on Oct 21. The reply-card pool is the top 36 Q
 | E2 | Who gets the work | 1600x900 | Each week's share of the targets and carries, by player | | Added Oct 21 |
 | E3 | EPA game by game | 1600x900 | Offense and defense EPA per play in every game, with the result | | Added Oct 21 |
 | E4 | Red zone pecking order | 1600x900 | Targets and carries inside the 20 by player, and each one's share | | Added Oct 21 |
+
+### F. League and Explore (no argument)
+
+None of these uses fantasy points. Each takes a timeframe: the season, the last 4, 3 or 2 weeks, or the newest week.
+
+| Card | Name | Size | What it shows | Controls | Status |
+|---|---|---|---|---|---|
+| F1 | Passing network | 1600x900 | The Explore tab's network for one quarterback: each receiver by depth (height) and side, line width targets, colour EPA per target, with a table of every receiver | Quarterback, timeframe, situation, receivers | Added Oct 28 |
+| F2 | Target analysis | 1200x1500 and up | The Explore tab's target analysis: each player's depth mix, or his air-yard curve, against the position average | Position, timeframe, min targets, sort, view, players | Added Oct 28 |
+| F3 | League leaders | 1200x1500 | The top 10 to 20 in any box-score stat or rate, as a total or per game | Stat, position, timeframe, measure, players | Added Oct 28 |
+| F4 | The race | 1600x900 | Season totals after every week for the leaders in a stat | Stat, position, players | Added Oct 28 |
+| F5 | Team rankings | 1200x1500 | All 32 teams in one team stat, as bars in team colours | Stat, timeframe | Added Oct 28 |
+| F6 | Team scatter plots | 1600x900 | Six team questions as logo scatters: passing vs running, pass vs run defense, PROE vs EPA, points for vs against, success vs explosive, pace vs pass rate | Chart, timeframe, highlight | Added Oct 28 |
 
 ## Rules the cards follow
 
@@ -170,6 +202,11 @@ D4 (season by season) was removed on Oct 21. The reply-card pool is the top 36 Q
   they match the site. A quarterback's rushing yards per game has no registry metric; `build_data.py`
   derives it with the API's own rule (the qualified players at the position; rank = players strictly
   better + 1; percentile = mid-rank), which reproduces the API exactly on rushing yards (129 backs).
+- **Timeframes** add weeks up where the numbers are sums (the network, target analysis, leaders and the race:
+  `pull.py` asks the Explore endpoints one week at a time), and read a window the API computed where they are not
+  (the scatters and team cards: one `/stats/intelligence` and `/teams/stats` request per window). A rate leader needs
+  the NFL's kind of minimum, per team game in the window (6.25 carries, 5 targets, 14 attempts).
+- **Cards marked No fantasy** carry no fantasy points, finishes or expected points anywhere on them.
 - **Consensus ranks** for the coming week usually post Tuesday or Wednesday. Before that,
   B2 has no rank column.
 - Fact-check any card that names a reason (C5's target and carry share lines) against
@@ -180,12 +217,12 @@ D4 (season by season) was removed on Oct 21. The reply-card pool is the top 36 Q
 | File | Does |
 |---|---|
 | `refresh.sh` | The weekly rebuild: checks the backend is up, then runs the five steps below in order |
-| `pull.py` | Calls the local API for the week's recaps, previews, team stats and breakdowns, every week's player board, Insight boards and the reply-card players. Writes `raw/*.json` |
+| `pull.py` | Calls the local API for the week's recaps, previews, team stats and breakdowns, every week's player board, Insight boards and the reply-card players, each timeframe window, and the Explore target boards and passing networks one week at a time. Writes `raw/*.json` |
 | `build_data.py` | Trims `raw/` into `data.json`: risers and fallers, bye weeks, team cards, scatter pools, weekly finishes, and the images needed |
 | `fetch_img.py` | Downloads headshots (220px WebP from the NFL CDN), both ESPN logo variants and the Inter and JetBrains Mono fonts |
 | `build.py` | Inlines the brand mark (from `components/Brand.jsx`), the fonts, data, images and `src/` into `index.html` and `preview.html` |
 | `src/core.js` | Frame, text, faces, logos, chips, grouped tiles, the shared scatter plot, team colours, formats |
-| `src/recap.js`, `preview.js`, `weekly.js`, `player.js`, `team.js` | One function per card, each returning an SVG string |
+| `src/recap.js`, `preview.js`, `weekly.js`, `player.js`, `team.js`, `explore.js` | One function per card, each returning an SVG string. `explore.js` also holds the timeframe windows and the network and target sums |
 | `src/app.js` | The page: pickers, each card's controls (`GROUPS`), theme, Save PNG and Copy image, the lightbox, and the solo mode `render.mjs` uses (`?card=C8&theme=dark&opt.pos=RB&hl=...`) |
 | `render.mjs` | Headless Chrome over its DevTools protocol: one PNG per card and theme, and warns about text outside the card |
 | `check.mjs` | Runs every card against every game, player, team and option |

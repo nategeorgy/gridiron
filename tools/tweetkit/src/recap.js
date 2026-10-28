@@ -420,3 +420,291 @@ function defaultGameExpected(g) {
   const short = [...g.players].sort((a, b) => (a.fantasy_points - (a.expected_fantasy_points ?? 0)) - (b.fantasy_points - (b.expected_fantasy_points ?? 0))).slice(0, 2);
   return [...new Set([...top(away), ...top(home), ...short].map((p) => p.player_id))];
 }
+
+// A8 ------------------------------------------------------------ Score and scoring plays
+function cardScoreFlow(g) {
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · ${finalWord(g)}`, title: scoreTitle(g), subtitle: "The score through the game, and every scoring play" });
+  const { pad, w } = fr;
+  const end = Math.max(g.wp.end, 3600);
+  const plays = [...g.scoring].sort((a, b) => (a.elapsed ?? 0) - (b.elapsed ?? 0));
+  const final = { [away]: g.header.away.score, [home]: g.header.home.score };
+  const px0 = pad + 56, px1 = w - pad - 150, py0 = fr.top + 10, py1 = fr.top + 330;
+  const top = Math.max(7, ...Object.values(final));
+  const step = niceStep(0, top, 4), ymax = Math.ceil(top / step) * step;
+  const x = lin(0, end, px0, px1), y = lin(0, ymax, py1, py0);
+  let s = "";
+  const quarters = [[1, 0, 900], [2, 900, 1800], [3, 1800, 2700], [4, 2700, 3600]];
+  if (end > 3600) quarters.push([5, 3600, end]);
+  quarters.forEach(([q, a, b], i) => {
+    if (i % 2 === 1) s += R(x(a), py0, x(Math.min(b, end)) - x(a), py1 - py0, { fill: mix("var(--fg)", 4) });
+    s += T((x(a) + x(Math.min(b, end))) / 2, py1 + 28, periodName(q, quarters.length), { size: 17, weight: 700, anchor: "middle", fill: "var(--faint)" });
+  });
+  for (let v = 0; v <= ymax; v += step) s += L(px0, y(v), px1, y(v), { stroke: v ? "var(--divider)" : "var(--plot-rule)" }) + T(px0 - 12, y(v) + 6, v, { size: 16, anchor: "end", mono: true, fill: "var(--faint)" });
+  // Each team's score as a step line, then numbered markers where it changed.
+  for (const team of [away, home]) {
+    const key = team === home ? "home_score" : "away_score";
+    let at = 0;
+    const pts = [[x(0), y(0)]];
+    for (const p of plays) { pts.push([x(p.elapsed), y(at)]); at = p[key]; pts.push([x(p.elapsed), y(at)]); }
+    pts.push([x(end), y(at)]);
+    s += `<path d="${pathOf(pts)}" fill="none" stroke="${colors[team]}" stroke-width="5" stroke-linejoin="round"/>`;
+    s += logo(team, px1 + 18, y(at) - 22, 44) + T(px1 + 72, y(at) + 11, at, { size: 32, weight: 800, mono: true, fill: teamText(colors[team]) });
+  }
+  plays.forEach((p, i) => {
+    const key = p.team === home ? "home_score" : "away_score";
+    const cx = x(p.elapsed), cy = y(p[key]);
+    s += C(cx, cy, 13, { fill: colors[p.team], stroke: "var(--card)", sw: 2.5 }) + T(cx, cy + 5, i + 1, { size: 14, weight: 800, anchor: "middle", fill: inkOn(colors[p.team]) });
+  });
+  // The list, in two columns.
+  const ly = py1 + 64, perCol = Math.ceil(plays.length / 2) || 1;
+  const rowH = Math.min(46, (fr.bottom - ly) / perCol), colW = (w - pad * 2 - 40) / 2;
+  plays.forEach((p, i) => {
+    const col = Math.floor(i / perCol), row = i % perCol;
+    const x0 = pad + col * (colW + 40), cy = ly + row * rowH + rowH / 2;
+    s += C(x0 + 14, cy, 13, { fill: colors[p.team] }) + T(x0 + 14, cy + 5, i + 1, { size: 14, weight: 800, anchor: "middle", fill: inkOn(colors[p.team]) });
+    s += T(x0 + 38, cy + 6, `${periodName(p.quarter, (g.header.periods || []).length)} ${String(p.clock ?? "").replace(/^0/, "")}`, { size: 15, weight: 600, mono: true, fill: "var(--muted)" });
+    s += logo(p.team, x0 + 124, cy - 13, 26);
+    s += T(x0 + 160, cy + 6, fit(p.text, colW - 160 - 100, 17, 600), { size: 17, weight: 600 });
+    s += T(x0 + colW, cy + 6, `${p.away_score}-${p.home_score}`, { size: 17, weight: 800, anchor: "end", mono: true });
+  });
+  s += T(w - pad, ly - 26, `Score: ${away}-${home}`, { size: 15, weight: 650, anchor: "end", fill: "var(--faint)" });
+  return wrapCard(fr, s);
+}
+
+// A9 ------------------------------------------------------------ NFL box score
+function cardBoxNfl(g) {
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const by = (team) => g.players.filter((p) => p.team === team);
+  const sections = (team) => [
+    ["Passing", ["C/ATT", "YDS", "TD", "INT"], by(team).filter((p) => p.attempts > 0).sort((a, b) => b.attempts - a.attempts).slice(0, 2),
+      (p) => [`${p.completions}/${p.attempts}`, p.passing_yards, p.passing_tds, p.interceptions]],
+    ["Rushing", ["CAR", "YDS", "AVG", "TD"], by(team).filter((p) => p.carries > 0).sort((a, b) => b.rushing_yards - a.rushing_yards).slice(0, 4),
+      (p) => [p.carries, p.rushing_yards, num(p.rushing_yards / p.carries, 1), p.rushing_tds]],
+    ["Receiving", ["REC/TGT", "YDS", "AVG", "TD"], by(team).filter((p) => p.targets > 0).sort((a, b) => b.receiving_yards - a.receiving_yards || b.receptions - a.receptions).slice(0, 6),
+      (p) => [`${p.receptions}/${p.targets}`, p.receiving_yards, p.receptions ? num(p.receiving_yards / p.receptions, 1) : "-", p.receiving_tds]],
+  ];
+  // Rows grow to fill a 1500 card, and the card grows past 1500 only when a team has more rows than fit.
+  const headH = 44, top = 236, foot = 120 + 150;
+  const maxRows = Math.max(...[away, home].map((team) => sections(team).reduce((a, [, , rows]) => a + Math.max(1, rows.length), 0)));
+  const rowH = Math.max(46, Math.min(58, (1500 - top - foot - 80 - 3 * (headH + 18)) / maxRows));
+  const h = Math.max(1500, Math.round(top + 80 + 3 * (headH + 18) + maxRows * rowH + foot));
+  const fr = frame(1200, h, { kicker: `${g.header.week_label} · ${finalWord(g)}`, title: `${scoreTitle(g)}: box score`, subtitle: venueLine(g) });
+  const { pad, w } = fr;
+  const colW = (w - pad * 2 - 36) / 2;
+  let s = "";
+  [away, home].forEach((team, ti) => {
+    const x0 = pad + ti * (colW + 36);
+    let y = fr.top;
+    s += R(x0, y, colW, 60, { rx: 16, fill: mix(colors[team], 16, "var(--card)") });
+    s += logo(team, x0 + 14, y + 10, 40) + T(x0 + 64, y + 39, TEAMS[team].name, { size: 23, weight: 800, fill: teamText(colors[team]) });
+    s += T(x0 + colW - 18, y + 41, ti ? g.header.home.score : g.header.away.score, { size: 30, weight: 800, anchor: "end", mono: true });
+    y += 80;
+    const cx = [colW - 222, colW - 144, colW - 74, colW - 12];
+    for (const [title, heads, rows, vals] of sections(team)) {
+      s += T(x0, y + 26, title, { size: 20, weight: 800 });
+      heads.forEach((hd, k) => { s += T(x0 + cx[k], y + 26, hd, { size: 13, weight: 750, anchor: "end", fill: "var(--faint)", ls: 1 }); });
+      y += headH;
+      rows.forEach((p, r) => {
+        const cy = y + r * rowH + rowH / 2;
+        if (r % 2 === 0) s += R(x0 - 6, cy - rowH / 2 + 2, colW + 12, rowH - 4, { rx: 10, fill: "var(--panel)" });
+        s += face(p.player_id, x0 + 18, cy, rowH > 52 ? 18 : 15, colors[team], p.name);
+        s += T(x0 + 46, cy + 7, fit(shortName(p.name), cx[0] - 116, 19, 650), { size: 19, weight: 650 });
+        vals(p).forEach((v, k) => { s += T(x0 + cx[k], cy + 7, v, { size: 19, weight: k === 1 ? 800 : 550, anchor: "end", mono: true }); });
+      });
+      if (!rows.length) s += T(x0, y + 24, "None", { size: 16, fill: "var(--faint)" });
+      y += Math.max(1, rows.length) * rowH + 18;
+    }
+  });
+  // The team box under both columns: yards, first downs, third downs, turnovers, possession.
+  const b = g.box;
+  const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`;
+  const facts = [["Total yards", (t) => b[t].yards], ["First downs", (t) => b[t].first_downs], ["Third down", (t) => `${b[t].third_down_conversions}/${b[t].third_down_attempts}`],
+    ["Turnovers", (t) => b[t].turnovers], ["Sacks taken", (t) => b[t].sacks], ["Possession", (t) => mmss(b[t].time_of_possession)]];
+  const fy = fr.bottom - 100, fw = (w - pad * 2) / facts.length;
+  s += L(pad, fy - 16, w - pad, fy - 16, { stroke: "var(--rule)" });
+  facts.forEach(([k, f], i) => {
+    const cx = pad + fw * i + fw / 2;
+    s += T(cx, fy + 10, k.toUpperCase(), { size: 13, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1 });
+    s += `<text x="${num(cx, 1)}" y="${num(fy + 50, 1)}" text-anchor="middle" font-size="21" font-weight="800" font-family="${MONO}"><tspan fill="${teamText(colors[away])}">${esc(f(away))}</tspan><tspan fill="var(--faint)" font-weight="500"> - </tspan><tspan fill="${teamText(colors[home])}">${esc(f(home))}</tspan></text>`;
+  });
+  return wrapCard(fr, s);
+}
+
+/** Each team's main passer in a game: whoever threw the most. */
+function mainPassers(g) {
+  const out = {};
+  for (const [team, ids] of Object.entries(g.passers)) {
+    const rows = ids.map((id) => g.players.find((p) => p.player_id === id)).filter(Boolean).sort((a, b) => (b.attempts || 0) - (a.attempts || 0));
+    if (rows[0]) out[team] = rows[0];
+  }
+  return out;
+}
+const passLine = (p) => `${p.completions}/${p.attempts}, ${p.passing_yards} yds, ${p.passing_tds} TD, ${p.interceptions} INT`;
+
+// A10 ----------------------------------------------------------- Passing networks
+function cardGameNetworks(g) {
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const qbs = mainPassers(g);
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Passing networks`, title: `${nickname(away)} at ${nickname(home)}: where the ball went`, subtitle: "Each quarterback's targets by receiver: share, depth and side of the field" });
+  const { pad, w } = fr;
+  const panelW = (w - pad * 2 - 40) / 2;
+  let s = "";
+  [away, home].forEach((team, i) => {
+    const x0 = pad + i * (panelW + 40);
+    const qb = qbs[team];
+    s += logo(team, x0, fr.top - 8, 36);
+    if (!qb) { s += T(x0 + 46, fr.top + 18, "No passer", { size: 20, fill: "var(--faint)" }); return; }
+    s += T(x0 + 46, fr.top + 18, qb.name, { size: 23, weight: 800, fill: teamText(colors[team]) });
+    s += T(x0 + panelW, fr.top + 18, passLine(qb), { size: 17, anchor: "end", mono: true, fill: "var(--muted)" });
+    const net = windowNetwork(qb.player_id, [g.header.week], "all");
+    if (!net) return;
+    const { shown } = shapeNet(net.receivers, 6);
+    s += networkField(x0 - 8, fr.top + 36, panelW + 8, fr.bottom - fr.top - 80, net, shown, { bands: false, scale: 0.92, name: 17, sub: 14 });
+  });
+  s += networkKey(pad + 44, fr.bottom - 8);
+  return wrapCard(fr, s);
+}
+
+// A11 ----------------------------------------------------------- Passing charts
+function throwField(x0, y0, W, H, throws, color, o = {}) {
+  const deep = Math.max(30, Math.ceil(Math.max(0, ...throws.map((t) => t[0] ?? 0)) / 10) * 10 + 5);
+  const y = lin(-8, deep, y0 + H, y0);
+  let s = R(x0, y0, W, H, { rx: 16, fill: "var(--panel)" });
+  for (let v = -5; v <= deep; v += 5) {
+    const major = v % 10 === 0;
+    s += L(x0, y(v), x0 + W, y(v), { stroke: v === 0 ? "var(--accent)" : major ? "var(--rule)" : "var(--divider)", sw: v === 0 ? 3 : 1.2 });
+    if (major && v > 0) s += T(x0 + 12, y(v) + 20, v, { size: 15, weight: 700, mono: true, fill: "var(--faint)" });
+  }
+  s += T(x0 + 12, y(0) - 8, "LOS", { size: 14, weight: 800, fill: "var(--accent-text)" });
+  const third = W / 3;
+  for (const k of [1, 2]) s += L(x0 + third * k, y0, x0 + third * k, y0 + H, { stroke: "var(--rule)", dash: "6 8" });
+  if (o.sides !== false) ["Left", "Middle", "Right"].forEach((side, k) => { s += T(x0 + third * k + third / 2, y0 + H + 24, side, { size: 16, weight: 700, anchor: "middle", fill: "var(--muted)" }); });
+  const cols = { left: 0, middle: 1, right: 2 };
+  throws.filter((t) => t[0] != null && t[1]).forEach((t, i) => {
+    const [ay, loc, comp, td, int] = t;
+    const cx = x0 + third * cols[loc] + third * (0.14 + 0.72 * hash01(i, 3));
+    const cy = y(Math.max(-7, Math.min(deep, ay + (hash01(i, 4) - 0.5) * 0.8)));
+    if (int) s += L(cx - 9, cy - 9, cx + 9, cy + 9, { stroke: "var(--neg)", sw: 4, cap: "round" }) + L(cx - 9, cy + 9, cx + 9, cy - 9, { stroke: "var(--neg)", sw: 4, cap: "round" });
+    else {
+      if (td) s += C(cx, cy, 16, { stroke: "var(--fg)", sw: 3 });
+      s += C(cx, cy, 10, { fill: comp ? color : "var(--card)", stroke: color, sw: comp ? 1.5 : 2.5 });
+    }
+  });
+  return s;
+}
+const throwLegend = (x, cy, color) => legendRow(x, cy, [
+  [(cx, c) => C(cx, c, 9, { fill: color, stroke: color, sw: 2 }), "Complete"],
+  [(cx, c) => C(cx, c, 9, { fill: "var(--card)", stroke: color, sw: 2.5 }), "Incomplete"],
+  [(cx, c) => C(cx, c, 8, { fill: color }) + C(cx, c, 13, { stroke: "var(--fg)", sw: 2.5 }), "Touchdown"],
+  [(cx, c) => L(cx - 8, c - 8, cx + 8, c + 8, { stroke: "var(--neg)", sw: 4, cap: "round" }) + L(cx - 8, c + 8, cx + 8, c - 8, { stroke: "var(--neg)", sw: 4, cap: "round" }), "Interception"],
+], 17).svg;
+function cardGameThrows(g) {
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const qbs = mainPassers(g);
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Every throw`, title: `${nickname(away)} at ${nickname(home)}: passing charts`, subtitle: "Each targeted pass by depth past the line and side of the field" });
+  const { pad, w } = fr;
+  const panelW = (w - pad * 2 - 40) / 2;
+  let s = throwLegend(w - pad - 600, fr.top - 66, "var(--muted)");
+  [away, home].forEach((team, i) => {
+    const x0 = pad + i * (panelW + 40);
+    const qb = qbs[team];
+    s += logo(team, x0, fr.top - 8, 36);
+    if (!qb) return;
+    const throws = g.throws[qb.player_id] || [];
+    const charted = throws.filter((t) => t[0] != null);
+    const adot = charted.length ? charted.reduce((a, t) => a + t[0], 0) / charted.length : null;
+    const deep = charted.filter((t) => t[0] >= 20);
+    s += T(x0 + 46, fr.top + 18, qb.name, { size: 23, weight: 800, fill: teamText(colors[team]) });
+    s += T(x0 + panelW, fr.top + 18, passLine(qb), { size: 17, anchor: "end", mono: true, fill: "var(--muted)" });
+    s += throwField(x0, fr.top + 40, panelW, fr.bottom - fr.top - 110, throws, colors[team]);
+    s += T(x0, fr.bottom - 6, `aDOT ${adot == null ? "-" : num(adot, 1)} · 20+ yards: ${deep.filter((t) => t[2]).length} of ${deep.length} complete`, { size: 17, weight: 650, fill: "var(--muted)" });
+  });
+  return wrapCard(fr, s);
+}
+
+// A12 ----------------------------------------------------------- Standout
+/** A player's rank that week at his position for one weekly-line stat (1 = most), ties shared. */
+function weekRank(pid, pos, value) {
+  const week = DATA.recap_week;
+  const me = DATA.weekly_lines[pid]?.w[week];
+  if (!me) return null;
+  const mine = value(me);
+  if (!mine) return null;
+  let better = 0;
+  for (const e of Object.values(DATA.weekly_lines)) if (e.pos === pos && e.w[week] && value(e.w[week]) > mine) better += 1;
+  return better + 1;
+}
+function defaultStandout(g) {
+  return [...g.players].sort((a, b) => b.fantasy_points - a.fantasy_points)[0]?.player_id;
+}
+function cardStandout(g, opts = {}) {
+  const p = g.players.find((x) => x.player_id === opts.who) || g.players.find((x) => x.player_id === defaultStandout(g));
+  const [away, home] = sidesOf(g);
+  const colors = gameColors(away, home);
+  const team = p.team, opp = team === home ? away : home;
+  const mine = team === home ? g.header.home.score : g.header.away.score, theirs = team === home ? g.header.away.score : g.header.home.score;
+  const result = `${mine > theirs ? "W" : mine < theirs ? "L" : "T"} ${mine}-${theirs} ${team === home ? "vs" : "at"} ${TEAMS[opp]?.name || opp}`;
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · ${p.position} · ${TEAMS[team]?.name || team}`, title: p.name, subtitle: result, headshot: { pid: p.player_id, name: p.name, ring: colors[team] } });
+  const { pad, w } = fr;
+  const rank = (fn) => (cx, cy) => { const rk = weekRank(p.player_id, p.position, fn); return rk ? chip(rk, p.position, cx, cy, { size: 15, h: 26, w: 58 }) : ""; };
+  const groups = [];
+  if (p.attempts >= 5) groups.push({ label: "Passing", cells: [
+    { label: "Comp/Att", value: `${p.completions}/${p.attempts}`, chip: rank((t) => t[1]) },
+    { label: "Yards", value: String(p.passing_yards), chip: rank((t) => t[2]) },
+    { label: "TD", value: String(p.passing_tds), chip: rank((t) => t[3]) },
+    { label: "INT", value: String(p.interceptions) }] });
+  if (p.carries >= (p.position === "QB" || p.position === "RB" ? 2 : 1) && (p.position === "RB" || p.rushing_yards >= 15 || p.rushing_tds)) groups.push({ label: "Rushing", cells: [
+    { label: "Carries", value: String(p.carries), chip: rank((t) => t[5]) },
+    { label: "Yards", value: String(p.rushing_yards), chip: rank((t) => t[6]) },
+    { label: "TD", value: String(p.rushing_tds), chip: rank((t) => t[7]) }] });
+  if (p.targets > 0 && p.position !== "QB") groups.push({ label: "Receiving", cells: [
+    { label: "Rec/Tgt", value: `${p.receptions}/${p.targets}`, chip: rank((t) => t[9]) },
+    { label: "Yards", value: String(p.receiving_yards), chip: rank((t) => t[10]) },
+    { label: "TD", value: String(p.receiving_tds), chip: rank((t) => t[11]) }] });
+  const cells = groups.reduce((a, gr) => a + gr.cells.length, 0);
+  let s = tileGroups(pad, fr.top - 4, w - pad * 2, groups.slice(0, cells > 8 ? 2 : 3), { cellH: 136 }).svg;
+  const y0 = fr.top + 196;
+  s += T(w - pad, y0 - 18, `Chip: his rank among ${POS_PLURAL[p.position]} in ${g.header.week_label}`, { size: 16, anchor: "end", fill: "var(--muted)" });
+  const color = colors[team];
+  if (p.position === "QB") {
+    // A quarterback's game is his throws.
+    const throws = g.throws[p.player_id] || [];
+    s += T(pad, y0 + 10, "Every throw", { size: 23, weight: 750 }) + throwLegend(pad + 200, y0 + 2, color);
+    s += throwField(pad, y0 + 34, w - pad * 2, fr.bottom - y0 - 64, throws, color);
+  } else {
+    // Everyone else: each target and carry on the game clock, height the yards it gained.
+    const mine = g.touches.filter((t) => t.player === p.player_id);
+    const end = Math.max(g.wp.end, 3600);
+    const px0 = pad + 60, px1 = w - pad - 10, py0 = y0 + 50, py1 = fr.bottom - 40;
+    const top = Math.max(10, ...mine.map((t) => t.yards || 0)), bottom = Math.min(0, ...mine.map((t) => t.yards || 0));
+    const step = niceStep(bottom, top, 4);
+    const ylo = Math.floor(bottom / step) * step, yhi = Math.ceil(top / step) * step;
+    const x = lin(0, end, px0, px1), y = lin(ylo, yhi, py1, py0);
+    s += T(pad, y0 + 10, "Every touch", { size: 23, weight: 750 });
+    s += legendRow(pad + 190, y0 + 2, [
+      [(cx, cy) => C(cx, cy, 8, { fill: color, stroke: color, sw: 2 }), "Catch"], [(cx, cy) => C(cx, cy, 8, { fill: "var(--card)", stroke: color, sw: 2.5 }), "Incomplete"],
+      [(cx, cy) => R(cx - 8, cy - 8, 16, 16, { rx: 3, fill: mix(color, 56, "var(--card)"), stroke: color, sw: 1.5 }), "Carry"], [(cx, cy) => C(cx, cy, 8, { fill: color }) + C(cx, cy, 13, { stroke: "var(--accent)", sw: 2.5 }), "Touchdown"]], 17).svg;
+    const quarters = [[1, 0, 900], [2, 900, 1800], [3, 1800, 2700], [4, 2700, 3600]];
+    if (end > 3600) quarters.push([5, 3600, end]);
+    quarters.forEach(([q, a, b], i) => {
+      if (i % 2 === 1) s += R(x(a), py0, x(Math.min(b, end)) - x(a), py1 - py0, { fill: mix("var(--fg)", 4) });
+      s += T((x(a) + x(Math.min(b, end))) / 2, py1 + 28, periodName(q, quarters.length), { size: 16, weight: 700, anchor: "middle", fill: "var(--faint)" });
+    });
+    for (const v of axisTicks(ylo, yhi, step)) s += L(px0, y(v), px1, y(v), { stroke: v ? "var(--divider)" : "var(--plot-rule)", sw: v ? 1 : 1.5 }) + T(px0 - 10, y(v) + 5, v, { size: 15, anchor: "end", mono: true, fill: "var(--faint)" });
+    s += `<text transform="translate(${pad + 6},${(py0 + py1) / 2}) rotate(-90)" text-anchor="middle" font-size="16" font-weight="650" fill="var(--muted)">Yards on the play</text>`;
+    for (const t of mine) {
+      const cx = x(t.t), v = t.kind === "target" && !t.caught ? 0 : t.yards || 0;
+      if (v) s += L(cx, y(0), cx, y(v), { stroke: color, sw: 4, cap: "round", opacity: 0.55 });
+      if (t.td) s += C(cx, y(v), 15, { stroke: "var(--accent)", sw: 3 });
+      s += t.kind === "target" ? C(cx, y(v), 9, { fill: t.caught ? color : "var(--card)", stroke: color, sw: 2.5 })
+        : R(cx - 9, y(v) - 9, 18, 18, { rx: 4, fill: mix(color, 56, "var(--card)"), stroke: color, sw: 1.8 });
+      s += `<circle class="hit" cx="${num(cx, 1)}" cy="${num(y(v), 1)}" r="12" fill="transparent" data-tip="${esc([t.kind === "target" ? (t.caught ? "Catch" : "Incomplete") : "Carry", `${t.yards ?? 0} yards${t.td ? ", touchdown" : ""}`].join("|"))}"/>`;
+    }
+  }
+  return wrapCard(fr, s);
+}

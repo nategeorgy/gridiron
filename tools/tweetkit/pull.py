@@ -44,6 +44,44 @@ RANKS = {
 RANKS["TE"] = RANKS["WR"]
 PERCENTILES["TE"] = PERCENTILES["WR"]
 
+# D8 and D9, the real-life cards: no fantasy points anywhere. Percentile rows, then the
+# tiles' ranks. Pulled in the same request as D1's, so both come from one pool.
+NFL_PERCENTILES = {
+    "QB": ["completion_pct", "cpoe", "yards_per_attempt", "passer_rating", "epa_per_play", "passing_first_downs",
+           "ngs_pass_intended_air_yards", "ngs_pass_time_to_throw", "bad_throw_rate", "pressure_rate", "sacks_suffered",
+           "rushing_yards_per_game"],
+    "RB": ["yards_per_carry", "rushing_yards_per_game", "ngs_rush_yards_over_expected_per_att", "rush_ybc_per_att",
+           "rush_yac_per_att", "rush_broken_tackles", "rushing_first_downs", "rushing_epa", "target_share",
+           "yards_per_route_run", "receiving_epa", "fumbles_lost"],
+    "WR": ["catch_rate", "yards_per_reception", "yards_per_target", "yards_per_route_run", "targets_per_route_run", "adot",
+           "receiving_first_downs", "yards_after_catch", "ngs_rec_yac_above_expectation", "ngs_rec_separation",
+           "rec_broken_tackles", "receiving_drop_rate", "receiving_epa"],
+}
+NFL_RANKS = {
+    "QB": ["completions", "attempts", "passing_yards", "passing_tds", "interceptions", "completion_pct", "passer_rating",
+           "rushing_yards", "rushing_tds"],
+    "RB": ["carries", "rushing_yards", "yards_per_carry", "rushing_tds", "receptions", "receiving_yards", "receiving_tds"],
+    "WR": ["targets", "receptions", "receiving_yards", "receiving_tds", "yards_per_reception"],
+}
+NFL_PERCENTILES["TE"] = NFL_PERCENTILES["WR"]
+NFL_RANKS["TE"] = NFL_RANKS["WR"]
+for _position in POSITIONS:
+    PERCENTILES[_position] = list(dict.fromkeys(PERCENTILES[_position] + NFL_PERCENTILES[_position]))
+    RANKS[_position] = list(dict.fromkeys(RANKS[_position] + NFL_RANKS[_position]))
+SITUATIONS = ["all", "red_zone", "late_downs"]
+# A passer needs this many targets in the season for the network card to offer him.
+NETWORK_MIN_TARGETS = 40
+
+
+def timeframes(last):
+    """The windows every timeframe control offers: the season, then the last 4, 3 and 2 weeks, then the newest week."""
+    out = {"season": list(range(1, last + 1))}
+    for n in (4, 3, 2):
+        if last > n:
+            out[f"last{n}"] = list(range(last - n + 1, last + 1))
+    out["last1"] = [last]
+    return out
+
 
 def get(path, **params):
     query = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
@@ -170,6 +208,54 @@ def main():
     with ThreadPoolExecutor(6) as pool:
         out["players"] = dict(pool.map(player, pool_ids))
     print("players", len(out["players"]), file=sys.stderr)
+
+    # Timeframe windows. The scatters and team cards read numbers no sum can rebuild
+    # (percentiles, expected points, rates), so each window is its own request.
+    windows = timeframes(RECAP_WEEK)
+    out["windows"] = windows
+    out["intel_windows"], out["team_windows"] = {}, {}
+    for key, weeks in windows.items():
+        wk = ",".join(map(str, weeks))
+        out["intel_windows"][key] = {
+            position: get("/stats/intelligence", season=SEASON, weeks=wk, position=position, metric="fantasy_points",
+                          scoring="ppr", limit=200)["data"]
+            for position in POSITIONS
+        }
+        out["team_windows"][key] = get("/teams/stats", season=SEASON, weeks=wk)
+    # Quarterbacks week by week, for the leaders and the race (the other positions are in weekly_boards).
+    out["weekly_qb"] = {week: every_row("/stats/leaderboard", season=SEASON, week=week, position="QB",
+                                        metric="fantasy_points", scoring="ppr")
+                        for week in range(1, RECAP_WEEK + 1)}
+    print("windows", list(windows), file=sys.stderr)
+
+    # Explore data one week at a time: every count in a target board and a passing network
+    # is a sum, so the page adds weeks up for any timeframe.
+    out["target_weeks"] = {week: get("/explore/targets", season=SEASON, weeks=str(week), positions="WR,TE,RB",
+                                     min_targets=1)
+                           for week in range(1, RECAP_WEEK + 1)}
+    passers = [p for p in get("/explore/passers", season=SEASON)["data"] if p["targets"] >= NETWORK_MIN_TARGETS]
+    out["passers"] = passers
+    # Plus anyone who threw in a recap game, so a backup who started gets his network too.
+    recap_qbs = {qb for game in out["recaps"].values() for ids in game["recap"]["passers"].values() for qb in ids}
+    network_ids = sorted({p["player_id"] for p in passers} | recap_qbs)
+
+    def network(job):
+        pid, week, situation = job
+        return job, get("/explore/network", passer_id=pid, season=SEASON, weeks=str(week), situation=situation)
+
+    jobs = [(pid, week, situation) for pid in network_ids for week in range(1, RECAP_WEEK + 1) for situation in SITUATIONS]
+    with ThreadPoolExecutor(8) as pool:
+        out["networks"] = {}
+        for (pid, week, situation), data in pool.map(network, jobs):
+            out["networks"].setdefault(pid, {}).setdefault(str(week), {})[situation] = data
+
+    # Every throw each recap quarterback made that week, for the game's passing charts.
+    def throws(qb):
+        return qb, get(f"/explore/players/{qb}/targets", season=SEASON, weeks=str(RECAP_WEEK), role="passer")
+    with ThreadPoolExecutor(6) as pool:
+        out["recap_throws"] = dict(pool.map(throws, sorted(recap_qbs)))
+    print("target weeks", len(out["target_weeks"]), "networks", len(network_ids), "x", len(jobs) // max(1, len(network_ids)),
+          "recap throws", len(out["recap_throws"]), file=sys.stderr)
 
     for key, value in out.items():
         save(key, value)
