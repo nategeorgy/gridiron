@@ -417,15 +417,15 @@ const scatterPreset = (pos, id) => SCATTERS[pos].find((s) => s.id === id) ?? SCA
 // Quarterbacks also need 15 pass attempts a game: games played alone qualifies a backup
 // with one throw, whose CPOE (-77) squashes every starter into a corner.
 const QB_ATTEMPTS_PER_GAME = 15;
-function scatterRows(pos, preset, cap) {
-  const rows = DATA.scatter_pool[pos].filter((r) => r[preset.x] != null && r[preset.y] != null
+function scatterRows(pos, preset, cap, tf = "season") {
+  const rows = (DATA.scatter_windows[tf] || DATA.scatter_windows.season)[pos].filter((r) => r[preset.x] != null && r[preset.y] != null
     && (pos !== "QB" || (r.attempts || 0) >= QB_ATTEMPTS_PER_GAME * (r.games_played || 1)));
   return cap === "all" ? rows : rows.slice(0, Number(cap) || 50);
 }
 /** Faces by default: the eight with the most points and the six furthest from the middle. */
 function defaultScatterFaces(pos, opts) {
   const preset = scatterPreset(pos, opts.chart);
-  const rows = scatterRows(pos, preset, opts.cap);
+  const rows = scatterRows(pos, preset, opts.cap, opts.tf);
   if (!rows.length) return [];
   const xs = rows.map((r) => r[preset.x]), ys = rows.map((r) => r[preset.y]);
   const sx = (Math.max(...xs) - Math.min(...xs)) || 1, sy = (Math.max(...ys) - Math.min(...ys)) || 1;
@@ -436,13 +436,12 @@ function defaultScatterFaces(pos, opts) {
   return [...new Set([...rows.slice(0, 8), ...far.slice(0, 6)].map((r) => r.player_id))];
 }
 function cardScatter(pos, opts) {
-  const wk = DATA.recap_week;
   const preset = scatterPreset(pos, opts.chart);
-  const rows = scatterRows(pos, preset, opts.cap);
+  const rows = scatterRows(pos, preset, opts.cap, opts.tf);
   const [xl, xfmt, xtip] = SM[preset.x], [yl, yfmt, ytip] = SM[preset.y];
   const who = (opts.cap === "all" ? `all ${rows.length} qualified ${POS_PLURAL[pos]}` : `the top ${rows.length} ${POS_PLURAL[pos]} in points`)
     + (pos === "QB" ? ` with ${QB_ATTEMPTS_PER_GAME}+ attempts a game` : "");
-  const fr = frame(1600, 900, { kicker: `Weeks 1-${wk} · ${POS_PLURAL[pos]}`, title: preset.question, subtitle: `${xl} against ${lowerFirst(yl)}${preset.size ? `. Dot size: ${lowerFirst(SM[preset.size][0])}` : ""}` });
+  const fr = frame(1600, 900, { kicker: `${weeksLabel(tfWeeks(opts.tf))} · ${POS_PLURAL[pos]}`, title: preset.question, subtitle: `${xl} against ${lowerFirst(yl)}${preset.size ? `. Dot size: ${lowerFirst(SM[preset.size][0])}` : ""}` });
   const c = preset.corners || {};
   const xs = rows.map((r) => r[preset.x]), ys = rows.map((r) => r[preset.y]);
   const s = scatterPlot(fr, {

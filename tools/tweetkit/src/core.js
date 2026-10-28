@@ -221,6 +221,8 @@ function gameColors(away, home) {
 }
 const teamColor = (abbr) => { const c = preferred(parseHex(TEAMS[abbr]?.color), parseHex(TEAMS[abbr]?.color2)); return c ? toHex(c) : "var(--series-1)"; };
 const teamText = (color) => mix(color, 62, "var(--fg)");
+/** Ink for small text on a team colour fill: dark on a light colour, white on the rest. */
+const inkOn = (hex) => { const rgb = parseHex(hex); return rgb && lum(rgb) > 0.32 ? "#0b0d12" : "#ffffff"; };
 const nickname = (abbr) => (TEAMS[abbr]?.name || abbr).split(" ").slice(-1)[0];
 
 // --------------------------------------------------------------------- frame

@@ -12,13 +12,17 @@ const CAP_OPTIONS = [["25", "Top 25 in points"], ["50", "Top 50 in points"], ["1
 /** One card per position for the app's Scatter page charts. */
 const scatterCard = (pos, id) => ({
   id, name: `${pos} scatter plots`, fn: (_, opts) => cardScatter(pos, opts), wide: true, isNew: true,
-  note: `Every ${pos} chart on the site's Scatter page. Hover a dot to see who it is; click it to add or remove his face.`,
+  note: `Every ${pos} chart on the site's Scatter page, for any timeframe. Hover a dot to see who it is; click it to add or remove his face.`,
   controls: [
     { key: "chart", type: "select", label: "Chart", options: SCATTERS[pos].map((s) => [s.id, s.label]), defaults: () => SCATTERS[pos][0].id },
+    tfControl(),
     { key: "cap", type: "select", label: "Players", options: CAP_OPTIONS, defaults: () => "50" },
-    { key: "hl", type: "highlight", label: "Faces", pool: (_, o) => rows(scatterRows(pos, scatterPreset(pos, o.chart), o.cap)), defaults: (_, o) => defaultScatterFaces(pos, o) },
+    { key: "hl", type: "highlight", label: "Faces", pool: (_, o) => rows(scatterRows(pos, scatterPreset(pos, o.chart), o.cap, o.tf)), defaults: (_, o) => defaultScatterFaces(pos, o) },
   ],
 });
+const rivalControl = { key: "vs", type: "player", label: "Against", pool: (pid) => Object.values(DATA.players).filter((o) => o.pos === posOf(pid) && o.id !== pid).sort((a, b) => b.season.fantasy_points - a.season.fantasy_points), defaults: (pid) => defaultRival(pid) };
+const gamePlayers = (g) => [...g.players].sort((a, b) => b.fantasy_points - a.fantasy_points).map((p) => ({ id: p.player_id, name: p.name, team: p.team }));
+const COUNT = (list, fallback) => ({ key: "n", type: "select", label: "Players", options: list.map((n) => [String(n), `Top ${n}`]), defaults: () => String(fallback) });
 
 const GROUPS = {
   recap: [
@@ -30,13 +34,21 @@ const GROUPS = {
     { id: "A6", name: "Drive chart", fn: cardDrives, isNew: true, note: "Every possession from where it started toward the end zone, with how it ended." },
     { id: "A7", name: "Points against expected", fn: cardGameExpected, wide: true, isNew: true, note: "Every player in the game: what he scored against what his work was worth.",
       controls: [{ key: "hl", type: "highlight", label: "Faces", pool: (g) => rows(g.players.map((p) => ({ ...p, team_abbreviation: p.team }))), defaults: (g) => defaultGameExpected(g) }] },
+    { id: "A8", name: "Score and scoring plays", fn: cardScoreFlow, wide: true, isNew: true, nfl: true, note: "Each team's score through the game as a step line, and every scoring play, numbered." },
+    { id: "A9", name: "Box score", fn: cardBoxNfl, isNew: true, nfl: true, note: "Passing, rushing and receiving lines for both teams, with yards, first downs, third downs and possession under them." },
+    { id: "A10", name: "Passing networks", fn: cardGameNetworks, wide: true, isNew: true, nfl: true, note: "Where each quarterback went with the ball: every receiver's share, depth and side of the field, coloured by EPA per target." },
+    { id: "A11", name: "Passing charts", fn: cardGameThrows, wide: true, isNew: true, nfl: true, note: "Every targeted pass from both quarterbacks by depth and side: completions, incompletions, touchdowns and picks." },
+    { id: "A12", name: "Standout", fn: cardStandout, wide: true, isNew: true, nfl: true, note: "One player's game: his line with his rank that week, then every touch on the game clock (a quarterback's throws on the field).",
+      controls: [{ key: "who", type: "player", label: "Player", pool: (g) => gamePlayers(g), defaults: (g) => defaultStandout(g) }] },
   ],
   preview: [
     { id: "B1", name: "Matchup", fn: cardMatchup, note: "Line, implied totals, last five against the spread, four players to watch per side." },
     { id: "B2", name: "Fantasy matchup", fn: cardPreviewFantasy, pick: true, note: "Each skill player's PPG, expected PPG, weekly finishes and matchup grade." },
-    { id: "B3", name: "Tale of the tape", fn: cardTape, wide: true, pick: true, note: "Each offense against the defense it faces, rank against rank." },
+    { id: "B3", name: "Tale of the tape", fn: cardTape, wide: true, pick: true, nfl: true, note: "Offense against offense on the left, defense against defense on the right, rank against rank (reworked Oct 28)." },
     { id: "B4", name: "Usage by week", fn: cardPreviewUsage, wide: true, pick: true, note: "Target and carry share every week for each team's main pieces, with snap share under each." },
     { id: "B6", name: "EPA by game", fn: cardTrend, wide: true, isNew: true, note: "Both offenses and both defenses game by game this season, against the league's middle half." },
+    { id: "B7", name: "Quarterback matchup", fn: cardQbMatchup, isNew: true, nfl: true, note: "The two quarterbacks side by side in real stats: the box score with ranks, then percentiles among quarterbacks." },
+    { id: "B8", name: "How they play", fn: cardStyle, wide: true, isNew: true, nfl: true, note: "Tendencies, not grades: pass rate, pace, motion and play action on offense; blitz, rushers and stacked boxes on defense." },
   ],
   weekly: [
     { id: "C1", name: "Team landscape", fn: cardLandscape, wide: true, pick: true, note: "Offense against defense EPA for all 32 teams. Hover a logo for the numbers; click it to highlight that team and fade the rest.",
@@ -60,8 +72,10 @@ const GROUPS = {
   ],
   player: [
     { id: "D1", name: "Player profile", fn: cardProfile, pick: true, note: "Stat tiles grouped by phase, percentiles among his position, every week's finish." },
-    { id: "D6", name: "Head to head", fn: cardH2H, isNew: true, note: "Two players at one position, side by side: the same numbers and percentiles, the better one bold.",
-      controls: [{ key: "vs", type: "player", label: "Against", pool: (pid) => Object.values(DATA.players).filter((o) => o.pos === posOf(pid) && o.id !== pid).sort((a, b) => b.season.fantasy_points - a.season.fantasy_points), defaults: (pid) => defaultRival(pid) }] },
+    { id: "D6", name: "Head to head", fn: cardH2H, isNew: true, note: "Two players at one position, side by side: the same numbers and percentiles, the better one bold.", controls: [rivalControl] },
+    { id: "D8", name: "Player card, real stats", fn: cardProfileNfl, isNew: true, nfl: true, note: "D1 with no fantasy points: the box score with ranks, percentiles in real-life stats, and yards game by game." },
+    { id: "D9", name: "Head to head, real stats", fn: cardH2HNfl, isNew: true, nfl: true, note: "D6 with no fantasy points: the box score and real-life percentiles side by side, the better one bold.", controls: [rivalControl] },
+    { id: "D10", name: "Game by game", fn: cardGameLogNfl, wide: true, isNew: true, nfl: true, note: "Yards every game with touchdowns, the opponent and the result, and his season line with ranks." },
     { id: "D2", name: "Week by week", fn: cardGameLog, wide: true, note: "Each week's points against expected points, with the finish and his usage." },
     { id: "D3", name: "Usage by week", fn: cardUsage, wide: true, pick: true, note: "Snap, route, target and air yards share (carry share for backs, volume for quarterbacks)." },
     { id: "D7", name: "Where the points come from", fn: cardSources, wide: true, isNew: true, note: "Each week's points split into yards, catches and touchdowns, with the season's split beside it." },
@@ -72,6 +86,46 @@ const GROUPS = {
     { id: "E2", name: "Who gets the work", fn: cardTeamShare, wide: true, isNew: true, note: "Each week's share of the targets and carries, by player." },
     { id: "E3", name: "EPA game by game", fn: cardTeamTrend, wide: true, isNew: true, note: "Offense and defense EPA per play in every game, with the result." },
     { id: "E4", name: "Red zone pecking order", fn: cardTeamRedZone, wide: true, isNew: true, note: "Who gets the targets and carries inside the 20, and each player's share." },
+  ],
+  league: [
+    { id: "F1", name: "Passing network", fn: cardNetwork, wide: true, isNew: true, nfl: true, note: "The Explore tab's passing network for any quarterback, timeframe and situation. Hover a face for his numbers.",
+      controls: [
+        { key: "qb", type: "player", label: "Quarterback", pool: () => networkPassers(), defaults: () => networkPassers()[0].id },
+        tfControl(),
+        { key: "sit", type: "select", label: "Situation", options: SITUATION_OPTIONS, defaults: () => "all" },
+        { key: "top", type: "select", label: "Receivers", options: [["6", "Top 6"], ["8", "Top 8"], ["10", "Top 10"]], defaults: () => "8" },
+      ] },
+    { id: "F2", name: "Target analysis", fn: cardTargetAnalysis, isNew: true, nfl: true, note: "The Explore tab's target analysis: where each player is targeted (depth mix) or his air-yard curve, against the position average.",
+      controls: [
+        { key: "grp", type: "select", label: "Position", options: TA_GROUPS, defaults: () => "WR" },
+        tfControl(),
+        { key: "min", type: "select", label: "Min targets", options: TA_MINIMUMS.map((m) => [String(m), `${m}+`]), defaults: (_, o) => taDefaultMin(o) },
+        { key: "sort", type: "select", label: "Sort", options: Object.entries(TA_SORTS).map(([k, [label]]) => [k, label[0].toUpperCase() + label.slice(1)]), defaults: () => "adot" },
+        { key: "view", type: "select", label: "View", options: [["bars", "Depth mix"], ["ridge", "Air-yard distribution"]], defaults: () => "bars" },
+        COUNT([15, 20, 25], 20),
+      ] },
+    { id: "F3", name: "League leaders", fn: cardLeaders, isNew: true, nfl: true, note: "The top players in any box-score stat, for any timeframe and position, as a total or per game.",
+      controls: [
+        { key: "stat", type: "select", label: "Stat", options: LEADER_OPTIONS, defaults: () => "rec_yds" },
+        { key: "pos", type: "select", label: "Position", options: POS_FILTER, defaults: () => "all" },
+        tfControl(),
+        { key: "per", type: "select", label: "Measure", options: [["total", "Total"], ["game", "Per game"]], defaults: () => "total" },
+        COUNT([10, 15, 20], 15),
+      ] },
+    { id: "F4", name: "The race", fn: cardRace, wide: true, isNew: true, nfl: true, note: "Season totals after every week for the leaders in a stat: who is pulling away and who is closing.",
+      controls: [
+        { key: "stat", type: "select", label: "Stat", options: LEADER_OPTIONS.filter(([k]) => !LEADER_STATS[k].rate), defaults: () => "rec_yds" },
+        { key: "pos", type: "select", label: "Position", options: POS_FILTER, defaults: () => "all" },
+        COUNT([5, 8, 10], 8),
+      ] },
+    { id: "F5", name: "Team rankings", fn: cardTeamRankings, isNew: true, nfl: true, note: "All 32 teams in any team stat, best to worst, for any timeframe.",
+      controls: [{ key: "m", type: "select", label: "Stat", options: TEAM_RANKINGS.map(([id, , , label]) => [id, label]), defaults: () => "epa-o" }, tfControl()] },
+    { id: "F6", name: "Team scatter plots", fn: cardTeamScatter, wide: true, isNew: true, nfl: true, note: "Six team questions as logo scatters, for any timeframe. Hover a logo for the numbers; click it to highlight that team and fade the rest.",
+      controls: [
+        { key: "chart", type: "select", label: "Chart", options: TEAM_SCATTERS.map((c) => [c.id, c.label]), defaults: () => TEAM_SCATTERS[0].id },
+        tfControl(),
+        { key: "hl", type: "highlight", label: "Highlight", pool: teamPool, defaults: () => [] },
+      ] },
   ],
 };
 const NOTES = {
@@ -131,8 +185,8 @@ function controlsHtml(card, arg, opts) {
 }
 
 // --------------------------------------------------------------------- render
-const GROUP_ARG = { recap: () => DATA.recaps[state.recap], preview: () => DATA.previews[state.preview], weekly: () => null, player: () => state.player, team: () => state.team };
-const GRID = { recap: "recap-grid", preview: "preview-grid", weekly: "weekly-grid", player: "player-grid", team: "team-grid" };
+const GROUP_ARG = { recap: () => DATA.recaps[state.recap], preview: () => DATA.previews[state.preview], weekly: () => null, player: () => state.player, team: () => state.team, league: () => null };
+const GRID = { recap: "recap-grid", preview: "preview-grid", weekly: "weekly-grid", player: "player-grid", team: "team-grid", league: "league-grid" };
 function drawCard(card, arg) {
   try { return card.fn(arg, optsFor(card, arg)); } catch (error) {
     console.error(card.id, error);
@@ -144,7 +198,7 @@ function figure(card, arg) {
   const [w, h] = (svg.match(/viewBox="0 0 (\d+) (\d+)"/) || []).slice(1);
   const ctrls = card.controls ? `<div class="controls-row">${controlsHtml(card, arg, optsFor(card, arg))}</div>` : "";
   return `<figure class="${card.wide ? "wide" : ""}" data-card="${card.id}"><div class="shot">${svg}</div>${ctrls}
-    <figcaption><b>${card.id} · ${card.name}</b><span class="size">${w} × ${h}</span>${card.pick ? '<span class="badge">Pick</span>' : ""}${card.isNew ? '<span class="badge new">New</span>' : ""}
+    <figcaption><b>${card.id} · ${card.name}</b><span class="size">${w} × ${h}</span>${card.pick ? '<span class="badge">Pick</span>' : ""}${card.isNew ? '<span class="badge new">New</span>' : ""}${card.nfl ? '<span class="badge nfl">No fantasy</span>' : ""}
     <span class="actions"><button type="button" class="act" data-save>Save PNG</button><button type="button" class="act" data-copy>Copy image</button></span>
     <span class="note">${card.note}</span></figcaption></figure>`;
 }
@@ -191,7 +245,7 @@ function plainColor(value) {
 async function cardPng(svgEl, scale = 2) {
   const clone = svgEl.cloneNode(true);
   for (const el of [clone, ...clone.querySelectorAll("*")]) {
-    for (const attr of ["fill", "stroke"]) {
+    for (const attr of ["fill", "stroke", "stop-color"]) {
       const v = el.getAttribute(attr);
       if (v && (v.includes("var(") || v.includes("color-mix("))) el.setAttribute(attr, plainColor(v));
     }
@@ -219,7 +273,8 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
 function subjectFor(group, card, arg) {
   const base = group === "player" ? playerName(arg) : group === "team" ? arg : arg?.id ?? `week-${DATA.recap_week}`;
   const o = optsFor(card, arg);
-  const extra = (card.controls || []).filter((c) => c.type !== "highlight").map((c) => (c.type === "player" ? `vs ${playerName(o[c.key])}` : o[c.key]));
+  const extra = (card.controls || []).filter((c) => c.type !== "highlight").map((c) => (c.type === "player"
+    ? `${c.key === "vs" ? "vs " : ""}${c.pool(arg, o).find((p) => p.id === o[c.key])?.name ?? playerName(o[c.key])}` : o[c.key]));
   return [base, ...extra].join(" ");
 }
 function fileName(group, card) {
@@ -409,7 +464,14 @@ if (params.get("card")) {
   state.player = findPlayer(params.get("player")) || Object.values(DATA.players).filter((p) => p.pos === "WR").sort((a, b) => b.season.fantasy_points - a.season.fantasy_points)[0].id;
   if (params.get("team") && DATA.teams_cards[params.get("team").toUpperCase()]) state.team = params.get("team").toUpperCase();
   const arg = GROUP_ARG[group]();
-  for (const [k, v] of params) if (k.startsWith("opt.")) setOpt(card, arg, k.slice(4), k === "opt.vs" ? findPlayer(v) : v);
+  // A player control takes an id or a name, matched within that control's own pool.
+  const squash = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const [k, v] of params) {
+    if (!k.startsWith("opt.")) continue;
+    const control = (card.controls || []).find((c) => c.key === k.slice(4));
+    const value = control?.type === "player" ? control.pool(arg, optsFor(card, arg)).find((p) => p.id === v || squash(p.name) === squash(v))?.id ?? v : v;
+    setOpt(card, arg, k.slice(4), value);
+  }
   if (params.get("hl") != null) {
     const control = (card.controls || []).find((c) => c.type === "highlight");
     if (control) {

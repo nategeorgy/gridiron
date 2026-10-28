@@ -154,48 +154,61 @@ function cardPreviewFantasy(pv) {
 }
 
 // B3 ---------------------------------------------------------- Tale of the tape
-function cardTape(pv) {
-  const [away, home] = pvSides(pv);
-  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: `Each offense against the defense it faces. Season ranks of ${pv.teams_ranked}, 1st is best.` });
-  const colors = gameColors(away, home);
-  const { pad, w } = fr;
-  const ids = ["epa", "suc", "p_epa", "r_epa", "explosive", "pts_drive", "rz_td", "d3", "sack_rate"];
-  const short = { epa: "EPA per play", suc: "Success rate", p_epa: "EPA per dropback", r_epa: "EPA per run", explosive: "Explosive rate", pts_drive: "Points per drive", rz_td: "Red zone TD rate", d3: "Third down rate", sack_rate: "Sack rate" };
-  const rows = ids.map((id) => pv.tape.find((t) => t.id === id)).filter(Boolean);
-  const panelW = (w - pad * 2 - 50) / 2;
-  const n = pv.teams_ranked;
-  let s = "";
-  [[away, home], [home, away]].forEach(([off, def], pi) => {
-    const x0 = pad + pi * (panelW + 50);
-    let y = fr.top - 6;
-    s += logo(off, x0, y, 40) + T(x0 + 50, y + 30, `${off} offense`, { size: 24, weight: 750, fill: teamText(colors[off]) });
-    const vw = textWidth(`${off} offense`, 24, 750);
-    s += T(x0 + 50 + vw + 14, y + 30, "vs", { size: 20, fill: "var(--faint)" });
-    s += logo(def, x0 + 50 + vw + 48, y, 40) + T(x0 + 50 + vw + 98, y + 30, `${def} defense`, { size: 24, weight: 750, fill: teamText(colors[def]) });
-    y += 64;
-    const labelW = 200, tx0 = x0 + labelW, tx1 = x0 + panelW - 150;
-    const x = lin(1, n, tx0 + 18, tx1 - 18);
-    s += T(tx0 + 18, y - 6, "Best", { size: 15, weight: 700, fill: "var(--faint)" }) + T(tx1 - 18, y - 6, "Worst", { size: 15, weight: 700, anchor: "end", fill: "var(--faint)" });
-    s += T(tx1 + 74, y - 6, off, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" }) + T(tx1 + 136, y - 6, def, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" });
-    const rowH = (fr.bottom - y) / rows.length;
-    rows.forEach((row, i) => {
-      const cy = y + i * rowH + rowH / 2;
-      const o = row.o[off], d = row.d[def];
-      s += T(x0, cy + 7, short[row.id] || row.label, { size: 20, weight: 600, fill: "var(--muted)" });
-      s += L(tx0 + 18, cy, tx1 - 18, cy, { stroke: "var(--rule)", sw: 6, cap: "round" });
-      if (o && d) {
-        const edge = o[1] < d[1] ? off : d[1] < o[1] ? def : null;
-        s += L(x(o[1]), cy, x(d[1]), cy, { stroke: edge ? colors[edge] : "var(--muted)", sw: 6, cap: "round", opacity: 0.85 });
-        const close = Math.abs(x(o[1]) - x(d[1])) < 34;
-        for (const [team, r, dy] of [[def, d[1], close ? 11 : 0], [off, o[1], close ? -11 : 0]]) {
-          s += C(x(r), cy + dy, 17, { fill: "var(--card)", stroke: colors[team], sw: 2.5 }) + logo(team, x(r) - 13, cy + dy - 13, 26);
-        }
+// Offense against offense on the left, defense against defense on the right: each row is
+// one stat's rank track, both teams on it, the line in the colour of the one ranked higher.
+const TAPE_ROWS = [["ppg", "Points per game", "Points allowed"], ["epa", "EPA per play"], ["suc", "Success rate"], ["p_epa", "EPA per dropback"],
+  ["r_epa", "EPA per run"], ["explosive", "Explosive rate"], ["pts_drive", "Points per drive"], ["rz_td", "Red zone TD rate"],
+  ["d3", "Third down rate"], ["sack_rate", "Sack rate"]];
+/** Rank tracks for both teams, 1st on the left. rows: [{label, a: [value, rank], b: [value, rank], fmt}]. */
+function rankTracks(x0, y0, W, H, rows, teams, colors, n, o = {}) {
+  const [ta, tb] = teams;
+  const labelW = o.labelW ?? 214, valW = 76;
+  const tx0 = x0 + labelW, tx1 = x0 + W - valW * 2 - 12;
+  const x = lin(1, n, tx0 + 18, tx1 - 18);
+  let s = T(tx0 + 18, y0 - 6, o.left ?? "1st", { size: 15, weight: 700, fill: "var(--faint)" }) + T(tx1 - 18, y0 - 6, o.right ?? `${ord(n)}`, { size: 15, weight: 700, anchor: "end", fill: "var(--faint)" });
+  [ta, tb].forEach((team, k) => { s += logo(team, tx1 + 12 + valW * k + valW / 2 - 14, y0 - 30, 28); });
+  const rowH = H / rows.length;
+  rows.forEach((row, i) => {
+    const cy = y0 + i * rowH + rowH / 2;
+    if (i % 2 === 0) s += R(x0 - 10, cy - rowH / 2 + 2, W + 20, rowH - 4, { rx: 12, fill: "var(--panel)" });
+    const lb = fitSize(row.label, labelW - 12, [19, 18, 17, 16], 600);
+    s += T(x0, cy + 7, lb.text, { size: lb.size, weight: 600, fill: "var(--muted)" });
+    s += L(tx0 + 18, cy, tx1 - 18, cy, { stroke: "var(--rule)", sw: 6, cap: "round" });
+    const ra = row.a?.[1], rb = row.b?.[1];
+    if (ra != null && rb != null) {
+      const lead = ra < rb ? ta : rb < ra ? tb : null;
+      s += L(x(ra), cy, x(rb), cy, { stroke: lead ? colors[lead] : "var(--muted)", sw: 6, cap: "round", opacity: 0.85 });
+      const close = Math.abs(x(ra) - x(rb)) < 34;
+      for (const [team, r, dy] of [[tb, rb, close ? 11 : 0], [ta, ra, close ? -11 : 0]]) {
+        s += C(x(r), cy + dy, 17, { fill: "var(--card)", stroke: colors[team], sw: 2.5 }) + logo(team, x(r) - 13, cy + dy - 13, 26);
       }
-      s += T(tx1 + 74, cy + 7, o ? ord(o[1]) : "-", { size: 19, weight: 700, anchor: "middle", mono: true, fill: o && d && o[1] < d[1] ? teamText(colors[off]) : "var(--fg)" });
-      s += T(tx1 + 136, cy + 7, d ? ord(d[1]) : "-", { size: 19, weight: 700, anchor: "middle", mono: true, fill: o && d && d[1] < o[1] ? teamText(colors[def]) : "var(--fg)" });
+    }
+    [[ta, row.a, ra != null && rb != null && ra < rb], [tb, row.b, ra != null && rb != null && rb < ra]].forEach(([team, v, better], k) => {
+      const cx = tx1 + 12 + valW * k + valW / 2;
+      s += T(cx, cy - 1, v ? ord(v[1]) : "-", { size: 19, weight: better ? 800 : 600, anchor: "middle", mono: true, fill: better ? teamText(colors[team]) : "var(--fg)" });
+      if (v && row.fmt) s += T(cx, cy + 18, teamFmt(v[0], row.fmt), { size: 13, weight: 500, anchor: "middle", mono: true, fill: "var(--faint)" });
     });
   });
-  s += L(w / 2, fr.top + 40, w / 2, fr.bottom, { stroke: "var(--rule)" });
+  return s;
+}
+function cardTape(pv) {
+  const [away, home] = pvSides(pv);
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: `Offense against offense, defense against defense. Season ranks of ${pv.teams_ranked}, 1st is best.` });
+  const colors = gameColors(away, home);
+  const { pad, w } = fr;
+  const panelW = (w - pad * 2 - 56) / 2;
+  let s = "";
+  [["o", "Offense"], ["d", "Defense"]].forEach(([side, title], pi) => {
+    const x0 = pad + pi * (panelW + 56);
+    const y = fr.top - 6;
+    s += T(x0, y + 28, title, { size: 27, weight: 800 });
+    const rows = TAPE_ROWS.map(([id, label, labelD]) => {
+      const t = pv.tape.find((r) => r.id === id);
+      return t && { label: side === "d" && labelD ? labelD : label, a: t[side]?.[away], b: t[side]?.[home], fmt: t.fmt };
+    }).filter(Boolean);
+    s += rankTracks(x0, y + 84, panelW, fr.bottom - y - 84, rows, [away, home], colors, pv.teams_ranked);
+  });
+  s += L(w / 2, fr.top + 20, w / 2, fr.bottom, { stroke: "var(--rule)" });
   return wrapCard(fr, s);
 }
 
@@ -277,5 +290,49 @@ function cardTrend(pv) {
     });
     weeks.forEach((week) => { s += T(x(week), py0 - 8, `W${week}`, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" }); });
   });
+  return wrapCard(fr, s);
+}
+
+// B7 ---------------------------------------------------------- Quarterback matchup
+/** Each team's quarterback: the one with the most games, then the most points. */
+function pvQbs(pv) {
+  return pvSides(pv).map((team) => (pv.players[team] || []).filter((p) => p.position === "QB").sort((a, b) => b.games - a.games || b.fantasy_points - a.fantasy_points)[0]?.player_id);
+}
+function cardQbMatchup(pv) {
+  const [a, b] = pvQbs(pv);
+  if (!DATA.players[a] || !DATA.players[b]) {
+    const fr = frame(1200, 1500, { kicker: `${pv.header.week_label} preview`, title: `${pvTitle(pv)}: quarterbacks` });
+    return wrapCard(fr, T(fr.pad, fr.top + 40, "One of these quarterbacks has too few games for a season line.", { size: 22, fill: "var(--faint)" }));
+  }
+  return cardH2HNfl(a, { vs: b, kicker: `${pv.header.week_label} preview · Quarterbacks`, colors: gameColors(...pvSides(pv)) });
+}
+
+// B8 ---------------------------------------------------------- How they play
+const STYLE_ROWS = {
+  Offense: [["pass_rate", "o", "Pass rate"], ["proe", "o", "Pass rate over expected"], ["plays_g", "o", "Plays per game"], ["sec_snap", "o", "Pace, seconds per snap"],
+    ["motion", "o", "Motion rate"], ["pa", "o", "Play action rate"], ["screen", "o", "Screen rate"], ["adot", "o", "Air yards per attempt"], ["two_back", "o", "2-back rate"]],
+  Defense: [["blitz", "d", "Blitz rate"], ["rushers", "d", "Pass rushers per dropback"], ["box8", "d", "Stacked box rate"], ["pass_rate", "d", "Pass rate faced"],
+    ["proe", "d", "Pass rate over expected faced"], ["plays_g", "d", "Plays faced per game"]],
+};
+function cardStyle(pv) {
+  const [away, home] = pvSides(pv);
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: `${pvTitle(pv)}: how they play`, subtitle: `Tendencies, not grades. Rank of ${pv.teams_ranked}: 1st does it the most, and on pace 1st is the fastest.` });
+  const colors = gameColors(away, home);
+  const { pad, w } = fr;
+  const panelW = (w - pad * 2 - 56) / 2;
+  const all = [...pv.tendencies, ...(pv.defense_tendencies || [])];
+  let s = "";
+  Object.entries(STYLE_ROWS).forEach(([title, list], pi) => {
+    const x0 = pad + pi * (panelW + 56);
+    const y = fr.top - 6;
+    s += T(x0, y + 28, title, { size: 27, weight: 800 });
+    const rows = list.map(([id, side, label]) => {
+      const t = all.find((r) => r.id === id && r[side] && Object.keys(r[side]).length);
+      return t && { label, a: t[side][away], b: t[side][home], fmt: t.fmt };
+    }).filter((r) => r && (r.a || r.b));
+    const H = Math.min(fr.bottom - y - 84, rows.length * 62);
+    s += rankTracks(x0, y + 84, panelW, H, rows, [away, home], colors, pv.teams_ranked, { left: "Most", right: "Least", labelW: 282 });
+  });
+  s += L(w / 2, fr.top + 20, w / 2, fr.bottom, { stroke: "var(--rule)" });
   return wrapCard(fr, s);
 }

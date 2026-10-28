@@ -175,6 +175,7 @@ for game in sorted(games[str(PREVIEW_WEEK)], key=lambda g: (g["game_date"], g.ge
     previews.append({
         "id": gid, "header": header(h), "form": pv["form"], "slate": pv["slate"], "players": players,
         "pa": pv["points_allowed"], "tape": pv["tape"], "tendencies": pv["tendencies"],
+        "defense_tendencies": pv.get("defense_tendencies") or [],
         "teams_ranked": pv["teams_ranked"],
         "trend": {team: {k: [pick(x, ["week", "value", "to_date", "opponent", "home", "points_for", "points_against",
                                       "league_q25", "league_q75"]) for x in v[k]] for k in ("net", "off", "def")}
@@ -475,6 +476,121 @@ for position, depth in FINISH_DEPTH.items():
         "weeks": {g["week"]: [g.get("position_rank"), r(g.get("fantasy_points"), 1)] for g in p["log"]},
     } for p in rows]
 
+# --------------------------------------------------------- timeframe windows
+# Every timeframe control offers the same windows (pull.timeframes): the season, the last
+# 4, 3 and 2 weeks, and the newest week.
+windows = load("windows")
+intel_windows = load("intel_windows")
+scatter_windows = {
+    key: {position: [pick(row, ["player_id", "name", "team_abbreviation", "games_played", "fantasy_points"] + fields)
+                     for row in sorted(intel_windows[key][position], key=lambda r: -(r.get("fantasy_points") or 0))]
+          for position, fields in SCATTER_FIELDS.items()}
+    for key in windows
+}
+# Team rankings and team scatters: a curated set of the team page's metrics, per window.
+TEAM_WINDOW_METRICS = ["ppg", "pdiff", "epa", "net_epa", "suc", "p_epa", "r_epa", "explosive", "ypp", "pts_drive", "three_out",
+                       "rz_td", "d3", "tov_g", "sack_rate", "pass_rate", "n_pass", "proe", "sec_snap", "plays_g", "p_yds_g",
+                       "r_yds_g", "ypc", "cpoe", "adot", "yac", "x_pass", "x_run", "stuff", "int_rate", "start"]
+team_windows_raw = load("team_windows")
+team_windows = {}
+for key, snap in team_windows_raw.items():
+    team_windows[key] = {mid: {side: {abbr: [r(v[0], 4), v[1]] for abbr, v in snap["values"][mid][side].items()}
+                               for side in ("o", "d") if side in snap["values"].get(mid, {})}
+                         for mid in TEAM_WINDOW_METRICS if mid in snap["values"]}
+    for mid in team_windows[key]:
+        for side in ("o", "d"):
+            mean = snap["values"][mid].get(f"{side}_mean")
+            if mean is not None:
+                team_windows[key][mid][f"{side}_mean"] = r(mean, 4)
+team_window_meta = {m["id"]: {"label_o": m["label_o"], "label_d": m["label_d"], "fmt": m["fmt"], "better": m["better"],
+                              "sides": m["sides"], "short": m["short"]}
+                    for m in team_stats["metrics"] if m["id"] in TEAM_WINDOW_METRICS}
+
+# ------------------------------------------------------- week-by-week lines
+# The leaders and the race add weeks up, so each player's box score is kept per week:
+# [attempts, completions, pass yards, pass TDs, INTs, carries, rush yards, rush TDs,
+#  targets, receptions, rec yards, rec TDs, fumbles lost].
+LINE = ["attempts", "completions", "passing_yards", "passing_tds", "interceptions", "carries", "rushing_yards",
+        "rushing_tds", "targets", "receptions", "receiving_yards", "receiving_tds", "fumbles_lost"]
+weekly_qb = load("weekly_qb")
+weekly_lines = {}
+for boards in (weekly_boards, weekly_qb):
+    for week, rows in boards.items():
+        for row in rows:
+            line = [row.get(key) or 0 for key in LINE]
+            if not any(line):
+                continue
+            entry = weekly_lines.setdefault(row["player_id"], {"n": row["name"], "pos": row["position"], "w": {}, "tw": {}})
+            entry["w"][int(week)] = line
+            entry["tw"][int(week)] = row.get("team_abbreviation")
+for entry in weekly_lines.values():
+    entry["t"] = entry["tw"][max(entry["tw"])]
+    del entry["tw"]
+
+# ------------------------------------------------- target analysis, by week
+# Per receiver per week: [targets, catches, yards, TDs, INTs, first downs, EPA, air yards,
+# charted, left, middle, right, behind, short, intermediate, deep] plus the air-yard
+# histogram as [bin, count] pairs (bin 0 is -10 yards or less, bin 55 is 45 or more).
+target_weeks = load("target_weeks")
+TALLY = ["targets", "receptions", "yards", "touchdowns", "interceptions", "first_downs", "epa", "air_yards", "charted"]
+
+
+def tally(row):
+    return ([row.get(key) or 0 for key in TALLY[:6]] + [r(row.get("epa") or 0, 2)] + [row.get(key) or 0 for key in TALLY[7:]]
+            + list(row["locations"]) + list(row["depth"]))
+
+
+receivers = {}
+for week, board in target_weeks.items():
+    for row in board["players"]:
+        entry = receivers.setdefault(row["player_id"], {"n": row["name"], "pos": row["position"], "w": {}, "tw": {}})
+        entry["w"][int(week)] = tally(row) + [[[i, c] for i, c in enumerate(row["hist"]) if c]]
+        entry["tw"][int(week)] = row.get("team")
+for entry in receivers.values():
+    entry["t"] = entry["tw"][max(entry["tw"])]
+    del entry["tw"]
+
+# ------------------------------------------------------- passing networks
+# Per passer, per week, per situation: each receiver's tally as above (no histogram), and
+# the passer's own line [completions, attempts, yards, TDs, INTs]. A receiver play-by-play
+# names but we do not track arrives with no id and is folded into "others" on the card.
+networks_raw = load("networks")
+people = {}
+networks = {}
+for pid, by_week in networks_raw.items():
+    entry = None
+    for week, by_situation in by_week.items():
+        for situation, net in by_situation.items():
+            passer = net["passer"]
+            if entry is None:
+                entry = {"n": passer["name"], "w": {}, "tw": {}}
+                note_face(passer)
+            if not net["receivers"] and not passer.get("attempts"):
+                continue
+            slot = entry["w"].setdefault(int(week), {})
+            slot[situation] = {"line": [passer.get(k) or 0 for k in ("completions", "attempts", "passing_yards", "passing_tds", "interceptions")]
+                               if situation == "all" else None,
+                               "rec": [[rec.get("player_id")] + tally(rec) for rec in net["receivers"]]}
+            if passer.get("team"):
+                entry["tw"][int(week)] = passer["team"]
+            for rec in net["receivers"]:
+                if rec.get("player_id"):
+                    people[rec["player_id"]] = [rec["name"], rec.get("position")]
+    if entry and entry["w"]:
+        entry["t"] = entry["tw"][max(entry["tw"])] if entry["tw"] else None
+        del entry["tw"]
+        networks[pid] = entry
+
+# Each recap quarterback's throws that week: [air yards, side, complete, TD, INT, yards].
+recap_throws = load("recap_throws")
+for game in recaps:
+    game["throws"] = {}
+    for team, ids in game["passers"].items():
+        for qb in ids:
+            rows = recap_throws.get(qb, {}).get("targets", [])
+            game["throws"][qb] = [[t["air_yards"], t["location"], int(bool(t["complete"])), int(bool(t["touchdown"])),
+                                   int(bool(t["interception"])), t["yards"]] for t in rows]
+
 # Week's best, risers and RB faces not in the card pool still need a headshot.
 needed = set()
 for rows in week_rows.values():
@@ -486,6 +602,21 @@ needed |= {row["player_id"] for rows in scatter_pool.values() for row in rows}
 needed |= {row["player_id"] for rows in xva_pool.values() for row in rows}
 for card in teams_cards.values():
     needed |= {row["player_id"] for row in card["top"] + card["redzone"] + card["share"]["tgt"] + card["share"]["car"]}
+# The new cards' faces: receivers with a real season of targets, each passer's regular
+# targets, and anyone near the top of a counting stat.
+needed |= {pid for pid, e in receivers.items() if sum(w[0] for w in e["w"].values()) >= 12}
+needed |= set(networks)
+for pid, e in networks.items():
+    counts = {}
+    for slot in e["w"].values():
+        for rec in slot.get("all", {}).get("rec", []):
+            if rec[0]:
+                counts[rec[0]] = counts.get(rec[0], 0) + rec[1]
+    needed |= {rid for rid, n in counts.items() if n >= 4}
+for k in range(len(LINE)):
+    totals = sorted(weekly_lines, key=lambda pid: -sum(w[k] for w in weekly_lines[pid]["w"].values()))
+    needed |= set(totals[:24])
+needed |= {pid for rows in scatter_windows["last1"].values() for pid in [row["player_id"] for row in rows[:40]]}
 missing = sorted(pid for pid in needed if pid not in headshots)
 for start in range(0, len(missing), 50):
     chunk = missing[start:start + 50]
@@ -504,6 +635,14 @@ for game in schedule:
         weeks_by_team.setdefault(game[side], set()).add(game["week"])
 all_weeks = set(range(1, max(g["week"] for g in schedule) + 1))
 byes = {team: sorted(all_weeks - weeks) for team, weeks in weeks_by_team.items()}
+# Week-by-week results per team, for the game logs: {team: {week: [opponent, home, for, against]}}.
+results = {}
+for game in schedule:
+    if game.get("season_type", "REG") != "REG" or game.get("home_score") is None:
+        continue
+    home, away = game["home_abbreviation"], game["away_abbreviation"]
+    results.setdefault(home, {})[game["week"]] = [away, 1, game["home_score"], game["away_score"]]
+    results.setdefault(away, {})[game["week"]] = [home, 0, game["away_score"], game["home_score"]]
 
 data = {
     "byes": byes,
@@ -514,6 +653,10 @@ data = {
     "players": players,
     "teams_cards": teams_cards, "team_means": team_means, "team_metric_meta": metric_meta,
     "routes_pool": routes_pool, "xva_pool": xva_pool, "finishes": finishes, "scatter_pool": scatter_pool,
+    "windows": windows, "scatter_windows": scatter_windows, "team_windows": team_windows, "team_window_meta": team_window_meta,
+    "weekly_lines": weekly_lines, "receivers": receivers, "networks": networks, "people": people, "results": results,
+    "passers": [p["player_id"] for p in load("passers")],
+    "tape_meta": {m["id"]: {"label_o": m["label_o"], "label_d": m["label_d"], "better": m["better"]} for m in team_stats["metrics"]},
 }
 with open(os.path.join(HERE, "data.json"), "w") as handle:
     json.dump(data, handle, separators=(",", ":"))

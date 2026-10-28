@@ -44,6 +44,46 @@ const TILE_GROUPS = {
     ["Receiving", [["Receptions", "receptions", n0], ["Yards", "receiving_yards", n0], ["TDs", "receiving_tds", n0]]]],
 };
 TILE_GROUPS.TE = TILE_GROUPS.WR;
+// D8 and D9, the real-life cards: no fantasy points. The rows mirror NFL_PERCENTILES in pull.py.
+Object.assign(STAT, {
+  catch_rate: ["Catch rate", p1], receiving_first_downs: ["Receiving first downs", n0], yards_after_catch: ["Yards after catch", n0],
+  ngs_rec_yac_above_expectation: ["YAC over expected, per catch", s1], ngs_rec_separation: ["Average separation, yards", n1],
+  rec_broken_tackles: ["Broken tackles", n0], receiving_drop_rate: ["Drop rate", p1], passing_first_downs: ["Passing first downs", n0],
+  ngs_pass_time_to_throw: ["Time to throw, seconds", n2], pressure_rate: ["Pressure rate", p1], sacks_suffered: ["Sacks taken", n0],
+  rush_broken_tackles: ["Broken tackles", n0], rushing_first_downs: ["Rushing first downs", n0], fumbles_lost: ["Fumbles lost", n0],
+});
+const NFL_PCT_LIST = {
+  QB: ["completion_pct", "cpoe", "yards_per_attempt", "passer_rating", "epa_per_play", "passing_first_downs", "ngs_pass_intended_air_yards",
+    "ngs_pass_time_to_throw", "bad_throw_rate", "pressure_rate", "sacks_suffered", "rushing_yards_per_game"],
+  RB: ["yards_per_carry", "rushing_yards_per_game", "ngs_rush_yards_over_expected_per_att", "rush_ybc_per_att", "rush_yac_per_att", "rush_broken_tackles",
+    "rushing_first_downs", "rushing_epa", "target_share", "yards_per_route_run", "receiving_epa", "fumbles_lost"],
+  WR: ["catch_rate", "yards_per_reception", "yards_per_target", "yards_per_route_run", "targets_per_route_run", "adot", "receiving_first_downs",
+    "yards_after_catch", "ngs_rec_yac_above_expectation", "ngs_rec_separation", "rec_broken_tackles", "receiving_drop_rate", "receiving_epa"],
+};
+NFL_PCT_LIST.TE = NFL_PCT_LIST.WR;
+// [label, stat, format, name on the head to head]
+const NFL_TILES = {
+  QB: [["Passing", [["Comp %", "completion_pct", p1, "Completion %"], ["Yards", "passing_yards", n0, "Passing yards"], ["TDs", "passing_tds", n0, "Passing TDs"],
+    ["INTs", "interceptions", n0, "Interceptions"], ["Rating", "passer_rating", n1, "Passer rating"]]],
+    ["Rushing", [["Yards", "rushing_yards", n0, "Rushing yards"], ["TDs", "rushing_tds", n0, "Rushing TDs"]]]],
+  RB: [["Rushing", [["Carries", "carries", n0, "Carries"], ["Yards", "rushing_yards", n0, "Rushing yards"], ["Per carry", "yards_per_carry", n1, "Yards per carry"],
+    ["TDs", "rushing_tds", n0, "Rushing TDs"]]],
+    ["Receiving", [["Catches", "receptions", n0, "Receptions"], ["Yards", "receiving_yards", n0, "Receiving yards"], ["TDs", "receiving_tds", n0, "Receiving TDs"]]]],
+  WR: [["Receiving", [["Targets", "targets", n0, "Targets"], ["Catches", "receptions", n0, "Receptions"], ["Yards", "receiving_yards", n0, "Receiving yards"],
+    ["Per catch", "yards_per_reception", n1, "Yards per catch"], ["TDs", "receiving_tds", n0, "Receiving TDs"]]]],
+};
+NFL_TILES.TE = NFL_TILES.WR;
+const CARD_MODES = {
+  fantasy: { tiles: TILE_GROUPS, list: PCT_LIST, tag: " \u00b7 PPR" },
+  nfl: { tiles: NFL_TILES, list: NFL_PCT_LIST, tag: "" },
+};
+/** One game in a few words, and the number to draw it by (yards). */
+function gameNumbers(pos, g) {
+  if (pos === "QB") return { value: g.passing_yards || 0, line: `${g.passing_tds || 0} TD, ${g.interceptions || 0} INT` };
+  if (pos === "RB") return { value: (g.rushing_yards || 0) + (g.receiving_yards || 0), parts: [g.rushing_yards || 0, g.receiving_yards || 0], line: `${g.carries || 0} car, ${g.receptions || 0} rec`, short: `${g.carries || 0} car` };
+  return { value: g.receiving_yards || 0, line: `${g.receptions || 0}/${g.targets || 0}` };
+}
+const gameTds = (g) => (g.passing_tds || 0) + (g.rushing_tds || 0) + (g.receiving_tds || 0);
 const POS_NAME = { QB: "quarterbacks", RB: "running backs", WR: "receivers", TE: "tight ends" };
 const height = (inches) => (inches ? `${Math.floor(inches / 12)}-${inches % 12}` : "");
 const draftLine = (d) => (!d?.draft_year ? "Undrafted" : d.draft_round ? `${d.draft_year} Round ${d.draft_round}, Pick ${d.draft_pick}` : `${d.draft_year} draft`);
@@ -80,14 +120,15 @@ function playerHead(p, fr, o = {}) {
 }
 
 // D1 ----------------------------------------------------------- Profile
-function cardProfile(pid) {
+function cardProfile(pid, opts = {}, mode = "fantasy") {
   const p = DATA.players[pid];
   const ss = p.season;
-  const list = PCT_LIST[p.pos];
+  const M = CARD_MODES[mode];
+  const list = M.list[p.pos];
   // The card is 1200x1500 when the rows fit at 50px or more; a long list (backs have 15)
   // grows the card rather than shrinking the type.
   const tilesH = 158;
-  const fixed = 326 + tilesH + 68 + 28 + 96 + 120;
+  const fixed = 326 + tilesH + 68 + 28 + (mode === "nfl" ? 180 : 96) + 120;
   const rowH = Math.max(50, Math.min(56, (1500 - fixed) / list.length));
   const h = Math.max(1500, Math.round(fixed + rowH * list.length));
   const fr = frame(1200, h, { noHeader: true });
@@ -95,9 +136,9 @@ function cardProfile(pid) {
   let s = mark(w - pad - 46 * MARK_ASPECT, pad - 4, 46);
   s += playerHead(p, fr, { top: 66 });
   let y = 304;
-  s += T(pad, y, `${DATA.season} through Week ${DATA.recap_week} \u00b7 PPR \u00b7 ${ss.games_played} games`.toUpperCase(), { size: 18, weight: 750, fill: "var(--accent-text)", ls: 2 });
+  s += T(pad, y, `${DATA.season} through Week ${DATA.recap_week}${M.tag} \u00b7 ${ss.games_played} games`.toUpperCase(), { size: 18, weight: 750, fill: "var(--accent-text)", ls: 2 });
   y += 22;
-  s += tileGroups(pad, y, w - pad * 2, TILE_GROUPS[p.pos].map(([label, cells]) => ({
+  s += tileGroups(pad, y, w - pad * 2, M.tiles[p.pos].map(([label, cells]) => ({
     label,
     cells: cells.map(([cellLabel, id, f]) => ({ label: cellLabel, value: ss[id] == null ? "-" : f(ss[id]), chip: (cx, cy) => chip(p.ranks[id], p.pos, cx, cy, { size: 16, h: 28, w: 62 }) })),
   }))).svg;
@@ -126,6 +167,7 @@ function cardProfile(pid) {
   y += list.length * rowH + 28;
   const slots = weekSlots(p);
   const cw = (w - pad * 2 - 190) / slots.length;
+  if (mode === "nfl") return wrapCard(fr, s + gameStrip(p, slots, pad + 190, y, cw, 180));
   s += T(pad, y + 52, "Weekly finish", { size: 22, weight: 750 });
   slots.forEach((sl, i) => {
     const cx = pad + 190 + cw * i + cw / 2;
@@ -382,18 +424,19 @@ function defaultRival(pid) {
   const i = same.findIndex((o) => o.id === pid);
   return (same[i + 1] ?? same[i - 1])?.id;
 }
-function cardH2H(pid, opts = {}) {
+function cardH2H(pid, opts = {}, mode = "fantasy") {
   const a = DATA.players[pid];
   const b = DATA.players[opts.vs] && DATA.players[opts.vs].pos === a.pos ? DATA.players[opts.vs] : DATA.players[defaultRival(pid)];
-  const list = PCT_LIST[a.pos];
-  const tiles = TILE_GROUPS[a.pos].flatMap(([, cells]) => cells);
+  const M = CARD_MODES[mode];
+  const list = M.list[a.pos];
+  const tiles = M.tiles[a.pos].flatMap(([, cells]) => cells);
   const rowH = 48, top = 380;
   const h = Math.max(1500, top + (tiles.length + list.length) * rowH + 70 + 120);
   const fr = frame(1200, h, { noHeader: true });
   const { pad, w } = fr;
-  const ca = teamColor(a.team), cb = teamColor(b.team);
+  const ca = opts.colors?.[a.team] ?? teamColor(a.team), cb = opts.colors?.[b.team] ?? teamColor(b.team);
   let s = mark(w / 2 - 23 * MARK_ASPECT, pad - 6, 46);
-  s += T(w / 2, 136, `Head to head · ${DATA.season} through Week ${DATA.recap_week} · PPR`.toUpperCase(), { size: 17, weight: 750, anchor: "middle", fill: "var(--accent-text)", ls: 1.8 });
+  s += T(w / 2, 136, (opts.kicker ?? `Head to head · ${DATA.season} through Week ${DATA.recap_week}${M.tag}`).toUpperCase(), { size: 17, weight: 750, anchor: "middle", fill: "var(--accent-text)", ls: 1.8 });
   [[a, ca, true], [b, cb, false]].forEach(([p, color, left]) => {
     const cx = left ? pad + 96 : w - pad - 96;
     s += face(p.id, cx, 250, 86, color, p.name);
@@ -418,11 +461,11 @@ function cardH2H(pid, opts = {}) {
     if (extra) s += extra(cy);
   };
   // The headline numbers, each side's rank beside it.
-  tiles.forEach(([label, id, f], i) => {
+  tiles.forEach(([label, id, f, full], i) => {
     const va = a.season[id], vb = b.season[id], ra = a.ranks[id], rb = b.ranks[id];
     const better = ra != null && rb != null && ra !== rb ? (ra < rb ? "a" : "b") : null;
-    const group = TILE_GROUPS[a.pos].find(([, cells]) => cells.some((c) => c[1] === id))[0];
-    const name = { fantasy_ppg: "Points per game", fantasy_points: "Total points", receptions: "Receptions", interceptions: "Interceptions" }[id]
+    const group = M.tiles[a.pos].find(([, cells]) => cells.some((c) => c[1] === id))[0];
+    const name = full ?? { fantasy_ppg: "Points per game", fantasy_points: "Total points", receptions: "Receptions", interceptions: "Interceptions" }[id]
       ?? `${group} ${label === "TDs" ? "TDs" : label.toLowerCase()}`;
     row(i, name, va == null ? "-" : f(va), vb == null ? "-" : f(vb), better, (cy) =>
       chip(ra, a.pos, mid - labelW / 2 - 50, cy, { size: 15, h: 26, w: 60 }) + chip(rb, b.pos, mid + labelW / 2 + 50, cy, { size: 15, h: 26, w: 60 }));
@@ -508,6 +551,89 @@ function cardSources(pid) {
     const share = Math.max(0, v / sum);
     s += R(sx + 28, ry + 18, panelW - 56, 10, { rx: 5, fill: "var(--rule)" }) + R(sx + 28, ry + 18, (panelW - 56) * Math.min(1, share), 10, { rx: 5, fill: color });
     if (key !== "turnovers") s += T(sx + 28, ry + 50, `${pct(share)} of his points`, { size: 16, fill: "var(--muted)" });
+  });
+  return wrapCard(fr, s);
+}
+
+// D8, D9 -------------------------------------------------- The real-life versions
+const cardProfileNfl = (pid, opts) => cardProfile(pid, opts, "nfl");
+const cardH2HNfl = (pid, opts) => cardH2H(pid, opts, "nfl");
+/** Each week as a small bar of yards, the number over it, the opponent and his line under it. */
+function gameStrip(p, slots, x0, y, cw, h) {
+  const pad = x0 - 190;
+  let s = T(pad, y + 28, "Game by game", { size: 22, weight: 750 });
+  s += T(pad, y + 54, p.pos === "QB" ? "Passing yards" : p.pos === "RB" ? "Scrimmage yards" : "Receiving yards", { size: 16, fill: "var(--muted)" });
+  const color = teamColor(p.team);
+  const max = Math.max(1, ...slots.map((sl) => (sl.log ? gameNumbers(p.pos, sl.log).value : 0)));
+  const base = y + h - 50, top = y + 36;
+  slots.forEach((sl, i) => {
+    const cx = x0 + cw * i + cw / 2;
+    s += T(cx, y + 14, `W${sl.week}`, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" });
+    if (!sl.log) { s += T(cx, base - 6, sl.bye ? "BYE" : "DNP", { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" }); return; }
+    const gn = gameNumbers(p.pos, sl.log);
+    const bh = (base - top - 22) * (gn.value / max), bw = Math.min(54, cw - 22);
+    if (gn.parts) {
+      const rush = (base - top - 22) * (gn.parts[0] / max);
+      s += R(cx - bw / 2, base - rush, bw, rush, { rx: 4, fill: color }) + R(cx - bw / 2, base - bh, bw, bh - rush, { rx: 4, fill: mix(color, 45, "var(--card)") });
+    } else s += R(cx - bw / 2, base - bh, bw, bh, { rx: 5, fill: color, opacity: 0.9 });
+    s += T(cx, base - bh - 8, gn.value, { size: 18, weight: 800, anchor: "middle", mono: true });
+    const tds = gameTds(sl.log);
+    s += T(cx, base + 22, `${homeAway(sl.log)} ${sl.log.opponent_abbreviation}`, { size: 14, weight: 650, anchor: "middle", fill: "var(--muted)" });
+    const words = p.pos === "QB" ? gn.line : `${gn.short ?? gn.line}${tds ? `, ${tds} TD` : ""}`;
+    s += T(cx, base + 42, fit(words, cw - 8, 13, 500, true), { size: 13, anchor: "middle", mono: true, fill: tds ? "var(--accent-text)" : "var(--faint)" });
+  });
+  return s;
+}
+
+// D10 ------------------------------------------------------------ Game by game
+function cardGameLogNfl(pid) {
+  const p = DATA.players[pid];
+  const pos = p.pos;
+  const fr = frame(1600, 900, { kicker: `${DATA.season} · ${pos} · ${TEAMS[p.team]?.name || p.team}`, title: `${p.name}: game by game`,
+    subtitle: pos === "QB" ? "Passing yards each game, with touchdowns and interceptions" : pos === "RB" ? "Rushing and receiving yards each game, with touchdowns" : "Receiving yards each game, with catches, targets and touchdowns",
+    headshot: { pid: p.id, name: p.name, ring: teamColor(p.team) } });
+  const { pad, w } = fr;
+  const slots = weekSlots(p);
+  const panelW = 330;
+  const px0 = pad + 56, px1 = w - pad - panelW - 40, py0 = fr.top + 34, py1 = fr.bottom - 120;
+  const color = teamColor(p.team);
+  const vals = slots.map((sl) => (sl.log ? gameNumbers(pos, sl.log) : null));
+  const top = Math.max(20, ...vals.filter(Boolean).map((v) => v.value));
+  const step = niceStep(0, top, 5), ymax = Math.ceil(top / step) * step;
+  const y = lin(0, ymax, py1, py0);
+  const slotW = (px1 - px0) / slots.length;
+  let s = "";
+  if (pos === "RB") s += legendRow(px0, fr.top + 2, [[(cx, cy) => R(cx - 9, cy - 9, 18, 18, { rx: 4, fill: color }), "Rushing"], [(cx, cy) => R(cx - 9, cy - 9, 18, 18, { rx: 4, fill: mix(color, 45, "var(--card)") }), "Receiving"]], 18).svg;
+  for (let v = 0; v <= ymax; v += step) s += L(px0, y(v), px1, y(v), { stroke: v ? "var(--divider)" : "var(--plot-rule)", sw: v ? 1 : 1.5 }) + T(px0 - 12, y(v) + 6, v, { size: 17, anchor: "end", mono: true, fill: "var(--faint)" });
+  const played = vals.filter(Boolean);
+  const avg = played.reduce((a, v) => a + v.value, 0) / Math.max(1, played.length);
+  s += L(px0, y(avg), px1, y(avg), { stroke: "var(--muted)", dash: "8 7", sw: 1.6 }) + T(px1 + 10, y(avg) - 4, "Avg", { size: 15, weight: 700, fill: "var(--muted)" }) + T(px1 + 10, y(avg) + 16, num(avg, 0), { size: 16, weight: 800, mono: true, fill: "var(--muted)" });
+  slots.forEach((sl, i) => {
+    const cx = px0 + slotW * i + slotW / 2, bw = Math.min(100, slotW * 0.56);
+    s += T(cx, py1 + 30, `W${sl.week}`, { size: 18, weight: 750, anchor: "middle", fill: "var(--faint)" });
+    if (!sl.log) { s += T(cx, py1 - 14, sl.bye ? "BYE" : "DNP", { size: 17, weight: 750, anchor: "middle", fill: "var(--faint)" }); return; }
+    const g = sl.log, gn = vals[i];
+    if (gn.parts) s += R(cx - bw / 2, y(gn.parts[0]), bw, py1 - y(gn.parts[0]), { rx: 6, fill: color }) + R(cx - bw / 2, y(gn.value), bw, y(gn.parts[0]) - y(gn.value), { rx: 6, fill: mix(color, 45, "var(--card)") });
+    else s += R(cx - bw / 2, y(gn.value), bw, py1 - y(gn.value), { rx: 8, fill: color, opacity: 0.9 });
+    s += T(cx, y(gn.value) - 12, gn.value, { size: 22, weight: 800, anchor: "middle", mono: true });
+    const tds = gameTds(g);
+    if (tds) s += pill(`${tds} TD`, cx, y(gn.value) - 48, { size: 14, tone: "var(--pos)", anchor: "middle" }).svg;
+    const res = DATA.results[g.team_abbreviation]?.[sl.week];
+    s += T(cx, py1 + 56, `${homeAway(g)} ${g.opponent_abbreviation}`, { size: 17, weight: 650, anchor: "middle", fill: "var(--muted)" });
+    if (res) s += T(cx, py1 + 78, `${res[2] > res[3] ? "W" : res[2] < res[3] ? "L" : "T"} ${res[2]}-${res[3]}`, { size: 15, weight: 700, anchor: "middle", mono: true, fill: res[2] > res[3] ? mix("var(--pos)", 72, "var(--fg)") : res[2] < res[3] ? mix("var(--neg)", 72, "var(--fg)") : "var(--muted)" });
+    s += T(cx, py1 + 100, fit(pos === "QB" ? `${g.completions}/${g.attempts}, ${g.interceptions} INT` : gn.line, slotW - 6, 15), { size: 15, anchor: "middle", mono: true, fill: "var(--faint)" });
+  });
+  // Side panel: the season line with ranks among the position.
+  const sx = w - pad - panelW;
+  s += R(sx, fr.top - 10, panelW, fr.bottom - fr.top + 10, { rx: 24, fill: "var(--panel)" });
+  s += T(sx + 28, fr.top + 26, `SEASON · ${p.season.games_played} GAMES`, { size: 14, weight: 750, fill: "var(--faint)", ls: 1.2 });
+  const cells = NFL_TILES[pos].flatMap(([, c]) => c).slice(0, 7);
+  const rowH = Math.min(92, (fr.bottom - fr.top - 50) / cells.length);
+  cells.forEach(([, id, f, full], k) => {
+    const ry = fr.top + 50 + k * rowH;
+    s += T(sx + 28, ry + 20, full.toUpperCase(), { size: 13, weight: 750, fill: "var(--faint)", ls: 1.1 });
+    s += T(sx + 28, ry + 56, p.season[id] == null ? "-" : f(p.season[id]), { size: 30, weight: 800, mono: true });
+    if (p.ranks[id]) s += chip(p.ranks[id], pos, sx + panelW - 56, ry + 46, { size: 15, h: 28 });
   });
   return wrapCard(fr, s);
 }

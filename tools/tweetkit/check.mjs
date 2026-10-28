@@ -4,13 +4,15 @@
 import { spawn } from "node:child_process";
 const port = 9800 + Math.floor(Math.random() * 100);
 const chrome = spawn("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${process.cwd()}/.chrome-check`, "--no-first-run", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
+// A run that throws must not leave Chrome holding the profile, or the next run cannot start.
+process.on("exit", () => chrome.kill());
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let target; for (let i = 0; i < 50 && !target; i++) { await sleep(200); try { target = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).find((t) => t.type === "page"); } catch {} }
 const ws = new WebSocket(target.webSocketDebuggerUrl); await new Promise((r) => ws.addEventListener("open", r));
 let seq = 0; const pending = new Map(); const logs = [];
 ws.addEventListener("message", (m) => { const d = JSON.parse(m.data); if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); } else if (d.method === "Runtime.consoleAPICalled" && ["error", "warning"].includes(d.params.type)) logs.push(d.params.args.map((a) => a.value ?? a.description).join(" ")); else if (d.method === "Runtime.exceptionThrown") logs.push(d.params.exceptionDetails.exception?.description); });
 const send = (method, params = {}) => new Promise((r) => { const id = ++seq; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
-const ev = async (e) => (await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true })).result.result.value;
+const ev = async (e) => { const r = (await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true })).result; if (r.exceptionDetails) console.log("EVAL ERROR", r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
 await send("Runtime.enable"); await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1320, height: 900, deviceScaleFactor: 1, mobile: false });
 await send("Page.navigate", { url: `file://${process.cwd()}/preview.html` });
@@ -28,14 +30,24 @@ const bad = await ev(`(() => {
       if (!svg.includes('</svg>') || m) out.push(label + ' ' + card.id + ' ' + (m ? m[0] : 'no svg'));
     } catch (e) { out.push(label + ' ' + card.id + ' ' + e.message); }
   };
-  const ARGS = { recap: DATA.recaps, preview: DATA.previews, weekly: [null], player: Object.keys(DATA.players), team: Object.keys(DATA.teams_cards) };
+  const ARGS = { recap: DATA.recaps, preview: DATA.previews, weekly: [null], player: Object.keys(DATA.players), team: Object.keys(DATA.teams_cards), league: [null] };
   for (const [group, cards] of Object.entries(GROUPS)) {
     for (const arg of ARGS[group]) {
       for (const card of cards) {
-        const select = (card.controls || []).find((c) => c.type === 'select');
         const hl = (card.controls || []).find((c) => c.key === 'hl');
-        if (select) for (const [v] of select.options) run(card, arg, (arg?.id ?? arg ?? group) + ' ' + v, { [select.key]: v, ...(hl ? { hl: hl.defaults(arg, { [select.key]: v }) } : {}) });
-        else run(card, arg, arg?.id ?? arg ?? group);
+        const label = arg?.id ?? arg ?? group;
+        run(card, arg, label);
+        // Every option of every select, one control at a time; the first few of a player picker.
+        // Whole-league cards get every option; per-game and per-player cards a sample, to keep the run short.
+        const wide = arg == null || arg === ARGS[group][0];
+        for (const c of card.controls || []) {
+          const options = c.type === 'select' ? c.options.map(([v]) => v) : c.type === 'player' ? c.pool(arg, optsFor(card, arg)).slice(0, wide ? 12 : 2).map((p) => p.id) : [];
+          for (const v of wide ? options : options.slice(0, 2)) {
+            const extra = { [c.key]: v };
+            if (hl) extra.hl = hl.defaults(arg, { ...optsFor(card, arg), ...extra });
+            run(card, arg, label + ' ' + c.key + '=' + v, extra);
+          }
+        }
       }
     }
   }
