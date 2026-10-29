@@ -22,6 +22,12 @@ const scatterCard = (pos, id) => ({
 });
 const rivalControl = { key: "vs", type: "player", label: "Against", pool: (pid) => Object.values(DATA.players).filter((o) => o.pos === posOf(pid) && o.id !== pid).sort((a, b) => b.season.fantasy_points - a.season.fantasy_points), defaults: (pid) => defaultRival(pid) };
 const gamePlayers = (g) => [...g.players].sort((a, b) => b.fantasy_points - a.fantasy_points).map((p) => ({ id: p.player_id, name: p.name, team: p.team }));
+// B11 to B13 share these: who makes the grid, and whose faces are drawn.
+const ENV_CONTROLS = [
+  { key: "minPpg", type: "select", label: "Min PPG", options: ENV_MIN_PPG.map((m) => [String(m), m ? `${m}+` : "Any"]), defaults: () => "4" },
+  { key: "minGames", type: "select", label: "Min games", options: ENV_MIN_GAMES.map((m) => [String(m), `${m}+`]), defaults: () => "2" },
+  { key: "hl", type: "highlight", label: "Faces", pool: (pv, o) => envPoint(pv, o).map((p) => ({ id: p.player_id, name: p.name, team: p.team })), defaults: (pv, o) => defaultEnvFaces(pv, o) },
+];
 const COUNT = (list, fallback) => ({ key: "n", type: "select", label: "Players", options: list.map((n) => [String(n), `Top ${n}`]), defaults: () => String(fallback) });
 
 const GROUPS = {
@@ -55,11 +61,19 @@ const GROUPS = {
     { id: "B8", name: "How they play", fn: cardStyle, wide: true, isNew: true, nfl: true, note: "Tendencies, not grades: pass rate, pace, motion and play action on offense; blitz, rushers and stacked boxes on defense." },
     { id: "B9", name: "Player matchup", fn: cardPlayerMatchup, isNew: true, note: "One player's spot: where the defense ranks in points allowed to his position, what it allows stat by stat, and every game against it.",
       controls: [{ key: "who", type: "player", label: "Player", pool: (pv) => previewPlayers(pv).map((p) => ({ id: p.player_id, name: p.name, team: p.team })), defaults: (pv) => defaultMatchupPlayer(pv) }] },
-    { id: "B10", name: "Team matchup", fn: cardTeamMatchup, isNew: true, note: "One offense against the other defense: unit against unit with the edge, the matchup at every position, and each player's spot.",
-      controls: [{ key: "side", type: "select", label: "Offense", options: (pv) => [["away", `${pv.header.away.abbreviation} offense`], ["home", `${pv.header.home.abbreviation} offense`]],
-        defaults: (pv) => ((pv.header.home_implied ?? 0) > (pv.header.away_implied ?? 0) ? "home" : "away") }] },
-    { id: "B11", name: "Game environment", fn: cardGameEnvironment, wide: true, isNew: true, note: "The whole game ranked against the week's others (total, pace, pass rate, both defenses), then every player on both teams by his points and his matchup. Click a dot to add or remove a face.",
-      controls: [{ key: "hl", type: "highlight", label: "Faces", pool: (pv) => envPoint(pv).map((p) => ({ id: p.player_id, name: p.name, team: p.team })), defaults: (pv) => defaultEnvFaces(pv) }] },
+    { id: "B10", name: "Team matchup", fn: cardTeamMatchup, isNew: true, note: "One offense against the other defense: unit against unit with the edge, the matchup at every position, and each key player's spot. Key players default to the top six by PPG who played the latest game (or have 4+ games); add or remove up to eight.",
+      controls: [
+        { key: "side", type: "select", label: "Offense", options: (pv) => [["away", `${pv.header.away.abbreviation} offense`], ["home", `${pv.header.home.abbreviation} offense`]],
+          defaults: (pv) => ((pv.header.home_implied ?? 0) > (pv.header.away_implied ?? 0) ? "home" : "away"), resets: ["who"] },
+        { key: "who", type: "highlight", label: "Key players", pool: (pv, o) => (pv.players[matchupSide(pv, o.side)] || []).map((p) => ({ id: p.player_id, name: p.name, team: p.team })),
+          defaults: (pv, o) => keyPlayers(pv, matchupSide(pv, o.side)).slice(0, 6).map((p) => p.player_id) },
+      ] },
+    { id: "B11", name: "Game environment", fn: cardGameEnvironment, wide: true, isNew: true, note: "The whole game ranked against the week's others (total, pace, pass rate, both defenses), then every player on both teams by his points and his matchup. Min PPG and Min games set who makes the grid; click a dot to add or remove a face.",
+      controls: ENV_CONTROLS },
+    { id: "B12", name: "Game environment, wide chart", fn: cardGameEnvironmentStrip, wide: true, isNew: true, note: "B11 with the game's ranks in one strip under the title, so the chart runs the full width.",
+      controls: ENV_CONTROLS },
+    { id: "B13", name: "Game environment, chart only", fn: cardGameEnvironmentChart, wide: true, isNew: true, note: "B11's chart on its own: every player on both teams by his points and his matchup.",
+      controls: ENV_CONTROLS },
   ],
   weekly: [
     { id: "C1", name: "Team landscape", fn: cardLandscape, wide: true, pick: true, note: "Offense against defense EPA for all 32 teams. Hover a logo for the numbers; click it to highlight that team and fade the rest.",

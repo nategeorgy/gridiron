@@ -567,14 +567,28 @@ function edgeRow(x0, x1, cy, o) {
 // the edge to whichever is ranked better.
 const UNIT_ROWS = [["p_epa", "Passing, EPA per dropback"], ["r_epa", "Running, EPA per designed run"], ["suc", "Success rate"],
   ["explosive", "Explosive play rate"], ["rz_td", "Red zone TD rate"], ["d3", "Third down rate"], ["sack_rate", "Sack rate"], ["tov_g", "Giveaways against takeaways"]];
+const matchupSide = (pv, side) => {
+  const [away, home] = pvSides(pv);
+  return side === "home" ? home : side === "away" ? away : (pv.header.home_implied ?? 0) > (pv.header.away_implied ?? 0) ? home : away;
+};
+// Key players: who played the team's latest game, or a regular (4+ games) who missed it, by
+// PPG. The latest game is what keeps a fill-in out once the starter is back.
+function keyPlayers(pv, team) {
+  const all = pv.players[team] || [];
+  const last = Math.max(0, ...all.flatMap((p) => p.weeks.filter((w) => w.played).map((w) => w.week)));
+  return all.filter((p) => (p.games >= 4 || p.weeks.some((w) => w.week === last && w.played)) && (p.position !== "QB" || p.fantasy_ppg > 5))
+    .sort((a, b) => b.fantasy_ppg - a.fantasy_ppg);
+}
+const KEY_PLAYERS_MAX = 8;
 function cardTeamMatchup(pv, opts = {}) {
   const [away, home] = pvSides(pv);
-  const team = opts.side === "home" ? home : opts.side === "away" ? away : (pv.header.home_implied ?? 0) > (pv.header.away_implied ?? 0) ? home : away;
+  const team = matchupSide(pv, opts.side);
   const opp = team === away ? home : away;
   const colors = gameColors(away, home);
   const imp = team === away ? pv.header.away_implied : pv.header.home_implied;
   const fr = frame(1200, 1500, { kicker: `${pv.header.week_label} preview · ${pvTitle(pv)}`, title: `${nickname(team)} offense vs ${nickname(opp)} defense`,
-    subtitle: `Implied total ${implied(imp)}, ${ord(pv.slate.implied_rank?.[team])} of ${pv.slate.offenses}. Unit against unit, then every position.` });
+    subtitle: imp == null ? `${team} has no implied point total yet this week`
+      : `${team} implied point total ${implied(imp)} (${ord(pv.slate.implied_rank?.[team])} of ${pv.slate.offenses} teams this week)` });
   const { pad, w } = fr;
   const tw = DATA.team_windows.season;
   let s = "", y = fr.top + 30;
@@ -594,10 +608,12 @@ function cardTeamMatchup(pv, opts = {}) {
   s += positionTiles(pv, team, opp, pad, y, w - pad * 2, 150, colors);
   y += 150 + 58;
   // The offense's players, each with his position's matchup.
-  s += T(pad, y, "The players", { size: 25, weight: 750 }) + T(w - pad, y, "PPR points per game, then his matchup", { size: 17, anchor: "end", fill: "var(--muted)" });
+  s += T(pad, y, "Key players", { size: 25, weight: 750 }) + T(w - pad, y, "PPR points per game, then his matchup", { size: 17, anchor: "end", fill: "var(--muted)" });
   y += 20;
-  const list = (pv.players[team] || []).filter((p) => p.games >= 2 && (p.position !== "QB" || p.fantasy_ppg > 5)).sort((a, b) => b.fantasy_ppg - a.fantasy_ppg).slice(0, 6);
-  const colW = (w - pad * 2 - 24) / 2, cardH = Math.min(96, (fr.bottom - y - 8) / 3 - 10);
+  const roster = pv.players[team] || [];
+  const list = (opts.who ?? keyPlayers(pv, team).slice(0, 6).map((p) => p.player_id)).map((id) => roster.find((p) => p.player_id === id)).filter(Boolean)
+    .sort((a, b) => b.fantasy_ppg - a.fantasy_ppg).slice(0, KEY_PLAYERS_MAX);
+  const colW = (w - pad * 2 - 24) / 2, cardH = Math.min(96, (fr.bottom - y - 8) / Math.max(3, Math.ceil(list.length / 2)) - 10);
   list.forEach((p, i) => {
     const x0 = pad + (i % 2) * (colW + 24), ry = y + Math.floor(i / 2) * (cardH + 10);
     s += R(x0, ry, colW, cardH, { rx: 18, fill: "var(--panel)" });
@@ -612,57 +628,101 @@ function cardTeamMatchup(pv, opts = {}) {
 // B11 ---------------------------------------------------------- Game environment
 // The whole game: how big a game the market and both teams' habits make it, ranked against
 // the week's other games, then every player on both sides by his production and his matchup.
+// [label, value, format, short label for B12's strip]
 const ENV_ROWS = [
-  ["Over/under", (g) => g.header.total_line, (v) => num(v, 1)],
-  ["Plays per game, both offenses", (g) => sumTeams(g, "plays_g", "o"), (v) => num(v, 1)],
-  ["Neutral pass rate, both offenses", (g) => meanTeams(g, "n_pass", "o"), (v) => pct(v, 1)],
-  ["EPA per play, both offenses", (g) => meanTeams(g, "epa", "o"), (v) => signed(v, 2)],
-  ["Points allowed per game, both defenses", (g) => sumTeams(g, "ppg", "d"), (v) => num(v, 1)],
-  ["Explosive play rate allowed, both", (g) => meanTeams(g, "explosive", "d"), (v) => pct(v, 1)],
+  ["Over/under", (g) => g.header.total_line, (v) => num(v, 1), "Over/under"],
+  ["Plays per game, both offenses", (g) => sumTeams(g, "plays_g", "o"), (v) => num(v, 1), "Plays per game"],
+  ["Neutral pass rate, both offenses", (g) => meanTeams(g, "n_pass", "o"), (v) => pct(v, 1), "Neutral pass rate"],
+  ["EPA per play, both offenses", (g) => meanTeams(g, "epa", "o"), (v) => signed(v, 2), "Offense EPA/play"],
+  ["Points allowed per game, both defenses", (g) => sumTeams(g, "ppg", "d"), (v) => num(v, 1), "Points allowed"],
+  ["Explosive play rate allowed, both", (g) => meanTeams(g, "explosive", "d"), (v) => pct(v, 1), "Explosives allowed"],
 ];
+/** One ENV_ROWS stat for this game, ranked 1st (highest) among the week's games. */
+function envRank(pv, value) {
+  const vals = DATA.previews.map(value).filter((v) => Number.isFinite(v));
+  const v = value(pv);
+  return { v, rank: Number.isFinite(v) ? 1 + vals.filter((o) => o > v + 1e-9).length : null, n: vals.length };
+}
 const sumTeams = (g, id, side) => pvSides(g).reduce((a, t) => a + (DATA.team_windows.season[id]?.[side]?.[t]?.[0] ?? NaN), 0);
 const meanTeams = (g, id, side) => sumTeams(g, id, side) / 2;
-const envPoint = (pv) => pvSides(pv).flatMap((t) => (pv.players[t] || []).filter((p) => p.games >= 2 && p.fantasy_ppg >= 4).map((p) => {
+// Who makes the grid: the card's Min PPG and Min games controls, 4+ and 2+ unless changed.
+const ENV_MIN_PPG = [0, 2, 4, 6, 8, 10, 12, 15];
+const ENV_MIN_GAMES = [1, 2, 3, 4, 5];
+const envMins = (opts = {}) => ({ ppg: Number(opts.minPpg ?? 4), games: Number(opts.minGames ?? 2) });
+const envPoint = (pv, opts) => { const min = envMins(opts); return pvSides(pv).flatMap((t) => (pv.players[t] || []).filter((p) => p.games >= min.games && Number.isFinite(p.fantasy_ppg) && p.fantasy_ppg >= min.ppg).map((p) => {
   const opp = t === pv.header.away.abbreviation ? pv.header.home.abbreviation : pv.header.away.abbreviation;
   const m = pv.pa.defenses[opp]?.[p.position], lg = pv.pa.league[p.position];
   return { ...p, team: t, opp, y: m && lg ? m.points_allowed / lg - 1 : null };
-}));
-const defaultEnvFaces = (pv) => pvSides(pv).flatMap((t) => envPoint(pv).filter((p) => p.team === t).sort((a, b) => b.fantasy_ppg - a.fantasy_ppg).slice(0, 4).map((p) => p.player_id));
-function cardGameEnvironment(pv, opts = {}) {
+})); };
+const defaultEnvFaces = (pv, opts) => pvSides(pv).flatMap((t) => envPoint(pv, opts).filter((p) => p.team === t).sort((a, b) => b.fantasy_ppg - a.fantasy_ppg).slice(0, 4).map((p) => p.player_id));
+// layout: "panel" (B11, the rankings in a column on the left), "strip" (B12, the rankings in
+// one row under the title and the chart full width) or "chart" (B13, the chart alone).
+function cardGameEnvironment(pv, opts = {}, layout = "panel") {
   const [away, home] = pvSides(pv);
   const colors = gameColors(away, home);
-  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview · PPR`, title: pvTitle(pv),
-    subtitle: "The game against the week's others, then every player by his points and his matchup" });
+  const min = envMins(opts);
+  const minLabel = [min.ppg ? `${min.ppg}+ PPG` : null, min.games > 1 ? `${min.games}+ games` : null].filter(Boolean).join(", ");
+  const subtitle = { panel: "The game against the week's others, then every player by his points and his matchup",
+    chart: "Every player on both teams by his points and his matchup" }[layout];
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview · PPR${minLabel ? ` · ${minLabel}` : ""}`, title: pvTitle(pv), subtitle });
   const { pad } = fr;
-  const panelW = 440;
-  let s = R(pad, fr.top - 10, panelW, fr.bottom - fr.top + 10, { rx: 24, fill: "var(--panel)" });
-  s += T(pad + 26, fr.top + 24, "RANKING AMONGST THIS WEEK'S GAMES", { size: 14, weight: 750, fill: "var(--faint)", ls: 1.2 });
-  const rowH = (fr.bottom - fr.top - 50) / ENV_ROWS.length;
-  ENV_ROWS.forEach(([label, value, fmt], i) => {
-    const ry = fr.top + 44 + i * rowH;
-    const vals = DATA.previews.map(value).filter((v) => Number.isFinite(v));
-    const v = value(pv);
-    const rank = Number.isFinite(v) ? 1 + vals.filter((o) => o > v + 1e-9).length : null;
-    if (i) s += L(pad + 26, ry - 4, pad + panelW - 26, ry - 4, { stroke: "var(--divider)" });
-    s += T(pad + 26, ry + 24, fit(label.toUpperCase(), panelW - 52, 13, 750), { size: 13, weight: 750, fill: "var(--faint)", ls: 1 });
-    s += T(pad + 26, ry + 66, Number.isFinite(v) ? fmt(v) : "-", { size: 34, weight: 800, mono: true });
-    if (rank) {
-      const color = rankColor(rank, vals.length);
-      s += R(pad + panelW - 26 - 92, ry + 36, 92, 40, { rx: 10, fill: mix(color, 22) });
-      s += T(pad + panelW - 26 - 46, ry + 63, ord(rank), { size: 20, weight: 800, anchor: "middle", mono: true, fill: mix(color, 62, "var(--fg)") });
-    }
-  });
-  const pts = envPoint(pv).filter((p) => p.y != null);
-  const sub = { ...fr, pad: pad + panelW + 30, w: fr.w + panelW + 30 };
+  let s = "", sub = fr;
+  if (layout === "panel") {
+    const panelW = 440;
+    s += R(pad, fr.top - 10, panelW, fr.bottom - fr.top + 10, { rx: 24, fill: "var(--panel)" });
+    s += T(pad + 26, fr.top + 24, "RANKING AMONGST THIS WEEK'S GAMES", { size: 14, weight: 750, fill: "var(--faint)", ls: 1.2 });
+    const rowH = (fr.bottom - fr.top - 50) / ENV_ROWS.length;
+    ENV_ROWS.forEach(([label, value, fmt], i) => {
+      const ry = fr.top + 44 + i * rowH;
+      const { v, rank, n } = envRank(pv, value);
+      if (i) s += L(pad + 26, ry - 4, pad + panelW - 26, ry - 4, { stroke: "var(--divider)" });
+      s += T(pad + 26, ry + 24, fit(label.toUpperCase(), panelW - 52, 13, 750), { size: 13, weight: 750, fill: "var(--faint)", ls: 1 });
+      s += T(pad + 26, ry + 66, Number.isFinite(v) ? fmt(v) : "-", { size: 34, weight: 800, mono: true });
+      if (rank) {
+        const color = rankColor(rank, n);
+        s += R(pad + panelW - 26 - 92, ry + 36, 92, 40, { rx: 10, fill: mix(color, 22) });
+        s += T(pad + panelW - 26 - 46, ry + 63, ord(rank), { size: 20, weight: 800, anchor: "middle", mono: true, fill: mix(color, 62, "var(--fg)") });
+      }
+    });
+    sub = { ...fr, pad: pad + panelW + 30, w: fr.w + panelW + 30 };
+  }
+  if (layout === "strip") {
+    // A caption, then one tile per stat: its value and its rank among the week's games.
+    const y0 = fr.top - 8, tileH = 74, gap = 12;
+    const caption = ["RANKED AMONGST", "THIS WEEK'S GAMES"];
+    const capW = Math.max(...caption.map((t) => textWidth(t, 13, 750) + t.length)) + 10;
+    caption.forEach((t, i) => { s += T(pad, y0 + tileH / 2 - 4 + i * 20, t, { size: 13, weight: 750, fill: "var(--faint)", ls: 1 }); });
+    const tileW = (fr.w - pad * 2 - capW - gap * ENV_ROWS.length) / ENV_ROWS.length;
+    ENV_ROWS.forEach(([, value, fmt, short], i) => {
+      const x0 = pad + capW + gap + i * (tileW + gap);
+      const { v, rank, n } = envRank(pv, value);
+      s += R(x0, y0, tileW, tileH, { rx: 16, fill: "var(--panel)" });
+      s += T(x0 + 16, y0 + 25, fit(short.toUpperCase(), tileW - 32, 12, 750), { size: 12, weight: 750, fill: "var(--faint)", ls: 1 });
+      s += T(x0 + 16, y0 + 59, Number.isFinite(v) ? fmt(v) : "-", { size: 27, weight: 800, mono: true });
+      if (rank) {
+        const color = rankColor(rank, n);
+        s += R(x0 + tileW - 14 - 64, y0 + 35, 64, 30, { rx: 8, fill: mix(color, 22) });
+        s += T(x0 + tileW - 14 - 32, y0 + 56, ord(rank), { size: 17, weight: 800, anchor: "middle", mono: true, fill: mix(color, 62, "var(--fg)") });
+      }
+    });
+    sub = { ...fr, top: y0 + tileH + 26 };
+  }
+  const pts = envPoint(pv, opts).filter((p) => p.y != null);
+  if (!pts.length) {
+    s += T((sub.pad + fr.w - pad) / 2, (sub.top + fr.bottom) / 2, "No player clears the minimum", { size: 26, weight: 600, anchor: "middle", fill: "var(--muted)" });
+    return wrapCard(fr, s);
+  }
   s += scatterPlot(sub, {
     points: pts.map((p) => ({ id: p.player_id, x: p.fantasy_ppg, y: p.y, name: p.name, team: p.team, face: p.player_id, color: colors[p.team],
       tip: [`${p.name} (${p.team} ${p.position})`, `${num(p.fantasy_ppg)} PPG`, `${p.opp} allow ${signed(p.y * 100, 0)}% to ${p.position}s vs the league`] })),
-    highlight: opts.hl ?? defaultEnvFaces(pv),
+    highlight: opts.hl ?? defaultEnvFaces(pv, opts),
     xstep: "auto", ystep: "auto", xfmt: (v) => num(v, 0), yfmt: (v) => `${signed(v * 100, 0)}%`,
     refY: 0, key: "League average",
     xlabel: "PPR points per game →", ylabel: "Points allowed to position for this matchup",
     quadrants: [["Producing, soft matchup", mix("var(--pos)", 72, "var(--fg)")], ["Soft matchup"], ["Producing, tough matchup"], ["Tough matchup", mix("var(--neg)", 72, "var(--fg)")]],
   });
-  s += legendRow(sub.pad + 74, fr.top + 8, [away, home].map((t) => [(cx, cy) => C(cx, cy, 8, { fill: mix(colors[t], 50), stroke: colors[t], sw: 2 }), TEAMS[t].name]), 17).svg;
+  s += legendRow(sub.pad + 74, sub.top + 8, [away, home].map((t) => [(cx, cy) => C(cx, cy, 8, { fill: mix(colors[t], 50), stroke: colors[t], sw: 2 }), TEAMS[t].name]), 17).svg;
   return wrapCard(fr, s);
 }
+const cardGameEnvironmentStrip = (pv, opts) => cardGameEnvironment(pv, opts, "strip");
+const cardGameEnvironmentChart = (pv, opts) => cardGameEnvironment(pv, opts, "chart");
