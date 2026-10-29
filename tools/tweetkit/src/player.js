@@ -49,12 +49,13 @@ Object.assign(STAT, {
   catch_rate: ["Catch rate", p1], receiving_first_downs: ["Receiving first downs", n0], yards_after_catch: ["Yards after catch", n0],
   ngs_rec_yac_above_expectation: ["YAC over expected, per catch", s1], ngs_rec_separation: ["Average separation, yards", n1],
   rec_broken_tackles: ["Broken tackles", n0], receiving_drop_rate: ["Drop rate", p1], passing_first_downs: ["Passing first downs", n0],
-  ngs_pass_time_to_throw: ["Time to throw, seconds", n2], pressure_rate: ["Pressure rate", p1], sacks_suffered: ["Sacks taken", n0],
+  ngs_pass_time_to_throw: ["Time to throw, seconds", n2], pressure_rate: ["Pressure rate", p1], sacks_suffered: ["Sacks taken", n0], sack_rate: ["Sack %", p1],
   rush_broken_tackles: ["Broken tackles", n0], rushing_first_downs: ["Rushing first downs", n0], fumbles_lost: ["Fumbles lost", n0],
 });
 const NFL_PCT_LIST = {
-  QB: ["completion_pct", "cpoe", "yards_per_attempt", "passer_rating", "epa_per_play", "passing_first_downs", "ngs_pass_intended_air_yards",
-    "ngs_pass_time_to_throw", "bad_throw_rate", "pressure_rate", "sacks_suffered", "rushing_yards_per_game"],
+  QB: ["epa", "epa_per_play", "cpoe", "completion_pct", "yards_per_attempt", "passer_rating", "ngs_pass_intended_air_yards",
+    "passing_first_downs", "ngs_pass_time_to_throw", "ngs_pass_aggressiveness", "bad_throw_rate", "pressure_rate", "sack_rate",
+    "rushing_yards_per_game"],
   RB: ["yards_per_carry", "rushing_yards_per_game", "ngs_rush_yards_over_expected_per_att", "rush_ybc_per_att", "rush_yac_per_att", "rush_broken_tackles",
     "rushing_first_downs", "rushing_epa", "target_share", "yards_per_route_run", "receiving_epa", "fumbles_lost"],
   WR: ["catch_rate", "yards_per_reception", "yards_per_target", "yards_per_route_run", "targets_per_route_run", "adot", "receiving_first_downs",
@@ -428,8 +429,9 @@ function cardH2H(pid, opts = {}, mode = "fantasy") {
   const a = DATA.players[pid];
   const b = DATA.players[opts.vs] && DATA.players[opts.vs].pos === a.pos ? DATA.players[opts.vs] : DATA.players[defaultRival(pid)];
   const M = CARD_MODES[mode];
-  const list = M.list[a.pos];
-  const tiles = M.tiles[a.pos].flatMap(([, cells]) => cells);
+  const skip = opts.skip || [];
+  const list = (opts.list ?? M.list[a.pos]).filter((id) => !skip.includes(id));
+  const tiles = M.tiles[a.pos].flatMap(([, cells]) => cells).filter(([, id]) => !skip.includes(id));
   const rowH = 48, top = 380;
   const h = Math.max(1500, top + (tiles.length + list.length) * rowH + 70 + 120);
   const fr = frame(1200, h, { noHeader: true });

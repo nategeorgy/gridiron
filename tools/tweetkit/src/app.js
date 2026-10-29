@@ -42,13 +42,24 @@ const GROUPS = {
       controls: [{ key: "who", type: "player", label: "Player", pool: (g) => gamePlayers(g), defaults: (g) => defaultStandout(g) }] },
   ],
   preview: [
-    { id: "B1", name: "Matchup", fn: cardMatchup, note: "Line, implied totals, last five against the spread, four players to watch per side." },
+    { id: "B1", name: "Matchup", fn: cardMatchup, note: "Line, implied totals, each team's last five, and both offenses' matchups at every position (reworked Oct 28)." },
     { id: "B2", name: "Fantasy matchup", fn: cardPreviewFantasy, pick: true, note: "Each skill player's PPG, expected PPG, weekly finishes and matchup grade." },
     { id: "B3", name: "Tale of the tape", fn: cardTape, wide: true, pick: true, nfl: true, note: "Offense against offense on the left, defense against defense on the right, rank against rank (reworked Oct 28)." },
     { id: "B4", name: "Usage by week", fn: cardPreviewUsage, wide: true, pick: true, note: "Target and carry share every week for each team's main pieces, with snap share under each." },
     { id: "B6", name: "EPA by game", fn: cardTrend, wide: true, isNew: true, note: "Both offenses and both defenses game by game this season, against the league's middle half." },
-    { id: "B7", name: "Quarterback matchup", fn: cardQbMatchup, isNew: true, nfl: true, note: "The two quarterbacks side by side in real stats: the box score with ranks, then percentiles among quarterbacks." },
+    { id: "B7", name: "Quarterback matchup", fn: cardQbMatchup, isNew: true, nfl: true, note: "Two quarterbacks side by side in real stats: the box score with ranks, then percentiles among quarterbacks. Opens on this game's starters; pick any two.",
+      controls: [
+        { key: "qb1", type: "player", label: "Quarterback", pool: () => qbPool(), defaults: (pv) => pvQbs(pv)[0] },
+        { key: "qb2", type: "player", label: "Against", pool: () => qbPool(), defaults: (pv) => pvQbs(pv)[1] },
+      ] },
     { id: "B8", name: "How they play", fn: cardStyle, wide: true, isNew: true, nfl: true, note: "Tendencies, not grades: pass rate, pace, motion and play action on offense; blitz, rushers and stacked boxes on defense." },
+    { id: "B9", name: "Player matchup", fn: cardPlayerMatchup, isNew: true, note: "One player's spot: where the defense ranks in points allowed to his position, what it allows stat by stat, and every game against it.",
+      controls: [{ key: "who", type: "player", label: "Player", pool: (pv) => previewPlayers(pv).map((p) => ({ id: p.player_id, name: p.name, team: p.team })), defaults: (pv) => defaultMatchupPlayer(pv) }] },
+    { id: "B10", name: "Team matchup", fn: cardTeamMatchup, isNew: true, note: "One offense against the other defense: unit against unit with the edge, the matchup at every position, and each player's spot.",
+      controls: [{ key: "side", type: "select", label: "Offense", options: (pv) => [["away", `${pv.header.away.abbreviation} offense`], ["home", `${pv.header.home.abbreviation} offense`]],
+        defaults: (pv) => ((pv.header.home_implied ?? 0) > (pv.header.away_implied ?? 0) ? "home" : "away") }] },
+    { id: "B11", name: "Game environment", fn: cardGameEnvironment, wide: true, isNew: true, note: "The whole game ranked against the week's others (total, pace, pass rate, both defenses), then every player on both teams by his points and his matchup. Click a dot to add or remove a face.",
+      controls: [{ key: "hl", type: "highlight", label: "Faces", pool: (pv) => envPoint(pv).map((p) => ({ id: p.player_id, name: p.name, team: p.team })), defaults: (pv) => defaultEnvFaces(pv) }] },
   ],
   weekly: [
     { id: "C1", name: "Team landscape", fn: cardLandscape, wide: true, pick: true, note: "Offense against defense EPA for all 32 teams. Hover a logo for the numbers; click it to highlight that team and fade the rest.",
@@ -168,7 +179,8 @@ function setOpt(card, arg, key, value) {
 function controlsHtml(card, arg, opts) {
   return (card.controls || []).map((c) => {
     if (c.type === "select") {
-      return `<label class="ctrl"><span>${c.label}</span><select data-key="${c.key}">${c.options.map(([v, label]) => `<option value="${v}"${opts[c.key] === v ? " selected" : ""}>${label}</option>`).join("")}</select></label>`;
+      const options = typeof c.options === "function" ? c.options(arg) : c.options;
+      return `<label class="ctrl"><span>${c.label}</span><select data-key="${c.key}">${options.map(([v, label]) => `<option value="${v}"${opts[c.key] === v ? " selected" : ""}>${label}</option>`).join("")}</select></label>`;
     }
     if (c.type === "player") {
       return `<label class="ctrl"><span>${c.label}</span><select data-key="${c.key}">${c.pool(arg).map((p) => `<option value="${p.id}"${opts[c.key] === p.id ? " selected" : ""}>${esc(p.name)} (${p.team})</option>`).join("")}</select></label>`;

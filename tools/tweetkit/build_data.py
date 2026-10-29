@@ -318,31 +318,42 @@ LOG_KEYS = ["week", "game_id", "opponent_abbreviation", "team_abbreviation", "fa
             "completions", "attempts", "passing_yards", "passing_tds", "interceptions", "air_yards", "routes_run",
             "red_zone_targets", "rush_att_inside_5", "air_yards_share", "epa", "fumbles_lost"]
 
-# D1 asks for a stat with no registry metric (a quarterback's rushing yards per game). They are ranked the way the API ranks
+# D1 and B7 ask for stats with no registry metric (a quarterback's rushing yards per game and sack %). They are ranked the way the API ranks
 # every other one (app/percentiles.py): within the qualified players at the position, rank
 # = players strictly better + 1, percentile = mid-rank (below + half the ties) / pool.
+# Sack % is sacks over dropbacks (attempts + sacks), the registry's own dropbacks.
+def sack_rate(row):
+    dropbacks = (row.get("attempts") or 0) + (row.get("sacks_suffered") or 0)
+    return (row.get("sacks_suffered") or 0) / dropbacks if dropbacks else None
+
+
+# [value, higher is better]
 DERIVED = {
     "QB": {
-        "rushing_yards_per_game": lambda r: (r.get("rushing_yards") or 0) / r["games_played"] if r.get("games_played") else None,
+        "rushing_yards_per_game": (lambda r: (r.get("rushing_yards") or 0) / r["games_played"] if r.get("games_played") else None, True),
+        "sack_rate": (sack_rate, False),
     },
 }
 
 
-def rank_and_percentile(value, pool):
-    """Higher is better for all three derived stats."""
+def rank_and_percentile(value, pool, higher=True):
+    """Rank (1 = best) and percentile within a sorted pool, for either direction."""
     below, through = bisect_left(pool, value), bisect_right(pool, value)
-    return len(pool) - through + 1, round((below + 0.5 * (through - below)) / len(pool) * 100)
+    ties = 0.5 * (through - below)
+    if higher:
+        return len(pool) - through + 1, round((below + ties) / len(pool) * 100)
+    return below + 1, round((len(pool) - through + ties) / len(pool) * 100)
 
 
 derived = {}
 for position, metrics in DERIVED.items():
     rows = intel[position]
-    for metric, value_of in metrics.items():
+    for metric, (value_of, higher) in metrics.items():
         pool = sorted(v for row in rows if row.get("qualified") and (v := value_of(row)) is not None)
         for row in rows:
             value = value_of(row)
             if value is not None and pool:
-                derived.setdefault(row["player_id"], {})[metric] = (value, *rank_and_percentile(value, pool))
+                derived.setdefault(row["player_id"], {})[metric] = (value, *rank_and_percentile(value, pool, higher))
 
 players = {}
 for pid, raw in players_raw.items():
@@ -490,7 +501,8 @@ scatter_windows = {
 # Team rankings and team scatters: a curated set of the team page's metrics, per window.
 TEAM_WINDOW_METRICS = ["ppg", "pdiff", "epa", "net_epa", "suc", "p_epa", "r_epa", "explosive", "ypp", "pts_drive", "three_out",
                        "rz_td", "d3", "tov_g", "sack_rate", "pass_rate", "n_pass", "proe", "sec_snap", "plays_g", "p_yds_g",
-                       "r_yds_g", "ypc", "cpoe", "adot", "yac", "x_pass", "x_run", "stuff", "int_rate", "start"]
+                       "r_yds_g", "ypc", "cpoe", "adot", "yac", "x_pass", "x_run", "stuff", "int_rate", "start", "blitz",
+                       "rushers", "box8", "p_td_g", "r_td_g", "rz_g"]
 team_windows_raw = load("team_windows")
 team_windows = {}
 for key, snap in team_windows_raw.items():
@@ -644,6 +656,29 @@ for game in schedule:
     results.setdefault(home, {})[game["week"]] = [away, 1, game["home_score"], game["away_score"]]
     results.setdefault(away, {})[game["week"]] = [home, 0, game["away_score"], game["home_score"]]
 
+# ------------------------------------------------------ what each defense allowed
+# The matchup cards: every QB, RB, WR and TE line against each defense, by week, summed by
+# position. allowed[defense][week][position] = the ALLOWED sums, then the top scorer as
+# [player_id, name, team, points].
+ALLOWED = ["fantasy_points", "expected_fantasy_points", "attempts", "completions", "passing_yards", "passing_tds",
+           "interceptions", "sacks_suffered", "carries", "rushing_yards", "rushing_tds", "rushing_epa", "targets",
+           "receptions", "receiving_yards", "receiving_tds", "air_yards", "yards_after_catch", "receiving_epa", "epa"]
+allowed = {}
+for boards in (weekly_boards, weekly_qb):
+    for week, rows in boards.items():
+        for row in rows:
+            game = results.get(row.get("team_abbreviation"), {}).get(int(week))
+            if not game:
+                continue
+            slot = allowed.setdefault(game[0], {}).setdefault(int(week), {}).setdefault(row["position"], {"sum": [0.0] * len(ALLOWED), "top": None})
+            for i, key in enumerate(ALLOWED):
+                slot["sum"][i] += row.get(key) or 0
+            points = row.get("fantasy_points") or 0
+            if slot["top"] is None or points > slot["top"][3]:
+                slot["top"] = [row["player_id"], row["name"], row["team_abbreviation"], r(points, 1)]
+allowed = {defense: {week: {position: [r(v, 2) for v in slot["sum"]] + [slot["top"]] for position, slot in by_pos.items()}
+                     for week, by_pos in by_week.items()} for defense, by_week in allowed.items()}
+
 data = {
     "byes": byes,
     "season": SEASON, "recap_week": RECAP_WEEK, "preview_week": PREVIEW_WEEK, "teams": TEAMS,
@@ -656,6 +691,7 @@ data = {
     "windows": windows, "scatter_windows": scatter_windows, "team_windows": team_windows, "team_window_meta": team_window_meta,
     "weekly_lines": weekly_lines, "receivers": receivers, "networks": networks, "people": people, "results": results,
     "passers": [p["player_id"] for p in load("passers")],
+    "allowed": allowed, "allowed_keys": ALLOWED,
     "tape_meta": {m["id"]: {"label_o": m["label_o"], "label_d": m["label_d"], "better": m["better"]} for m in team_stats["metrics"]},
 }
 with open(os.path.join(HERE, "data.json"), "w") as handle:

@@ -47,9 +47,10 @@ PERCENTILES["TE"] = PERCENTILES["WR"]
 # D8 and D9, the real-life cards: no fantasy points anywhere. Percentile rows, then the
 # tiles' ranks. Pulled in the same request as D1's, so both come from one pool.
 NFL_PERCENTILES = {
-    "QB": ["completion_pct", "cpoe", "yards_per_attempt", "passer_rating", "epa_per_play", "passing_first_downs",
-           "ngs_pass_intended_air_yards", "ngs_pass_time_to_throw", "bad_throw_rate", "pressure_rate", "sacks_suffered",
-           "rushing_yards_per_game"],
+    # Sack % is derived in build_data.py from sacks_suffered and attempts.
+    "QB": ["epa", "epa_per_play", "cpoe", "completion_pct", "yards_per_attempt", "passer_rating",
+           "ngs_pass_intended_air_yards", "passing_first_downs", "ngs_pass_time_to_throw", "ngs_pass_aggressiveness",
+           "bad_throw_rate", "pressure_rate", "sacks_suffered", "rushing_yards_per_game"],
     "RB": ["yards_per_carry", "rushing_yards_per_game", "ngs_rush_yards_over_expected_per_att", "rush_ybc_per_att",
            "rush_yac_per_att", "rush_broken_tackles", "rushing_first_downs", "rushing_epa", "target_share",
            "yards_per_route_run", "receiving_epa", "fumbles_lost"],
