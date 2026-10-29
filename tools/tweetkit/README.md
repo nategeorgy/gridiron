@@ -50,6 +50,8 @@ Then render the cards you want. Both themes at 2x by default, into the repo's
 ```bash
 node render.mjs A4,A5 --game 2026_06_BUF_LV
 node render.mjs B3,B4 --game 2026_07_GB_DET
+node render.mjs B9 --game 2026_08_BAL_BUF --opt who="Derrick Henry"
+node render.mjs B7 --game 2026_08_BAL_BUF --opt qb1="Drake Maye" --opt qb2="Matthew Stafford"
 node render.mjs C1,C3,C4,C5,C6
 node render.mjs C8 --opt pos=RB --highlight "Bijan Robinson,Jahmyr Gibbs"
 node render.mjs D1,D3 --player "Jaxon Smith-Njigba"
@@ -99,13 +101,20 @@ adds or removes his face (on C1, highlights the team). The hover targets draw no
 
 | Card | Name | Size | What it shows | Controls | Status |
 |---|---|---|---|---|---|
-| B1 | Matchup | 1200x1500 | Line, implied totals, last five against the spread, four players to watch a side | | |
+| B1 | Matchup | 1200x1500 | Line, implied totals, each team's last five results, both offenses' matchups at every position (PPR points allowed, rank of 32), and passing and running unit against unit (reworked Oct 28: no ATS lines, no last meeting, no players to watch) | | |
 | B2 | Fantasy matchup | 1200x1500 | PPG, expected PPG, weekly finishes, soft or tough matchup tag | | |
-| B3 | Tale of the tape | 1600x900 | Offense against offense on the left, defense against defense on the right: both teams on one rank track per stat (reworked Oct 28). Titled with the matchup only | | Picked Oct 20 |
+| B3 | Tale of the tape | 1600x900 | Offense against offense on the left, defense against defense on the right: both teams on one rank track per stat, 32nd on the left and 1st on the right (reworked Oct 28). Titled with the matchup only | | Picked Oct 20 |
 | B4 | Usage by week | 1600x900 | Target share (receivers) or carry share (backs) every week, snap share under it | | Picked Oct 20 |
 | B6 | EPA by game | 1600x900 | Both offenses and both defenses game by game, against the league's middle half | | Added Oct 21 |
-| B7 | Quarterback matchup | 1200x1500 | The two quarterbacks as D9: real-life box score with ranks, then percentiles, the better one bold | | Added Oct 28, no fantasy |
-| B8 | How they play | 1600x900 | Tendencies on rank tracks (1st does it the most): pass rate, pace, motion, play action and more on offense; blitz, rushers, stacked boxes and what opponents do against them on defense | | Added Oct 28, no fantasy |
+| B7 | Quarterback matchup | 1200x1500 | Two quarterbacks as D9 without the rushing totals, with its own percentile rows (`QB_MATCHUP_PCT`: yards per completion added, passing first downs dropped): passing box score with ranks, then percentiles (EPA total, EPA per play, CPOE first; Sack % from sacks over dropbacks, derived in `build_data.py`), the better one bold | Quarterback, Against (this game's starters by default; any two) | Added Oct 28, no fantasy |
+| B8 | How they play | 1600x900 | Tendencies on rank tracks (the most on the right): pass rate, pace, motion, play action and more on offense; blitz, rushers, stacked boxes and what opponents do against them on defense | | Added Oct 28, no fantasy |
+| B9 | Player matchup | 1200x1500 | One player's spot: where the defense ranks in PPR points allowed to his position (and in expected points), nine stats it allows to the position on rank tracks (toughest left, softest right), and every game against it with the top scorer | Player | Added Oct 28 |
+| B10 | Team matchup | 1200x1500 | One offense against the other defense: eight unit-against-unit rows with the edge to the better ranked, the four position matchups, and each player's matchup tag | Offense | Added Oct 28 |
+| B11 | Game environment | 1600x900 | Titled with the matchup only. The game ranked 1st to last against the week's others (total, plays, neutral pass rate, EPA, both defenses' points and explosive plays allowed), and every player on both teams by PPG against his matchup | Faces | Added Oct 28 |
+
+B9 to B11 read `DATA.allowed`: every QB, RB, WR and TE stat line against each defense, summed
+by week and position in `build_data.py` (it matches the site's matchup ranks exactly). Every
+rank on them is for the offense: 1st is the softest matchup.
 
 ### C. Weekly series (no argument)
 

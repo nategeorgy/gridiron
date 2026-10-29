@@ -41,7 +41,7 @@ const bad = await ev(`(() => {
         // Whole-league cards get every option; per-game and per-player cards a sample, to keep the run short.
         const wide = arg == null || arg === ARGS[group][0];
         for (const c of card.controls || []) {
-          const options = c.type === 'select' ? c.options.map(([v]) => v) : c.type === 'player' ? c.pool(arg, optsFor(card, arg)).slice(0, wide ? 12 : 2).map((p) => p.id) : [];
+          const options = c.type === 'select' ? (typeof c.options === 'function' ? c.options(arg) : c.options).map(([v]) => v) : c.type === 'player' ? c.pool(arg, optsFor(card, arg)).slice(0, wide ? 12 : 2).map((p) => p.id) : [];
           for (const v of wide ? options : options.slice(0, 2)) {
             const extra = { [c.key]: v };
             if (hl) extra.hl = hl.defaults(arg, { ...optsFor(card, arg), ...extra });
