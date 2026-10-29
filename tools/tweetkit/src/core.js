@@ -369,7 +369,9 @@ function scatterPlot(fr, cfg) {
   for (const it of items) { it.y -= drop; it.ay -= drop; }
   for (const it of items) if (Math.hypot(it.x - it.ax, it.y - it.ay) > 8) s += L(it.ax, it.ay, it.x, it.y, { stroke: "var(--muted)", sw: 1.4 }) + C(it.ax, it.ay, 4, { fill: "var(--muted)" });
   if (cfg.quadrants) {
-    const boxes = items.map((it) => [it.x - r, it.y - r, it.x + r, it.y + r + 22]);
+    // A label steers clear of the faces (with their names) and of the plain dots.
+    const boxes = [...items.map((it) => [it.x - r - 6, it.y - r - 6, it.x + r + 6, it.y + r + 22]),
+      ...pts.filter((p) => !hlSet.has(p.id)).map((p) => { const d = dotR(p) + 4; return [x(p.x) - d, y(p.y) - d, x(p.x) + d, y(p.y) + d]; })];
     s += quadrantLabels({ px0, px1, py0, py1, mx: cfg.refX != null ? x(cfg.refX) : (px0 + px1) / 2, my: cfg.refY != null ? y(cfg.refY) : (py0 + py1) / 2, boxes, labels: cfg.quadrants });
   }
   const surnames = {};

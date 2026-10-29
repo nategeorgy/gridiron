@@ -109,10 +109,12 @@ adds or removes his face (on C1, highlights the team). The hover targets draw no
 | B7 | Quarterback matchup | 1200x1500 | Two quarterbacks as D9 without the rushing totals, with its own percentile rows (`QB_MATCHUP_PCT`: yards per completion added, passing first downs dropped): passing box score with ranks, then percentiles (EPA total, EPA per play, CPOE first; Sack % from sacks over dropbacks, derived in `build_data.py`), the better one bold | Quarterback, Against (this game's starters by default; any two) | Added Oct 28, no fantasy |
 | B8 | How they play | 1600x900 | Tendencies on rank tracks (the most on the right): pass rate, pace, motion, play action and more on offense; blitz, rushers, stacked boxes and what opponents do against them on defense | | Added Oct 28, no fantasy |
 | B9 | Player matchup | 1200x1500 | One player's spot: where the defense ranks in PPR points allowed to his position (and in expected points), nine stats it allows to the position on rank tracks (toughest left, softest right), and every game against it with the top scorer | Player | Added Oct 28 |
-| B10 | Team matchup | 1200x1500 | One offense against the other defense: eight unit-against-unit rows with the edge to the better ranked, the four position matchups, and each player's matchup tag | Offense | Added Oct 28 |
-| B11 | Game environment | 1600x900 | Titled with the matchup only. The game ranked 1st to last against the week's others (total, plays, neutral pass rate, EPA, both defenses' points and explosive plays allowed), and every player on both teams by PPG against his matchup | Faces | Added Oct 28 |
+| B10 | Team matchup | 1200x1500 | One offense against the other defense: eight unit-against-unit rows with the edge to the better ranked, the four position matchups, and each key player's matchup tag. Key players default to the top six by PPG among those who played the team's latest game or have 4+ games, so a fill-in drops out once the starter is back; pick up to eight | Offense, Key players | Added Oct 28 |
+| B11 | Game environment | 1600x900 | Titled with the matchup only. The game ranked 1st to last against the week's others (total, plays, neutral pass rate, EPA, both defenses' points and explosive plays allowed), and every player on both teams by PPG against his matchup (4+ PPG in 2+ games unless changed; the kicker states the minimum) | Min PPG, Min games, Faces | Added Oct 28 |
+| B12 | Game environment, wide chart | 1600x900 | B11 with the six ranks in one strip of tiles under the title, so the chart runs the full width | Min PPG, Min games, Faces | Added Oct 29 |
+| B13 | Game environment, chart only | 1600x900 | B11's chart on its own | Min PPG, Min games, Faces | Added Oct 29 |
 
-B9 to B11 read `DATA.allowed`: every QB, RB, WR and TE stat line against each defense, summed
+B9 to B13 read `DATA.allowed`: every QB, RB, WR and TE stat line against each defense, summed
 by week and position in `build_data.py` (it matches the site's matchup ranks exactly). Every
 rank on them is for the offense: 1st is the softest matchup.
 

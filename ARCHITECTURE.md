@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-10-28 (tweet kit: 54 cards, matchup environment previews)
+Last updated: 2026-10-29 (tweet kit: 56 cards, B11 layouts and minimums)
 
 ---
 
@@ -73,7 +73,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `frontend/` | app | The React web app (what users see). See [§4](#4-frontend--the-react-web-app). |
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
-| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 54 card templates (game recaps, previews with matchup environment cards, weekly series including every Scatter page chart, player reply cards, teams, and league cards with the Explore tab's passing network and target analysis) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
+| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 56 card templates (game recaps, previews with matchup environment cards, weekly series including every Scatter page chart, player reply cards, teams, and league cards with the Explore tab's passing network and target analysis) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
 | `render.yaml` | config | "Blueprint" telling **Render** how to build and run the backend in production. ⭐ Its `buildCommand` runs **`scripts/migrate.sh`** after installing dependencies — `preDeployCommand` is paid-only on the free plan. See the file's comments: a bare `alembic upgrade head` failed there on a pooler **checkout timeout**, not connectivity, because a build competes with the still-running previous version for connections. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
@@ -832,6 +832,9 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-10-29**: **Tweet kit: B11 layouts (56 cards).** B12 puts the game's ranks in a strip under the title and B13 is
+  the chart alone; B11 to B13 take a Min PPG and Min games, and B10's key players can be picked. Scatter corner labels
+  now steer clear of plain dots as well as faces.
 - **2026-10-28**: **Tweet kit matchup environment cards (54 cards).** Three previews: B9 one player's matchup, B10 one
   offense against the other defense, B11 the whole game against the week's others with every player by PPG and matchup.
   `build_data.py` now ships `allowed` (every QB, RB, WR and TE line against each defense, by week and position; it
