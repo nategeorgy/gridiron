@@ -33,7 +33,9 @@ const player = flag("player", "");
 const team = flag("team", "");
 const highlight = flag("highlight", null);
 const opts = args.flatMap((a, i) => (a === "--opt" ? [args[i + 1]] : [])).map((kv) => kv.split("=")).filter(([k, v]) => k && v != null);
-const out = resolve(flag("out", join(HERE, "..", "..", "tweets", `${meta.season}-w${String(meta.recap_week).padStart(2, "0")}`)));
+// A game's cards go in its own week's folder (Thursday's game is a week ahead of the rest).
+const week = (game && meta.recaps.concat(meta.previews).find((g) => g.id === game)?.header.week) || meta.recap_week;
+const out = resolve(flag("out", join(HERE, "..", "..", "tweets", `${meta.season}-w${String(week).padStart(2, "0")}`)));
 mkdirSync(out, { recursive: true });
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 

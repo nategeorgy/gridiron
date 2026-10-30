@@ -22,6 +22,8 @@ const ord = (n) => {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
+/** The newest week a team's cards run through: a week further for a team that played Thursday. */
+const thru = (...teams) => Math.max(DATA.recap_week, ...teams.map((t) => DATA.through?.[t] ?? DATA.recap_week));
 const SUFFIX = /^(jr\.?|sr\.?|ii|iii|iv|v)$/i;
 function lastName(name) {
   const parts = String(name ?? "").split(" ");

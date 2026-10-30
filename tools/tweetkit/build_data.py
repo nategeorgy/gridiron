@@ -2,6 +2,7 @@
 import json
 import os
 from bisect import bisect_left, bisect_right
+from statistics import median_low
 
 from pull import PERCENTILES, RANKS
 import re
@@ -31,6 +32,7 @@ def pick(row, keys, digits=3):
 
 meta = load("meta")
 SEASON, RECAP_WEEK, PREVIEW_WEEK = meta["season"], meta["recap_week"], meta["preview_week"]
+NEWEST_WEEK = meta.get("newest_week", RECAP_WEEK)
 games = load("games")
 recaps_raw = load("recaps")
 previews_raw = load("previews")
@@ -117,8 +119,60 @@ def short_text(text):
     return text[:60].rstrip() + "..."
 
 
+# ------------------------------------------------- a week still in progress
+# A Thursday game is recapped before the rest of its week is played, so "his finish that
+# week" would rank him against one other team. A week with under half its games played is
+# ranked against a typical week instead: where the number would have ranked in each full
+# week, the median of those.
+weekly_boards = load("weekly_boards")
+weekly_qb = load("weekly_qb")
+team_weeks = load("team_weeks")
+FULL_WEEKS = [w for w in range(1, RECAP_WEEK + 1) if str(w) in weekly_boards]
+TYPICAL_WEEKS = {int(week) for week, rows in games.items()
+                 if rows and sum(1 for g in rows if g["played"]) * 2 < len(rows)}
+
+
+def typical_rank(pools, value, higher=True):
+    """Where value would rank in each pool (1 = best, ties shared), the median across pools."""
+    if value is None:
+        return None
+    ranks = [1 + sum(1 for v in pool if (v > value if higher else v < value)) for pool in pools if pool]
+    return median_low(ranks) if ranks else None
+
+
+# Every player's points each full week, by position: the pool a weekly finish ranks in.
+points_pools = {}
+for boards in (weekly_boards, weekly_qb):
+    for week in FULL_WEEKS:
+        by_position = {}
+        for row in boards[str(week)]:
+            by_position.setdefault(row["position"], []).append(row.get("fantasy_points") or 0)
+        for position, pool in by_position.items():
+            points_pools.setdefault(position, []).append(pool)
+
+
+def typical_finish(position, points):
+    return typical_rank(points_pools.get(position, []), points)
+
+
+TEAM_BETTER = {m["id"]: m["better"]["o"] for m in team_stats["metrics"]}
+
+
+def typical_team_ranks(ranks):
+    """A recap's team ranks against a typical week: each offense's single game, every full week."""
+    metrics = {}
+    for metric, by_team in ranks["metrics"].items():
+        pools = [[v[0] for v in team_weeks[str(w)]["values"].get(metric, {}).get("o", {}).values() if v and v[0] is not None]
+                 for w in FULL_WEEKS]
+        higher = TEAM_BETTER.get(metric, 1) != -1
+        metrics[metric] = {abbr: [v[0], typical_rank(pools, v[0], higher)] if v and v[0] is not None else v
+                           for abbr, v in by_team.items()}
+    return {"teams": median_low([len(team_weeks[str(w)]["teams"]) for w in FULL_WEEKS]), "metrics": metrics}
+
+
 recaps = []
-for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get("kickoff_time") or "")):
+recap_games = [g for week in (RECAP_WEEK, PREVIEW_WEEK) for g in games.get(str(week), [])]
+for game in sorted(recap_games, key=lambda g: (g["game_date"], g.get("kickoff_time") or "")):
     gid = game["game_id"]
     if gid not in recaps_raw:  # not played yet
         continue
@@ -126,8 +180,16 @@ for game in sorted(games[str(RECAP_WEEK)], key=lambda g: (g["game_date"], g.get(
     h, rc = raw["header"], raw["recap"]
     for p in rc["players"]:
         note_face(p)
+    typical = h["week"] in TYPICAL_WEEKS
+    if typical:
+        for p in rc["players"]:
+            p["position_rank"] = typical_finish(p["position"], p["fantasy_points"])
+        if rc["week_ranks"]:
+            rc["week_ranks"] = typical_team_ranks(rc["week_ranks"])
     recaps.append({
         "id": gid,
+        "week": h["week"],
+        "typical": typical,
         "header": header(h),
         "wp": {"pregame": rc["win_probability"]["pregame"], "end": rc["win_probability"]["end"],
                "series": [[t, round(v, 4)] for t, v in rc["win_probability"]["series"]]},
@@ -154,6 +216,8 @@ PREVIEW_PLAYER = ["player_id", "name", "position", "team", "games", "fantasy_poi
 previews = []
 for game in sorted(games[str(PREVIEW_WEEK)], key=lambda g: (g["game_date"], g.get("kickoff_time") or "")):
     gid = game["game_id"]
+    if gid not in previews_raw:  # already played, so it is a recap
+        continue
     raw = previews_raw[gid]
     h, pv = raw["header"], raw["preview"]
     players = {}
@@ -355,6 +419,14 @@ for position, metrics in DERIVED.items():
             if value is not None and pool:
                 derived.setdefault(row["player_id"], {})[metric] = (value, *rank_and_percentile(value, pool, higher))
 
+def typical_line(line, position):
+    """A game-log line from a week still in progress, its finish against a typical week."""
+    if line["week"] in TYPICAL_WEEKS:
+        line["position_rank"] = typical_finish(position, line["fantasy_points"])
+        line["typical"] = 1
+    return line
+
+
 players = {}
 for pid, raw in players_raw.items():
     profile = raw["profile"]
@@ -373,7 +445,7 @@ for pid, raw in players_raw.items():
         "pct": season.get("percentiles") or {},
         "ranks": season.get("ranks") or {},
         "qualified": season.get("qualified"),
-        "log": [pick(g, LOG_KEYS) for g in raw["log"]],
+        "log": [typical_line(pick(g, LOG_KEYS), position) for g in raw["log"] if g["week"] <= NEWEST_WEEK],
         "career": [pick(c, ["season", "team_abbreviation", "games_played", "fantasy_points", "fantasy_ppg",
                             "position_rank", "position_rank_ppg", "pool_size", "ppg_pool_size", "ppg_qualified",
                             "expected_fantasy_ppg"], 2) for c in raw["career"]],
@@ -397,7 +469,6 @@ for pid, raw in players_raw.items():
 # ---------------------------------------------------------------- teams (E)
 team_stats_values = values
 breakdowns = load("breakdowns")
-weekly_boards = load("weekly_boards")
 TEAM_METRICS = ["record", "pdiff", "ppg", "net_epa", "epa", "suc", "p_epa", "r_epa", "explosive", "pts_drive", "rz_td",
                 "d3", "tov_g", "sack_rate", "pass_rate", "n_pass", "proe", "sec_snap", "plays_g", "adot",
                 "fp_QB", "fp_RB", "fp_WR", "fp_TE"]
@@ -417,7 +488,8 @@ for team in team_stats["teams"]:
             if other["player_id"] == row["player_id"]), None)
     # Share of the work: every skill player's target and carry share by week, for the
     # players with the most targets plus carries.
-    weeks = sorted(int(w) for w in weekly_boards)
+    weeks = sorted(int(w) for w in weekly_boards if int(w) <= RECAP_WEEK or any(
+        row.get("team_abbreviation") == abbr for row in weekly_boards[w]))
     share = {}
     for week in weeks:
         for row in weekly_boards[str(week)]:
@@ -478,13 +550,15 @@ scatter_pool = {
 FINISH_DEPTH = {"QB": 20, "RB": 30, "WR": 36, "TE": 20}
 finishes = {}
 for position, depth in FINISH_DEPTH.items():
+    def full(p):
+        return [g for g in p["log"] if g["week"] <= RECAP_WEEK]
     rows = sorted((p for p in players_raw.values() if p["profile"]["position"] == position),
-                  key=lambda p: -sum(g.get("fantasy_points") or 0 for g in p["log"]))[:depth]
+                  key=lambda p: -sum(g.get("fantasy_points") or 0 for g in full(p)))[:depth]
     finishes[position] = [{
         "player_id": p["profile"]["player_id"], "name": p["profile"]["name"],
         "team": season_rows.get(p["profile"]["player_id"], {}).get("team_abbreviation"),
-        "total": r(sum(g.get("fantasy_points") or 0 for g in p["log"]), 1),
-        "weeks": {g["week"]: [g.get("position_rank"), r(g.get("fantasy_points"), 1)] for g in p["log"]},
+        "total": r(sum(g.get("fantasy_points") or 0 for g in full(p)), 1),
+        "weeks": {g["week"]: [g.get("position_rank"), r(g.get("fantasy_points"), 1)] for g in full(p)},
     } for p in rows]
 
 # --------------------------------------------------------- timeframe windows
@@ -524,7 +598,6 @@ team_window_meta = {m["id"]: {"label_o": m["label_o"], "label_d": m["label_d"], 
 #  targets, receptions, rec yards, rec TDs, fumbles lost].
 LINE = ["attempts", "completions", "passing_yards", "passing_tds", "interceptions", "carries", "rushing_yards",
         "rushing_tds", "targets", "receptions", "receiving_yards", "receiving_tds", "fumbles_lost"]
-weekly_qb = load("weekly_qb")
 weekly_lines = {}
 for boards in (weekly_boards, weekly_qb):
     for week, rows in boards.items():
@@ -599,7 +672,7 @@ for game in recaps:
     game["throws"] = {}
     for team, ids in game["passers"].items():
         for qb in ids:
-            rows = recap_throws.get(qb, {}).get("targets", [])
+            rows = recap_throws.get(f"{qb}:{game['week']}", {}).get("targets", [])
             game["throws"][qb] = [[t["air_yards"], t["location"], int(bool(t["complete"])), int(bool(t["touchdown"])),
                                    int(bool(t["interception"])), t["yards"]] for t in rows]
 
@@ -679,9 +752,12 @@ for boards in (weekly_boards, weekly_qb):
 allowed = {defense: {week: {position: [r(v, 2) for v in slot["sum"]] + [slot["top"]] for position, slot in by_pos.items()}
                      for week, by_pos in by_week.items()} for defense, by_week in allowed.items()}
 
+# The newest week each team has played: a Thursday team's cards run a week further.
+team_through = {team: NEWEST_WEEK if NEWEST_WEEK in weeks else RECAP_WEEK for team, weeks in results.items()}
+
 data = {
-    "byes": byes,
-    "season": SEASON, "recap_week": RECAP_WEEK, "preview_week": PREVIEW_WEEK, "teams": TEAMS,
+    "byes": byes, "through": team_through,
+    "season": SEASON, "recap_week": RECAP_WEEK, "preview_week": PREVIEW_WEEK, "newest_week": NEWEST_WEEK, "teams": TEAMS,
     "recaps": recaps, "previews": previews,
     "landscape": landscape, "league_means": league_means,
     "week_top": week_rows, "risers": risers, "fallers": fallers, "rb_work": rb_work,
