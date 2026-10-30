@@ -16,6 +16,13 @@ week only when it is rebuilt and published again.
    week after it (previews), rebuilds the page and checks every card. To refresh before
    Monday night is in, name the week (`refresh.sh --week 7`): games not yet played are left
    out of the recap picker.
+
+   **Friday, after Thursday night.** Run `refresh.sh` again once the Thursday game is in
+   your database. That game moves from the previews to the recaps and opens selected. Its
+   week has barely started, so its finishes and team ranks are against a typical week (the
+   median of where the number would have ranked in each full week) instead of against one
+   other team, and the cards say so. Both Thursday teams' player and team cards run a week
+   further; the weekly series (C) stay on the last full week.
 3. Ask Claude to publish `tools/tweetkit/index.html` to the review page below with
    `capabilities: {downloads: true}`. Publishing to the same link keeps it; publishing
    without the link makes a new page.

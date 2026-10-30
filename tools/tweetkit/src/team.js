@@ -3,7 +3,7 @@ const teamFmt = (v, fmt) => (v == null ? "-" : fmt === "pct1" ? pct(v, 1) : fmt 
   : fmt === "sgn1" ? signed(v, 1) : fmt === "pp1" ? `${signed(v, 1)}` : fmt === "num2" ? num(v, 2) : num(v, 1));
 const teamStat = (t, id, side = "o") => t.stats[id]?.[side] ?? null; // [value, rank]
 const recordText = (r) => `${r.wins}-${r.losses}${r.ties ? `-${r.ties}` : ""}`;
-const teamWeeks = () => Array.from({ length: DATA.recap_week }, (_, i) => i + 1);
+const teamWeeks = (abbr) => Array.from({ length: thru(abbr) }, (_, i) => i + 1);
 
 function teamHead(t, fr, kicker) {
   const { pad, w } = fr;
@@ -30,7 +30,7 @@ function cardTeamProfile(abbr) {
   const h = Math.max(1500, end + 120);
   const fr = frame(1200, h, { noHeader: true });
   const { pad, w } = fr;
-  let s = teamHead(t, fr, `${DATA.season} through Week ${DATA.recap_week}`);
+  let s = teamHead(t, fr, `${DATA.season} through Week ${thru(t.team)}`);
   let y = top;
   const cell = (label, id, side) => {
     const v = teamStat(t, id, side);
@@ -77,9 +77,9 @@ function cardTeamProfile(abbr) {
 // E2 --------------------------------------------------------- Share of the work
 function cardTeamShare(abbr) {
   const t = DATA.teams_cards[abbr];
-  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${DATA.recap_week}`, title: "Who gets the work", subtitle: "Each week's share of the team's targets and carries" });
+  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${thru(abbr)}`, title: "Who gets the work", subtitle: "Each week's share of the team's targets and carries" });
   const { pad, w } = fr;
-  const weeks = teamWeeks();
+  const weeks = teamWeeks(abbr);
   // One colour per player across both panels, so a back in both reads as one person.
   const order = [...new Map([...t.share.tgt.slice(0, 4), ...t.share.car.slice(0, 3)].map((p) => [p.player_id, p])).values()];
   const palette = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)", "var(--muted)", "var(--faint)"];
@@ -129,7 +129,7 @@ const inkOnToken = (token) => (token.includes("series-4") || token.includes("ser
 function cardTeamTrend(abbr) {
   const t = DATA.teams_cards[abbr];
   const color = teamColor(abbr);
-  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${DATA.recap_week}`, title: "EPA per play, game by game", subtitle: "Offense, and what the defense allowed (lower is better). Band: the league's middle half." });
+  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${thru(abbr)}`, title: "EPA per play, game by game", subtitle: "Offense, and what the defense allowed (lower is better). Band: the league's middle half." });
   const { pad, w } = fr;
   const panelW = (w - pad * 2 - 60) / 2;
   let s = "";
@@ -161,7 +161,7 @@ function cardTeamTrend(abbr) {
 // E4 ------------------------------------------------------ Red zone pecking order
 function cardTeamRedZone(abbr) {
   const t = DATA.teams_cards[abbr];
-  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${DATA.recap_week}`, title: "Red zone pecking order", subtitle: "Targets and carries inside the opponent's 20" });
+  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${thru(abbr)}`, title: "Red zone pecking order", subtitle: "Targets and carries inside the opponent's 20" });
   const { pad, w } = fr;
   const rows = t.redzone.map((p) => ({ ...p, tg: p.red_zone_targets || 0, ca: p.red_zone_rush_attempts || 0 }));
   const total = rows.reduce((a, p) => a + p.tg + p.ca, 0) || 1;

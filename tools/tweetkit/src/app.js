@@ -157,11 +157,12 @@ const NOTES = {
   recap: "<b>My picks:</b> A1 after every game you post about. A4 when the story is who got the work. A7 when someone ran hot or cold against his usage.",
 };
 
-// Open on the week's highest-scoring game, the preview with the highest total, and the
-// team with the best point margin.
+// Open on the newest week's highest-scoring game (Thursday's, once it is played), the
+// preview with the highest total, and the team with the best point margin.
 const topIndex = (list, value) => list.reduce((best, item, i) => (value(item) > value(list[best]) ? i : best), 0);
+const newestRecapWeek = Math.max(...DATA.recaps.map((g) => g.week));
 const state = {
-  recap: topIndex(DATA.recaps, (g) => (g.header.away.score ?? 0) + (g.header.home.score ?? 0)),
+  recap: topIndex(DATA.recaps, (g) => (g.week === newestRecapWeek ? 1000 : 0) + (g.header.away.score ?? 0) + (g.header.home.score ?? 0)),
   preview: topIndex(DATA.previews, (g) => g.header.total_line ?? 0),
   player: null,
   team: Object.values(DATA.teams_cards).sort((a, b) => (b.stats.pdiff?.o?.[0] ?? 0) - (a.stats.pdiff?.o?.[0] ?? 0))[0]?.team,
@@ -357,10 +358,13 @@ function cardFromEvent(e) {
   return { fig, group, card: GROUPS[group].find((c) => c.id === fig.dataset.card) };
 }
 function setup() {
-  document.getElementById("lede-week").textContent = DATA.recap_week;
+  const early = DATA.recaps.filter((g) => g.week > DATA.recap_week).length;
+  document.getElementById("lede-week").textContent = DATA.recap_week + (early ? `, plus ${early === 1 ? "the" : early} Week ${DATA.newest_week} game${early === 1 ? "" : "s"} already played` : "");
   const recapPick = document.getElementById("recap-pick");
-  recapPick.setAttribute("aria-label", `Week ${DATA.recap_week} game`);
-  recapPick.innerHTML = DATA.recaps.map((g, i) => `<option value="${i}">${g.header.away.abbreviation} ${g.header.away.score} @ ${g.header.home.abbreviation} ${g.header.home.score}</option>`).join("");
+  recapPick.setAttribute("aria-label", "Recap game");
+  // Newest week first, so Thursday's game leads once it is in.
+  const order = DATA.recaps.map((g, i) => i).sort((a, b) => DATA.recaps[b].week - DATA.recaps[a].week || a - b);
+  recapPick.innerHTML = order.map((i) => { const g = DATA.recaps[i]; return `<option value="${i}">${early ? `W${g.week} · ` : ""}${g.header.away.abbreviation} ${g.header.away.score} @ ${g.header.home.abbreviation} ${g.header.home.score}</option>`; }).join("");
   recapPick.value = state.recap;
   recapPick.addEventListener("change", () => { state.recap = Number(recapPick.value); renderGroup("recap"); });
 

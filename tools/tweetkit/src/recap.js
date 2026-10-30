@@ -126,7 +126,7 @@ function cardFinal(g) {
   y += 300 + 50;
   // Top fantasy scorers
   s += T(pad, y, "Top fantasy scorers", { size: 25, weight: 750 });
-  s += T(w - pad, y, "PPR · finish among the week's players at his position", { size: 18, anchor: "end", fill: "var(--muted)" });
+  s += T(w - pad, y, g.typical ? "PPR · finish: where his points rank in a typical week" : "PPR · finish among the week's players at his position", { size: 18, anchor: "end", fill: "var(--muted)" });
   y += 26;
   const colW = (w - pad * 2 - 28) / 2;
   [away, home].forEach((team, i) => {
@@ -147,7 +147,7 @@ function cardFinal(g) {
 
 // A2 ------------------------------------------------------- Fantasy box score
 function cardBox(g) {
-  const fr = frame(1200, 1500, { kicker: `${g.header.week_label} · PPR`, title: `${scoreTitle(g)}: fantasy points`, subtitle: "Bar: points this game. Tick: his average coming in." });
+  const fr = frame(1200, 1500, { kicker: `${g.header.week_label} · PPR`, title: `${scoreTitle(g)}: fantasy points`, subtitle: `Bar: points this game. Tick: his average coming in.${g.typical ? " Finish: rank in a typical week." : ""}` });
   const [away, home] = sidesOf(g);
   const colors = gameColors(away, home);
   const { pad, w } = fr;
@@ -285,7 +285,7 @@ function cardTouches(g) {
 function cardTeamStats(g) {
   const [away, home] = sidesOf(g);
   const n = g.ranks.teams;
-  const fr = frame(1200, 1500, { kicker: g.header.week_label, title: `${scoreTitle(g)}: team stats`, subtitle: `Chip: rank among the ${n} teams that played in ${g.header.week_label}` });
+  const fr = frame(1200, 1500, { kicker: g.header.week_label, title: `${scoreTitle(g)}: team stats`, subtitle: g.typical ? "Chip: where each number ranks in a typical week" : `Chip: rank among the ${n} teams that played in ${g.header.week_label}` });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const b = g.box, rk = g.ranks.metrics;
@@ -628,16 +628,24 @@ function cardGameThrows(g) {
 }
 
 // A12 ----------------------------------------------------------- Standout
-/** A player's rank that week at his position for one weekly-line stat (1 = most), ties shared. */
-function weekRank(pid, pos, value) {
-  const week = DATA.recap_week;
-  const me = DATA.weekly_lines[pid]?.w[week];
+/**
+ * A player's rank that week at his position for one weekly-line stat (1 = most), ties shared.
+ * A game from a week still in progress ranks against a typical week instead: the median of
+ * where it would have ranked in each full week.
+ */
+function weekRank(g, pid, pos, value) {
+  const me = DATA.weekly_lines[pid]?.w[g.week];
   if (!me) return null;
   const mine = value(me);
   if (!mine) return null;
-  let better = 0;
-  for (const e of Object.values(DATA.weekly_lines)) if (e.pos === pos && e.w[week] && value(e.w[week]) > mine) better += 1;
-  return better + 1;
+  const rankIn = (week) => {
+    let better = 0;
+    for (const e of Object.values(DATA.weekly_lines)) if (e.pos === pos && e.w[week] && value(e.w[week]) > mine) better += 1;
+    return better + 1;
+  };
+  if (!g.typical) return rankIn(g.week);
+  const ranks = Array.from({ length: DATA.recap_week }, (_, i) => rankIn(i + 1)).sort((a, b) => a - b);
+  return ranks[Math.floor((ranks.length - 1) / 2)];
 }
 function defaultStandout(g) {
   return [...g.players].sort((a, b) => b.fantasy_points - a.fantasy_points)[0]?.player_id;
@@ -651,7 +659,7 @@ function cardStandout(g, opts = {}) {
   const result = `${mine > theirs ? "W" : mine < theirs ? "L" : "T"} ${mine}-${theirs} ${team === home ? "vs" : "at"} ${TEAMS[opp]?.name || opp}`;
   const fr = frame(1600, 900, { kicker: `${g.header.week_label} · ${p.position} · ${TEAMS[team]?.name || team}`, title: p.name, subtitle: result, headshot: { pid: p.player_id, name: p.name, ring: colors[team] } });
   const { pad, w } = fr;
-  const rank = (fn) => (cx, cy) => { const rk = weekRank(p.player_id, p.position, fn); return rk ? chip(rk, p.position, cx, cy, { size: 15, h: 26, w: 58 }) : ""; };
+  const rank = (fn) => (cx, cy) => { const rk = weekRank(g, p.player_id, p.position, fn); return rk ? chip(rk, p.position, cx, cy, { size: 15, h: 26, w: 58 }) : ""; };
   const groups = [];
   if (p.attempts >= 5) groups.push({ label: "Passing", cells: [
     { label: "Comp/Att", value: `${p.completions}/${p.attempts}`, chip: rank((t) => t[1]) },
@@ -669,7 +677,7 @@ function cardStandout(g, opts = {}) {
   const cells = groups.reduce((a, gr) => a + gr.cells.length, 0);
   let s = tileGroups(pad, fr.top - 4, w - pad * 2, groups.slice(0, cells > 8 ? 2 : 3), { cellH: 136 }).svg;
   const y0 = fr.top + 196;
-  s += T(w - pad, y0 - 18, `Chip: his rank among ${POS_PLURAL[p.position]} in ${g.header.week_label}`, { size: 16, anchor: "end", fill: "var(--muted)" });
+  s += T(w - pad, y0 - 18, `Chip: his rank among ${POS_PLURAL[p.position]} in ${g.typical ? "a typical week" : g.header.week_label}`, { size: 16, anchor: "end", fill: "var(--muted)" });
   const color = colors[team];
   if (p.position === "QB") {
     // A quarterback's game is his throws.

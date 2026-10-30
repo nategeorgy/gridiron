@@ -3,6 +3,9 @@
     python3 pull.py                 # the newest fully played week, and the week after it
     python3 pull.py --week 6        # recaps for Week 6, previews for Week 7
 
+A game in the preview week that has already been played (Thursday night) is a recap, not a
+preview: it joins the recap picker with its own week's data, and leaves the previews.
+
 Needs the backend running on localhost:8000 (uvicorn app.main:app --port 8000).
 """
 import argparse
@@ -126,12 +129,18 @@ def main():
     print(f"season {SEASON}: recaps for Week {RECAP_WEEK}, previews for Week {PREVIEW_WEEK}", file=sys.stderr)
 
     os.makedirs(RAW, exist_ok=True)
-    out = {"meta": {"season": SEASON, "recap_week": RECAP_WEEK, "preview_week": PREVIEW_WEEK}}
-
     games = {}
     for week in (RECAP_WEEK, PREVIEW_WEEK):
         games[week] = get("/games", season=SEASON, week=week, limit=50)["data"]
-    out["games"] = games
+    out = {"games": games}
+    # The preview week's games already played (Thursday night). The newest week is then the
+    # preview week, still in progress: its lines are pulled for the player and team cards,
+    # while the weekly series stay on the last full week.
+    early_games = [g for g in games[PREVIEW_WEEK] if g["played"]]
+    NEWEST_WEEK = PREVIEW_WEEK if early_games else RECAP_WEEK
+    out["meta"] = {"season": SEASON, "recap_week": RECAP_WEEK, "preview_week": PREVIEW_WEEK, "newest_week": NEWEST_WEEK}
+    if early_games:
+        print(f"Week {PREVIEW_WEEK} already played:", ", ".join(g["game_id"] for g in early_games), file=sys.stderr)
 
     def recap(game):
         gid = game["game_id"]
@@ -143,8 +152,8 @@ def main():
 
     with ThreadPoolExecutor(4) as pool:
         # Only games already played: a week can be recapped before Monday night is.
-        out["recaps"] = dict(pool.map(recap, [g for g in games[RECAP_WEEK] if g["played"]]))
-        out["previews"] = dict(pool.map(preview, games[PREVIEW_WEEK]))
+        out["recaps"] = dict(pool.map(recap, [g for g in games[RECAP_WEEK] if g["played"]] + early_games))
+        out["previews"] = dict(pool.map(preview, [g for g in games[PREVIEW_WEEK] if not g["played"]]))
     print("recaps", len(out["recaps"]), "previews", len(out["previews"]), file=sys.stderr)
 
     out["teams"] = get("/teams")
@@ -183,8 +192,11 @@ def main():
     out["weekly_boards"] = {
         week: every_row("/stats/leaderboard", season=SEASON, week=week, positions="RB,WR,TE", metric="fantasy_points",
                         scoring="ppr")
-        for week in range(1, RECAP_WEEK + 1)
+        for week in range(1, NEWEST_WEEK + 1)
     }
+    # Every offense's single game each full week, so a recap from a week still in progress
+    # can rank its team stats against a typical week rather than against one other team.
+    out["team_weeks"] = {week: get("/teams/stats", season=SEASON, weeks=str(week)) for week in range(1, RECAP_WEEK + 1)}
     print("breakdowns", len(out["breakdowns"]), "weekly boards", len(out["weekly_boards"]), file=sys.stderr)
 
     # The reply-card pool: the top N at each position by total points.
@@ -226,7 +238,7 @@ def main():
     # Quarterbacks week by week, for the leaders and the race (the other positions are in weekly_boards).
     out["weekly_qb"] = {week: every_row("/stats/leaderboard", season=SEASON, week=week, position="QB",
                                         metric="fantasy_points", scoring="ppr")
-                        for week in range(1, RECAP_WEEK + 1)}
+                        for week in range(1, NEWEST_WEEK + 1)}
     print("windows", list(windows), file=sys.stderr)
 
     # Explore data one week at a time: every count in a target board and a passing network
@@ -237,24 +249,30 @@ def main():
     passers = [p for p in get("/explore/passers", season=SEASON)["data"] if p["targets"] >= NETWORK_MIN_TARGETS]
     out["passers"] = passers
     # Plus anyone who threw in a recap game, so a backup who started gets his network too.
-    recap_qbs = {qb for game in out["recaps"].values() for ids in game["recap"]["passers"].values() for qb in ids}
-    network_ids = sorted({p["player_id"] for p in passers} | recap_qbs)
+    # (quarterback, the week of his recap game): one man can have a game in both weeks.
+    recap_qbs = sorted({(qb, game["header"]["week"]) for game in out["recaps"].values()
+                        for ids in game["recap"]["passers"].values() for qb in ids})
+    network_ids = sorted({p["player_id"] for p in passers} | {qb for qb, _ in recap_qbs})
 
     def network(job):
         pid, week, situation = job
         return job, get("/explore/network", passer_id=pid, season=SEASON, weeks=str(week), situation=situation)
 
     jobs = [(pid, week, situation) for pid in network_ids for week in range(1, RECAP_WEEK + 1) for situation in SITUATIONS]
+    # A Thursday quarterback's game is in the week after: his recap card needs that week too.
+    jobs += [(qb, week, situation) for qb, week in recap_qbs if week > RECAP_WEEK for situation in SITUATIONS]
     with ThreadPoolExecutor(8) as pool:
         out["networks"] = {}
         for (pid, week, situation), data in pool.map(network, jobs):
             out["networks"].setdefault(pid, {}).setdefault(str(week), {})[situation] = data
 
     # Every throw each recap quarterback made that week, for the game's passing charts.
-    def throws(qb):
-        return qb, get(f"/explore/players/{qb}/targets", season=SEASON, weeks=str(RECAP_WEEK), role="passer")
+    # Keyed "player_id:week".
+    def throws(job):
+        qb, week = job
+        return f"{qb}:{week}", get(f"/explore/players/{qb}/targets", season=SEASON, weeks=str(week), role="passer")
     with ThreadPoolExecutor(6) as pool:
-        out["recap_throws"] = dict(pool.map(throws, sorted(recap_qbs)))
+        out["recap_throws"] = dict(pool.map(throws, recap_qbs))
     print("target weeks", len(out["target_weeks"]), "networks", len(network_ids), "x", len(jobs) // max(1, len(network_ids)),
           "recap throws", len(out["recap_throws"]), file=sys.stderr)
 

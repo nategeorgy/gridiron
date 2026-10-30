@@ -94,7 +94,7 @@ function weekSlots(p) {
   const team = p.team;
   const byes = DATA.byes[team] || [];
   const out = [];
-  for (let wk = 1; wk <= DATA.recap_week; wk++) {
+  for (let wk = 1; wk <= thru(team); wk++) {
     const log = p.log.find((g) => g.week === wk) || null;
     out.push({ week: wk, log, bye: !log && byes.includes(wk) });
   }
@@ -137,7 +137,7 @@ function cardProfile(pid, opts = {}, mode = "fantasy") {
   let s = mark(w - pad - 46 * MARK_ASPECT, pad - 4, 46);
   s += playerHead(p, fr, { top: 66 });
   let y = 304;
-  s += T(pad, y, `${DATA.season} through Week ${DATA.recap_week}${M.tag} \u00b7 ${ss.games_played} games`.toUpperCase(), { size: 18, weight: 750, fill: "var(--accent-text)", ls: 2 });
+  s += T(pad, y, `${DATA.season} through Week ${thru(p.team)}${M.tag} \u00b7 ${ss.games_played} games`.toUpperCase(), { size: 18, weight: 750, fill: "var(--accent-text)", ls: 2 });
   y += 22;
   s += tileGroups(pad, y, w - pad * 2, M.tiles[p.pos].map(([label, cells]) => ({
     label,
@@ -170,6 +170,8 @@ function cardProfile(pid, opts = {}, mode = "fantasy") {
   const cw = (w - pad * 2 - 190) / slots.length;
   if (mode === "nfl") return wrapCard(fr, s + gameStrip(p, slots, pad + 190, y, cw, 180));
   s += T(pad, y + 52, "Weekly finish", { size: 22, weight: 750 });
+  const typical = slots.find((sl) => sl.log?.typical);
+  if (typical) s += T(pad, y + 80, `W${typical.week}: in a typical week`, { size: 15, fill: "var(--faint)" });
   slots.forEach((sl, i) => {
     const cx = pad + 190 + cw * i + cw / 2;
     s += T(cx, y + 18, `W${sl.week}`, { size: 15, weight: 700, anchor: "middle", fill: "var(--faint)" });
@@ -184,9 +186,10 @@ function cardProfile(pid, opts = {}, mode = "fantasy") {
 // D2 ----------------------------------------------------------- Game log
 function cardGameLog(pid) {
   const p = DATA.players[pid];
-  const fr = frame(1600, 900, { kicker: `${DATA.season} · PPR`, title: `${p.name}: week by week`, subtitle: "Fantasy points each week. Line: expected points. Chip: finish at the position." });
-  const { pad, w } = fr;
   const slots = weekSlots(p);
+  const typical = slots.find((sl) => sl.log?.typical);
+  const fr = frame(1600, 900, { kicker: `${DATA.season} · PPR`, title: `${p.name}: week by week`, subtitle: `Fantasy points each week. Line: expected points. Chip: finish at the position${typical ? ` (W${typical.week}: in a typical week)` : ""}.` });
+  const { pad, w } = fr;
   const panelW = 340;
   const px0 = pad + 56, px1 = w - pad - panelW - 120;
   const py0 = fr.top + 24, py1 = fr.bottom - 150;
@@ -309,7 +312,7 @@ function cardTargets(pid) {
   const p = DATA.players[pid];
   if (p.pos === "RB") return cardRuns(pid);
   const qb = p.pos === "QB";
-  const fr = frame(1200, 1500, { kicker: `${DATA.season} · Weeks 1-${DATA.recap_week}`, title: `${p.name}: every ${qb ? "throw" : "target"}`, subtitle: qb ? "Each targeted pass by depth past the line of scrimmage and side of the field" : "Each target by depth past the line of scrimmage and side of the field" });
+  const fr = frame(1200, 1500, { kicker: `${DATA.season} · Weeks 1-${thru(p.team)}`, title: `${p.name}: every ${qb ? "throw" : "target"}`, subtitle: qb ? "Each targeted pass by depth past the line of scrimmage and side of the field" : "Each target by depth past the line of scrimmage and side of the field" });
   const { pad, w } = fr;
   const color = teamColor(p.team);
   const throws = p.targets.filter((t) => t[1] != null && t[2]);
@@ -363,7 +366,7 @@ function cardTargets(pid) {
 const LANES = [["le", "Left end"], ["lt", "Left tackle"], ["lg", "Left guard"], ["mid", "Middle"], ["rg", "Right guard"], ["rt", "Right tackle"], ["re", "Right end"]];
 function cardRuns(pid) {
   const p = DATA.players[pid];
-  const fr = frame(1200, 1500, { kicker: `${DATA.season} · Weeks 1-${DATA.recap_week}`, title: `${p.name}: every carry`, subtitle: "Designed runs by gap, and how each one ended. Tick: running backs on average." });
+  const fr = frame(1200, 1500, { kicker: `${DATA.season} · Weeks 1-${thru(p.team)}`, title: `${p.name}: every carry`, subtitle: "Designed runs by gap, and how each one ended. Tick: running backs on average." });
   const { pad, w } = fr;
   const runs = p.runs;
   const color = teamColor(p.team);
@@ -438,7 +441,7 @@ function cardH2H(pid, opts = {}, mode = "fantasy") {
   const { pad, w } = fr;
   const ca = opts.colors?.[a.team] ?? teamColor(a.team), cb = opts.colors?.[b.team] ?? teamColor(b.team);
   let s = mark(w / 2 - 23 * MARK_ASPECT, pad - 6, 46);
-  s += T(w / 2, 136, (opts.kicker ?? `Head to head · ${DATA.season} through Week ${DATA.recap_week}${M.tag}`).toUpperCase(), { size: 17, weight: 750, anchor: "middle", fill: "var(--accent-text)", ls: 1.8 });
+  s += T(w / 2, 136, (opts.kicker ?? `Head to head · ${DATA.season} through Week ${thru(a.team, b.team)}${M.tag}`).toUpperCase(), { size: 17, weight: 750, anchor: "middle", fill: "var(--accent-text)", ls: 1.8 });
   [[a, ca, true], [b, cb, false]].forEach(([p, color, left]) => {
     const cx = left ? pad + 96 : w - pad - 96;
     s += face(p.id, cx, 250, 86, color, p.name);
