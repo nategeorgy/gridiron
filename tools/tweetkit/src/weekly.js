@@ -220,13 +220,19 @@ function cardWeekTop() {
 
 // C5 ----------------------------------------------------- Risers and fallers
 function driver(m) {
+  // Name what moved the same way as expected points. A share that moved the other way is
+  // no reason: the volume behind it is (the team threw less, or one huge game left the window).
+  const withMove = (d) => (m.x1 > m.x0 ? d > 0 : d < 0);
+  const dc = (m.c1 ?? 0) - (m.c0 ?? 0), dt = (m.t1 ?? 0) - (m.t0 ?? 0);
   if (m.position === "RB") {
-    const dc = (m.c1 ?? 0) - (m.c0 ?? 0), dt = (m.t1 ?? 0) - (m.t0 ?? 0);
-    // Name the share that moved the same way as expected points: a back whose carries rose
-    // while his targets fell is a riser on carries, however the two sizes compare.
-    const withMove = (d) => (m.x1 > m.x0 ? d > 0 : d < 0);
+    // A back whose carries rose while his targets fell is a riser on carries, however the two sizes compare.
+    if (!withMove(dc) && !withMove(dt)) return `Carries + targets a game ${num((m.cg0 ?? 0) + (m.tg0 ?? 0))} → ${num((m.cg1 ?? 0) + (m.tg1 ?? 0))}`;
     const carries = withMove(dc) !== withMove(dt) ? withMove(dc) : Math.abs(dc) >= Math.abs(dt) * 1.5;
     return carries ? `Carry share ${pct(m.c0)} → ${pct(m.c1)}` : `Target share ${pct(m.t0)} → ${pct(m.t1)}`;
+  }
+  if (!withMove(dt)) {
+    if (withMove((m.tg1 ?? 0) - (m.tg0 ?? 0))) return `Targets a game ${num(m.tg0)} → ${num(m.tg1)}`;
+    return `Air yards a game ${num(m.ay0, 0)} → ${num(m.ay1, 0)}`;
   }
   return `Target share ${pct(m.t0)} → ${pct(m.t1)}${Math.abs((m.s1 ?? 0) - (m.s0 ?? 0)) >= 0.1 ? `, snaps ${pct(m.s0)} → ${pct(m.s1)}` : ""}`;
 }

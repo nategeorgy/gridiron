@@ -321,7 +321,8 @@ def window_usage(raw_log, weeks):
         return None
     mean = lambda key: sum((g.get(key) or 0) for g in games) / len(games)
     return {"x": mean("expected_fantasy_points"), "p": mean("fantasy_points"), "t": mean("target_share"),
-            "c": mean("rush_attempt_share"), "s": mean("snap_share"), "g": len(games)}
+            "c": mean("rush_attempt_share"), "s": mean("snap_share"), "g": len(games),
+            "tg": mean("targets"), "cg": mean("carries"), "ay": mean("air_yards")}
 
 
 early_weeks, late_weeks = set(range(1, RECAP_WEEK - 2)), set(range(RECAP_WEEK - 2, RECAP_WEEK + 1))
@@ -340,6 +341,10 @@ for pid, raw in players_raw.items():
         "x0": r(a["x"], 2), "x1": r(b["x"], 2), "p0": r(a["p"], 2), "p1": r(b["p"], 2),
         "t0": r(a["t"], 3), "t1": r(b["t"], 3), "c0": r(a["c"], 3), "c1": r(b["c"], 3),
         "s0": r(a["s"], 3), "s1": r(b["s"], 3), "g0": a["g"], "g1": b["g"],
+        # Volume per game, for when a share moved the other way from expected points
+        # (Puka Nacua's share rose in Weeks 6-8 while his targets a game fell from 15 to 10).
+        "tg0": r(a["tg"], 1), "tg1": r(b["tg"], 1), "cg0": r(a["cg"], 1), "cg1": r(b["cg"], 1),
+        "ay0": r(a["ay"], 0), "ay1": r(b["ay"], 0),
     })
 risers = sorted([m for m in moves if m["x1"] >= 10 and m["x1"] > m["x0"]], key=lambda m: m["x0"] - m["x1"])[:8]
 fallers = sorted([m for m in moves if m["x0"] >= 10 and m["x1"] < m["x0"]], key=lambda m: m["x1"] - m["x0"])[:8]

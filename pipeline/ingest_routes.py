@@ -197,12 +197,16 @@ def _surname(folded: str) -> str:
     return (folded.split() or [""])[-1]
 
 
-def _match(rows: list[ExportRow], lines: list[dict], teams: dict[str, int]) -> tuple[dict, list, list]:
+def _match(
+    rows: list[ExportRow], lines: list[dict], teams: dict[str, int], held: set[tuple[int, str]],
+) -> tuple[dict, list, list]:
     """Pair export rows with stat lines on team plus normalised name.
 
     Falls back to a *unique* surname within the team and position group, which covers
     a nickname ("Bill" vs "Jacory"); every fallback is returned so it gets logged. Never
-    guesses between two candidates.
+    guesses between two candidates, and never falls back for a name we hold on that team:
+    he is a real player with no stat line this week, not a nickname. Without that, Tampa's
+    Kameron Johnson (1 snap, 0 routes) took Tez Johnson's stat line in 2026 Week 8.
     """
     exact: dict[tuple[int, str], list[dict]] = {}
     by_surname: dict[tuple[int, str, str], list[dict]] = {}
@@ -223,7 +227,7 @@ def _match(rows: list[ExportRow], lines: list[dict], teams: dict[str, int]) -> t
         if len(candidates) != 1:
             group = POSITION_GROUPS.get(row.position, row.position)
             surname = by_surname.get((team_id, _surname(folded), group), [])
-            if not candidates and len(surname) == 1:
+            if not candidates and len(surname) == 1 and (team_id, folded) not in held:
                 candidates = surname
                 fallbacks.append((row, surname[0]))
         if len(candidates) != 1:
@@ -242,7 +246,7 @@ def _match(rows: list[ExportRow], lines: list[dict], teams: dict[str, int]) -> t
 
 def _report(
     matched: dict, fallbacks: list, unmatched: list, lines: list[dict],
-    teams: dict[str, int], teams_in_file: set[int],
+    teams: dict[str, int], teams_in_file: set[int], held: set[tuple[int, str]],
 ) -> None:
     """Log what matched, what did not, and where the export disagrees with stored stats."""
     logger.info("matched %d export rows to stat lines", len(matched))
@@ -259,7 +263,6 @@ def _report(
     # one of two things, and they need different fixes: someone we hold but nflverse gave
     # nothing to this week, or someone we do not hold at all (a position outside scope,
     # or a name spelled differently).
-    held = _players_by_team()
     for row in unmatched:
         if row in no_line:
             continue
@@ -302,8 +305,9 @@ def ingest_week(season: int, week: int, paths: list[Path], dry_run: bool = False
         return 0
 
     teams = _team_ids_by_name(season)
-    matched, fallbacks, unmatched = _match(rows, lines, teams)
-    _report(matched, fallbacks, unmatched, lines, teams, {teams[row.team.lower()] for row in rows})
+    held = _players_by_team()
+    matched, fallbacks, unmatched = _match(rows, lines, teams, held)
+    _report(matched, fallbacks, unmatched, lines, teams, {teams[row.team.lower()] for row in rows}, held)
 
     dropbacks = _team_dropbacks(season, week)
     written_rows = []
