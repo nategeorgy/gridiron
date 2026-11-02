@@ -96,11 +96,15 @@ function networkField(x0, y0, W, H, net, shown, o = {}) {
     r, x: lx0 + (i + 0.5) * ((lx1 - lx0) / order.length), y: fy(Math.max(-3, Math.min(FAR - 1.5, r.adot ?? 0))),
     rad: (17 + 21 * Math.sqrt(r.targets / most)) * k, width: (3 + 17 * (r.targets / most)) * k,
   }));
-  const label = (n) => lastName(n.r.name), sub = (n) => `${n.r.targets} · ${Math.round(n.r.share * 100)}%`;
-  const gap = nameSize + 3;
+  // Under each face: his name, then targets and share ("6 · 21%"), or with o.units each
+  // number on its own line in words ("6 tgts", "21% share", "+0.04 epa/t").
+  const label = (n) => lastName(n.r.name);
+  const subs = (n) => (o.units ? [`${n.r.targets} tgts`, `${Math.round(n.r.share * 100)}% share`, `${signed(n.r.epa_per_target ?? 0, 2)} epa/t`]
+    : [`${n.r.targets} · ${Math.round(n.r.share * 100)}%`]);
+  const gap = nameSize + 3, subGap = subSize + 3;
   const box = (n) => {
-    const half = Math.max(n.rad, textWidth(label(n), nameSize, 700) / 2 + 5, textWidth(sub(n), subSize, 500, true) / 2 + 5);
-    return { x0: n.x - half, x1: n.x + half, y0: n.y - n.rad, y1: n.y + n.rad + gap * 2 + 6, half };
+    const half = Math.max(n.rad, textWidth(label(n), nameSize, 700) / 2 + 5, ...subs(n).map((t) => textWidth(t, subSize, 500, true) / 2 + 5));
+    return { x0: n.x - half, x1: n.x + half, y0: n.y - n.rad, y1: n.y + n.rad + gap + subGap * subs(n).length + 6, half };
   };
   // The site's spread: push apart any faces or labels that touch, horizontally only.
   for (let pass = 0; pass < 300; pass++) {
@@ -130,9 +134,14 @@ function networkField(x0, y0, W, H, net, shown, o = {}) {
     s += `<path d="M${num(P.x, 1)},${num(P.y - P.r, 1)} C${num(P.x, 1)},${num(P.y - 110 * bend, 1)} ${num(n.x, 1)},${num(n.y + 120 * bend, 1)} ${num(n.x, 1)},${num(n.y, 1)}" fill="none" stroke="${epaColor(n.r.epa_per_target)}" stroke-width="${num(n.width, 1)}" stroke-linecap="round" opacity="0.92"/>`;
   }
   for (const n of nodes) s += face(n.r.player_id, n.x, n.y, n.rad, posColor(n.r.position || "WR"), n.r.name);
+  // Three lines of numbers cross the lines more than a halo can hide: give them a plate.
+  if (o.units) for (const n of nodes) {
+    const b = box(n), py = n.y + n.rad + gap - nameSize + 2;
+    s += R(b.x0 + 2, py, b.x1 - b.x0 - 4, b.y1 - 4 - py, { rx: 10, fill: mix("var(--card)", 86) });
+  }
   for (const n of nodes) {
     s += haloT(n.x, n.y + n.rad + gap, label(n), { size: nameSize, weight: 700, anchor: "middle" });
-    s += haloT(n.x, n.y + n.rad + gap * 2, sub(n), { size: subSize, anchor: "middle", mono: true, fill: "var(--muted)" });
+    subs(n).forEach((t, i) => { s += haloT(n.x, n.y + n.rad + gap + subGap * (i + 1), t, { size: subSize, anchor: "middle", mono: true, fill: "var(--muted)" }); });
   }
   s += face(net.pid, P.x, P.y, P.r, posColor("QB"), net.name);
   s += haloT(P.x, P.y + P.r + gap + 2, lastName(net.name), { size: nameSize + 1, weight: 800, anchor: "middle" });

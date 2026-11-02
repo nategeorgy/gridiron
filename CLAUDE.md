@@ -2171,9 +2171,20 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   threw, ran, caught and lost a fumble, and `_play_points` in `app/game_pages.py` prices each play in
   the request's scoring for the box score's points by quarter. Checked against all 8,099 stat lines
   of 2025-26: 99% match to the tenth. The rest are return
-  touchdowns (no offensive play credits them) and laterals. A lost fumble counts only when the fumbler
-  was the passer, rusher or receiver, because a stat line does not count a muffed punt. ⚠️ Production
-  needs `ingest_plays.py --seasons 2025 2026` once after migration `5b2e9c4d7a10` to fill the columns
+  touchdowns (no offensive play credits them) and laterals. Every lost fumble costs its player, a muffed
+  punt and a fumble after a lateral included, on the play and on the stat line alike (next note).
+  ⚠️ Production needs `ingest_plays.py --seasons 2025 2026` once after migration `5b2e9c4d7a10` to
+  fill the columns
+- ⚠️ **nflverse's fantasy points skip some lost fumbles** (found October 2026). `load_player_stats`
+  charges a lost fumble only on a run, a catch or a sack, while its `fumbles_lost_total` (our
+  `fumbles_lost`) also counts returns, laterals and fumbled snaps: 48 stat lines in 2025-26, Jalen
+  Coker's 2026 Week 8 lateral among them (the feed's 11.6 PPR, every league's 9.6). `ingest_stats.py`
+  now charges the difference, which is also what `compute_points` has always assumed when it
+  reweights `fumbles_lost`. Seasons before the fix keep the feed's points until re-ingested
+- **A drive opened by the kicking team's recovery belongs to the kicking team.** A kickoff's
+  `posteam` is the receiving team, so a fumbled return or a recovered onside kick filed the next
+  drive under the wrong team with no start, and the game page dropped it (2026 Week 8's Panthers
+  opening field goal). `collect_game_drives` drops that kickoff; 24 drives came back across 2025-26
 - **A recap fills in the morning after the game.** The score arrives within minutes (the daily schedule
   ingest); stat lines, expected points, snaps, team sums and play-by-play come with the **daily
   newest-week job** (`recaps` in `pipeline.yml`, in season, skipped Wednesdays): it runs the five

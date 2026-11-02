@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-10-29 (tweet kit: 56 cards, B11 layouts and minimums)
+Last updated: 2026-10-30 (lost fumbles charged at ingest, kickoff-recovery drives, tweet kit A10-A12)
 
 ---
 
@@ -831,6 +831,12 @@ repo. Update it in the *same change* that alters the project's structure — spe
   The rule and its two exceptions are under "Writing" in [`CLAUDE.md`](CLAUDE.md).
 
 ### Changelog
+
+- **2026-10-30**: **Every lost fumble charged; kickoff-recovery drives kept.** `ingest_stats.py` adds the
+  lost fumbles nflverse's fantasy points skip (returns, laterals, fumbled snaps) and `_play_points` in
+  `app/game_pages.py` prices them per play to match. `ingest_plays.py` drops a kickoff from the kicking
+  team's drive when it recovers, so the drive is filed under the right team. Tweet kit: A10 writes out each
+  receiver's targets, share and EPA per target, A11 shows each quarterback's face, A12 drops the weekly ranks.
 
 - **2026-10-29**: **Tweet kit: B11 layouts (56 cards).** B12 puts the game's ranks in a strip under the title and B13 is
   the chart alone; B11 to B13 take a Min PPG and Min games, and B10's key players can be picked. Scatter corner labels

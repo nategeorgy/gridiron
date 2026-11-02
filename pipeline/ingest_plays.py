@@ -292,6 +292,14 @@ def collect_game_drives(pbp: pl.DataFrame, season: int, games: set[str], codes, 
     plays = pbp.filter(
         pl.col("game_id").is_in(list(games)) & pl.col("posteam").is_not_null() & pl.col("fixed_drive").is_not_null()
     ).sort(["game_id", "order_sequence"])
+    # A kickoff's posteam is the receiving team. When the kicking team recovers (a fumbled
+    # return, an onside kick) the kickoff opens the kicking team's drive, and read first it
+    # filed that drive under the other team with no start: 2026 Week 8's Panthers opening
+    # field goal vanished from the Packers game. Drop such a kickoff, never one that leads
+    # its own team's drive (a return touchdown is nothing but its kickoff and extra point).
+    kickoff = pl.col("play_type") == "kickoff"
+    offense = pl.col("posteam").filter(~kickoff.fill_null(False)).first().over(["game_id", "fixed_drive"])
+    plays = plays.filter(~(kickoff & offense.is_not_null() & (pl.col("posteam") != offense)).fill_null(False))
     drives = plays.group_by(["game_id", "fixed_drive"], maintain_order=True).agg(
         pl.col("week").first(), pl.col("season_type").first(), pl.col("posteam").first(),
         pl.col("drive_quarter_start").first(), pl.col("drive_game_clock_start").first(),

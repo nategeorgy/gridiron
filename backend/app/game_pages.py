@@ -400,9 +400,9 @@ def _play_points(config: ScoringConfig, plays: list[GamePlay], positions: dict[s
             rec_weight = config.te_rec if config.te_rec is not None and positions.get(play.receiver_id) == "TE" else config.rec
             credit(play.receiver_id, rec_weight * bool(play.complete) + config.rec_yd * (play.receiving_yards or 0)
                    + config.rec_td * bool(play.pass_touchdown) + two, play.quarter)
-        # A stat line counts the fumbles its player lost with the ball as passer, rusher or
-        # receiver; a muffed punt is a special-teams fumble and costs nothing.
-        if play.fumble_lost_id and play.fumble_lost_id in (play.passer_id, play.rusher_id, play.receiver_id):
+        # A stat line charges every fumble its player lost, a muffed punt or a fumble after
+        # a lateral included (ingest_stats.py), so the play does too.
+        if play.fumble_lost_id:
             credit(play.fumble_lost_id, config.fumble_lost, play.quarter)
     return by_period
 
