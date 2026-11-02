@@ -20,6 +20,10 @@ from availability import mask_unavailable, unavailable_columns
 from franchises import contemporary_code_map, resolve
 from seasons import STATS, clamp_seasons, default_seasons
 
+# The lost fumbles the feed's fantasy points already charge, and what each one costs.
+CHARGED_FUMBLES = ("rushing_fumbles_lost", "receiving_fumbles_lost", "sack_fumbles_lost")
+FUMBLE_LOST_POINTS = -2.0
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("pipeline.stats")
 
@@ -200,6 +204,15 @@ def ingest_stats(seasons: list[int], include_pbp: bool = True, weeks: list[int] 
 
         std = record.get("fantasy_points")
         ppr = record.get("fantasy_points_ppr")
+        # The feed's points charge a lost fumble only on a run, a catch or a sack, while its
+        # fumbles_lost_total (our fumbles_lost) also counts laterals, returns and fumbled
+        # snaps. Charge every one, as leagues do and as app/scoring.py assumes when it
+        # reweights fumbles_lost: Jalen Coker's 2026 Week 8 fumble after a lateral made his
+        # day 9.6 standard, not the feed's 11.6.
+        uncharged = (record.get("fumbles_lost_total") or 0) - sum(record.get(column) or 0 for column in CHARGED_FUMBLES)
+        if uncharged > 0:
+            std = std + FUMBLE_LOST_POINTS * uncharged if std is not None else None
+            ppr = ppr + FUMBLE_LOST_POINTS * uncharged if ppr is not None else None
         half = (std + ppr) / 2 if std is not None and ppr is not None else None
 
         # A feed reports an unavailable stat as 0, not as missing — see

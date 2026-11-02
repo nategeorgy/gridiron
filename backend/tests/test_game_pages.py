@@ -184,7 +184,8 @@ def test_each_play_is_priced_by_quarter_for_the_players_on_it():
         GamePlay(quarter=2, rusher_id=rb, two_point=True, is_rush=True),
         # Q3: an interception thrown at the tight end.
         GamePlay(quarter=3, passer_id=qb, receiver_id=te, interception=True, is_pass=True),
-        # Q4: a muffed punt costs the returner nothing; a fumble on a run costs the back.
+        # Q4: a muffed punt costs the returner, as his stat line charges it; so does a
+        # fumble on a run cost the back.
         GamePlay(quarter=4, fumble_lost_id=returner, play_type="punt"),
         GamePlay(quarter=4, rusher_id=rb, rushing_yards=3, fumble_lost_id=rb, is_rush=True),
     ]
@@ -194,7 +195,7 @@ def test_each_play_is_priced_by_quarter_for_the_players_on_it():
     assert points[te] == {1: pytest.approx(1.5 + 2.0 + 6.0)}
     assert points[qb] == {1: pytest.approx(0.8 + 4.0), 3: pytest.approx(-2.0)}
     assert points[rb] == {2: pytest.approx(1.5 + 6.0 + 2.0), 4: pytest.approx(0.3 - 2.0)}
-    assert returner not in points
+    assert points[returner] == {4: pytest.approx(-2.0)}
 
 
 def test_every_target_and_carry_is_a_touch_in_order():

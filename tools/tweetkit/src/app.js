@@ -44,7 +44,7 @@ const GROUPS = {
     { id: "A9", name: "Box score", fn: cardBoxNfl, isNew: true, nfl: true, note: "Passing, rushing and receiving lines for both teams, with yards, first downs, third downs and possession under them." },
     { id: "A10", name: "Passing networks", fn: cardGameNetworks, wide: true, isNew: true, nfl: true, note: "Where each quarterback went with the ball: every receiver's share, depth and side of the field, coloured by EPA per target." },
     { id: "A11", name: "Passing charts", fn: cardGameThrows, wide: true, isNew: true, nfl: true, note: "Every targeted pass from both quarterbacks by depth and side: completions, incompletions, touchdowns and picks." },
-    { id: "A12", name: "Standout", fn: cardStandout, wide: true, isNew: true, nfl: true, note: "One player's game: his line with his rank that week, then every touch on the game clock (a quarterback's throws on the field).",
+    { id: "A12", name: "Standout", fn: cardStandout, wide: true, isNew: true, nfl: true, note: "One player's game: his line, then every touch on the game clock (a quarterback's throws on the field).",
       controls: [{ key: "who", type: "player", label: "Player", pool: (g) => gamePlayers(g), defaults: (g) => defaultStandout(g) }] },
   ],
   preview: [

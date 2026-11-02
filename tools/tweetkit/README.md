@@ -97,9 +97,9 @@ means Nate chose it to post. **Controls** are what the page and `render.mjs` let
 | A7 | Points against expected | 1600x900 | Every player in the game: points against what his targets and carries were worth | Faces | Added Oct 21 |
 | A8 | Score and scoring plays | 1600x900 | Each team's score through the game as a step line, every scoring play numbered and listed | | Added Oct 28, no fantasy |
 | A9 | Box score | 1200x1500 | Passing, rushing and receiving lines for both teams, then yards, first downs, third downs, turnovers, sacks and possession | | Added Oct 28, no fantasy |
-| A10 | Passing networks | 1600x900 | Both quarterbacks' networks for the game: each receiver's share, depth and side, coloured by EPA per target | | Added Oct 28, no fantasy |
-| A11 | Passing charts | 1600x900 | Every targeted pass from both quarterbacks by depth and side, with completions, touchdowns and picks | | Added Oct 28, no fantasy |
-| A12 | Standout | 1600x900 | One player's line with his rank among the position that week, then every touch on the game clock (a quarterback's throws on the field) | Player | Added Oct 28, no fantasy |
+| A10 | Passing networks | 1600x900 | Titled "Away at Home: targets distribution". Both quarterbacks' networks for the game: each receiver's depth and side, coloured by EPA per target, with his targets, share and EPA per target written under him | | Added Oct 28, no fantasy |
+| A11 | Passing charts | 1600x900 | Every targeted pass from both quarterbacks by depth and side, with completions, touchdowns and picks, under each quarterback's face | | Added Oct 28, no fantasy |
+| A12 | Standout | 1600x900 | One player's line, then every touch on the game clock (a quarterback's throws on the field) | Player | Added Oct 28, no fantasy |
 
 On every chart, hovering a dot on the page shows who it is and his numbers, and clicking it
 adds or removes his face (on C1, highlights the team). The hover targets draw nothing in a PNG.

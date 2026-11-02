@@ -549,7 +549,7 @@ function cardGameNetworks(g) {
   const [away, home] = sidesOf(g);
   const colors = gameColors(away, home);
   const qbs = mainPassers(g);
-  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Passing networks`, title: `${nickname(away)} at ${nickname(home)}: where the ball went`, subtitle: "Each quarterback's targets by receiver: share, depth and side of the field" });
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Passing networks`, title: `${nickname(away)} at ${nickname(home)}: targets distribution` });
   const { pad, w } = fr;
   const panelW = (w - pad * 2 - 40) / 2;
   let s = "";
@@ -563,7 +563,7 @@ function cardGameNetworks(g) {
     const net = windowNetwork(qb.player_id, [g.header.week], "all");
     if (!net) return;
     const { shown } = shapeNet(net.receivers, 6);
-    s += networkField(x0 - 8, fr.top + 36, panelW + 8, fr.bottom - fr.top - 80, net, shown, { bands: false, scale: 0.92, name: 17, sub: 14 });
+    s += networkField(x0 - 8, fr.top + 36, panelW + 8, fr.bottom - fr.top - 80, net, shown, { bands: false, scale: 0.92, name: 17, sub: 14, units: true });
   });
   s += networkKey(pad + 44, fr.bottom - 8);
   return wrapCard(fr, s);
@@ -613,13 +613,13 @@ function cardGameThrows(g) {
   [away, home].forEach((team, i) => {
     const x0 = pad + i * (panelW + 40);
     const qb = qbs[team];
-    s += logo(team, x0, fr.top - 8, 36);
-    if (!qb) return;
+    if (!qb) { s += logo(team, x0, fr.top - 8, 36); return; }
+    s += face(qb.player_id, x0 + 27, fr.top + 10, 27, colors[team], qb.name);
     const throws = g.throws[qb.player_id] || [];
     const charted = throws.filter((t) => t[0] != null);
     const adot = charted.length ? charted.reduce((a, t) => a + t[0], 0) / charted.length : null;
     const deep = charted.filter((t) => t[0] >= 20);
-    s += T(x0 + 46, fr.top + 18, qb.name, { size: 23, weight: 800, fill: teamText(colors[team]) });
+    s += T(x0 + 66, fr.top + 18, qb.name, { size: 23, weight: 800, fill: teamText(colors[team]) });
     s += T(x0 + panelW, fr.top + 18, passLine(qb), { size: 17, anchor: "end", mono: true, fill: "var(--muted)" });
     s += throwField(x0, fr.top + 40, panelW, fr.bottom - fr.top - 110, throws, colors[team]);
     s += T(x0, fr.bottom - 6, `aDOT ${adot == null ? "-" : num(adot, 1)} · 20+ yards: ${deep.filter((t) => t[2]).length} of ${deep.length} complete`, { size: 17, weight: 650, fill: "var(--muted)" });
@@ -628,25 +628,6 @@ function cardGameThrows(g) {
 }
 
 // A12 ----------------------------------------------------------- Standout
-/**
- * A player's rank that week at his position for one weekly-line stat (1 = most), ties shared.
- * A game from a week still in progress ranks against a typical week instead: the median of
- * where it would have ranked in each full week.
- */
-function weekRank(g, pid, pos, value) {
-  const me = DATA.weekly_lines[pid]?.w[g.week];
-  if (!me) return null;
-  const mine = value(me);
-  if (!mine) return null;
-  const rankIn = (week) => {
-    let better = 0;
-    for (const e of Object.values(DATA.weekly_lines)) if (e.pos === pos && e.w[week] && value(e.w[week]) > mine) better += 1;
-    return better + 1;
-  };
-  if (!g.typical) return rankIn(g.week);
-  const ranks = Array.from({ length: DATA.recap_week }, (_, i) => rankIn(i + 1)).sort((a, b) => a - b);
-  return ranks[Math.floor((ranks.length - 1) / 2)];
-}
 function defaultStandout(g) {
   return [...g.players].sort((a, b) => b.fantasy_points - a.fantasy_points)[0]?.player_id;
 }
@@ -659,25 +640,18 @@ function cardStandout(g, opts = {}) {
   const result = `${mine > theirs ? "W" : mine < theirs ? "L" : "T"} ${mine}-${theirs} ${team === home ? "vs" : "at"} ${TEAMS[opp]?.name || opp}`;
   const fr = frame(1600, 900, { kicker: `${g.header.week_label} · ${p.position} · ${TEAMS[team]?.name || team}`, title: p.name, subtitle: result, headshot: { pid: p.player_id, name: p.name, ring: colors[team] } });
   const { pad, w } = fr;
-  const rank = (fn) => (cx, cy) => { const rk = weekRank(g, p.player_id, p.position, fn); return rk ? chip(rk, p.position, cx, cy, { size: 15, h: 26, w: 58 }) : ""; };
   const groups = [];
   if (p.attempts >= 5) groups.push({ label: "Passing", cells: [
-    { label: "Comp/Att", value: `${p.completions}/${p.attempts}`, chip: rank((t) => t[1]) },
-    { label: "Yards", value: String(p.passing_yards), chip: rank((t) => t[2]) },
-    { label: "TD", value: String(p.passing_tds), chip: rank((t) => t[3]) },
-    { label: "INT", value: String(p.interceptions) }] });
+    { label: "Comp/Att", value: `${p.completions}/${p.attempts}` }, { label: "Yards", value: String(p.passing_yards) },
+    { label: "TD", value: String(p.passing_tds) }, { label: "INT", value: String(p.interceptions) }] });
   if (p.carries >= (p.position === "QB" || p.position === "RB" ? 2 : 1) && (p.position === "RB" || p.rushing_yards >= 15 || p.rushing_tds)) groups.push({ label: "Rushing", cells: [
-    { label: "Carries", value: String(p.carries), chip: rank((t) => t[5]) },
-    { label: "Yards", value: String(p.rushing_yards), chip: rank((t) => t[6]) },
-    { label: "TD", value: String(p.rushing_tds), chip: rank((t) => t[7]) }] });
+    { label: "Carries", value: String(p.carries) }, { label: "Yards", value: String(p.rushing_yards) }, { label: "TD", value: String(p.rushing_tds) }] });
   if (p.targets > 0 && p.position !== "QB") groups.push({ label: "Receiving", cells: [
-    { label: "Rec/Tgt", value: `${p.receptions}/${p.targets}`, chip: rank((t) => t[9]) },
-    { label: "Yards", value: String(p.receiving_yards), chip: rank((t) => t[10]) },
-    { label: "TD", value: String(p.receiving_tds), chip: rank((t) => t[11]) }] });
+    { label: "Rec/Tgt", value: `${p.receptions}/${p.targets}` }, { label: "Yards", value: String(p.receiving_yards) }, { label: "TD", value: String(p.receiving_tds) }] });
   const cells = groups.reduce((a, gr) => a + gr.cells.length, 0);
-  let s = tileGroups(pad, fr.top - 4, w - pad * 2, groups.slice(0, cells > 8 ? 2 : 3), { cellH: 136 }).svg;
-  const y0 = fr.top + 196;
-  s += T(w - pad, y0 - 18, `Chip: his rank among ${POS_PLURAL[p.position]} in ${g.typical ? "a typical week" : g.header.week_label}`, { size: 16, anchor: "end", fill: "var(--muted)" });
+  const tiles = tileGroups(pad, fr.top - 4, w - pad * 2, groups.slice(0, cells > 8 ? 2 : 3), { cellH: 96 });
+  let s = tiles.svg;
+  const y0 = fr.top - 4 + tiles.h + 38;
   const color = colors[team];
   if (p.position === "QB") {
     // A quarterback's game is his throws.
