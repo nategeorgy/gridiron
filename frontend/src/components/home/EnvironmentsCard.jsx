@@ -31,7 +31,7 @@ export function EnvironmentsCard({ upcoming: next, isLoading, isError }) {
           )}
         </>
       )}
-      <CardLink to="/schedule/vegas">Vegas board</CardLink>
+      <CardLink to="/schedule/games">All games</CardLink>
     </Card>
   );
 }

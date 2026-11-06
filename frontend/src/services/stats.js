@@ -51,15 +51,6 @@ export async function getSos(params) {
 }
 
 /**
- * Fetch the Vegas board (M6.4). Params: season?, week?, view ("players"|"games"),
- * position?, scoring, limit, offset. Returns { data, weeks, week, ... }.
- */
-export async function getVegas(params) {
-  const { data } = await api.get("/stats/vegas", { params });
-  return data;
-}
-
-/**
  * Fetch trending usage (M10). Params: season?, season_type, direction ("up"|"down"),
  * window, position?, scoring, limit.
  * Returns { data, context: { recent_from, recent_to, prior_from, prior_to, ... } }.

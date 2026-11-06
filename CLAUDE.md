@@ -699,6 +699,12 @@ no stored columns. See [`docs/design/M3-fantasy-intelligence.md`](docs/design/M3
   `/stats/intelligence` still returns them — the draft board, hidden for the same
   launch, is built on expected VORP — so bringing them back is a frontend change. Do
   not add a `vorp*` column to a board without asking
+- ⚠️ **The Insight menu and its three boards (Opportunity Rating, Buy Low, Sell High) were
+  removed in November 2026**, along with `/insight/*` (every path redirects, see
+  `RETIRED_PAGES` and `RETIRED_INSIGHT_BOARDS` in `App.jsx`). The scores below are still
+  computed by `/stats/intelligence`, which serves every leaderboard tab, and Opportunity
+  Rating still shows on the home page's My Players card. Do not bring a board back
+  without asking
 - Fantasy Opportunity Rating (0–100)
 - Positive-Regression Index (0–100, buy-low)
 - Sell-High Index (0–100)
@@ -986,9 +992,8 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   matchups by position, and the featured game's tale of the tape, which replaced implied totals).
   The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
-  in the code and in these docs. The nav holds **six dropdowns**: **Insight**
-  (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
-  **Schedule** (`/schedule/*`: Games, By Team, Vegas Board) and **Leaderboards**, which
+  in the code and in these docs. The nav holds **five dropdowns**: **Schedule**
+  (`/schedule/*`: Games and Strength of Schedule) and **Leaderboards**, which
   lists five preset tabs of **one leaderboard page** (September 2026, replacing M12's 14
   boards):
 
@@ -1002,13 +1007,13 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   - **Edit Columns** opens a slide-out that adds, removes, searches and drag-reorders,
     live; any edit turns the board into Custom.
 
-  Tab, group and a custom column list all live in the URL. The fourth, **Players**
+  Tab, group and a custom column list all live in the URL. The third, **Players**
   (November 2026), holds the **Player Dashboard** (`/players`) and **Player Comparison**
-  (`/players/compare`, moved from Explore). The fifth dropdown, **Teams**,
+  (`/players/compare`, moved from Explore). The fourth dropdown, **Teams**,
   holds Team Leaderboards (`/teams/leaderboards/:tab`), Team Pages (`/teams`) and all 32
   teams by division, each linking to `/teams/:teamId`. The presets are in
-  `frontend/src/constants/leaderboards.js`; the Insight boards and tool pages are in
-  `frontend/src/constants/boards.js`. The sixth, **Explore** (after Teams, September 2026),
+  `frontend/src/constants/leaderboards.js`; the Schedule, Players and Explore menus are in
+  `frontend/src/constants/boards.js`. The fifth, **Explore** (after Teams, September 2026),
   holds Scatter, Passing Network, Target Analysis and Query Builder
   (`EXPLORE_ITEMS`, see [`docs/design/explore.md`](docs/design/explore.md)).
 - ⚠️ **Draft ▾ is built but HIDDEN for launch.** `DRAFT_ITEMS` is still exported from
@@ -1502,6 +1507,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `pipeline/ingest_charting.py`. ⚠️ **Production needs, once after merge:**
       `ingest_charting.py --seasons 2025 2026` (FTN charting and 2025 routes) and, for older route
       trees, `ingest_charting.py --only routes --seasons 2016 ... 2024`
+- [x] Insight removed, Schedule trimmed (November 2026). Nate built the Insight boards in a
+      hurry and did not like them, so the **Insight** menu and its three boards (Opportunity
+      Rating, Buy Low, Sell High) are gone, as are Schedule's **By Team** grid and **Vegas
+      Board**. **Strength of Schedule moved to `/schedule/sos`**, so Schedule holds Games and
+      Strength of Schedule. Every old path redirects keeping its query: `/insight/sos` to
+      `/schedule/sos`, the Vegas and By Team paths to `/schedule/games`, and the Insight boards
+      to the Expected leaderboard tab at All. Frontend only: the backend endpoints stay
+      (`/stats/vegas` uncalled by the site)
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is

@@ -1,184 +1,16 @@
-// Nav config for everything that is not a player leaderboard: the Insight boards and
-// tools, Schedule, Explore, and the hidden Draft section.
+// Nav config for everything that is not a player leaderboard: Schedule, Players,
+// Explore, and the hidden Draft section.
 //
 // The player leaderboards live in constants/leaderboards.js (September 2026). They were
 // fourteen boards here, one route each; they are now one page with preset tabs, and
 // only their nav entry is assembled below.
 import { LEADERBOARD_ITEMS } from "./leaderboards";
 
-/**
- * @typedef {Object} Section
- * @property {string} name      section heading, spanning its columns
- * @property {string[]} columns metric ids in display order
- */
-
-/**
- * @typedef {Object} Board
- * @property {string} id
- * @property {string} label           short label (nav item)
- * @property {string} path            route path
- * @property {string} menuDesc        one-liner in the nav dropdown
- * @property {string} title           page H1
- * @property {string} [description]   page subtitle
- * @property {Section[]} sections     column groups, in display order
- * @property {string[]} columns       every column flattened, in display order
- * @property {string} defaultSort     metric id to sort by initially
- * @property {string} defaultPosition '' for every position, or a comma-separated set
- * @property {boolean} scoring        true = scoring control + scoring-aware columns
- * @property {boolean} [insight]      served by /stats/intelligence
- * @property {string[]} [signed]      columns tinted positive/negative
- */
-
-/** @type {Board[]} */
-export const INSIGHT_BOARDS = [
-  {
-    id: "insight-opportunity",
-    label: "Opportunity Rating",
-    path: "/insight/opportunity",
-    menuDesc: "What players see the most chances",
-    title: "Fantasy Opportunity Rating",
-    description:
-      "0–100 on how much of an offense runs through a player, regardless of what they " +
-      "produced.",
-    columns: ["fantasy_opportunity_rating", "expected_fantasy_ppg", "fantasy_ppg", "opportunity_share", "target_share", "route_participation", "air_yards_share", "rush_attempt_share", "rush_att_inside_10", "red_zone_targets", "snap_share"],
-    defaultSort: "fantasy_opportunity_rating",
-    defaultPosition: "",
-    scoring: true,
-    insight: true,
-      sections: [
-      {
-        "name": "Score",
-        "columns": [
-          "fantasy_opportunity_rating"
-        ]
-      },
-      {
-        "name": "Production",
-        "columns": [
-          "expected_fantasy_ppg",
-          "fantasy_ppg"
-        ]
-      },
-      {
-        "name": "Usage",
-        "columns": [
-          "opportunity_share",
-          "target_share",
-          "route_participation",
-          "air_yards_share",
-          "rush_attempt_share",
-          "rush_att_inside_10",
-          "red_zone_targets",
-          "snap_share"
-        ]
-      }
-    ],
-    percentileColumns: ["fantasy_opportunity_rating", "expected_fantasy_ppg", "fantasy_ppg", "opportunity_share", "target_share", "route_participation", "air_yards_share", "rush_attempt_share", "rush_att_inside_10", "red_zone_targets", "snap_share"],
-  },
-  {
-    id: "insight-buy-low",
-    label: "Buy Low",
-    path: "/insight/buy-low",
-    menuDesc: "Players scoring less than expected based on usage",
-    title: "Buy Low | Positive Regression",
-    description:
-      "0–100 on players earning more than they're scoring: output below what the " +
-      "opportunity has been worth.",
-    columns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share"],
-    defaultSort: "positive_regression_index",
-    defaultPosition: "",
-    scoring: true,
-    insight: true,
-          sections: [
-      {
-        "name": "Signal",
-        "columns": [
-          "positive_regression_index",
-          "fantasy_opportunity_rating"
-        ]
-      },
-      {
-        "name": "Production",
-        "columns": [
-          "fantasy_ppg",
-          "expected_fantasy_ppg",
-          "fantasy_points_over_expected",
-          "tds_over_expected"
-        ]
-      },
-      {
-        "name": "Usage",
-        "columns": [
-          "opportunity_share",
-          "target_share"
-        ]
-      }
-    ],
-    percentileColumns: ["positive_regression_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "opportunity_share", "target_share"],
-  },
-  {
-    id: "insight-sell-high",
-    label: "Sell High",
-    path: "/insight/sell-high",
-    menuDesc: "Players scoring more than expected based on usage",
-    title: "Sell High",
-    description:
-      "0–100 on players whose production is running ahead of their opportunity: " +
-      "touchdown luck and efficiency above what the opportunity has been worth.",
-    columns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend"],
-    defaultSort: "sell_high_index",
-    defaultPosition: "",
-    scoring: true,
-    insight: true,
-          sections: [
-      {
-        "name": "Signal",
-        "columns": [
-          "sell_high_index",
-          "fantasy_opportunity_rating"
-        ]
-      },
-      {
-        "name": "Production",
-        "columns": [
-          "fantasy_ppg",
-          "expected_fantasy_ppg",
-          "fantasy_points_over_expected",
-          "tds_over_expected"
-        ]
-      },
-      {
-        "name": "Efficiency",
-        "columns": [
-          "efficiency_over_baseline",
-          "opportunity_trend"
-        ]
-      }
-    ],
-    percentileColumns: ["sell_high_index", "fantasy_opportunity_rating", "fantasy_ppg", "expected_fantasy_ppg", "fantasy_points_over_expected", "tds_over_expected", "efficiency_over_baseline", "opportunity_trend"],
-  }
-];
-
-/** @type {Board[]} */
-export const INSIGHT_TOOLS = [
-  {
-    id: "insight-sos",
-    label: "Strength of Schedule",
-    path: "/insight/sos",
-    menuDesc: "Positional matchup difficulty",
-    title: "Strength of Schedule",
-    description: "How difficult each position's matchups are.",
-    lede:
-      "Difficulty is fantasy points allowed to this position, on a 0-100 scale where " +
-      "higher is harder.",
-  }
-];
-
 // --- Schedule (M10) ---
-// A fixture list, a season grid, and the betting board. Vegas moved here from
-// Insight ▾ because it is a *schedule* surface: it answers "what happens this week",
-// not "who should I start" — the same reasoning that moved the Value Board into
-// Draft ▾ in M9. Its old URL redirects, so shared links and saved views survive.
+// The fixture list and strength of schedule. SOS moved here from Insight in November
+// 2026, when Insight was removed along with its three boards (Opportunity Rating, Buy
+// Low, Sell High); By Team and the Vegas board were removed at the same time. Every
+// retired path redirects (App.jsx), so shared links and saved views survive.
 export const SCHEDULE_ITEMS = [
   {
     id: "schedule-games",
@@ -191,36 +23,23 @@ export const SCHEDULE_ITEMS = [
       "been played, and the betting market's view where they have not.",
   },
   {
-    id: "schedule-by-team",
-    label: "By Team",
-    path: "/schedule/by-team",
-    menuDesc: "All teams and all games in one view",
-    title: "Schedule by Team",
-    description:
-      "Every team's season schedule in one grid. Home games are plain, away games carry " +
-      "an @. Played weeks are tinted by result.",
-  },
-  {
-    id: "schedule-vegas",
-    label: "Vegas Board",
-    path: "/schedule/vegas",
-    menuDesc: "Implied point totals, betting market lines",
-    title: "Vegas Board",
-    description:
-      "What the betting market expects each offense to score in a week, and the players " +
-      "who are in those games. Which players have the best scoring environment this week.",
+    id: "schedule-sos",
+    label: "Strength of Schedule",
+    path: "/schedule/sos",
+    menuDesc: "Positional matchup difficulty",
+    title: "Strength of Schedule",
+    description: "How difficult each position's matchups are.",
     lede:
-      "Implied total is the game total split by the spread - the points the market " +
-      "expects one offense to put up.",
-  }
+      "Difficulty is fantasy points allowed to this position, on a 0-100 scale where " +
+      "higher is harder.",
+  },
 ];
 
 
 // --- Draft (M9) ---
 // The fourth product surface. Rankings is the board you read; Mock Draft is the room
 // you practise in; the Value Board is the M6.1 comparison, moved here from Insight ▾
-// because a draft tool belongs in the draft menu (the old /insight/draft redirects, so
-// saved views and shared links survive).
+// (since removed) because a draft tool belongs in the draft menu.
 export const DRAFT_ITEMS = [
   {
     id: "draft-rankings",
@@ -327,8 +146,8 @@ export const PLAYER_ITEMS = [
 export const EXPLORE_GROUP = { label: "Explore", items: EXPLORE_ITEMS, match: "/explore" };
 
 
-// Nav dropdown groups. Insight leads, since it is the reason to come back. Leaderboards
-// lists the five preset tabs; Custom is a tab on the page only.
+// Nav dropdown groups. Leaderboards lists the five preset tabs; Custom is a tab on the
+// page only. Insight led this list until November 2026, when it was removed.
 //
 // ⚠️ **Draft is built but hidden**, which is why DRAFT_ITEMS is still exported above
 // and absent here: it has nothing left to say now the season has started (it returns
@@ -337,12 +156,8 @@ export const EXPLORE_GROUP = { label: "Explore", items: EXPLORE_ITEMS, match: "/
 // group back to this list, and drop its prefix from HIDDEN_SECTIONS. Explore is live
 // again (September 2026) and is rendered after Teams, from EXPLORE_GROUP.
 export const NAV_GROUPS = [
-  { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
   { label: "Schedule", items: SCHEDULE_ITEMS, match: "/schedule" },
   { label: "Leaderboards", items: LEADERBOARD_ITEMS, match: "/leaderboards" },
   // Between Leaderboards and Teams, which Layout renders after this list.
   { label: "Players", items: PLAYER_ITEMS, match: "/players" },
 ];
-
-/** Every Insight board, for routing and for saved-view path validation. */
-export const ALL_BOARDS = [...INSIGHT_BOARDS];

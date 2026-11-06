@@ -126,7 +126,7 @@ export function MatchupsCard({ week, season, boards, logos, isLoading, isError }
           Points allowed per game to the position, then difficulty from 0 (easiest) to 100 (toughest). {basisText(basis, season)}.
         </p>
       )}
-      <CardLink to="/insight/sos">Strength of schedule</CardLink>
+      <CardLink to="/schedule/sos">Strength of schedule</CardLink>
     </Card>
   );
 }
