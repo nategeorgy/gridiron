@@ -121,8 +121,7 @@ export function SosView({ board }) {
   return (
     <div className="space-y-5">
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Insight</div>
-        <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-fg">{board.title}</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">{board.description}</p>
       </div>
 

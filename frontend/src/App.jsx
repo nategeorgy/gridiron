@@ -3,18 +3,15 @@ import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
-import { InsightView } from "./pages/InsightView";
 import { LeaderboardView } from "./pages/LeaderboardView";
 import { PlayerDashboard } from "./pages/PlayerDashboard";
 import { SosView } from "./pages/SosView";
-import { VegasView } from "./pages/VegasView";
 import { GamesView } from "./pages/GamesView";
-import { ScheduleGridView } from "./pages/ScheduleGridView";
 import { StyleGuide } from "./pages/StyleGuide";
 import { TeamProfile } from "./pages/TeamProfile";
 import { TeamLeaderboards } from "./pages/TeamLeaderboards";
 import { TeamsIndex } from "./pages/TeamsIndex";
-import { ALL_BOARDS, EXPLORE_ITEMS, INSIGHT_TOOLS, PLAYER_ITEMS, SCHEDULE_ITEMS } from "./constants/boards";
+import { EXPLORE_ITEMS, PLAYER_ITEMS, SCHEDULE_ITEMS } from "./constants/boards";
 import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants/leaderboards";
 
 // Route prefixes that are built but hidden for launch. Everything beneath one
@@ -34,16 +31,11 @@ import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants
 // restore its group in NAV_GROUPS (constants/boards.js).
 const HIDDEN_SECTIONS = ["draft"];
 
-// Insight tools (M6) — pages rather than boards, so they map to their own components.
-const INSIGHT_TOOL_VIEWS = {
-  "insight-sos": SosView,
-};
-
-// Schedule (M10) — under /schedule. The Vegas board is the M6.4 page, moved here.
+// Schedule (M10), under /schedule. Strength of Schedule moved here from Insight in
+// November 2026.
 const SCHEDULE_VIEWS = {
   "schedule-games": GamesView,
-  "schedule-by-team": ScheduleGridView,
-  "schedule-vegas": VegasView,
+  "schedule-sos": SosView,
 };
 
 // Explore (September 2026): five tools, each its own page, loaded on first visit. They
@@ -71,17 +63,29 @@ function PageLoading() {
   return <div className="glass-card p-6 text-center text-sm text-muted">Loading…</div>;
 }
 
-// Board paths that have been retired, and the board that absorbed each. A saved view
-// (M5) and a shared link both store a route, and with no route matching, the app
-// renders nothing at all (header included), so a retired path has to go somewhere.
+// Paths that have been retired, and the page that absorbed each. A saved view (M5) and a
+// shared link both store a route, and with no route matching, the app renders nothing at
+// all (header included), so a retired path has to go somewhere.
 //
-// VORP was pulled from the product before launch, and Opportunity Rating is the nearest
-// surviving board: it answers the question people were mostly asking VORP, which is
-// who is actually worth starting. The old player-board paths are redirected by
-// LegacyBoard below, since each one also names a position group.
-const RETIRED_BOARDS = {
-  "insight/vorp": "/insight/opportunity",
+// Insight was removed in November 2026. Strength of Schedule moved under Schedule; By
+// Team and the Vegas board were removed, and the Games page is what is left of them.
+// The old player-board paths are redirected by LegacyBoard below, since each one also
+// names a position group.
+const RETIRED_PAGES = {
+  "insight/sos": "/schedule/sos",
+  "insight/vegas": "/schedule/games",
+  "schedule/vegas": "/schedule/games",
+  "schedule/by-team": "/schedule/games",
 };
+
+// The Insight boards (and VORP, retired before them) go to the Expected leaderboard tab,
+// which carries the expected points and points over expected they were built on. They
+// covered every position, so that is the group they land on.
+const RETIRED_INSIGHT_BOARDS = Object.fromEntries(
+  ["insight/opportunity", "insight/buy-low", "insight/sell-high", "insight/vorp"].map(
+    (path) => [path, { tab: "expected", group: "all" }],
+  ),
+);
 
 /** Redirect keeping the query string: the filters are what a saved view saved. */
 function MovedTo({ path }) {
@@ -118,30 +122,8 @@ export function App() {
         <Route path="leaderboards" element={<Navigate to="/leaderboards/fantasy" replace />} />
         <Route path="leaderboards/:tab" element={<LeaderboardView />} />
 
-        {/* Insight boards, served by the intelligence endpoint. The key forces a fresh
-            instance per board so filters and sort reset to that board's defaults. */}
-        {ALL_BOARDS.map((board) => (
-          <Route
-            key={board.id}
-            path={board.path.replace(/^\//, "")}
-            element={<InsightView key={board.id} board={board} />}
-          />
-        ))}
-
-        {/* Insight tools (M6): Strength of Schedule, which is a grid rather than a
-            ranked table, so it is a page not a board config. */}
-        {INSIGHT_TOOLS.map((item) => {
-          const View = INSIGHT_TOOL_VIEWS[item.id];
-          return (
-            <Route
-              key={item.id}
-              path={item.path.replace(/^\//, "")}
-              element={<View key={item.id} board={item} />}
-            />
-          );
-        })}
-
-        {/* Schedule (M10): fixtures, the season grid, and the betting board. */}
+        {/* Schedule (M10): fixtures and strength of schedule. */}
+        <Route path="schedule" element={<Navigate to="/schedule/games" replace />} />
         {SCHEDULE_ITEMS.map((item) => {
           const View = SCHEDULE_VIEWS[item.id];
           return (
@@ -177,14 +159,10 @@ export function App() {
             redirect into a redirect. */}
         <Route path="insight/draft" element={<Navigate to="/" replace />} />
 
-        {/* The Vegas board moved out of Insight ▾ in M10: redirected, not renamed, so
-            shared links and saved views survive. */}
-        <Route path="insight/vegas" element={<Navigate to="/schedule/vegas" replace />} />
-
-        {Object.entries(RETIRED_BOARDS).map(([retired, current]) => (
+        {Object.entries(RETIRED_PAGES).map(([retired, current]) => (
           <Route key={retired} path={retired} element={<MovedTo path={current} />} />
         ))}
-        {Object.entries(LEGACY_BOARD_REDIRECTS).map(([retired, target]) => (
+        {Object.entries({ ...LEGACY_BOARD_REDIRECTS, ...RETIRED_INSIGHT_BOARDS }).map(([retired, target]) => (
           <Route key={retired} path={retired} element={<LegacyBoard {...target} />} />
         ))}
 

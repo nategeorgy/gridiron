@@ -10,11 +10,11 @@ import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useSavedViews } from "../hooks/useAccount";
-import { ALL_BOARDS, EXPLORE_ITEMS, INSIGHT_TOOLS } from "../constants/boards";
+import { EXPLORE_ITEMS, SCHEDULE_ITEMS } from "../constants/boards";
 import { CUSTOM_TAB, LEADERBOARD_TABS } from "../constants/leaderboards";
 
 const SAVEABLE_PATHS = new Set(
-  [...ALL_BOARDS, ...LEADERBOARD_TABS, CUSTOM_TAB, ...EXPLORE_ITEMS, ...INSIGHT_TOOLS].map(
+  [...LEADERBOARD_TABS, CUSTOM_TAB, ...EXPLORE_ITEMS, ...SCHEDULE_ITEMS].map(
     (entry) => entry.path,
   ),
 );

@@ -29,7 +29,7 @@ export function TeamSchedule({ schedule, sos, sosBasis, season, abbreviation, ne
           <h2 className="text-[15px] font-semibold tracking-tight text-fg">Schedule</h2>
           <p className="text-[11.5px] text-faint">{season} regular season {"·"} strength of schedule in {scoringLabel}</p>
         </div>
-        <Link to="/insight/sos" className="text-[11px] text-faint transition hover:text-accent">Full grid</Link>
+        <Link to="/schedule/sos" className="text-[11px] text-faint transition hover:text-accent">Full grid</Link>
       </div>
       {POSITIONS.some((position) => sos?.[position]?.full?.difficulty != null) && (
         <div className="mb-3 grid grid-cols-2 gap-2">
