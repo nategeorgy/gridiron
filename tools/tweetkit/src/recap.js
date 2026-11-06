@@ -89,17 +89,28 @@ function cardFinal(g) {
   const bandH = 200;
   s += R(pad, y, w - pad * 2, bandH, { rx: 26, fill: "var(--panel)" });
   const winner = g.header.away.score > g.header.home.score ? away : home;
-  [away, home].forEach((team, i) => {
-    const side = i ? g.header.home : g.header.away;
+  // One name size and one score size for both sides, the largest at which both names
+  // clear their scores: "Seahawks" or "Commanders" beside a two-digit score would
+  // otherwise run into it. The score shrinks only when a name will not fit at 27.
+  const label = finalWord(g).toUpperCase();
+  const mid = Math.max(52, (textWidth(label, 17, 750) + 1.5 * label.length) / 2 + 22);
+  const nameRoom = w / 2 - mid - (pad + 34 + 148);
+  const sides = [[away, g.header.away], [home, g.header.home]];
+  const fits = (scoreSize, nameSize) => sides.every(([team, side]) =>
+    textWidth(nickname(team), nameSize, 750) <= nameRoom - textWidth(side.score, scoreSize, 800, true) - 24);
+  const [scoreSize, nameSize] = [104, 96, 88].flatMap((sc) => [38, 34, 30, 27].map((nm) => [sc, nm])).find(([sc, nm]) => fits(sc, nm)) || [88, 27];
+  sides.forEach(([team, side], i) => {
     const left = i === 0;
     const lx = left ? pad + 34 : w - pad - 34 - 124;
     s += logo(team, lx, y + 38, 124);
     const tx = left ? lx + 148 : lx - 24;
-    s += T(tx, y + 92, nickname(team), { size: 38, weight: 750, anchor: left ? "start" : "end" });
+    const sx = left ? w / 2 - mid : w / 2 + mid;
+    const room = nameRoom - textWidth(side.score, scoreSize, 800, true) - 24;
+    s += T(tx, y + 92, fit(nickname(team), room, nameSize, 750), { size: nameSize, weight: 750, anchor: left ? "start" : "end" });
     s += T(tx, y + 128, side.record || "", { size: 22, weight: 500, anchor: left ? "start" : "end", fill: "var(--muted)", mono: true });
-    s += T(left ? w / 2 - 60 : w / 2 + 60, y + 134, side.score, { size: 104, weight: 800, anchor: left ? "end" : "start", mono: true, fill: team === winner ? "var(--fg)" : "var(--faint)" });
+    s += T(sx, y + 97 + scoreSize * 0.36, side.score, { size: scoreSize, weight: 800, anchor: left ? "end" : "start", mono: true, fill: team === winner ? "var(--fg)" : "var(--faint)" });
   });
-  s += T(w / 2, y + 108, finalWord(g).toUpperCase(), { size: 17, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1.5 });
+  s += T(w / 2, y + 108, label, { size: 17, weight: 750, anchor: "middle", fill: "var(--faint)", ls: 1.5 });
   y += bandH + 30;
   // Linescore + line result
   s += linescore(g, pad, y, 560);
@@ -137,7 +148,8 @@ function cardFinal(g) {
       s += R(x0, ry, colW, 108, { rx: 20, fill: "var(--panel)" });
       s += face(p.player_id, x0 + 54, ry + 54, 36, colors[team], p.name);
       s += T(x0 + 104, ry + 46, fit(p.name, colW - 230, 24, 700), { size: 24, weight: 700 });
-      s += T(x0 + 104, ry + 78, fit(`${p.position} · ${statLine(p, true)}`, colW - 220, 17, 500), { size: 17, fill: "var(--muted)" });
+      const line = fitSize(`${p.position} · ${statLine(p, true)}`, colW - 220, [17, 16, 15], 500);
+      s += T(x0 + 104, ry + 78, line.text, { size: line.size, fill: "var(--muted)" });
       s += T(x0 + colW - 22, ry + 52, num(p.fantasy_points), { size: 34, weight: 800, anchor: "end", mono: true });
       s += chip(p.position_rank, p.position, x0 + colW - 62, ry + 80, { size: 16, h: 26 });
     });

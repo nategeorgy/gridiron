@@ -2,6 +2,10 @@
 const DATA = JSON.parse(document.getElementById("data").textContent);
 const IMG = JSON.parse(document.getElementById("img").textContent);
 const TEAMS = DATA.teams;
+// Game logs arrive as arrays under one key list (build_data.py); rebuild the rows once.
+for (const p of Object.values(DATA.players)) {
+  p.log = p.log.map((row) => Object.fromEntries(DATA.log_keys.map((key, i) => [key, row[i]])));
+}
 
 const SANS = "Inter, 'Helvetica Neue', Arial, sans-serif";
 const MONO = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
