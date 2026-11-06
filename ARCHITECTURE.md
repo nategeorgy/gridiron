@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-11-04 (the Players tab: Player Dashboard, Player Comparison moved, the six-tab player page)
+Last updated: 2026-11-05 (the tweet kit gains the player page's visuals, D11 to D24)
 
 ---
 
@@ -73,7 +73,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `frontend/` | app | The React web app (what users see). See [§4](#4-frontend--the-react-web-app). |
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
-| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 56 card templates (game recaps, previews with matchup environment cards, weekly series including every Scatter page chart, player reply cards, teams, and league cards with the Explore tab's passing network and target analysis) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
+| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 70 card templates (game recaps, previews with matchup environment cards, weekly series including every Scatter page chart, player reply cards with the player page's visuals in `src/playerpage.js`, teams, and league cards with the Explore tab's passing network and target analysis) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
 | `render.yaml` | config | "Blueprint" telling **Render** how to build and run the backend in production. ⭐ Its `buildCommand` runs **`scripts/migrate.sh`** after installing dependencies — `preDeployCommand` is paid-only on the free plan. See the file's comments: a bare `alembic upgrade head` failed there on a pooler **checkout timeout**, not connectivity, because a build competes with the still-running previous version for connections. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
@@ -839,6 +839,15 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-11-05**: **The tweet kit gets the player page's visuals**: 14 new reply cards, D11 to D24, in a new
+  `tools/tweetkit/src/playerpage.js`. Dashboard: the percentile profile (role, radar, percentile list), the game
+  chart (every game hanging from the WR24 line, any of the position's stats) and Next game (what the defense
+  allows). Stats and Opportunity: both week grids, running by lane with how runs end, and by quarterback.
+  Splits: by situation and game splits. Career: the arc, the profile and this season against last. Compare:
+  compare lines and most similar. Each card mirrors its component in `components/player/page/` and the lists
+  in `constants/playerTabs.js` and `similarity.js` (`RADAR`, `WEEK_GRID`, `SIMILAR`, `GAME_LINES` in `pull.py`),
+  so change both together. `pull.py` reads the player page's endpoints for every reply-card player, and
+  `build_data.py` packs the game logs as arrays to keep the page under its 16 MB limit (14.8 MB).
 - **2026-11-04**: **The Players tab.** A **Players** menu between Leaderboards and Teams holds the new
   **Player Dashboard** (`/players`, `pages/PlayerDashboard.jsx`: search every player since 2009, last week's
   leaders) and **Player Comparison**, moved from Explore (`/players/compare`; `/explore/compare` redirects). The
