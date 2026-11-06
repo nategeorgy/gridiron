@@ -69,8 +69,50 @@ NFL_RANKS = {
 }
 NFL_PERCENTILES["TE"] = NFL_PERCENTILES["WR"]
 NFL_RANKS["TE"] = NFL_RANKS["WR"]
+# The player page's cards (D11 to D24), November 2026. Each list mirrors the site's, in
+# frontend/src/constants/playerTabs.js and similarity.js: change one and change the other.
+# RADAR_STATS: the Dashboard radar, the career profile and this season against last.
+RADAR = {
+    "WR": ["fantasy_ppg", "receiving_epa", "target_share", "red_zone_targets", "yards_per_route_run",
+           "targets_per_route_run", "fantasy_points_per_route_run", "adot", "air_yards_share"],
+    "RB": ["fantasy_ppg", "rushing_epa", "ngs_rush_yards_over_expected_per_att", "rush_yac_per_att", "rush_attempt_share",
+           "target_share", "opportunity_share", "rush_att_inside_5", "targets_per_route_run", "route_participation"],
+    "QB": ["fantasy_ppg", "epa_per_play", "epa", "cpoe", "yards_per_attempt", "yards_per_completion", "pass_td_rate",
+           "interception_rate", "ngs_pass_intended_air_yards"],
+}
+# USAGE_ROWS and RANKED_ROWS: the two week-by-week grids.
+WEEK_GRID = {
+    "WR": ["snap_share", "route_participation", "target_share", "air_yards_share", "targets", "air_yards", "adot",
+           "red_zone_targets", "wopr", "fantasy_points", "receptions", "receiving_yards", "yards_per_route_run",
+           "receiving_epa"],
+    "RB": ["snap_share", "rush_attempt_share", "target_share", "route_participation", "opportunity_share", "carries",
+           "targets", "rush_att_inside_10", "red_zone_targets", "fantasy_points", "rushing_yards", "yards_per_carry",
+           "rushing_epa"],
+    "QB": ["attempts", "dropbacks", "sacks_suffered", "carries", "rush_attempt_share", "passing_first_downs",
+           "ngs_pass_time_to_throw", "ngs_pass_intended_air_yards", "fantasy_points", "passing_yards", "passing_tds",
+           "yards_per_attempt", "cpoe", "epa", "rushing_yards", "interceptions"],
+}
+# SIMILARITY_STATS: who plays the most like him.
+SIMILAR = {
+    "WR": ["fantasy_ppg", "target_share", "air_yards_share", "adot", "route_participation", "targets_per_route_run",
+           "yards_per_route_run", "catch_rate", "yards_after_catch", "red_zone_targets"],
+    "RB": ["fantasy_ppg", "rush_attempt_share", "target_share", "route_participation", "rush_att_inside_5",
+           "yards_per_carry", "rush_yac_per_att", "red_zone_targets", "snap_share"],
+    "QB": ["fantasy_ppg", "passer_rating", "cpoe", "yards_per_attempt", "ngs_pass_intended_air_yards", "carries",
+           "rushing_yards", "epa_per_play", "ngs_pass_aggressiveness"],
+}
+# GAME_CHART: the stats the game chart and career arc draw, and the rank of the dashed line.
+GAME_LINES = {
+    "WR": (["fantasy_ppg", "epa_per_play", "yards_per_route_run", "targets_per_route_run"], 24),
+    "TE": (["fantasy_ppg", "epa_per_play", "yards_per_route_run", "targets_per_route_run"], 12),
+    "RB": (["fantasy_ppg", "epa_per_play", "targets_per_route_run", "rush_attempt_share", "rush_yac_per_att"], 18),
+    "QB": (["fantasy_ppg", "epa_per_play", "cpoe", "pass_adot", "passer_rating"], 12),
+}
+for _table in (RADAR, WEEK_GRID, SIMILAR):
+    _table["TE"] = _table["WR"]
 for _position in POSITIONS:
-    PERCENTILES[_position] = list(dict.fromkeys(PERCENTILES[_position] + NFL_PERCENTILES[_position]))
+    PERCENTILES[_position] = list(dict.fromkeys(PERCENTILES[_position] + NFL_PERCENTILES[_position] + RADAR[_position]
+                                                + WEEK_GRID[_position] + SIMILAR[_position]))
     RANKS[_position] = list(dict.fromkeys(RANKS[_position] + NFL_RANKS[_position]))
 SITUATIONS = ["all", "red_zone", "late_downs"]
 # A passer needs this many targets in the season for the network card to offer him.
@@ -207,15 +249,28 @@ def main():
 
     def player(entry):
         pid, position = entry
+        lines, line_rank = GAME_LINES[position]
         data = {
             "profile": get(f"/players/{pid}"),
             "log": get(f"/players/{pid}/stats", season=SEASON, scoring="ppr")["data"],
-            "career": get(f"/players/{pid}/career", scoring="ppr")["data"],
+            # Each season's radar percentiles and the game chart's dashed lines ride along.
+            "career": get(f"/players/{pid}/career", scoring="ppr", percentiles=",".join(RADAR[position]),
+                          lines=",".join(lines), line_rank=line_rank)["data"],
+            # The player page's cards: every career game (the arc), each week ranked, the
+            # splits, the next game and, for a receiver or back, who threw to him.
+            "games_all": get(f"/players/{pid}/stats", scoring="ppr")["data"],
+            "weekly_ranks": get(f"/players/{pid}/weekly-ranks", season=SEASON, scoring="ppr",
+                                stats=",".join(WEEK_GRID[position])),
+            "splits": get(f"/players/{pid}/splits", season=SEASON, scoring="ppr"),
+            "next_game": get(f"/players/{pid}/next-game", scoring="ppr"),
         }
         role = "passer" if position == "QB" else "receiver"
         data["targets"] = get(f"/explore/players/{pid}/targets", season=SEASON, role=role)
         if position in ("RB", "QB"):
             data["runs"] = get(f"/explore/players/{pid}/runs", season=SEASON)
+            data["carries"] = get(f"/players/{pid}/carries", season=SEASON)
+        if position != "QB":
+            data["by_qb"] = get(f"/players/{pid}/by-quarterback", scoring="ppr")
         return pid, data
 
     with ThreadPoolExecutor(6) as pool:

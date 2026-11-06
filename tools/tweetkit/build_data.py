@@ -4,7 +4,7 @@ import os
 from bisect import bisect_left, bisect_right
 from statistics import median_low
 
-from pull import PERCENTILES, RANKS
+from pull import PERCENTILES, POSITIONS, RADAR, RANKS, SIMILAR, WEEK_GRID
 import re
 import urllib.parse
 import urllib.request
@@ -385,7 +385,9 @@ LOG_KEYS = ["week", "game_id", "opponent_abbreviation", "team_abbreviation", "fa
             "position_rank", "pool_size", "snap_share", "target_share", "rush_attempt_share", "route_participation",
             "targets", "receptions", "receiving_yards", "receiving_tds", "carries", "rushing_yards", "rushing_tds",
             "completions", "attempts", "passing_yards", "passing_tds", "interceptions", "air_yards", "routes_run",
-            "red_zone_targets", "rush_att_inside_5", "air_yards_share", "epa", "fumbles_lost"]
+            "red_zone_targets", "rush_att_inside_5", "air_yards_share", "epa", "fumbles_lost",
+            # The game chart (D12) and compare lines (D23) divide these per game, as the site does.
+            "cpoe", "pass_adot", "rush_yards_after_contact"]
 
 # D1 and B7 ask for stats with no registry metric (a quarterback's rushing yards per game and sack %). They are ranked the way the API ranks
 # every other one (app/percentiles.py): within the qualified players at the position, rank
@@ -470,6 +472,118 @@ for pid, raw in players_raw.items():
         entry["ranks"][metric] = rank
         entry["pct"][metric] = percentile
     players[pid] = entry
+
+# ------------------------------------------------- the player page (D11 to D24)
+# The cards built from the site's player page (November 2026). Everything is packed as
+# arrays, since it is per player and the page is near its 16 MB limit.
+pp_needed = set()
+# Every career game's parts for the game chart's stats (summed before dividing, like the
+# site's GAME_STATS), regular season only: [season, week, *ARC_KEYS[pos]].
+ARC_KEYS = {
+    "WR": ["fantasy_points", "epa", "attempts", "carries", "targets", "routes_run", "receiving_yards"],
+    "RB": ["fantasy_points", "epa", "attempts", "carries", "targets", "routes_run", "rush_attempt_share",
+           "rush_yards_after_contact"],
+    "QB": ["fantasy_points", "epa", "attempts", "carries", "targets", "cpoe", "pass_adot", "completions",
+           "passing_yards", "passing_tds", "interceptions"],
+}
+ARC_KEYS["TE"] = ARC_KEYS["WR"]
+ARC_DIGITS = {"epa": 2, "cpoe": 1, "pass_adot": 1, "rush_attempt_share": 3, "fantasy_points": 2}
+next_games, allows_pp, pos_lines, split_labels = {}, {}, {}, {}
+label_id = lambda text: split_labels.setdefault(text, len(split_labels))
+for pid, entry in players.items():
+    raw = players_raw[pid]
+    position = entry["pos"]
+    keys = ARC_KEYS[position]
+    entry["arc"] = [[g["season"], g["week"]] + [r(g.get(k), ARC_DIGITS.get(k, 2)) if isinstance(g.get(k), float) else g.get(k) for k in keys]
+                    for g in sorted(raw.get("games_all", []), key=lambda g: (g["season"], g["week"]))
+                    if g.get("season_type") == "REG" and g["season"] <= SEASON and (g["season"] < SEASON or g["week"] <= NEWEST_WEEK)]
+    # Each season's radar values and percentiles, and the game chart's dashed lines.
+    by_season = {c["season"]: c for c in raw["career"]}
+    for row in entry["career"]:
+        c = by_season.get(row["season"], {})
+        # Aligned with DATA.radar_keys[pos] (RADAR in pull.py).
+        row["rv"] = [r(c.get(k), 3) for k in RADAR[position]]
+        row["rp"] = [(c.get("percentiles") or {}).get(k) for k in RADAR[position]]
+        # The dashed lines are the position's, the same for every player: stored once.
+        for k, v in (c.get("lines") or {}).items():
+            pos_lines.setdefault(position, {}).setdefault(row["season"], {})[k] = [r(v.get("avg"), 4), r(v.get("rank"), 4)]
+    # Each week's number, rank and percentile among the position that week.
+    weeks = (raw.get("weekly_ranks") or {}).get("weeks", {})
+    entry["wk"] = {stat: [[r(c["v"], 3), c["rank"], c["pct"]] if (c := weeks.get(str(wk), {}).get("stats", {}).get(stat)) else None
+                          for wk in range(1, NEWEST_WEEK + 1)] for stat in WEEK_GRID[position]}
+    # Splits: by situation, then by kind of game.
+    sp = raw.get("splits") or {}
+    sit = sp.get("situations") or {}
+    entry["sit"] = {"ok": bool(sit.get("available")), "charted": bool(sit.get("charted")),
+                    "all": [sit.get("overall", {}).get(k) for k in ("n", "pts")],
+                    "groups": [[g["title"], [[label_id(x["label"]), x["n"], x.get("team"), r(x["pts"], 2), x["yds"], x["td"], r(x["epa"], 2)] for x in g["rows"]]]
+                               for g in sit.get("groups", [])]}
+    gs = sp.get("games") or {}
+    entry["gsplit"] = {"ppg": (gs.get("overall") or {}).get("ppg"),
+                       "groups": [[g["title"], [[label_id(x["label"]), x["g"], r(x.get("ppg"), 2), r(x.get("best"), 1), r(x.get("worst"), 1)] for x in g["rows"]]]
+                                  for g in gs.get("groups", [])]}
+    # The next game, and what that defense has allowed to his position (shared by everyone
+    # at the position facing it).
+    ng = raw.get("next_game") or {}
+    if ng.get("game"):
+        game = ng["game"]
+        next_games[game["game_id"]] = {
+            **pick(game, ["game_id", "week", "game_date", "kickoff_time", "spread_line", "total_line", "home_implied", "away_implied"]),
+            "away": game["away"]["abbreviation"], "home": game["home"]["abbreviation"],
+            "away_record": game["away"].get("record"), "home_record": game["home"].get("record"),
+        }
+        defense = game["away"]["abbreviation"] if ng["is_home"] else game["home"]["abbreviation"]
+        key = f"{defense}:{position}"
+        if key not in allows_pp and ng.get("allows"):
+            al = ng["allows"]
+            allows_pp[key] = {"avg": r(al.get("average"), 2), "games": [
+                [x["week"], x["offense"], int(bool(x["offense_home"])), r(x["total"], 1), r(x.get("others"), 1), x.get("count"),
+                 [[p["player_id"], p["name"], r(p["pts"], 1)] for p in x["prominent"]]] for x in al["games"]]}
+            for x in al["games"]:
+                for p in x["prominent"]:
+                    note_face(p)
+        cons = ng.get("consensus")
+        entry["next"] = {"g": game["game_id"], "home": int(bool(ng["is_home"])), "opp": defense,
+                         "cons": pick(cons, ["label", "best", "worst", "as_of"]) if cons else None}
+    # Who threw to him: his numbers in each quarterback's starts, over the last three seasons.
+    if raw.get("by_qb"):
+        bq = raw["by_qb"]
+        entry["byqb"] = [[x["season"], x["qb_id"], x["name"], x["games"], r(x["fantasy_points"], 2), x["targets"], x["team_targets"],
+                          r(x["receiving_epa"], 2), x["epa_targets"], x["routes_run"], x["route_targets"], x["route_yards"]]
+                         for x in bq.get("rows", []) if x["season"] >= SEASON - 2]
+        for x in bq.get("rows", []):
+            if x["season"] < SEASON - 2:
+                continue
+            note_face({"player_id": x["qb_id"], "headshot_url": x.get("headshot_url")})
+    if raw.get("carries", {}).get("available"):
+        entry["carries"] = pick(raw["carries"], ["bins", "mine", "league", "carries", "league_carries"])
+    if raw.get("runs"):
+        entry["runs"]["succ"] = raw["runs"].get("successes")
+        entry["runs"]["fd"] = raw["runs"].get("first_downs")
+
+# Who plays the most like him: every qualified player at the position with his
+# percentiles on SIMILARITY_STATS (constants/similarity.js), [id, name, team, [pct...]].
+sim_pool = {}
+for position in POSITIONS:
+    sim_pool[position] = [[row["player_id"], row["name"], row["team_abbreviation"],
+                           [(row.get("percentiles") or {}).get(k) for k in SIMILAR[position]]]
+                          for row in intel[position] if row.get("qualified")]
+
+
+def closeness(mine, theirs):
+    """100 minus the RMS of percentile gaps, every stat weighted 1 (constants/similarity.js)."""
+    gaps = [(a - b) ** 2 for a, b in zip(mine, theirs) if a is not None and b is not None]
+    missing = len(mine) - len(gaps)
+    return None if missing > 2 or not gaps else round(100 - (sum(gaps) / len(gaps)) ** 0.5)
+
+
+for pid, entry in players.items():
+    pool = sim_pool[entry["pos"]]
+    mine = next((row[3] for row in pool if row[0] == pid), None)
+    if mine is None:
+        continue
+    ranked = sorted(((closeness(mine, row[3]), row[0]) for row in pool if row[0] != pid), key=lambda t: -(t[0] or -1))
+    pp_needed |= {other for match, other in ranked[:5] if match is not None}
 
 # ---------------------------------------------------------------- teams (E)
 team_stats_values = values
@@ -688,6 +802,7 @@ for rows in week_rows.values():
 needed |= {m["player_id"] for m in risers + fallers}
 needed |= {row["player_id"] for row in rb_work}
 needed |= {row["player_id"] for row in routes_pool}
+needed |= pp_needed
 needed |= {row["player_id"] for rows in scatter_pool.values() for row in rows}
 needed |= {row["player_id"] for rows in xva_pool.values() for row in rows}
 for card in teams_cards.values():
@@ -760,7 +875,14 @@ allowed = {defense: {week: {position: [r(v, 2) for v in slot["sum"]] + [slot["to
 # The newest week each team has played: a Thursday team's cards run a week further.
 team_through = {team: NEWEST_WEEK if NEWEST_WEEK in weeks else RECAP_WEEK for team, weeks in results.items()}
 
+# Game logs as arrays under one key list (the page decodes them in core.js): the same
+# rows as before at about half the bytes, which is room for the player page's cards.
+LOG_PACK = LOG_KEYS + ["typical"]
+for entry in players.values():
+    entry["log"] = [[g.get(k) for k in LOG_PACK] for g in entry["log"]]
+
 data = {
+    "log_keys": LOG_PACK, "arc_keys": ARC_KEYS, "pos_lines": pos_lines, "radar_keys": RADAR, "week_grid_keys": WEEK_GRID, "similar_keys": SIMILAR, "split_labels": list(split_labels), "next_games": next_games, "allows_pp": allows_pp, "sim_pool": sim_pool,
     "byes": byes, "through": team_through,
     "season": SEASON, "recap_week": RECAP_WEEK, "preview_week": PREVIEW_WEEK, "newest_week": NEWEST_WEEK, "teams": TEAMS,
     "recaps": recaps, "previews": previews,

@@ -63,6 +63,8 @@ node render.mjs C1,C3,C4,C5,C6
 node render.mjs C8 --opt pos=RB --highlight "Bijan Robinson,Jahmyr Gibbs"
 node render.mjs D1,D3 --player "Jaxon Smith-Njigba"
 node render.mjs D6 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba"
+node render.mjs D12,D20 --player "Jahmyr Gibbs" --opt stat=epa
+node render.mjs D23 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba" --opt range=career
 node render.mjs E1,E2,E3,E4 --team DET
 node render.mjs A12 --game 2026_07_GB_DET --opt who="Jahmyr Gibbs"
 node render.mjs F1 --opt qb="Jared Goff" --opt tf=last4 --opt sit=red_zone
@@ -164,6 +166,28 @@ The timeframe (Oct 28) re-reads the qualified players for those weeks, as the si
 | D9 | Head to head, real stats | 1200x1500 and up | D6 with D8's numbers | Opponent | Added Oct 28, no fantasy |
 | D10 | Game by game | 1600x900 | Yards every game (backs split rushing and receiving) with touchdowns, the opponent and the result, and the season line with ranks | | Added Oct 28, no fantasy |
 
+**From the player page (added Nov 5).** D11 to D24 are the site's six-tab player page as reply cards, tab by
+tab. Each mirrors a component in `frontend/src/components/player/page/` and its lists in
+`frontend/src/constants/playerTabs.js` and `similarity.js` (`RADAR`, `WEEK_GRID`, `SIMILAR` and `GAME_LINES` in
+`pull.py`, and the matching tables in `src/playerpage.js`): change a list on the site and change it here.
+
+| Card | Name | Size | What it shows | Controls | Status |
+|---|---|---|---|---|---|
+| D11 | Percentile profile | 1600x900 | Dashboard: the role label (the site's role rules), the percentile radar, and D1's percentile list beside it | | Added Nov 5 |
+| D12 | Game chart | 1600x900 | Dashboard: every game this season hanging from the position's dashed line (WR24, TE12, RB18, QB12, or the position average for a rate), with the season to date (or last three) as a smooth line. A game past the axis is an arrow; a missed game an X | Stat, line | Added Nov 5 |
+| D13 | Next game | 1600x900 | Dashboard: the next game (records, kickoff, line, total, implied total, consensus rank), then what that defense has allowed to the position in every game, the offense's most-used players marked with faces, the defense's average dashed and his PPG solid | | Added Nov 5 |
+| D14 | Usage by week, ranked | 1600x900 | Opportunity: the usage rows each week, shaded by the rank among everyone at the position that week, and the season shaded by its percentile | | Added Nov 5 |
+| D15 | Every week, ranked | 1600x900 | Stats: points and the box score each week with the rank under every number | | Added Nov 5 |
+| D16 | Running by lane | 1600x900 | Opportunity, backs and quarterbacks: the run fan through the line (width = share of runs, colour = yards a carry against every back in that lane), how runs end against every back, and every carry by yards gained | | Added Nov 5 |
+| D17 | By quarterback | 1600x900 | Opportunity, receivers and backs: PPG, target share, YPRR, TPRR and EPA per target in each quarterback's starts, by season, against the overall | Seasons | Added Nov 5 |
+| D18 | By situation | 1200x1500 and up | Splits: points per target (touch, play) and EPA by down and distance, score, field position, and FTN's play type and formation, against the overall rate | | Added Nov 5 |
+| D19 | Game splits | 1600x900 | Splits: PPG at home and away, in wins and losses, favoured or not, by implied total, roof, division and quarterback | | Added Nov 5 |
+| D20 | Career arc | 1600x900 | Career: every career game as a dot, a column per season (last ten), with the median, the middle half and that season's dashed line | Stat | Added Nov 5 |
+| D21 | Career profile | 1600x900 | Career: the radar's stats every season, a small chart each, dots coloured by that season's percentile | | Added Nov 5 |
+| D22 | This season against last | 1600x900 | Career: both seasons on one radar, and each stat as an arrow from last season's percentile to this one's | | Added Nov 5 |
+| D23 | Compare lines | 1600x900 | Compare: two players on one game chart stat, season to date week by week or season by season | Opponent, stat, range | Added Nov 5 |
+| D24 | Most similar | 1600x900 | Compare: every qualified player at the position by closeness (the site's placeholder formula), the five closest as faces, and a heat table of their percentiles beside his | | Added Nov 5 |
+
 D1 and D6 are also on the site (Oct 21): the player page's player card and head-to-head, and the
 home page's Head to Head (`frontend/src/components/player/PlayerCard.jsx` and `HeadToHead.jsx`).
 Their stats are `CARD_TILES` and `CARD_PERCENTILES` in `frontend/src/constants/playerPage.js`, which
@@ -235,12 +259,12 @@ None of these uses fantasy points. Each takes a timeframe: the season, the last 
 | File | Does |
 |---|---|
 | `refresh.sh` | The weekly rebuild: checks the backend is up, then runs the five steps below in order |
-| `pull.py` | Calls the local API for the week's recaps, previews, team stats and breakdowns, every week's player board, Insight boards and the reply-card players, each timeframe window, and the Explore target boards and passing networks one week at a time. Writes `raw/*.json` |
+| `pull.py` | Calls the local API for the week's recaps, previews, team stats and breakdowns, every week's player board, Insight boards and the reply-card players (with the player page's endpoints: career detail, weekly ranks, splits, next game, by quarterback, carries), each timeframe window, and the Explore target boards and passing networks one week at a time. Writes `raw/*.json` |
 | `build_data.py` | Trims `raw/` into `data.json`: risers and fallers, bye weeks, team cards, scatter pools, weekly finishes, and the images needed |
 | `fetch_img.py` | Downloads headshots (220px WebP from the NFL CDN), both ESPN logo variants and the Inter and JetBrains Mono fonts |
 | `build.py` | Inlines the brand mark (from `components/Brand.jsx`), the fonts, data, images and `src/` into `index.html` and `preview.html` |
 | `src/core.js` | Frame, text, faces, logos, chips, grouped tiles, the shared scatter plot, team colours, formats |
-| `src/recap.js`, `preview.js`, `weekly.js`, `player.js`, `team.js`, `explore.js` | One function per card, each returning an SVG string. `explore.js` also holds the timeframe windows and the network and target sums |
+| `src/recap.js`, `preview.js`, `weekly.js`, `player.js`, `playerpage.js`, `team.js`, `explore.js` | One function per card, each returning an SVG string. `explore.js` also holds the timeframe windows and the network and target sums |
 | `src/app.js` | The page: pickers, each card's controls (`GROUPS`), theme, Save PNG and Copy image, the lightbox, and the solo mode `render.mjs` uses (`?card=C8&theme=dark&opt.pos=RB&hl=...`) |
 | `render.mjs` | Headless Chrome over its DevTools protocol: one PNG per card and theme, and warns about text outside the card |
 | `check.mjs` | Runs every card against every game, player, team and option |
