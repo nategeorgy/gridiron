@@ -5,7 +5,7 @@ import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
 import { InsightView } from "./pages/InsightView";
 import { LeaderboardView } from "./pages/LeaderboardView";
-import { PlayerProfile } from "./pages/PlayerProfile";
+import { PlayerDashboard } from "./pages/PlayerDashboard";
 import { SosView } from "./pages/SosView";
 import { VegasView } from "./pages/VegasView";
 import { GamesView } from "./pages/GamesView";
@@ -14,7 +14,7 @@ import { StyleGuide } from "./pages/StyleGuide";
 import { TeamProfile } from "./pages/TeamProfile";
 import { TeamLeaderboards } from "./pages/TeamLeaderboards";
 import { TeamsIndex } from "./pages/TeamsIndex";
-import { ALL_BOARDS, EXPLORE_ITEMS, INSIGHT_TOOLS, SCHEDULE_ITEMS } from "./constants/boards";
+import { ALL_BOARDS, EXPLORE_ITEMS, INSIGHT_TOOLS, PLAYER_ITEMS, SCHEDULE_ITEMS } from "./constants/boards";
 import { DEFAULT_GROUP, GROUP_VALUES, LEGACY_BOARD_REDIRECTS } from "./constants/leaderboards";
 
 // Route prefixes that are built but hidden for launch. Everything beneath one
@@ -50,10 +50,10 @@ const SCHEDULE_VIEWS = {
 // are most of a megabyte of charts between them, and a visitor who never opens one
 // should not download them with the home page.
 const page = (load, name) => lazy(() => load().then((module) => ({ default: module[name] })));
+const CompareView = page(() => import("./pages/CompareView"), "CompareView");
 const EXPLORE_VIEWS = {
   "explore-scatter": page(() => import("./pages/ScatterView"), "ScatterView"),
   "explore-network": page(() => import("./pages/PassingNetworkView"), "PassingNetworkView"),
-  "explore-compare": page(() => import("./pages/CompareView"), "CompareView"),
   "explore-targets": page(() => import("./pages/TargetAnalysisView"), "TargetAnalysisView"),
   "explore-query": page(() => import("./pages/QueryBuilderView"), "QueryBuilderView"),
 };
@@ -62,6 +62,10 @@ const EXPLORE_VIEWS = {
 // passing network and the target map, which a visitor who never opens a game should not
 // download with the home page.
 const GamePage = page(() => import("./pages/GamePage"), "GamePage");
+
+// The player page (November 2026) draws Explore's scatter, network and target map and a
+// dozen charts of its own, so it loads on first visit too.
+const PlayerProfile = page(() => import("./pages/PlayerProfile"), "PlayerProfile");
 
 function PageLoading() {
   return <div className="glass-card p-6 text-center text-sm text-muted">Loading…</div>;
@@ -184,7 +188,18 @@ export function App() {
           <Route key={retired} path={retired} element={<LegacyBoard {...target} />} />
         ))}
 
-        <Route path="players/:playerId" element={<PlayerProfile />} />
+        {/* Players (November 2026): the dashboard, Player Comparison (moved here from
+            Explore, its old path redirected) and the tabbed player page, the tab in the
+            path. "compare" is a static segment, so it outranks a player id. */}
+        <Route path="players" element={<PlayerDashboard />} />
+        <Route
+          path="players/compare"
+          element={<Suspense fallback={<PageLoading />}><CompareView board={PLAYER_ITEMS.find((item) => item.id === "players-compare")} /></Suspense>}
+        />
+        <Route path="explore/compare" element={<MovedTo path="/players/compare" />} />
+        {/* One route with an optional tab, so switching tabs keeps the page (and the
+            season picked on it) rather than mounting a new one. */}
+        <Route path="players/:playerId/:tab?" element={<Suspense fallback={<PageLoading />}><PlayerProfile /></Suspense>} />
         <Route path="teams" element={<TeamsIndex />} />
         <Route path="teams/leaderboards" element={<Navigate to="/teams/leaderboards/overview" replace />} />
         <Route path="teams/leaderboards/:tab" element={<TeamLeaderboards />} />

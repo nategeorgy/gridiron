@@ -239,6 +239,7 @@ jobs:
           python ingest_pfr.py          --seasons $SEASONS
           python ingest_team_stats.py   --seasons $SEASONS
           python ingest_plays.py        --seasons $SEASONS
+          python ingest_charting.py     --seasons $SEASONS
 
   # The newest week's games, every day in season (October 2026). The game pages' recaps
   # read stat lines, expected points, snaps, team sums and play-by-play, and the weekly

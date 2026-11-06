@@ -222,7 +222,7 @@ export function ScatterView({ board }) {
               </div>
             </div>
             <div className="flex gap-1.5">
-              <Link to={`/explore/compare?players=${pin.id}:${season}`} className="btn-ghost px-3 py-1.5 text-xs hover:!text-accent">Add to Compare</Link>
+              <Link to={`/players/compare?players=${pin.id}:${season}`} className="btn-ghost px-3 py-1.5 text-xs hover:!text-accent">Add to Compare</Link>
               <Link to={`/players/${pin.id}`} className="btn-ghost px-3 py-1.5 text-xs hover:!text-accent">Player page</Link>
               <button type="button" onClick={() => setPinned("")} className="btn-ghost px-3 py-1.5 text-xs hover:!text-accent">Clear</button>
             </div>

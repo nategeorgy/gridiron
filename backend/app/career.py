@@ -37,8 +37,10 @@ from app.aggregation import (
     finalize_row,
     games_expr,
 )
+from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
-from app.percentiles import qualify_games
+from app.models.plays import PlayTarget
+from app.percentiles import PercentileIndex, qualify_games
 from app.scoring import ScoringConfig
 
 from sqlalchemy.dialects.postgresql import aggregate_order_by
@@ -106,18 +108,74 @@ def _dense_rank(rows: list[dict], metric: str) -> dict[str, int]:
     return result
 
 
+def _better_first(rows: list[dict], metric: str) -> list[float]:
+    """The qualified values of ``metric``, best first, direction-corrected."""
+    definition = REGISTRY_BY_ID.get(metric)
+    higher = definition.higher_is_better if definition is not None else True
+    values = [row[metric] for row in rows if row.get(metric) is not None]
+    return sorted(values, reverse=higher)
+
+
+def _pooled(rows: list[dict], metric: str) -> float | None:
+    """The position's rate over a pool of season rows, aggregated first: Σ/Σ.
+
+    ``fantasy_ppg`` is every point over every game; a ``derived`` rate is its base over
+    its denominator; a weighted average weights each player's rate by his own weight
+    column (exact, since rate x weight recovers the total); a flat average weights by
+    games. Never the mean of the players' rates, which would let a three-game season
+    count as much as a seventeen-game one.
+    """
+    definition = REGISTRY_BY_ID.get(metric)
+    if metric == "fantasy_ppg":
+        games = sum(row.get("games_played") or 0 for row in rows)
+        return sum(row.get("fantasy_points") or 0 for row in rows) / games if games else None
+    if definition is None:
+        return None
+    if definition.aggregation == "derived" and definition.base:
+        denominators = definition.per or ("games_played",)
+        numerator = sum(row.get(definition.base) or 0 for row in rows)
+        denominator = sum(sum(row.get(name) or 0 for name in denominators) for row in rows)
+        return numerator / denominator if denominator else None
+    weight_name = definition.weight_by or "games_played"
+    pairs = [(row[metric], row.get(weight_name) or 0) for row in rows if row.get(metric) is not None]
+    weight = sum(w for _, w in pairs)
+    return sum(v * w for v, w in pairs) / weight if weight else None
+
+
+def _passer_adot(db: Session, seasons: list[int], season_type: str) -> dict[int, float]:
+    """Every quarterback's depth of target per season, from every charted throw."""
+    rows = db.execute(
+        select(PlayTarget.season, func.sum(PlayTarget.air_yards), func.count(PlayTarget.air_yards))
+        .join(Player, PlayTarget.passer_id == Player.player_id)
+        .where(PlayTarget.season.in_(seasons), PlayTarget.season_type == season_type, Player.position == "QB")
+        .group_by(PlayTarget.season)
+    ).all()
+    return {season: float(total) / count for season, total, count in rows if count}
+
+
 def career_seasons(
     db: Session,
     player_id: str,
     position: str,
     config: ScoringConfig,
     season_type: str = "REG",
+    percentile_ids: tuple[str, ...] = (),
+    line_ids: tuple[str, ...] = (),
+    line_rank: int | None = None,
 ) -> list[dict]:
     """Every season this player played, with his finish among his position in each.
 
     Returns newest first. Each row is a full aggregated season — the same shape the
     leaderboard returns — plus the two finishes and the size of the pool each was
     measured against, so a surface can say how many players the rank is out of.
+
+    ``percentile_ids`` adds each season's percentile among the qualified players at his
+    position (the career profile and this-season-against-last). ``line_ids`` adds, per
+    season, the position's pooled rate for each stat and the value of the
+    ``line_rank``-th best qualified season (the dashed lines on the game charts: WR24,
+    the average back). Both come from the rows this function already aggregates for
+    the finishes, so they cost no further pass over the table. ``pass_adot`` is the one
+    line read elsewhere: a quarterback's depth of target comes from every charted throw.
     """
     if position not in POSITIONS:
         return []
@@ -174,6 +232,25 @@ def career_seasons(
         mine["ppg_pool_size"] = len(qualified)
         mine["ppg_qualified"] = player_id in ppg_ranks
         mine["min_games"] = min_games
+        if percentile_ids:
+            index = PercentileIndex(rows, percentile_ids, min_games)
+            mine["percentiles"] = index.for_row(mine)
+            mine["ranks"] = index.ranks_for_row(mine, percentile_ids)
+        if line_ids:
+            lines = {}
+            for metric in line_ids:
+                if metric == "pass_adot":
+                    continue
+                best = _better_first(qualified, metric)
+                lines[metric] = {
+                    "avg": _pooled(qualified, metric),
+                    "rank": best[line_rank - 1] if line_rank and len(best) >= line_rank else None,
+                }
+            mine["lines"] = lines
         out.append(mine)
 
+    if "pass_adot" in line_ids and out:
+        adot = _passer_adot(db, [row["season"] for row in out], season_type)
+        for row in out:
+            row["lines"]["pass_adot"] = {"avg": adot.get(row["season"]), "rank": None}
     return out

@@ -63,7 +63,8 @@ from app.intelligence import build_intelligence, resolve_window
 from app.league import FLEX_ELIGIBLE, parse_league
 from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
-from app.seasons import current_season, latest_scheduled_season, week_bounds
+from app.player_page import week_leaders
+from app.seasons import current_season, latest_scheduled_season, newest_played_week, week_bounds
 from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
 from app.weekly_finishes import POOLS as FINISH_POOLS, build_weekly_finishes
 from app.trending import (
@@ -1334,6 +1335,40 @@ def weekly_finishes(
         db, config, target, upper, season_type=season_type, min_games=min_games, limit=limit, sort=sort,
     )
     return {**result, "scoring": config.model_dump()}
+
+
+_LEADERS_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=16)
+
+
+@router.get("/week-leaders")
+@cached_response(_LEADERS_RESPONSES)
+def get_week_leaders(
+    request: Request,
+    season: int | None = Query(None, description="Defaults to the season of the week just played"),
+    week: int | None = Query(None, ge=1, le=22, description="Defaults to the week just played"),
+    scoring: str = Query("ppr"),
+    limit: int = Query(10, ge=1, le=20),
+    db: Session = Depends(get_db),
+) -> dict:
+    """The week's top scorers at each position (the Player Dashboard).
+
+    "The week just played" is the newest week whose games are mostly final, the same
+    week the home page's scoreboard calls last week.
+    """
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if season is None or week is None:
+        played = newest_played_week(db)
+        if played is None:
+            raise HTTPException(status_code=404, detail="No week has been played")
+        if season is None:
+            season = played[0]
+        if week is None:
+            bounds = week_bounds(db, season, "REG")
+            week = played[1] if season == played[0] else (bounds[1] if bounds else 1)
+    return week_leaders(db, season, week, config, limit)
 
 
 # --- The Vegas board (M6.4) --------------------------------------------------------

@@ -2,9 +2,16 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getPlayer,
+  getPlayerByQuarterback,
   getPlayerCareer,
+  getPlayerCarries,
   getPlayerGameLog,
+  getPlayerIndex,
+  getPlayerNextGame,
+  getPlayerRoutes,
+  getPlayerSplits,
   getPlayerTargetDepth,
+  getPlayerWeeklyRanks,
 } from "../services/players";
 import { getIntelligence } from "../services/insight";
 
@@ -87,5 +94,82 @@ export function usePlayerTargetDepth(playerId, season, seasonType = "REG") {
     queryFn: () =>
       getPlayerTargetDepth(playerId, { season, season_type: seasonType }),
     enabled: Boolean(playerId && season),
+  });
+}
+
+// --- The tabbed player page (November 2026) ---------------------------------------------
+// Each tab asks only for what it draws, so a reader who never opens Splits never pays for
+// it. Everything scoring-aware carries the spec in its key.
+
+export function usePlayerWeeklyRanks(playerId, season, stats, scoring) {
+  const list = (stats ?? []).join(",");
+  return useQuery({
+    queryKey: ["player-weekly-ranks", playerId, season, list, scoring],
+    queryFn: () => getPlayerWeeklyRanks(playerId, { season, stats: list, scoring }),
+    enabled: Boolean(playerId && season && list),
+  });
+}
+
+export function usePlayerByQuarterback(playerId, scoring, { enabled = true } = {}) {
+  return useQuery({
+    queryKey: ["player-by-qb", playerId, scoring],
+    queryFn: () => getPlayerByQuarterback(playerId, { scoring }),
+    enabled: Boolean(playerId) && enabled,
+  });
+}
+
+export function usePlayerSplits(playerId, season, scoring) {
+  return useQuery({
+    queryKey: ["player-splits", playerId, season, scoring],
+    queryFn: () => getPlayerSplits(playerId, { season, scoring }),
+    enabled: Boolean(playerId && season),
+  });
+}
+
+export function usePlayerNextGame(playerId, scoring) {
+  return useQuery({
+    queryKey: ["player-next-game", playerId, scoring],
+    queryFn: () => getPlayerNextGame(playerId, { scoring }),
+    enabled: Boolean(playerId),
+  });
+}
+
+export function usePlayerCarries(playerId, season, { enabled = true } = {}) {
+  return useQuery({
+    queryKey: ["player-carries", playerId, season],
+    queryFn: () => getPlayerCarries(playerId, { season }),
+    enabled: Boolean(playerId && season) && enabled,
+  });
+}
+
+export function usePlayerRoutes(playerId, role, season) {
+  return useQuery({
+    queryKey: ["player-routes", playerId, role, season ?? "newest"],
+    queryFn: () => getPlayerRoutes(playerId, { role, ...(season ? { season } : {}) }),
+    enabled: Boolean(playerId),
+  });
+}
+
+/**
+ * Career seasons with each season's percentile in `percentiles` and, per season, the
+ * position's pooled rate and Nth-best value for each of `lines` (the dashed lines on the
+ * game charts). A separate key from `usePlayerCareer`, which the career table reads plain.
+ */
+export function usePlayerCareerDetail(playerId, scoring, { percentiles = [], lines = [], lineRank } = {}) {
+  const pct = percentiles.join(",");
+  const ln = lines.join(",");
+  return useQuery({
+    queryKey: ["player-career-detail", playerId, scoring, pct, ln, lineRank],
+    queryFn: () => getPlayerCareer(playerId, { scoring, percentiles: pct, lines: ln, ...(lineRank ? { line_rank: lineRank } : {}) }),
+    enabled: Boolean(playerId),
+  });
+}
+
+/** The dashboard's search index: fetched once, searched in the browser. */
+export function usePlayerIndex(scoring) {
+  return useQuery({
+    queryKey: ["player-index", scoring],
+    queryFn: () => getPlayerIndex({ scoring }),
+    staleTime: 10 * 60 * 1000,
   });
 }

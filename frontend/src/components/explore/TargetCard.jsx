@@ -40,7 +40,7 @@ function Body({ data, isLoading, isError, role, position, subject, exportSubtitl
 export function PlayerTargetCard({ player, season }) {
   const role = player.position === "QB" ? "passer" : "receiver";
   const { data, isLoading, isError } = usePlayerTargets(player.player_id, { season, role });
-  const title = role === "passer" ? "Where he throws" : "Where he's targeted";
+  const title = "Target Map";
   return (
     <section className="glass-card min-w-0 p-4">
       <CardTitle title={title} sub={`${season} · regular season`}>

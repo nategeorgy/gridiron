@@ -93,7 +93,7 @@ export function headlineColumns(position) {
 // or week reads as the box score of his position plus the rate that explains it (yards
 // per carry for a back, per target and per reception for a pass-catcher), where the
 // leaderboard's Fantasy tab also shows every phase so positions can sit side by side.
-const PLAYER_FANTASY = {
+export const PLAYER_FANTASY = {
   QB: [
     { name: "Passing", columns: ["completions", "attempts", "passing_yards", "passing_tds", "interceptions"] },
     { name: "Rushing", columns: ["carries", "rushing_yards", "yards_per_carry", "rushing_tds"] },

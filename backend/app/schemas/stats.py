@@ -117,6 +117,9 @@ class StatLineOut(BaseModel):
     # scoring (M13). Computed, never stored: it depends on the scoring config.
     position_rank: int | None = None
     pool_size: int | None = None
+    # A quarterback's depth of target in this game, from every throw play-by-play gives
+    # a depth for (``play_targets``). The ``adot`` column is the receiving one.
+    pass_adot: float | None = None
 
     # Expected components (M2 — ffopportunity model estimates)
     passing_yards_exp: float | None = None

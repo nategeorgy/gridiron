@@ -379,7 +379,7 @@ export function NetworkLegend({ layout }) {
       <span>
         {layout === "radial"
           ? "Distance from the quarterback: average depth of target"
-          : "Height: average depth of target (to scale). Left to right: which side he is targeted on more"}
+          : "Height: average depth of target (to scale). Left to right: which side each receiver is targeted on more"}
       </span>
     </div>
   );

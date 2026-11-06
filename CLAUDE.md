@@ -545,6 +545,26 @@ player_run_lanes (
   PRIMARY KEY (player_id, game_id, lane)
 )
 
+-- The player page's charting (November 2026). Both replaced per game, by
+-- pipeline/ingest_charting.py. A route is the targeted receiver's on a stored target
+-- (join play_targets for who threw and caught); participation trails a season, so the
+-- season in progress has none until February. FTN charting is weekly, 2025 on (its only
+-- reader joins game_plays). Credit FTN Data via nflverse.
+play_routes (
+  game_id VARCHAR(50) REFERENCES games(game_id), play_id INT,
+  season INT, week INT, season_type VARCHAR(20),
+  route VARCHAR(20),            -- the feed's own name: GO, IN/DIG, HITCH/CURL, ...
+  PRIMARY KEY (game_id, play_id)
+)
+play_charting (
+  game_id VARCHAR(50) REFERENCES games(game_id), play_id INT,
+  season INT, week INT, season_type VARCHAR(20),
+  play_action BOOLEAN, screen BOOLEAN, rpo BOOLEAN, motion BOOLEAN, no_huddle BOOLEAN,
+  qb_location VARCHAR(2),       -- S shotgun, U under center, P pistol
+  backfield SMALLINT,           -- players in the backfield; 0 is an empty backfield
+  PRIMARY KEY (game_id, play_id)
+)
+
 -- The game pages (October 2026), 2025 on (FIRST_GAME_PAGE_SEASON, a scope decision mirrored
 -- in pipeline/seasons.py, backend/app/models/game_detail.py and frontend constants). Every
 -- play of a game, for the score by quarter, the win probability, the scoring plays and the
@@ -791,6 +811,24 @@ GET /api/v1/players/{player_id}/stats        ← player game log. Each line carr
                                                pool_size), in the request's scoring
 GET /api/v1/players/{player_id}/intelligence ← M3 scores + explanation breakdown
 GET /api/v1/players/{player_id}/target-depth ← M4 targets by pass depth
+
+# The tabbed player page (November 2026). All public, all through cached_response.
+GET /api/v1/players/index                    ← every QB/RB/WR/TE since 2009 for the dashboard's
+                                               search, as arrays in `fields` order. Declared
+                                               before /{player_id}
+GET /api/v1/players/{player_id}/weekly-ranks ← each game's stats ranked among everyone at the
+                                               position that week. stats=, season=, scoring=
+GET /api/v1/players/{player_id}/by-quarterback ← his games by the QB with the most attempts,
+                                               season by season, as sums
+GET /api/v1/players/{player_id}/splits       ← game splits + situation splits (2025 on, FTN's
+                                               play type and formation where loaded)
+GET /api/v1/players/{player_id}/next-game    ← the next fixture, this week's consensus, and
+                                               what that defense allowed to his position
+GET /api/v1/players/{player_id}/carries      ← every designed run by yards gained (2025 on)
+GET /api/v1/players/{player_id}/routes       ← targets by route, role=receiver|passer
+                                               (/career gains percentiles=, lines=, line_rank=)
+GET /api/v1/stats/week-leaders               ← the week just played's top scorers at each
+                                               position (the Player Dashboard)
 GET /api/v1/stats/leaderboard                ← filterable leaderboard. M12 adds
                                                percentiles= (comma-separated metric
                                                ids to rank, each within that player's
@@ -948,7 +986,7 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   matchups by position, and the featured game's tale of the tape, which replaced implied totals).
   The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
-  in the code and in these docs. The nav holds **five dropdowns**: **Insight**
+  in the code and in these docs. The nav holds **six dropdowns**: **Insight**
   (`/insight/*`: Strength of Schedule / Opportunity Rating / Buy Low / Sell High),
   **Schedule** (`/schedule/*`: Games, By Team, Vegas Board) and **Leaderboards**, which
   lists five preset tabs of **one leaderboard page** (September 2026, replacing M12's 14
@@ -964,12 +1002,14 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   - **Edit Columns** opens a slide-out that adds, removes, searches and drag-reorders,
     live; any edit turns the board into Custom.
 
-  Tab, group and a custom column list all live in the URL. The fourth dropdown, **Teams**,
+  Tab, group and a custom column list all live in the URL. The fourth, **Players**
+  (November 2026), holds the **Player Dashboard** (`/players`) and **Player Comparison**
+  (`/players/compare`, moved from Explore). The fifth dropdown, **Teams**,
   holds Team Leaderboards (`/teams/leaderboards/:tab`), Team Pages (`/teams`) and all 32
   teams by division, each linking to `/teams/:teamId`. The presets are in
   `frontend/src/constants/leaderboards.js`; the Insight boards and tool pages are in
-  `frontend/src/constants/boards.js`. The fifth, **Explore** (after Teams, September 2026),
-  holds Scatter, Passing Network, Player Comparison, Target Analysis and Query Builder
+  `frontend/src/constants/boards.js`. The sixth, **Explore** (after Teams, September 2026),
+  holds Scatter, Passing Network, Target Analysis and Query Builder
   (`EXPLORE_ITEMS`, see [`docs/design/explore.md`](docs/design/explore.md)).
 - ⚠️ **Draft ▾ is built but HIDDEN for launch.** `DRAFT_ITEMS` is still exported from
   `boards.js` and its pages still compile; it is simply absent from `NAV_GROUPS`, and
@@ -1445,6 +1485,23 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       needs one card that can fill, last in its column**, or the gap comes back. Measured at
       1,060 to 1,600px with a receiver pair, a back pair and every Weekly Finishes tab: no column
       ends short, and no card holds more than about a row of spare space
+- [x] The Players tab (November 2026), from ten rounds of mockups. A **Players** dropdown (Player
+      Dashboard: search every player since 2009 and last week's leaders; Player Comparison, moved from
+      Explore with its old path redirected) and a **six-tab player page** at `/players/:id/:tab?` under a
+      team-colour banner: **Dashboard** (role label, percentile radar beside the card's percentile bars,
+      the fantasy game log, a game chart of every game hanging from that season's WR24 or position
+      average, and Next game: what the opponent allowed to his position, each bar split into that
+      offense's two most-targeted receivers or most-used back), **Stats** (Season Stats, the game log,
+      every week ranked, the scatter), **Opportunity** (usage by week ranked among the position, run fan
+      and how runs end, who threw to him, the passing network, the target map, the route tree),
+      **Splits** (by situation from play-by-play and FTN charting, game splits), **Career** (the arc as a
+      column per season, the profile as a table or charts that open bigger, the career table, this
+      season against last) and **Compare** (head to head and both radars in one box, both players'
+      lines, the closeness line). `app/player_page.py`, seven player routes and `/stats/week-leaders`;
+      two tables (`play_routes`, `play_charting`, migration `9c4a1e7b2d58`, RLS on) from
+      `pipeline/ingest_charting.py`. ⚠️ **Production needs, once after merge:**
+      `ingest_charting.py --seasons 2025 2026` (FTN charting and 2025 routes) and, for older route
+      trees, `ingest_charting.py --only routes --seasons 2016 ... 2024`
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is
@@ -2163,6 +2220,21 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
 - ⚠️ **`useLeague()` returns the spec string, not a league.** Anything that reads
   `teams` or `lineup` needs `parseLeague(spec)` first; the Query Builder's first build
   passed the string to the finish chips (which then read the league) and blanked the page
+- **The player page's tab is the path, one route with an optional segment**
+  (`players/:playerId/:tab?`). Two routes (with and without the tab) render two different elements, so
+  every tab switch remounted the page and dropped the season picked on it
+- **A weekly rank pools everyone at the position with a stat line that week**, unqualified, like a
+  weekly finish (`player_page.weekly_ranks`). The grids' Season column is the season row's own
+  percentile among the qualified pool, so the two pools differ on purpose
+- **"Most similar" is a placeholder formula, kept in `constants/similarity.js`** (100 minus the RMS
+  of percentile gaps, every stat weighted 1). Nate is writing his own; it replaces that file only
+- **Next game's bars use the offense's most-used players by season usage, not the game's top
+  scorers**: two receivers by targets, one back by carries plus targets, one quarterback by attempts
+  plus carries, one tight end. A player who missed the game gives way to the next one who played.
+  The dashed line is that defense's own average allowed, not the league's
+- **A quarterback's depth of target on the game chart comes from `play_targets`** (the game log's
+  `pass_adot`), not `ngs_pass_intended_air_yards`, which NGS publishes only for qualifying games and
+  only from 2016. The career endpoint's `pass_adot` line is the same source pooled over quarterbacks
 - **Game pages start at `FIRST_GAME_PAGE_SEASON` (2025)**, a scope decision mirrored in three
   places (`pipeline/seasons.py`, `backend/app/models/game_detail.py`, `frontend/src/constants/index.js`;
   `tests/test_game_pages.py` fails if they drift). An older game is a 404 and gets no link. Widening it

@@ -104,3 +104,58 @@ class PlayerRunLane(Base):
     short: Mapped[int] = mapped_column(Integer, default=0)
     medium: Mapped[int] = mapped_column(Integer, default=0)
     explosive: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class PlayRoute(Base):
+    """The route the targeted receiver ran on one targeted pass (November 2026).
+
+    From nflverse's participation feed, which charts the route on every targeted pass
+    from 2016 on. That feed trails a season (it arrives after the Super Bowl), so the
+    season in progress has no rows until February: the player page's route tree says
+    which season it shows. Joined to ``play_targets`` on the play for who threw and who
+    caught, which is why nothing here repeats them.
+
+    Written by ``pipeline/ingest_routes_run.py``, replaced per game like every play table.
+    """
+
+    __tablename__ = "play_routes"
+    __table_args__ = (Index("ix_play_routes_season", "season"),)
+
+    game_id: Mapped[str] = mapped_column(ForeignKey("games.game_id"), primary_key=True)
+    play_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    season: Mapped[int] = mapped_column(Integer)
+    week: Mapped[int] = mapped_column(Integer)
+    season_type: Mapped[str] = mapped_column(String(20))
+
+    route: Mapped[str] = mapped_column(String(20))   # as the feed spells it: "GO", "IN/DIG", ...
+
+
+class PlayCharting(Base):
+    """FTN's charting of one play: play action, screen, RPO, motion, formation.
+
+    FTN charts every play by hand and nflverse publishes it weekly in season, which is
+    what lets the player page split a season by play type and formation. Stored from
+    ``FIRST_GAME_PAGE_SEASON`` (2025) on, since its only reader joins it to
+    ``game_plays``, which starts there. Credit: FTN Data via nflverse (CC-BY-SA 4.0).
+
+    Written by ``pipeline/ingest_charting.py``, replaced per game.
+    """
+
+    __tablename__ = "play_charting"
+    __table_args__ = (Index("ix_play_charting_season", "season"),)
+
+    game_id: Mapped[str] = mapped_column(ForeignKey("games.game_id"), primary_key=True)
+    play_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    season: Mapped[int] = mapped_column(Integer)
+    week: Mapped[int] = mapped_column(Integer)
+    season_type: Mapped[str] = mapped_column(String(20))
+
+    play_action: Mapped[bool | None] = mapped_column(Boolean)
+    screen: Mapped[bool | None] = mapped_column(Boolean)
+    rpo: Mapped[bool | None] = mapped_column(Boolean)
+    motion: Mapped[bool | None] = mapped_column(Boolean)
+    no_huddle: Mapped[bool | None] = mapped_column(Boolean)
+    qb_location: Mapped[str | None] = mapped_column(String(2))   # S shotgun, U under center, P pistol
+    backfield: Mapped[int | None] = mapped_column(SmallInteger)  # players in the backfield; 0 is empty

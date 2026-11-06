@@ -81,3 +81,9 @@ export async function getWeeklyFinishes(params) {
   const { data } = await api.get("/stats/weekly-finishes", { params });
   return data;
 }
+
+/** The week's top scorers at each position (the Player Dashboard). Omit week for the week just played. */
+export async function getWeekLeaders(params) {
+  const { data } = await api.get("/stats/week-leaders", { params });
+  return data;
+}

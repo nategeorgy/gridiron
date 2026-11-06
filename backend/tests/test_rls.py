@@ -53,6 +53,8 @@ REFERENCE_TABLES = (
     "team_personnel_season",
     "team_staff",
     "play_targets",
+    "play_routes",
+    "play_charting",
     "player_run_lanes",
     "game_plays",
     "game_drives",
