@@ -1,14 +1,28 @@
 """Player endpoints: search, profile, per-game game log, and fantasy intelligence."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.cache import VersionedCache, cached_response
 from app.career import career_seasons
+from app.percentiles import percentile_metric_ids
+from app.player_page import (
+    by_quarterback,
+    carry_histogram,
+    game_splits,
+    next_game,
+    route_tree,
+    search_index,
+    situation_splits,
+    weekly_ranks,
+    weekly_stat_ids,
+)
+from app.seasons import current_season
 from app.database import get_db
 from app.intelligence import breakdown, build_intelligence, resolve_window
 from app.league import parse_league
-from app.models import DepthChartEntry, Game, Player, PlayerStats, PlayerTargetDepth, Team
+from app.models import DepthChartEntry, Game, Player, PlayerStats, PlayerTargetDepth, PlayTarget, Team
 from app.models.player_target_depth import DEPTH_BUCKETS
 from app.schemas.common import PaginatedResponse, paginated
 from app.schemas.player import DepthChartSlot, PlayerDetailOut, PlayerOut
@@ -24,6 +38,26 @@ from app.scoring import (
 )
 
 router = APIRouter(prefix="/players", tags=["players"])
+
+# Whole responses for the player page's per-player endpoints (November 2026), keyed on
+# the URL plus the data version like every cached_response store. A popular player's
+# page is the same few URLs for everyone until the next write.
+_PLAYER_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=256)
+_INDEX_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=8)
+
+
+def _scoring(spec: str):
+    try:
+        return parse_scoring(spec)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _known(db: Session, player_id: str) -> Player:
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+    return player
 
 
 def _to_player_out(
@@ -121,6 +155,21 @@ def list_players(
     return paginated(items, total or 0, limit, offset)
 
 
+@router.get("/index")
+@cached_response(_INDEX_RESPONSES)
+def get_search_index(
+    request: Request,
+    scoring: str = Query("ppr", description="Scoring for this season's PPG, rank and finishes"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Every QB, RB, WR and TE since the first season, for the Player Dashboard's search.
+
+    Sent whole and searched in the browser, so typing never waits on a request. Rows are
+    arrays in ``fields`` order to keep ~2,600 players small.
+    """
+    return search_index(db, current_season(db), _scoring(scoring))
+
+
 @router.get("/{player_id}", response_model=PlayerDetailOut)
 def get_player(player_id: str, db: Session = Depends(get_db)) -> PlayerDetailOut:
     """Return a single player's profile."""
@@ -146,6 +195,9 @@ def get_player_career(
         description="League scoring as preset[:overrides] — the finishes are re-ranked "
                     "in it, so a superflex or TE-premium league sees its own career",
     ),
+    percentiles: str = Query("", description="Metric ids to rank each season among the position's qualified players"),
+    lines: str = Query("", description="Metric ids to add the position's pooled rate and Nth-best season for"),
+    line_rank: int | None = Query(None, ge=1, le=64, description="The N in Nth-best season, e.g. 24 for WR24"),
     db: Session = Depends(get_db),
 ) -> dict:
     """Season-by-season career with each season's finish among the player's position.
@@ -162,7 +214,12 @@ def get_player_career(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    seasons = career_seasons(db, player_id, player.position, config, season_type)
+    seasons = career_seasons(
+        db, player_id, player.position, config, season_type,
+        percentile_ids=percentile_metric_ids(percentiles) if percentiles else (),
+        line_ids=tuple(m for m in lines.split(",") if m) if lines else (),
+        line_rank=line_rank,
+    )
     return {
         "player_id": player_id,
         "name": player.name,
@@ -394,6 +451,18 @@ def get_player_game_log(
     finishes = _weekly_finishes(
         db, player_id, player.position, config, {stat_line.season for stat_line, *_ in rows}
     )
+    pass_depth: dict[str, float] = {}
+    if player.position == "QB" and rows:
+        pass_depth = {
+            game_id: float(total) / count
+            for game_id, total, count in db.execute(
+                select(PlayTarget.game_id, func.sum(PlayTarget.air_yards), func.count(PlayTarget.air_yards))
+                .where(PlayTarget.season.in_({stat_line.season for stat_line, *_ in rows}),
+                       PlayTarget.passer_id == player_id)
+                .group_by(PlayTarget.game_id)
+            ).all()
+            if count
+        }
 
     items: list[StatLineOut] = []
     for stat_line, game_date, home_team_id, away_team_id in rows:
@@ -412,6 +481,92 @@ def get_player_game_log(
         expected = compute_expected_points(config, expected_components, player.position)
         line.expected_fantasy_points = round(expected, 3) if expected is not None else None
         line.position_rank, line.pool_size = finishes.get(stat_line.game_id, (None, None))
+        line.pass_adot = round(pass_depth[stat_line.game_id], 2) if stat_line.game_id in pass_depth else None
         items.append(line)
 
     return paginated(items, len(items), limit=len(items) or 1, offset=0)
+
+
+# --- The tabbed player page (November 2026) ------------------------------------------------
+
+@router.get("/{player_id}/weekly-ranks")
+@cached_response(_PLAYER_RESPONSES)
+def get_weekly_ranks(
+    request: Request,
+    player_id: str,
+    season: int | None = Query(None),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    stats: str = Query("fantasy_points", description="Stored columns, a few per-game rates, or fantasy_points"),
+    scoring: str = Query("ppr"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Each of his games, every stat ranked among everyone at his position that week."""
+    player = _known(db, player_id)
+    wanted = weekly_stat_ids(stats)
+    if not wanted:
+        raise HTTPException(status_code=400, detail="No rankable stat in stats=")
+    return weekly_ranks(db, player_id, player.position, season or current_season(db), season_type,
+                        wanted, _scoring(scoring))
+
+
+@router.get("/{player_id}/by-quarterback")
+@cached_response(_PLAYER_RESPONSES)
+def get_by_quarterback(
+    request: Request, player_id: str, scoring: str = Query("ppr"), db: Session = Depends(get_db),
+) -> dict:
+    """His numbers in the games each quarterback started, season by season."""
+    player = _known(db, player_id)
+    return by_quarterback(db, player_id, player.position, _scoring(scoring))
+
+
+@router.get("/{player_id}/splits")
+@cached_response(_PLAYER_RESPONSES)
+def get_splits(
+    request: Request,
+    player_id: str,
+    season: int | None = Query(None),
+    scoring: str = Query("ppr"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Game splits (home, favoured, indoors...) and situation splits (down, score, play type)."""
+    player = _known(db, player_id)
+    season = season or current_season(db)
+    config = _scoring(scoring)
+    return {
+        "season": season,
+        "games": game_splits(db, player_id, player.position, season, config),
+        "situations": situation_splits(db, player_id, player.position, season, config),
+    }
+
+
+@router.get("/{player_id}/next-game")
+@cached_response(_PLAYER_RESPONSES)
+def get_next_game(
+    request: Request, player_id: str, scoring: str = Query("ppr"), db: Session = Depends(get_db),
+) -> dict:
+    """His team's next game and what that defense has allowed to his position, game by game."""
+    return next_game(db, _known(db, player_id), _scoring(scoring))
+
+
+@router.get("/{player_id}/carries")
+@cached_response(_PLAYER_RESPONSES)
+def get_carries(
+    request: Request, player_id: str, season: int | None = Query(None), db: Session = Depends(get_db),
+) -> dict:
+    """Every designed run by yards gained, his and every back's (2025 on)."""
+    _known(db, player_id)
+    return carry_histogram(db, player_id, season or current_season(db))
+
+
+@router.get("/{player_id}/routes")
+@cached_response(_PLAYER_RESPONSES)
+def get_routes(
+    request: Request,
+    player_id: str,
+    season: int | None = Query(None, description="Omit for the newest season with charted routes"),
+    role: str = Query("receiver", pattern="^(receiver|passer)$"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Targets by the route run, from the participation feed (2016 on, a season behind)."""
+    _known(db, player_id)
+    return route_tree(db, player_id, role, season)

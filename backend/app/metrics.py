@@ -236,6 +236,12 @@ REGISTRY: list[MetricDef] = [
        description="Passing yards per completion. Read beside Y/A it separates a "
                    "passer who throws deep from one who completes a lot of short ones: "
                    "the gap between the two is where the incompletions live."),
+    _m("pass_td_rate", "Touchdown Rate", "TD%", "pct", "passing", "derived",
+       base="passing_tds", per=("attempts",), applies_to=["QB"],
+       description="Passing touchdowns per attempt."),
+    _m("interception_rate", "Interception Rate", "INT%", "pct", "passing", "derived",
+       base="interceptions", per=("attempts",), applies_to=["QB"], higher_is_better=False,
+       description="Interceptions per attempt."),
     _m("cpoe", "CPOE", "CPOE", 1, "passing", "avg", applies_to=["QB"],
        weight_by="attempts",
        description="Completion percentage over expected, weighted by attempts, so a "

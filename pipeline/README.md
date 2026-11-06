@@ -45,6 +45,8 @@ abbreviations and foreign keys created by earlier steps.
 .venv/bin/python ingest_plays.py --seasons 2024        # 12. every target + run lanes (Explore), and
                                                        #     every play + drive from 2025 (game pages)
 .venv/bin/python ingest_injuries.py                    # 13. the weekly injury reports (game previews)
+.venv/bin/python ingest_charting.py                    # 14. FTN play charting from 2025 and the newest
+                                                       #     participation season's routes (player page)
 ```
 
 Steps 8 and 9 are independent of 4–7 — they need only `players` (and `teams`) — but
@@ -316,6 +318,22 @@ disagree about which code a franchise used in a given season (`STL` vs `LA`). Se
   `load_team_stats` (penalties, giveaways, takeaways) and snap counts (2013+).
 - Needs `teams` and `games` first. Team codes go through `franchises.py`, and a game not
   in `games` is skipped rather than written.
+
+`ingest_charting.py` populates the **player page's two charting tables** (November 2026).
+It runs after `ingest_plays.py`, because a route is kept only for a play that is a
+stored target:
+
+- **`play_charting`**: FTN's hand charting of every play from 2025 on (play action,
+  screen, RPO, motion at the snap, no huddle, shotgun / under center / pistol, players in
+  the backfield). Published weekly in season, so the Wednesday job runs it. It feeds the
+  Splits tab's play type and formation groups. Credit FTN Data via nflverse (CC-BY-SA 4.0).
+- **`play_routes`**: the route the targeted receiver ran, from the participation feed,
+  2016 on and **a season behind** (FTN delivers a season after its Super Bowl). The
+  in-season job skips it with a warning until the feed has the season. Once it does (each
+  February), load it by hand, and backfill older seasons the same way:
+  `ingest_charting.py --only routes --seasons 2016 2017 ... 2025`. About 17,000 routes a
+  season.
+- Both are replaced per game, like every play table.
 
 `ingest_plays.py` populates the **Explore tab's play-level tables** (September 2026):
 

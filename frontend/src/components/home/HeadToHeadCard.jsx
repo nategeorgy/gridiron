@@ -111,7 +111,7 @@ export function HeadToHeadCard({ caption, ids, position, result, people, teams, 
     onChange([player.player_id, second === player.player_id ? "" : second]);
   };
   const pickSecond = (player) => onChange([ids[0], player.player_id]);
-  const compareLink = `/explore/compare?players=${ids.filter(Boolean).join(",")}`;
+  const compareLink = `/players/compare?players=${ids.filter(Boolean).join(",")}`;
 
   return (
     <Card>

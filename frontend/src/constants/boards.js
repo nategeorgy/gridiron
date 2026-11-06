@@ -285,14 +285,6 @@ export const EXPLORE_ITEMS = [
     title: "Passing Network",
   },
   {
-    id: "explore-compare",
-    label: "Player Comparison",
-    path: "/explore/compare",
-    menuDesc: "Compare up to five players side by side",
-    title: "Player Comparison",
-    description: "Up to five players side by side. Each player can be a different season.",
-  },
-  {
     id: "explore-targets",
     label: "Target Analysis",
     path: "/explore/targets",
@@ -307,6 +299,27 @@ export const EXPLORE_ITEMS = [
     menuDesc: "Search for games and seasons by any stat",
     title: "Query Builder",
     description: "Search every game and season since 2009 by any stat.",
+  },
+];
+
+// --- Players (November 2026) ---
+// The Player Dashboard (search any player, with last week's leaders) and Player
+// Comparison, moved here from Explore; its old path redirects (App.jsx).
+export const PLAYER_ITEMS = [
+  {
+    id: "players-dashboard",
+    label: "Player Dashboard",
+    path: "/players",
+    menuDesc: "Search any player, with last week's leaders",
+    title: "Player Dashboard",
+  },
+  {
+    id: "players-compare",
+    label: "Player Comparison",
+    path: "/players/compare",
+    menuDesc: "Compare up to five players side by side",
+    title: "Player Comparison",
+    description: "Up to five players side by side. Each player can be a different season.",
   },
 ];
 
@@ -326,7 +339,9 @@ export const EXPLORE_GROUP = { label: "Explore", items: EXPLORE_ITEMS, match: "/
 export const NAV_GROUPS = [
   { label: "Insight", items: [...INSIGHT_TOOLS, ...INSIGHT_BOARDS], match: "/insight" },
   { label: "Schedule", items: SCHEDULE_ITEMS, match: "/schedule" },
-  { label: "Leaderboards", items: LEADERBOARD_ITEMS, match: "/leaderboards" }
+  { label: "Leaderboards", items: LEADERBOARD_ITEMS, match: "/leaderboards" },
+  // Between Leaderboards and Teams, which Layout renders after this list.
+  { label: "Players", items: PLAYER_ITEMS, match: "/players" },
 ];
 
 /** Every Insight board, for routing and for saved-view path validation. */

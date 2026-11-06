@@ -64,17 +64,25 @@ export function buildSeasonLog(statLines, fixtures, teamId) {
       week,
       game_id: fixture.game_id,
       opponent_abbreviation: home ? fixture.away_abbreviation : fixture.home_abbreviation,
+      // Played without him (inactive, or not on the roster yet) rather than still to come.
+      final: fixture.home_score != null,
+      home,
     });
   }
 
+  // A game for another team (a player traded mid-season) takes the place of that week's
+  // fixture for his current team, which he did not play in, so no week appears twice.
   const covered = new Set(rows.map((row) => row.game_id));
   for (const line of statLines) {
-    if (!covered.has(line.game_id)) rows.push({ ...line, row_kind: "played" });
+    if (covered.has(line.game_id)) continue;
+    const slot = rows.findIndex((row) => row.week === line.week && row.row_kind !== "played");
+    if (slot >= 0) rows[slot] = { ...line, row_kind: "played" };
+    else rows.push({ ...line, row_kind: "played" });
   }
   return rows.sort((a, b) => a.week - b.week);
 }
 
-export function GameLog({ games, sections, controls, metrics, position, season, isLoading }) {
+export function GameLog({ games, sections, controls, metrics, position, season, isLoading, title = "Game Log" }) {
   const tooltip = useStatTooltip();
   const columns = sections.flatMap((section, sectionIndex) =>
     section.columns.map((id, columnIndex) => ({
@@ -89,7 +97,7 @@ export function GameLog({ games, sections, controls, metrics, position, season, 
     <section className="glass-card px-0 pb-2 pt-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-4">
         <h2 className="text-sm font-semibold tracking-tight text-fg">
-          Game Log
+          {title}
           <span className="ml-2 text-[11px] font-medium text-faint">
             {season} regular season
           </span>

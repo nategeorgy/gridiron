@@ -19,7 +19,7 @@ from app.models.player import Player
 from app.models.player_ranking import PlayerRanking
 from app.models.player_stats import PlayerStats
 from app.models.player_target_depth import PlayerTargetDepth
-from app.models.plays import PlayerRunLane, PlayTarget
+from app.models.plays import PlayCharting, PlayerRunLane, PlayRoute, PlayTarget
 from app.models.team import Team
 from app.models.team_extras import TeamPersonnel, TeamPersonnelSeason, TeamStaff
 from app.models.team_game_stats import TeamGameStats
@@ -40,6 +40,8 @@ __all__ = [
     "PlayerRanking",
     "DepthChartEntry",
     "PlayerTargetDepth",
+    "PlayCharting",
+    "PlayRoute",
     "PlayTarget",
     "PlayerRunLane",
     "User",
