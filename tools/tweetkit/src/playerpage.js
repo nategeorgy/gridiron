@@ -750,7 +750,8 @@ function cardQbSplit(pid, opts = {}) {
   const p = DATA.players[pid];
   const W = 1600, H = 900;
   const metrics = QB_SPLIT_METRICS[p.pos];
-  const plain = (text) => { const f = ppFrame(p, W, H, "By quarterback · Regular season · PPR", `${p.name} by quarterback`, null); return wrapCard(f, emptyBody(f, text)); };
+  // No headshots anywhere on this card, the player's or the quarterbacks': a plain frame and a colour dot per row.
+  const plain = (text) => { const f = frame(W, H, { kicker: "By quarterback · Regular season · PPR", title: `${p.name} by quarterback` }); return wrapCard(f, emptyBody(f, text)); };
   if (!metrics) return plain("For quarterbacks, the passing network (F1) shows the other side");
   const rows = p.byqb || [];
   const at = byqbAt();
@@ -775,13 +776,15 @@ function cardQbSplit(pid, opts = {}) {
   if (others.length >= 2 || rest.t.g > others.reduce((total, g) => total + g.t.g, 0)) shown.push({ ...rest, kind: "rest" });
   const seasons = shown.flatMap((g) => g.games.map((x) => x[0]));
   const lo = Math.min(...seasons), hi = Math.max(...seasons);
-  const fr = ppFrame(p, W, H, `${lo === hi ? lo : `${lo} to ${hi}`} · By quarterback · Regular season · PPR`,
-    after ? `${p.name} with ${base.name}, and since` : `${p.name} with and without ${base.name}`, null);
+  const fr = frame(W, H, {
+    kicker: `${lo === hi ? lo : `${lo} to ${hi}`} · By quarterback · Regular season · PPR`,
+    title: after ? `${p.name} with ${base.name}, and since` : `${p.name} with and without ${base.name}`,
+  });
   const { pad, w } = fr;
   const [colorA, colorB] = qbSplitColors(p.team);
 
   // Columns.
-  const nameW = 290, sx0 = pad + nameW + 14, sx1 = sx0 + 380, ppgX = sx1 + 26, ppgW = 100;
+  const nameW = 260, sx0 = pad + nameW + 14, sx1 = sx0 + 400, ppgX = sx1 + 26, ppgW = 100;
   const mx0 = ppgX + ppgW + 8, mw = (w - pad - mx0) / metrics.length;
   const maxPts = Math.max(0, ...shown.flatMap((g) => g.games.map((x) => x[2] ?? 0)));
   const axisHi = Math.min(60, Math.max(30, Math.ceil(maxPts / 10) * 10));
@@ -828,11 +831,9 @@ function cardQbSplit(pid, opts = {}) {
     const cy = y0 + i * rowH + rowH / 2;
     const isBase = g.kind === "base", isRest = g.kind === "rest";
     const color = isBase ? colorA : colorB;
-    // Who, and how many games.
-    const fr0 = Math.min(26, rowH / 2 - 14);
-    if (isRest) s += `<circle cx="${num(pad + 8 + fr0, 1)}" cy="${num(cy, 1)}" r="${num(fr0, 1)}" fill="none" stroke="${colorB}" stroke-width="2.5" stroke-dasharray="6 5"/>`;
-    else s += face(g.id, pad + 8 + fr0, cy, fr0, color, g.name);
-    const tx = pad + 8 + fr0 * 2 + 16;
+    // Who, and how many games, keyed to the dots' colour.
+    s += C(pad + 14, cy - 9, 7, { fill: color });
+    const tx = pad + 30;
     const nm = fitSize(g.name, sx0 - tx - 14, [25, 23, 21], 750);
     s += T(tx, cy - 1, nm.text, { size: nm.size, weight: 750 });
     const seen = g.games.map((x) => x[0]);

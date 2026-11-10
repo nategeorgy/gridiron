@@ -570,7 +570,8 @@ for pid, entry in players.items():
     if raw.get("by_qb"):
         entry["byqb"] = byqb_rows(raw["by_qb"])
         for x in raw["by_qb"].get("rows", []):
-            note_face({"player_id": x["qb_id"], "headshot_url": x.get("headshot_url")})
+            if x["season"] >= SEASON - 2:  # D17's faces; D25 draws none
+                note_face({"player_id": x["qb_id"], "headshot_url": x.get("headshot_url")})
     if raw.get("carries", {}).get("available"):
         entry["carries"] = pick(raw["carries"], ["bins", "mine", "league", "carries", "league_carries"])
     if raw.get("runs"):
