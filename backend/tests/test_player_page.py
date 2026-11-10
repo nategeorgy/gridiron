@@ -103,6 +103,10 @@ def test_by_quarterback_reads_the_starter_from_attempts(client: TestClient, worl
     assert by_qb["Carson Wentz"]["games"] == 1 and by_qb["Carson Wentz"]["targets"] == 6
     # The team's targets come from every stat line in the game, Worthy and the back included.
     assert by_qb["Patrick Mahomes"]["team_targets"] == 16
+    # Each row names its weeks and counts its touchdowns, so every game can be placed.
+    assert by_qb["Patrick Mahomes"]["weeks"] == [1] and by_qb["Carson Wentz"]["weeks"] == [2]
+    assert by_qb["Patrick Mahomes"]["receiving_tds"] == 1 and by_qb["Carson Wentz"]["receiving_tds"] == 0
+    assert by_qb["Patrick Mahomes"]["rushing_tds"] == 0
 
 
 def test_game_splits_name_the_quarterbacks_only_when_there_were_two(client: TestClient, world):

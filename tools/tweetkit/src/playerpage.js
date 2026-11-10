@@ -661,6 +661,212 @@ function cardByQuarterback(pid, opts = {}) {
   return wrapCard(fr, s);
 }
 
+// D25 ----------------------------------------------------- Player by quarterback
+// His career split by who threw to him: every game as a dot on a points strip, each
+// quarterback's average, and his numbers against a baseline quarterback's row (the one he
+// played the most games with, unless picked), then everyone else together. The rows are
+// the by-quarterback endpoint's (DATA.byqb_keys), and each game's points come from his
+// career log (`arc`), matched by season and week. Regular season only, like both sources.
+const QB_SPLIT_SHARE = [["Target", "share"], (t) => (t.tt ? t.tg / t.tt : null), (v) => `${(v * 100).toFixed(1)}%`];
+const QB_SPLIT_METRICS = {
+  WR: [
+    QB_SPLIT_SHARE,
+    [["Yards", "per game"], (t) => t.ry / t.g, (v) => v.toFixed(1)],
+    [["Yards", "per target"], (t) => (t.tg ? t.ry / t.tg : null), (v) => v.toFixed(1)],
+    [["Catch", "rate"], (t) => (t.tg ? t.rec / t.tg : null), (v) => `${Math.round(v * 100)}%`],
+    [["EPA per", "target"], (t) => (t.et ? t.epa / t.et : null), (v) => signed(v, 2)],
+    [["TDs per", "17 games"], (t) => (t.rtd / t.g) * 17, (v) => v.toFixed(1)],
+  ],
+  RB: [
+    [["Carries", "per game"], (t) => t.car / t.g, (v) => v.toFixed(1)],
+    QB_SPLIT_SHARE,
+    [["Scrimmage", "yds / game"], (t) => (t.ry + t.rushy) / t.g, (v) => v.toFixed(1)],
+    [["Yards per", "carry"], (t) => (t.car ? t.rushy / t.car : null), (v) => v.toFixed(1)],
+    [["Yards per", "target"], (t) => (t.tg ? t.ry / t.tg : null), (v) => v.toFixed(1)],
+    [["TDs per", "17 games"], (t) => ((t.rtd + t.rushtd) / t.g) * 17, (v) => v.toFixed(1)],
+  ],
+};
+QB_SPLIT_METRICS.TE = QB_SPLIT_METRICS.WR;
+// Each running total and the by-quarterback field it adds up.
+const QB_SUMS = { g: "games", fp: "fantasy_points", tg: "targets", tt: "team_targets", epa: "receiving_epa", et: "epa_targets",
+  rec: "receptions", ry: "receiving_yards", rtd: "receiving_tds", car: "carries", rushy: "rushing_yards", rushtd: "rushing_tds" };
+const byqbAt = () => Object.fromEntries((DATA.byqb_keys || []).map((key, i) => [key, i]));
+/** One group per quarterback over the given rows: totals, and every game as [season, week, points]. */
+function qbCollect(p, rows) {
+  const at = byqbAt();
+  const fp = 2 + (DATA.arc_keys[p.pos] || []).indexOf("fantasy_points");
+  const points = new Map((p.arc || []).map((g) => [`${g[0]}:${g[1]}`, g[fp]]));
+  const groups = new Map();
+  for (const x of rows) {
+    const id = x[at.qb_id];
+    if (!groups.has(id)) groups.set(id, { id, name: x[at.name], t: Object.fromEntries(Object.keys(QB_SUMS).map((k) => [k, 0])), games: [] });
+    const g = groups.get(id);
+    for (const [k, key] of Object.entries(QB_SUMS)) g.t[k] += x[at[key]] ?? 0;
+    for (const week of x[at.weeks] || []) g.games.push([x[at.season], week, points.get(`${x[at.season]}:${week}`)]);
+  }
+  for (const g of groups.values()) g.games.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  return groups;
+}
+/** The quarterbacks he has played with, most games first: the baseline picker. */
+const qbSplitPool = (pid) => [...qbCollect(DATA.players[pid], DATA.players[pid].byqb || []).values()]
+  .sort((a, b) => b.t.g - a.t.g).map((g) => ({ id: g.id, name: g.name, team: `${g.t.g} game${g.t.g === 1 ? "" : "s"}` }));
+const qbSplitSeasons = (pid) => [...new Set((DATA.players[pid].byqb || []).map((x) => x[0]))].sort((a, b) => a - b);
+const yearSpan = (a, b) => (a === b ? String(a) : `${a}-${String(b).slice(2)}`);
+const possessive = (name) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
+/** The baseline in the team's colour and everyone else in its second one, both readable on the card. */
+function qbSplitColors(abbr) {
+  const t = TEAMS[abbr] || {};
+  const p1 = parseHex(t.color), p2 = parseHex(t.color2);
+  const a = preferred(p1, p2);
+  const second = a && p2 && toHex(a) === toHex(p2) ? p1 : p2;
+  let b = second ? lighten(second) : null;
+  // A grey or black second colour (Bengals, Lions) reads as faded, so it gives way to a series hue.
+  if (!a || !b || hsl(b).s < 0.15 || hueGap(a, b) < 40 || Math.abs(lum(a) - lum(b)) < 0.03) b = null;
+  // A pale colour (Vikings gold) on the light theme's white card: deepen it until it holds.
+  const hold = (c) => {
+    if (theme() !== "light" || lum(c) <= 0.3) return c;
+    const { h, s, l } = hsl(c);
+    for (let next = l; next >= 0.2; next -= 0.02) { const d = fromHsl({ h, s, l: next }); if (lum(d) <= 0.3) return d; }
+    return fromHsl({ h, s, l: 0.2 });
+  };
+  const A = a ? toHex(hold(a)) : "var(--series-1)";
+  const B = b ? toHex(hold(b)) : a && hueGap(a, { r: 235, g: 104, b: 52 }) < 40 ? "var(--series-1)" : "var(--series-2)";
+  return [A, B];
+}
+/** Dots stacked away from the centre line until they stop overlapping; returns each dot's offset. */
+function swarm(xs, r, maxOff) {
+  const placed = [], out = new Array(xs.length), step = r * 1.9;
+  const offsets = [0];
+  for (let k = 1; k * step <= maxOff + 0.1; k++) offsets.push(-k * step, k * step);
+  for (const [x, i] of xs.map((x, i) => [x, i]).sort((a, b) => a[0] - b[0])) {
+    let best = offsets.find((dy) => placed.every(([px, py]) => Math.hypot(px - x, py - dy) >= r * 1.95));
+    if (best === undefined) best = offsets[placed.length % offsets.length];
+    placed.push([x, best]);
+    out[i] = best;
+  }
+  return out;
+}
+function cardQbSplit(pid, opts = {}) {
+  const p = DATA.players[pid];
+  const W = 1600, H = 900;
+  const metrics = QB_SPLIT_METRICS[p.pos];
+  const plain = (text) => { const f = ppFrame(p, W, H, "By quarterback · Regular season · PPR", `${p.name} by quarterback`, null); return wrapCard(f, emptyBody(f, text)); };
+  if (!metrics) return plain("For quarterbacks, the passing network (F1) shows the other side");
+  const rows = p.byqb || [];
+  const at = byqbAt();
+  const career = qbCollect(p, rows);
+  const base = career.get(opts.base) ?? [...career.values()].sort((a, b) => b.t.g - a.t.g)[0];
+  if (!base) return plain("No games on record");
+  const from = opts.from && opts.from !== "all" ? Number(opts.from) : -Infinity;
+  const min = Number(opts.min || 3);
+  const pool = qbCollect(p, rows.filter((x) => x[at.season] >= from && x[at.qb_id] !== base.id));
+  const first = (g) => g.games[0] ?? [Infinity, 0];
+  const others = [...pool.values()].filter((g) => g.t.g >= min).sort((a, b) => b.t.g - a.t.g).slice(0, 5)
+    .sort((a, b) => first(a)[0] - first(b)[0] || first(a)[1] - first(b)[1]);
+  // Everyone else in the window together, the quarterbacks under the minimum included.
+  const rest = { id: null, t: Object.fromEntries(Object.keys(QB_SUMS).map((k) => [k, 0])), games: [] };
+  for (const g of pool.values()) { for (const k of Object.keys(QB_SUMS)) rest.t[k] += g.t[k]; rest.games.push(...g.games); }
+  if (!rest.t.g) return plain(`No other quarterback has thrown to him${from > -Infinity ? ` since ${from}` : ""}`);
+  const last = base.games.at(-1) ?? [-Infinity, 0];
+  const after = rest.games.length > 0 && rest.games.every((g) => g[0] > last[0] || (g[0] === last[0] && g[1] > last[1]));
+  const baseName = lastName(base.name);
+  rest.name = after ? `Since ${baseName}` : `Without ${baseName}`;
+  const shown = [{ ...base, kind: "base" }, ...others.map((g) => ({ ...g, kind: "qb" }))];
+  if (others.length >= 2 || rest.t.g > others.reduce((total, g) => total + g.t.g, 0)) shown.push({ ...rest, kind: "rest" });
+  const seasons = shown.flatMap((g) => g.games.map((x) => x[0]));
+  const lo = Math.min(...seasons), hi = Math.max(...seasons);
+  const fr = ppFrame(p, W, H, `${lo === hi ? lo : `${lo} to ${hi}`} · By quarterback · Regular season · PPR`,
+    after ? `${p.name} with ${base.name}, and since` : `${p.name} with and without ${base.name}`, null);
+  const { pad, w } = fr;
+  const [colorA, colorB] = qbSplitColors(p.team);
+
+  // Columns.
+  const nameW = 290, sx0 = pad + nameW + 14, sx1 = sx0 + 380, ppgX = sx1 + 26, ppgW = 100;
+  const mx0 = ppgX + ppgW + 8, mw = (w - pad - mx0) / metrics.length;
+  const maxPts = Math.max(0, ...shown.flatMap((g) => g.games.map((x) => x[2] ?? 0)));
+  const axisHi = Math.min(60, Math.max(30, Math.ceil(maxPts / 10) * 10));
+  const ticks = Array.from({ length: axisHi / 10 + 1 }, (_, i) => i * 10);
+  const sx = lin(0, axisHi, sx0, sx1);
+  // Rows share the space, up to 120 each, and the block sits in the middle of it.
+  const headH = 54, footH = 36, rowGap = 8;
+  const room = fr.bottom + 24 - fr.top;
+  const rowH = Math.min(120, Math.floor((room - headH - footH) / shown.length));
+  const top = fr.top + Math.max(0, Math.floor((room - headH - footH - rowH * shown.length) / 2));
+  const y0 = top + headH, yEnd = y0 + rowH * shown.length;
+  let s = "";
+
+  // Header row.
+  const hy = top + 42;
+  const label = (x, text, y = hy) => { const f = fitSize(text.toUpperCase(), mw - 16, [14, 13, 12], 750); return T(x, y, f.text, { size: f.size, weight: 750, fill: "var(--faint)", ls: 1.2 }); };
+  s += T(pad + 6, hy, "QUARTERBACK", { size: 14, weight: 750, fill: "var(--faint)", ls: 1.2 });
+  s += T(sx0, top + 14, "PPR POINTS, EVERY GAME", { size: 14, weight: 750, fill: "var(--faint)", ls: 1.2 });
+  for (const v of ticks) s += T(sx(v), hy, String(v), { size: 15, weight: 600, mono: true, fill: "var(--faint)", anchor: "middle" });
+  s += T(ppgX + ppgW - 14, hy, "PPG", { size: 14, weight: 750, fill: "var(--faint)", ls: 1.2, anchor: "end" });
+  metrics.forEach(([[l1, l2]], k) => { s += label(mx0 + k * mw + 12, l1, hy - 19) + label(mx0 + k * mw + 12, l2); });
+
+  // Panels first, so the strip's grid and the baseline's dashed line draw over them.
+  shown.forEach((g, i) => {
+    const isBase = g.kind === "base", isRest = g.kind === "rest";
+    s += R(pad - 12, y0 + i * rowH + rowGap / 2, w - pad * 2 + 24, rowH - rowGap, {
+      rx: 18, fill: isBase ? mix(colorA, 13) : isRest ? mix("var(--fg)", 2) : "var(--panel)",
+      stroke: isRest ? "var(--border-strong)" : isBase ? mix(colorA, 45) : undefined, sw: 1.5, dash: isRest ? "6 5" : undefined,
+    });
+  });
+  for (const v of ticks) s += L(sx(v), y0 + 6, sx(v), yEnd - 6, { stroke: "var(--divider)", sw: 1.5 });
+  const ppg = (t) => t.fp / t.g;
+  s += L(sx(ppg(base.t)), y0 + 2, sx(ppg(base.t)), yEnd - 2, { stroke: "var(--plot-rule)", dash: "7 6", sw: 2 });
+
+  // Bars run over the rows on show, so each player's card reads at its own scale.
+  const ranges = metrics.map(([, value]) => {
+    const vals = shown.map((g) => value(g.t)).filter((v) => v != null && Number.isFinite(v));
+    const lo = Math.min(0, ...vals) * 1.12, hi = Math.max(0, ...vals) * 1.12;
+    return [lo, hi > lo ? hi : lo + 1];
+  });
+  const most = Math.max(...shown.map((g) => g.games.length));
+  const r = most > 100 ? 3.6 : most > 60 ? 4.6 : 5.8;
+  shown.forEach((g, i) => {
+    const cy = y0 + i * rowH + rowH / 2;
+    const isBase = g.kind === "base", isRest = g.kind === "rest";
+    const color = isBase ? colorA : colorB;
+    // Who, and how many games.
+    const fr0 = Math.min(26, rowH / 2 - 14);
+    if (isRest) s += `<circle cx="${num(pad + 8 + fr0, 1)}" cy="${num(cy, 1)}" r="${num(fr0, 1)}" fill="none" stroke="${colorB}" stroke-width="2.5" stroke-dasharray="6 5"/>`;
+    else s += face(g.id, pad + 8 + fr0, cy, fr0, color, g.name);
+    const tx = pad + 8 + fr0 * 2 + 16;
+    const nm = fitSize(g.name, sx0 - tx - 14, [25, 23, 21], 750);
+    s += T(tx, cy - 1, nm.text, { size: nm.size, weight: 750 });
+    const seen = g.games.map((x) => x[0]);
+    const span = seen.length ? `${yearSpan(Math.min(...seen), Math.max(...seen))} · ` : "";
+    s += T(tx, cy + 25, `${span}${g.t.g} game${g.t.g === 1 ? "" : "s"}`, { size: 18, weight: 500, fill: "var(--muted)" });
+
+    // Every game, then the average as a bar through the dots.
+    const pts = g.games.map((x) => x[2]).filter((v) => v != null);
+    const xs = pts.map((v) => clampTo(sx(v), sx0 + r, sx1 - r));
+    const ys = swarm(xs, r, rowH / 2 - r - 10);
+    xs.forEach((x, k) => { s += C(x, cy + ys[k], r, { fill: mix(color, 55), stroke: color, sw: 1.6 }); });
+    const bh = rowH - 26;
+    s += R(sx(ppg(g.t)) - 2.5, cy - bh / 2, 5, bh, { rx: 2.5, fill: "var(--fg)" });
+
+    // Points per game, then his numbers, each against the baseline: green beats it, red falls short.
+    const tone = (diff, band) => (isBase ? "var(--fg)" : diff > band ? "var(--pos)" : diff < -band ? "var(--neg)" : "var(--fg)");
+    s += T(ppgX + ppgW - 14, cy + 13, ppg(g.t).toFixed(1), { size: 36, weight: 800, mono: true, anchor: "end", fill: tone(ppg(g.t) - ppg(base.t), 0.3) });
+    metrics.forEach(([, value, fmt], k) => {
+      const x0 = mx0 + k * mw + 12, x1 = x0 + mw - 30;
+      const v = value(g.t), b = value(base.t);
+      if (v == null || !Number.isFinite(v)) { s += T(x0, cy + 4, "-", { size: 26, weight: 800, mono: true, fill: "var(--faint)" }); return; }
+      const [lo, hi] = ranges[k];
+      s += T(x0, cy + 4, fmt(v), { size: 26, weight: 800, mono: true, fill: b == null ? "var(--fg)" : tone(v - b, (hi - lo) * 0.015) });
+      const bx = lin(lo, hi, x0, x1), zero = clampTo(bx(0), x0, x1), end = clampTo(bx(v), x0, x1), by = cy + 18;
+      s += R(x0, by, x1 - x0, 8, { rx: 4, fill: mix("var(--fg)", 8) }) + R(Math.min(zero, end), by, Math.abs(end - zero), 8, { rx: 4, fill: color });
+      if (!isBase && b != null) s += R(clampTo(bx(b), x0, x1) - 1.5, by - 5, 3, 18, { fill: "var(--fg)" });
+    });
+  });
+
+  s += T(pad, yEnd + 26, `Each dot is a game. The solid bar is that quarterback's average, the dashed line ${possessive(baseName)}. Green beats the ${baseName} row, red falls short of it.`,
+    { size: 16, weight: 500, fill: "var(--muted)" });
+  return wrapCard(fr, s);
+}
+
 // D18 ----------------------------------------------------- By situation
 const SPLIT_UNIT = {
   QB: { unit: "Plays", one: "play", noun: "dropback and run", share: false },

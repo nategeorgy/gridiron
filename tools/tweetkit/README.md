@@ -65,6 +65,7 @@ node render.mjs D1,D3 --player "Jaxon Smith-Njigba"
 node render.mjs D6 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba"
 node render.mjs D12,D20 --player "Jahmyr Gibbs" --opt stat=epa
 node render.mjs D23 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba" --opt range=career
+node render.mjs D25 --player "Justin Jefferson" --opt base="Kirk Cousins" --opt from=2024 --opt min=3
 node render.mjs E1,E2,E3,E4 --team DET
 node render.mjs A12 --game 2026_07_GB_DET --opt who="Jahmyr Gibbs"
 node render.mjs F1 --opt qb="Jared Goff" --opt tf=last4 --opt sit=red_zone
@@ -187,6 +188,20 @@ tab. Each mirrors a component in `frontend/src/components/player/page/` and its 
 | D22 | This season against last | 1600x900 | Career: both seasons on one radar, and each stat as an arrow from last season's percentile to this one's | | Added Nov 5 |
 | D23 | Compare lines | 1600x900 | Compare: two players on one game chart stat, season to date week by week or season by season | Opponent, stat, range | Added Nov 5 |
 | D24 | Most similar | 1600x900 | Compare: every qualified player at the position by closeness (the site's placeholder formula), the five closest as faces, and a heat table of their percentiles beside his | | Added Nov 5 |
+
+**Career by quarterback (added Nov 10).** D17 covers the last three seasons; D25 is the whole career.
+
+| Card | Name | Size | What it shows | Controls | Status |
+|---|---|---|---|---|---|
+| D25 | Player by quarterback | 1600x900 | Receivers and backs. A row per quarterback: every regular-season game as a dot on a PPR strip, that quarterback's average as a bar, PPG, then six numbers (receivers: target share, yards per game, yards per target, catch rate, EPA per target, TDs per 17 games; backs: carries per game, target share, scrimmage yards per game, yards per carry, yards per target, TDs per 17). The baseline quarterback leads, in the team colour, and every other row is green or red against it; then everyone else together. Titled "with X, and since" when every other game came after the baseline's last, else "with and without X" | Baseline (default: most games), Others from (a season; the baseline row keeps his whole career), Min games for a row (default 3) | Added Nov 10 |
+
+D25 reads every season of the by-quarterback rows (`byqb`, packed in `BYQB_KEYS` order by `build_data.py`;
+D17 reads the first twelve and filters to three seasons itself) and places each game from the row's
+`weeks`, against his career log (`arc`). The `weeks` and touchdown fields arrived with the endpoint on
+Nov 10, so a backend older than that draws the rows without their dots. At most five other quarterbacks
+get a row (the five with the most games, in the order they played); the rest still count in the
+everyone-else row. A team whose second colour is grey or black (Bengals, Lions) gets a series hue for
+the other rows instead, and a pale one (Vikings gold) is deepened on the light theme.
 
 D1 and D6 are also on the site (Oct 21): the player page's player card and head-to-head, and the
 home page's Head to Head (`frontend/src/components/player/PlayerCard.jsx` and `HeadToHead.jsx`).

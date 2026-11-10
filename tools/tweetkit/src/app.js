@@ -115,6 +115,12 @@ const GROUPS = {
     { id: "D16", name: "Running by lane", fn: cardRunFan, wide: true, isNew: true, note: "Opportunity (backs and quarterbacks): the run fan through the line, how runs end against every back, and every carry by yards gained." },
     { id: "D17", name: "By quarterback", fn: cardByQuarterback, wide: true, isNew: true, note: "Opportunity (receivers and backs): points, target share, YPRR, TPRR and EPA per target in each quarterback's starts, by season.",
       controls: [{ key: "scope", type: "select", label: "Seasons", options: () => [["three", `${DATA.season - 2} to ${DATA.season}`], ["one", String(DATA.season)]], defaults: () => "three" }] },
+    { id: "D25", name: "Player by quarterback", fn: cardQbSplit, wide: true, isNew: true, note: "Career (receivers and backs): every game as a dot by who threw to him, each quarterback's average, and his numbers against a baseline quarterback, then everyone else together.",
+      controls: [
+        { key: "base", type: "player", label: "Baseline", pool: (pid) => qbSplitPool(pid), defaults: (pid) => qbSplitPool(pid)[0]?.id ?? "" },
+        { key: "from", type: "select", label: "Others from", options: (pid) => [["all", "Every season"], ...qbSplitSeasons(pid).slice(1).map((s) => [String(s), `${s} on`])], defaults: () => "all" },
+        { key: "min", type: "select", label: "Min games", options: [["1", "1+"], ["2", "2+"], ["3", "3+"], ["4", "4+"], ["6", "6+"]], defaults: () => "3" },
+      ] },
     { id: "D18", name: "By situation", fn: cardSituations, isNew: true, note: "Splits: points per target (touch, play) by down and distance, score, field position, play type and formation." },
     { id: "D19", name: "Game splits", fn: cardGameSplits, wide: true, isNew: true, note: "Splits: points per game at home and away, favoured or not, by implied total, roof, division and quarterback." },
     { id: "D20", name: "Career arc", fn: cardCareerArc, wide: true, isNew: true, note: "Career: every career game as a dot, a column per season, with the median game, the middle half and that season's WR24 line.",

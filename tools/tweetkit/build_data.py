@@ -477,6 +477,25 @@ for pid, raw in players_raw.items():
 # The cards built from the site's player page (November 2026). Everything is packed as
 # arrays, since it is per player and the page is near its 16 MB limit.
 pp_needed = set()
+# His numbers in each quarterback's starts, one row per season and quarterback (the
+# by-quarterback endpoint). D17 (src/playerpage.js) reads indices 0-11 and D25 the rest;
+# append, never reorder. Only weeks already played are kept, like `arc`, so a rebuild for
+# an earlier week (refresh.sh --week) places no game the cards would not otherwise show.
+BYQB_KEYS = ["season", "qb_id", "name", "games", "fantasy_points", "targets", "team_targets", "receiving_epa",
+             "epa_targets", "routes_run", "route_targets", "route_yards", "receptions", "receiving_yards",
+             "receiving_tds", "carries", "rushing_yards", "rushing_tds", "weeks"]
+
+
+def byqb_rows(response):
+    """The by-quarterback rows packed as arrays in BYQB_KEYS order."""
+    rows = []
+    for x in response.get("rows", []):
+        weeks = [w for w in x.get("weeks", []) if x["season"] < SEASON or w <= NEWEST_WEEK]
+        packed = {**x, "fantasy_points": r(x["fantasy_points"], 2), "receiving_epa": r(x["receiving_epa"], 2), "weeks": weeks}
+        rows.append([packed.get(key, 0 if key not in ("weeks", "qb_id", "name") else None) for key in BYQB_KEYS])
+    return rows
+
+
 # Every career game's parts for the game chart's stats (summed before dividing, like the
 # site's GAME_STATS), regular season only: [season, week, *ARC_KEYS[pos]].
 ARC_KEYS = {
@@ -545,15 +564,12 @@ for pid, entry in players.items():
         cons = ng.get("consensus")
         entry["next"] = {"g": game["game_id"], "home": int(bool(ng["is_home"])), "opp": defense,
                          "cons": pick(cons, ["label", "best", "worst", "as_of"]) if cons else None}
-    # Who threw to him: his numbers in each quarterback's starts, over the last three seasons.
+    # Who threw to him: his numbers in each quarterback's starts, every season. D17 reads
+    # the last three; D25 (player by quarterback) reads his whole career and places each
+    # game from its weeks, against `arc`.
     if raw.get("by_qb"):
-        bq = raw["by_qb"]
-        entry["byqb"] = [[x["season"], x["qb_id"], x["name"], x["games"], r(x["fantasy_points"], 2), x["targets"], x["team_targets"],
-                          r(x["receiving_epa"], 2), x["epa_targets"], x["routes_run"], x["route_targets"], x["route_yards"]]
-                         for x in bq.get("rows", []) if x["season"] >= SEASON - 2]
-        for x in bq.get("rows", []):
-            if x["season"] < SEASON - 2:
-                continue
+        entry["byqb"] = byqb_rows(raw["by_qb"])
+        for x in raw["by_qb"].get("rows", []):
             note_face({"player_id": x["qb_id"], "headshot_url": x.get("headshot_url")})
     if raw.get("carries", {}).get("available"):
         entry["carries"] = pick(raw["carries"], ["bins", "mine", "league", "carries", "league_carries"])
@@ -882,7 +898,7 @@ for entry in players.values():
     entry["log"] = [[g.get(k) for k in LOG_PACK] for g in entry["log"]]
 
 data = {
-    "log_keys": LOG_PACK, "arc_keys": ARC_KEYS, "pos_lines": pos_lines, "radar_keys": RADAR, "week_grid_keys": WEEK_GRID, "similar_keys": SIMILAR, "split_labels": list(split_labels), "next_games": next_games, "allows_pp": allows_pp, "sim_pool": sim_pool,
+    "log_keys": LOG_PACK, "arc_keys": ARC_KEYS, "byqb_keys": BYQB_KEYS, "pos_lines": pos_lines, "radar_keys": RADAR, "week_grid_keys": WEEK_GRID, "similar_keys": SIMILAR, "split_labels": list(split_labels), "next_games": next_games, "allows_pp": allows_pp, "sim_pool": sim_pool,
     "byes": byes, "through": team_through,
     "season": SEASON, "recap_week": RECAP_WEEK, "preview_week": PREVIEW_WEEK, "newest_week": NEWEST_WEEK, "teams": TEAMS,
     "recaps": recaps, "previews": previews,

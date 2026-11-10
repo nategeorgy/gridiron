@@ -825,7 +825,7 @@ GET /api/v1/players/index                    ← every QB/RB/WR/TE since 2009 fo
 GET /api/v1/players/{player_id}/weekly-ranks ← each game's stats ranked among everyone at the
                                                position that week. stats=, season=, scoring=
 GET /api/v1/players/{player_id}/by-quarterback ← his games by the QB with the most attempts,
-                                               season by season, as sums
+                                               season by season, as sums, with each row's weeks
 GET /api/v1/players/{player_id}/splits       ← game splits + situation splits (2025 on, FTN's
                                                play type and formation where loaded)
 GET /api/v1/players/{player_id}/next-game    ← the next fixture, this week's consensus, and

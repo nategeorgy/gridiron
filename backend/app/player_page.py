@@ -213,6 +213,8 @@ def by_quarterback(db: Session, player_id: str, position: str, config: ScoringCo
     Sums, not rates: the page divides them, so a career line is Σ/Σ across seasons
     rather than an average of season rates. Route-based rates only count games with a
     route count, since routes start in 2016 and a season in progress is hand-loaded.
+    Each row also names its weeks, so a caller holding his game log can place every
+    game (the tweet kit's player by quarterback card draws each one as a dot).
     """
     lines = db.execute(
         select(PlayerStats).where(PlayerStats.player_id == player_id, PlayerStats.season_type == "REG")
@@ -231,10 +233,11 @@ def by_quarterback(db: Session, player_id: str, position: str, config: ScoringCo
             "season": line.season, "qb_id": starter["qb_id"], "name": starter["name"],
             "headshot_url": starter["headshot_url"], "games": 0, "fantasy_points": 0.0,
             "targets": 0, "team_targets": 0, "receptions": 0, "receiving_yards": 0, "receiving_epa": 0.0,
-            "epa_targets": 0, "carries": 0, "rushing_yards": 0,
-            "routes_run": 0, "route_targets": 0, "route_yards": 0,
+            "epa_targets": 0, "carries": 0, "rushing_yards": 0, "receiving_tds": 0, "rushing_tds": 0,
+            "routes_run": 0, "route_targets": 0, "route_yards": 0, "weeks": [],
         })
         group["games"] += 1
+        group["weeks"].append(line.week)
         group["fantasy_points"] += _points(config, line, position)
         group["targets"] += line.targets or 0
         group["team_targets"] += team_targets.get((line.game_id, line.team_id), 0)
@@ -245,6 +248,8 @@ def by_quarterback(db: Session, player_id: str, position: str, config: ScoringCo
             group["epa_targets"] += line.targets or 0
         group["carries"] += line.carries or 0
         group["rushing_yards"] += line.rushing_yards or 0
+        group["receiving_tds"] += line.receiving_tds or 0
+        group["rushing_tds"] += line.rushing_tds or 0
         if line.routes_run:
             group["routes_run"] += line.routes_run
             group["route_targets"] += line.targets or 0
@@ -254,6 +259,7 @@ def by_quarterback(db: Session, player_id: str, position: str, config: ScoringCo
     for row in rows:
         row["fantasy_points"] = round(row["fantasy_points"], 2)
         row["receiving_epa"] = round(row["receiving_epa"], 3)
+        row["weeks"].sort()
     return {"player_id": player_id, "seasons": sorted({row["season"] for row in rows}, reverse=True), "rows": rows}
 
 
