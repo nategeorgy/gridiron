@@ -232,6 +232,61 @@ def _parse_player_ids(raw: str) -> tuple[str, ...] | None:
     return ids or None
 
 
+# How many stat filters one board request takes. The leaderboard's Filter button adds
+# them one at a time, so this is a guard on hand-written URLs, not a design limit.
+MAX_BOARD_FILTERS = 10
+
+# Row fields a board may filter on that are not registry metrics. Games played is on every
+# row and is the leaderboard Filter's first stat, but it is the window's denominator rather
+# than a metric anyone ranks by, so it has no registry entry.
+WHERE_ROW_FIELDS = frozenset({"games_played"})
+
+
+def _parse_where(raw: str) -> tuple[tuple[str, float | None, float | None], ...]:
+    """Parse the board's stat filters: ``metric:min:max``, comma-separated.
+
+    The Query Builder's grammar, so one URL shape means one thing across the site.
+    Either bound may be empty, and shares are fractions (0.25, not 25), exactly as the
+    rows report them. Raises ValueError (the router's 400) on an unknown metric, a bad
+    number, a range that runs backwards, or more filters than a board takes.
+
+    Unlike the percentile list, an unknown metric is refused rather than dropped: a
+    filter that silently vanished would show a board the user did not ask for while the
+    page still said it was filtered. The page drops a filter it has no metric for
+    before it asks.
+    """
+    conditions: list[tuple[str, float | None, float | None]] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, _, bounds = part.partition(":")
+        if name not in ALLOWED_INSIGHT_METRICS and name not in WHERE_ROW_FIELDS:
+            raise ValueError(f"Unknown metric '{name}' in where.")
+        low_text, _, high_text = bounds.partition(":")
+        try:
+            low = float(low_text) if low_text.strip() else None
+            high = float(high_text) if high_text.strip() else None
+        except ValueError as exc:
+            raise ValueError(f"The range for '{name}' must be numbers.") from exc
+        if low is not None and high is not None and low > high:
+            raise ValueError(f"The range for '{name}' runs backwards ({low} to {high}).")
+        if low is None and high is None:
+            continue
+        conditions.append((name, low, high))
+    if len(conditions) > MAX_BOARD_FILTERS:
+        raise ValueError(f"A board takes at most {MAX_BOARD_FILTERS} stat filters.")
+    return tuple(conditions)
+
+
+def _within(value: float | None, low: float | None, high: float | None) -> bool:
+    """Whether a row's value clears a filter. No value never does: a receiver with no
+    tracking data is not "at least 3 yards of separation"."""
+    if value is None:
+        return False
+    return (low is None or value >= low) and (high is None or value <= high)
+
+
 @router.get("/leaderboard")
 @cached_response(_LEADERBOARD_RESPONSES)
 def leaderboard(
@@ -1003,6 +1058,12 @@ def intelligence(
         "", description="Comma-separated player ids to narrow to (the M5 watchlist filter)"
     ),
     team: str = Query("", description="Team abbreviation, e.g. 'KC'"),
+    where: str = Query(
+        "",
+        description="Stat filters as metric:min:max, comma-separated; either bound may be "
+                    "empty. Shares are fractions (0.25, not 25). Narrows the output only, "
+                    "never a percentile pool.",
+    ),
     percentiles: str = Query(
         "",
         description="Comma-separated metric ids to return percentile ranks for, each "
@@ -1032,6 +1093,7 @@ def intelligence(
     try:
         config = parse_scoring(scoring)
         league_config = parse_league(league)
+        conditions = _parse_where(where)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1069,6 +1131,12 @@ def intelligence(
         abbreviation = team.strip().upper()
         rows = [row for row in rows if row.get("team_abbreviation") == abbreviation]
 
+    # Stat filters last, and on output only, like the watchlist and the team: the
+    # percentile index below is built from ``scored_league``, so "at least 20% target
+    # share" hides receivers from the board without moving anyone's percentile.
+    for metric_id, low, high in conditions:
+        rows = [row for row in rows if _within(row.get(metric_id), low, high)]
+
     descending = order == "desc"
 
     def sort_key(row: dict) -> tuple[int, float]:
@@ -1105,6 +1173,8 @@ def intelligence(
         percentile_context = {
             "metrics": list(metric_ids),
             "pool_sizes": index.pool_sizes,
+            # Per position and metric: what each rank is "out of", for colouring it.
+            "rank_pools": index.metric_pool_sizes if rank_ids else None,
             "min_games": qualify_games(window.weeks),
             "basis": "position, this season",
         }
@@ -1117,6 +1187,9 @@ def intelligence(
         "scoring": config.model_dump(), "league": league_config.model_dump(),
         "min_games": context["min_games"], "replacement": context["replacement"],
         "team": team or None,
+        "where": [
+            {"metric": metric_id, "min": low, "max": high} for metric_id, low, high in conditions
+        ] or None,
         "positions": list(position_list) if position_list else None,
         "percentiles": percentile_context or None,
     }

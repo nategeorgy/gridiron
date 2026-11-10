@@ -21,7 +21,15 @@ from app.scoring import parse_scoring
 # has to be kept in sync. What the backend must guarantee is narrower and stable —
 # that a stored path is a same-origin app route and can never become an off-site
 # redirect. The frontend, which owns the registry, rejects unknown boards at save time.
-SAVED_VIEW_SECTIONS: tuple[str, ...] = ("fantasy", "insight", "nfl", "explore", "draft")
+#
+# ⚠️ Keep it current when a section moves. The September 2026 rebuilds moved the boards to
+# /leaderboards, /teams and /schedule and nobody added them here, so every signed-in "Save
+# view" on a leaderboard was refused with a 422 until November 2026. The old sections stay
+# because views saved under them still exist, and their paths redirect.
+SAVED_VIEW_SECTIONS: tuple[str, ...] = (
+    "leaderboards", "teams", "schedule", "players", "explore",
+    "fantasy", "insight", "nfl", "draft",
+)
 
 
 # --- Shared field validators -------------------------------------------------

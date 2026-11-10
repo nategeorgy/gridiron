@@ -10,23 +10,36 @@
 // ⚠️ A column change must never cost a request. Rows already carry every stat, and the
 // percentile request names every stat the position GROUP has rather than the columns on
 // screen, so the query depends on the group, season and scoring only. That is what lets
-// Edit Columns update the table live without a round trip per tick.
+// Edit Columns update the table live without a round trip per tick. The same holds for
+// the Display menu: ranks are asked for alongside percentiles, so switching what the
+// cells show never refetches.
+//
+// The page is laid out as the "Table toolbar" mockup picked in November 2026: tabs with
+// the saved views beside them, one row of label-less filter pills, then a card holding
+// the table and its own toolbar (Filter, Display, Edit Columns, Export). Stat filters
+// (`where=`) and the sort direction (`order=`) are in the URL like everything else. Each
+// position group opens with a minimum already on (DEFAULT_FILTERS: dropbacks for
+// quarterbacks, snaps for backs and the mixed groups, targets for receivers and tight
+// ends), which the user can edit or remove like any filter.
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Select } from "../components/ui/Select";
 import { FilterBar, summarize } from "../components/ui/FilterBar";
-import { ScoringControl } from "../components/ScoringControl";
+import { PillSelect } from "../components/ui/PillSelect";
 import { StatTable, TablePager } from "../components/StatTable";
 import { ExportButton } from "../components/ExportButton";
 import { WatchlistToggle, useWatchlistFilter } from "../components/WatchlistToggle";
 import { TeamFilter } from "../components/TeamFilter";
 import { TimeframeFilter, formatWeeks } from "../components/TimeframeFilter";
-import { scoringLabel } from "../constants/scoring";
-import { SaveViewButton } from "../components/SaveViewButton";
+import { DEFAULT_SCORING, SCORING_PRESET_OPTIONS, normalizeScoring, scoringLabel } from "../constants/scoring";
 import { AvailabilityNotice } from "../components/AvailabilityNotice";
+import { BoardViews } from "../components/leaderboard/BoardViews";
 import { ColumnEditor } from "../components/leaderboard/ColumnEditor";
+import { DisplayMenu, PercentileLegend } from "../components/leaderboard/DisplayMenu";
 import { LeaderboardTabs } from "../components/leaderboard/LeaderboardTabs";
 import { PositionGroupPicker } from "../components/leaderboard/PositionGroupPicker";
+import { StatFilter, filterLabel, parseWhere, sameFilter, writeWhere } from "../components/leaderboard/StatFilter";
+import { useLiveSearchParams } from "../hooks/useLiveSearchParams";
+import { DEFAULT_DISPLAY, DISPLAY_IDS, displayMode } from "../constants/boardDisplay";
 import { buildBoardExport } from "../utils/csv";
 import { useIntelligence } from "../hooks/useInsight";
 import { useScoring } from "../hooks/useScoring";
@@ -34,12 +47,15 @@ import { useLeague } from "../hooks/useLeague";
 import { useUrlState } from "../hooks/useUrlState";
 import { useMetrics } from "../hooks/useMetrics";
 import { useSeasons } from "../hooks/useSeasons";
-import { firstAvailableColumn, isMetricAvailable, unavailableColumns } from "../utils/availability";
+import { firstAvailableColumn, isMetricAvailable, unavailableColumns, unavailableReason } from "../utils/availability";
 import { SEASON_TYPES } from "../constants";
 import {
   CUSTOM_TAB,
   DEFAULT_GROUP,
+  FILTER_STATS,
+  FILTER_STAT_IDS,
   GROUP_VALUES,
+  defaultFilters,
   LEADERBOARD_TABS,
   TAB_IDS,
   customSections,
@@ -66,6 +82,19 @@ function EditIcon() {
   );
 }
 
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10" />
+    </svg>
+  );
+}
+
+// The table card's toolbar buttons: quiet until hovered, so the Filter button and the
+// Display menu lead.
+const TOOL_BUTTON =
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] font-semibold text-fg transition hover:bg-surface-2 hover:text-accent disabled:opacity-40";
+
 export function LeaderboardView() {
   const { tab: tabParam } = useParams();
   if (!TAB_IDS.includes(tabParam)) return <Navigate to="/leaderboards/fantasy" replace />;
@@ -82,6 +111,9 @@ function Leaderboard({ tab }) {
   const [group] = useUrlState("positions", DEFAULT_GROUP, GROUP_VALUES);
   const [seasonType, setSeasonType] = useUrlState("type", "REG");
   const [team, setTeam] = useUrlState("team", "");
+  const [order, setOrder] = useUrlState("order", "desc", ["asc", "desc"]);
+  const [display, setDisplay] = useUrlState("display", DEFAULT_DISPLAY, DISPLAY_IDS);
+  const [, setLiveParams] = useLiveSearchParams();
   const [offset, setOffset] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
   const [scoring, setScoring] = useScoring();
@@ -137,8 +169,42 @@ function Leaderboard({ tab }) {
     if (presetMissing) navigate(`/leaderboards/fantasy${search}`, { replace: true });
   }, [presetMissing, navigate, search]);
 
+  // Stat filters. `where` is read raw, like `cols`: absent means the group's default
+  // filter, and empty means the user removed every filter, the default included. Only the
+  // Filter's own stats are read from it.
+  const rawWhere = searchParams.get("where");
+  const filters = useMemo(
+    () =>
+      rawWhere === null
+        ? defaultFilters(group)
+        : parseWhere(rawWhere).filter((entry) => FILTER_STAT_IDS.includes(entry.metric)),
+    [rawWhere, group],
+  );
+  // A filter on a stat the season has no data for (snaps before 2013) would empty the
+  // board, so it stays on screen, dimmed with the reason, and is not sent.
+  const inactive = Object.fromEntries(
+    filters
+      .filter((entry) => metrics[entry.metric] && !isMetricAvailable({ id: entry.metric, ...metrics[entry.metric] }, season))
+      .map((entry) => [entry.metric, unavailableReason({ id: entry.metric, ...metrics[entry.metric] }, season)]),
+  );
+  const applied = filters.filter((entry) => !inactive[entry.metric]);
+  const whereParam = writeWhere(applied);
+  // A list that is the group's default again goes back out of the URL.
+  const setFilters = (next) => {
+    const text = writeWhere(next);
+    setLiveParams(
+      (previous) => {
+        const params = new URLSearchParams(previous);
+        if (text === writeWhere(defaultFilters(group))) params.delete("where");
+        else params.set("where", text);
+        return params;
+      },
+      { replace: true },
+    );
+  };
+
   // A new tab, group or filter is a new board: back to the first page.
-  useEffect(() => setOffset(0), [tab, group, season, weeks, seasonType, team, sortMetric]);
+  useEffect(() => setOffset(0), [tab, group, season, weeks, seasonType, team, sortMetric, order, whereParam]);
 
   // Every stat the group has, not the columns on screen. See the note at the top.
   const params = useMemo(
@@ -150,14 +216,16 @@ function Leaderboard({ tab }) {
       metric: sortMetric,
       scoring,
       league,
-      order: "desc",
+      order,
       ...watchlist.params,
       ...(team ? { team } : {}),
+      ...(whereParam ? { where: whereParam } : {}),
       percentiles: pool.join(","),
+      ranks: pool.join(","),
       limit: PAGE_SIZE,
       offset,
     }),
-    [season, weeks, seasonType, group, sortMetric, scoring, league, team, pool, offset, watchlist.params.player_ids],
+    [season, weeks, seasonType, group, sortMetric, order, scoring, league, team, whereParam, pool, offset, watchlist.params.player_ids],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useIntelligence(params);
@@ -178,11 +246,21 @@ function Leaderboard({ tab }) {
   };
 
   // A tab link keeps the group and filters, and drops the sort: each tab opens on its
-  // own default order.
-  const hrefFor = (id) => `/leaderboards/${id}${withParams({ metric: null })}`;
+  // own default order, high to low.
+  const hrefFor = (id) => `/leaderboards/${id}${withParams({ metric: null, order: null })}`;
 
   const changeGroup = (value) => {
-    const query = withParams({ positions: value === DEFAULT_GROUP ? null : value });
+    const changes = { positions: value === DEFAULT_GROUP ? null : value };
+    // Filters someone changed stay, with the old group's default (if still on) swapped
+    // for the new group's. Untouched filters need nothing: the new group's default applies.
+    if (rawWhere !== null) {
+      const next = filters.flatMap((entry) =>
+        defaultFilters(group).some((fallback) => sameFilter(fallback, entry)) ? defaultFilters(value) : [entry],
+      );
+      const text = writeWhere(next);
+      changes.where = text === writeWhere(defaultFilters(value)) ? null : text;
+    }
+    const query = withParams(changes);
     const target = !isCustom && !hasPreset(value, tab) ? "fantasy" : tab;
     navigate(`/leaderboards/${target}${query}`, { replace: target === tab });
   };
@@ -202,16 +280,22 @@ function Leaderboard({ tab }) {
   // The Custom tab with no custom board yet starts one from what is on screen, and opens
   // the editor on it: there is nothing to look at on a custom board nobody has made.
   const startCustom = () => {
-    navigate(`/leaderboards/custom${withParams({ cols: columns.join(","), metric: null })}`);
+    navigate(`/leaderboards/custom${withParams({ cols: columns.join(","), metric: null, order: null })}`);
     setEditorOpen(true);
   };
 
   const customCount = rawCols === null ? 0 : parseColumns(rawCols).filter((id) => pool.includes(id)).length;
 
+  // The first click sorts high to low, a second click on the same column low to high.
   const sortByColumn = (key) => {
     // A header for a column with no data this season is inert rather than misleading.
     if (!isMetricAvailable({ id: key, ...(metrics[key] ?? {}) }, season)) return;
-    setMetric(key);
+    if (key === sortMetric) {
+      setOrder((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setMetric(key);
+      setOrder("desc");
+    }
   };
 
   // --- Page ------------------------------------------------------------------------------
@@ -225,38 +309,45 @@ function Leaderboard({ tab }) {
 
   const exportData = useMemo(() => buildBoardExport(rows, columns, metrics), [rows, columns, metrics]);
 
+  const scoringValue = normalizeScoring(scoring);
+  const exportName = `second-level-${tab}-${group === "all" ? "all" : group.replace(/,/g, "-").toLowerCase()}-${season}${weeks ? `-wk${weeks.replace(/,/g, "-")}` : ""}`;
+  const viewSummary = summarize(
+    title,
+    groupLabel,
+    season,
+    weeks ? formatWeeks(weeks.split(",").map(Number)) : "Full season",
+    team,
+    displayMode(display).label,
+    `sorted by ${metrics[sortMetric]?.short ?? sortMetric} ${order === "asc" ? "\u2191" : "\u2193"}`,
+    applied.map((entry) => filterLabel(entry, FILTER_STATS)),
+  );
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div>
         <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-accent">Leaderboards</div>
         <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-fg">{title}</h1>
         {description && <p className="mt-1 max-w-3xl text-sm text-muted">{description}</p>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <LeaderboardTabs
-          active={tab}
-          hrefFor={hrefFor}
-          isAvailable={(id) => id === CUSTOM_TAB.id || hasPreset(group, id)}
-          customCount={customCount}
-          onStartCustom={startCustom}
-        />
-        <button
-          type="button"
-          onClick={() => setEditorOpen(true)}
-          aria-haspopup="dialog"
-          aria-expanded={editorOpen}
-          className="ml-auto hidden items-center gap-2 rounded-full border bg-surface-2 px-4 py-1.5 text-[13px] font-semibold text-fg transition hover:text-accent md:inline-flex"
-          style={{ borderColor: "color-mix(in srgb, var(--accent) 55%, transparent)" }}
-        >
-          <EditIcon />
-          Edit Columns
-        </button>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div className="w-full min-w-0 md:w-auto md:flex-1">
+          <LeaderboardTabs
+            variant="underline"
+            active={tab}
+            hrefFor={hrefFor}
+            isAvailable={(id) => id === CUSTOM_TAB.id || hasPreset(group, id)}
+            customCount={customCount}
+            onStartCustom={startCustom}
+          />
+        </div>
+        <BoardViews defaultName={`${title} \u00b7 ${groupLabel}`} summary={viewSummary} />
       </div>
 
-      {/* On a phone Edit Columns rides in the folded filter row rather than taking a row
-          of its own under the tabs. */}
+      {/* One row of pills, no card, from md up; folded to a summary on a phone. */}
       <FilterBar
+        plain
+        className="flex flex-wrap items-center gap-2 max-md:p-4"
         summary={summarize(
           groupLabel,
           season,
@@ -265,40 +356,17 @@ function Leaderboard({ tab }) {
           team,
           supportsScoring && scoringLabel(scoring),
         )}
-        aside={
-          <button
-            type="button"
-            onClick={() => setEditorOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={editorOpen}
-            className="inline-flex items-center gap-1.5 rounded-full border bg-surface-2 px-3 py-1.5 text-xs font-semibold text-fg"
-            style={{ borderColor: "color-mix(in srgb, var(--accent) 55%, transparent)" }}
-          >
-            <EditIcon />
-            Columns
-          </button>
-        }
       >
-        <PositionGroupPicker value={group} onChange={changeGroup} />
-        <Select label="Season" value={season} onChange={setSeason} options={seasonOptions} />
-        <TimeframeFilter weeks={weeks} season={season} seasonType={seasonType} onChange={setWeeks} />
-        <Select label="Type" value={seasonType} onChange={setSeasonType} options={SEASON_TYPES} />
-        <TeamFilter value={team} onChange={setTeam} />
-        {supportsScoring && <ScoringControl scoring={scoring} onChange={setScoring} label="Scoring" bare />}
+        <PositionGroupPicker value={group} onChange={changeGroup} bare />
+        <span aria-hidden="true" className="mx-1 hidden h-6 w-px bg-line md:block" />
+        <PillSelect label="Season" value={season} onChange={setSeason} options={seasonOptions} changed={season !== String(currentSeason)} />
+        <TimeframeFilter variant="pill" weeks={weeks} season={season} seasonType={seasonType} onChange={setWeeks} />
+        <PillSelect label="Type" value={seasonType} onChange={setSeasonType} options={SEASON_TYPES} changed={seasonType !== "REG"} />
+        <TeamFilter variant="pill" value={team} onChange={setTeam} />
+        {supportsScoring && (
+          <PillSelect label="Scoring" value={scoringValue} onChange={setScoring} options={SCORING_PRESET_OPTIONS} changed={scoringValue !== DEFAULT_SCORING} />
+        )}
         <WatchlistToggle filter={watchlist} onChange={() => setOffset(0)} />
-        <div className="ml-auto flex items-end gap-2">
-          <SaveViewButton defaultName={`${title} · ${groupLabel}`} />
-          <ExportButton
-            filename={`second-level-${tab}-${group === "all" ? "all" : group.replace(/,/g, "-").toLowerCase()}-${season}${weeks ? `-wk${weeks.replace(/,/g, "-")}` : ""}`}
-            rows={exportData.rows}
-            columns={exportData.columns}
-            context={[
-              `Second Level: ${title} · ${groupLabel}`,
-              `${season} ${seasonType}${weeks ? ` · weeks ${weeks}` : " · full season"}${team ? ` · ${team}` : ""}`,
-              `sorted by ${metrics[sortMetric]?.label ?? sortMetric} · scoring: ${scoring}`,
-            ]}
-          />
-        </div>
       </FilterBar>
 
       <AvailabilityNotice
@@ -308,31 +376,79 @@ function Leaderboard({ tab }) {
         sortFallback={sortFellBack ? (metrics[sortMetric]?.label ?? sortMetric) : null}
       />
 
-      {columns.length ? (
-        <StatTable
-          columns={columns}
-          sections={sections}
-          rows={rows}
-          metrics={metrics}
-          sortMetric={sortMetric}
-          onSort={sortByColumn}
-          offset={offset}
-          unavailableColumns={unavailableColumns(columns, metrics, season).map((entry) => entry.id)}
-          isLoading={isLoading}
-          isError={isError}
-          error={error}
-          dimmed={isPlaceholderData}
-          emptyMessage="No players met the games threshold for these filters."
-        />
-      ) : (
-        <div className="glass-card p-8 text-center text-sm text-muted">
-          No columns on this board.{" "}
-          <button type="button" onClick={() => setEditorOpen(true)} className="font-semibold text-accent hover:underline">
-            Edit Columns
-          </button>{" "}
-          to pick some stats.
+      <div className="glass-card overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
+          <StatFilter filters={filters} onChange={setFilters} stats={FILTER_STATS} inactive={inactive} />
+          <span className="flex-1" />
+          <DisplayMenu value={display} onChange={setDisplay} />
+          <PercentileLegend mode={display} />
+          <span aria-hidden="true" className="mx-0.5 h-6 w-px bg-line" />
+          <button
+            type="button"
+            onClick={() => setEditorOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={editorOpen}
+            className={TOOL_BUTTON}
+          >
+            <EditIcon />
+            <span className="max-sm:hidden">Edit Columns</span>
+            <span className="sm:hidden">Columns</span>
+          </button>
+          <ExportButton
+            filename={exportName}
+            rows={exportData.rows}
+            columns={exportData.columns}
+            label={
+              <>
+                <DownloadIcon />
+                <span className="max-sm:hidden">Export</span>
+              </>
+            }
+            className={TOOL_BUTTON}
+            context={[
+              `Second Level: ${title} · ${groupLabel}`,
+              `${season} ${seasonType}${weeks ? ` · weeks ${weeks}` : " · full season"}${team ? ` · ${team}` : ""}`,
+              `sorted by ${metrics[sortMetric]?.label ?? sortMetric}${order === "asc" ? ", low to high" : ""} · scoring: ${scoring}`,
+              ...(applied.length ? [`filters: ${applied.map((entry) => filterLabel(entry, FILTER_STATS)).join(", ")}`] : []),
+            ]}
+          />
         </div>
-      )}
+
+        {columns.length ? (
+          <StatTable
+            bare
+            columns={columns}
+            sections={sections}
+            rows={rows}
+            metrics={metrics}
+            sortMetric={sortMetric}
+            sortOrder={order}
+            onSort={sortByColumn}
+            offset={offset}
+            display={display}
+            rankPools={data?.percentiles?.rank_pools}
+            filteredColumns={applied.map((entry) => entry.metric)}
+            unavailableColumns={unavailableColumns(columns, metrics, season).map((entry) => entry.id)}
+            isLoading={isLoading}
+            isError={isError}
+            error={error}
+            dimmed={isPlaceholderData}
+            emptyMessage={
+              applied.length
+                ? "No players match these filters."
+                : "No players met the games threshold for these filters."
+            }
+          />
+        ) : (
+          <div className="p-8 text-center text-sm text-muted">
+            No columns on this board.{" "}
+            <button type="button" onClick={() => setEditorOpen(true)} className="font-semibold text-accent hover:underline">
+              Edit Columns
+            </button>{" "}
+            to pick some stats.
+          </div>
+        )}
+      </div>
 
       {data && columns.length > 0 && (
         <p className="text-[11px] leading-relaxed text-faint">
@@ -340,7 +456,7 @@ function Leaderboard({ tab }) {
           <span className="text-muted">
             {data.min_games} game{data.min_games === 1 ? "" : "s"}
           </span>
-          . Percentiles are within each player's own position.
+          . Percentiles and ranks are within each player's own position, with 100 and #1 the best.
           {mixed ? " A dash means the stat does not apply to that player's position, or has no data." : ""}
         </p>
       )}

@@ -15,6 +15,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useGameWeeks } from "../hooks/useGames";
+import { Caret, PILL_CHANGED_STYLE, PILL_CLASS } from "./ui/PillSelect";
 
 /** Weeks 1..18 — the regular season. Post-season boards filter by type instead. */
 const WEEKS = Array.from({ length: 18 }, (_, index) => index + 1);
@@ -52,7 +53,7 @@ export function formatWeeks(weeks) {
   return `${sorted.length === 1 ? "Week" : "Weeks"} ${parts.join(", ")}`;
 }
 
-export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange }) {
+export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange, variant = "field" }) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState(null);
   const container = useRef(null);
@@ -136,19 +137,38 @@ export function TimeframeFilter({ weeks, season, seasonType = "REG", onChange })
   return (
     <div className="flex items-end gap-2" ref={container}>
       <div className="relative flex flex-col gap-1 max-md:flex-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">Timeframe</span>
-        <button
-          type="button"
-          ref={button}
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          title={label}
-          className={`glass-input min-w-[124px] max-w-[240px] truncate px-3 py-2 text-left text-sm ${
-            selected.length ? "!text-accent" : ""
-          }`}
-        >
-          {label}
-        </button>
+        {variant === "pill" ? (
+          // The leaderboards' pill row: no label above, the value says what it is.
+          <button
+            type="button"
+            ref={button}
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-label={`Weeks: ${label}`}
+            title="Weeks"
+            className={`${PILL_CLASS} max-w-[240px]`}
+            style={selected.length ? PILL_CHANGED_STYLE : undefined}
+          >
+            <span className="truncate">{label}</span>
+            <Caret />
+          </button>
+        ) : (
+          <>
+            <span className="text-xs font-medium uppercase tracking-wide text-muted">Timeframe</span>
+            <button
+              type="button"
+              ref={button}
+              onClick={() => setOpen((value) => !value)}
+              aria-expanded={open}
+              title={label}
+              className={`glass-input min-w-[124px] max-w-[240px] truncate px-3 py-2 text-left text-sm ${
+                selected.length ? "!text-accent" : ""
+              }`}
+            >
+              {label}
+            </button>
+          </>
+        )}
 
         {open &&
           anchor &&

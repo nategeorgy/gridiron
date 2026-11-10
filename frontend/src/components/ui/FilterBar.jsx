@@ -46,19 +46,22 @@ export function summarize(...parts) {
  *                   leaderboard's Edit Columns, which has its own place on desktop
  * @param footer     a part of the card that never folds, such as the schedule's week
  *                   rail: it is how those pages are navigated, not a filter on them
+ * @param plain      no card from md up, just the row of controls: the leaderboards'
+ *                   pill row. A phone still gets the folded card.
  */
 export function FilterBar({
   summary,
   className = "flex flex-wrap gap-3 p-4",
   aside = null,
   footer = null,
+  plain = false,
   children,
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
   return (
-    <div className="glass-card">
+    <div className={plain ? "max-md:glass-card" : "glass-card"}>
       <div className="flex items-center md:hidden">
         <button
           type="button"

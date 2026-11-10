@@ -7,34 +7,30 @@
 // sweep of abbreviations; the same 35 columns under General / Expected / Advanced /
 // Next Gen / Other / Opportunity read as six short tables sharing a row.
 //
-// **Percentiles.** Each value can carry its rank within that player's own position for
-// that season, as a small tinted number beneath it. Every number on a leaderboard
-// answers "how much" and almost none answer "is that a lot" — 3.0 yards of separation
-// is meaningless to most readers until it says 56th percentile. The scale DIVERGES
-// around the median rather than ramping in one direction: on a 30-column row a
-// single-direction ramp turns everything green and distinguishes nothing, while
-// neutral-at-50 makes an unusual row visible at a glance.
+// **Percentiles.** Every number on a leaderboard answers "how much" and almost none
+// answer "is that a lot": 3.0 yards of separation means little until it says 56th
+// percentile. `display` picks how a cell says it (constants/boardDisplay.js): the cell
+// tinted by its percentile, the percentile or the rank ("#12") in small type beneath,
+// the value alone, or the percentile in place of the value. One scale for all of them,
+// green at 100, yellow at the median, orange at 25, red at 0 (utils/percentileScale.js):
+// it runs through a visible middle, so on a 30-column row an ordinary player reads as
+// yellow and an unusual one stands out at a glance.
 //
 // **Direction is the API's problem, not this component's.** The backend inverts
 // `higher_is_better` before reporting, so 95th percentile always means good — even for
 // drops and interceptions. Nothing here needs to know which way a metric points.
 //
-// Column headers are click-to-sort; the active sort column is accented. Signed columns
-// (gaps and trends) are tinted positive/negative because their sign is the whole point.
+// Column headers are click-to-sort, and the page reverses the order on a second click;
+// the arrow says which way. Headers and values are centred over each other: the arrow
+// and the filter mark hang outside the label, so a sorted or filtered column's label
+// does not shift off its numbers. Signed columns (gaps and trends) are tinted
+// positive/negative because their sign is the whole point.
 import { Link } from "react-router-dom";
 import { FavoriteStar } from "./FavoriteStar";
 import { PositionTag } from "./PositionTag";
-import { formatStat, shortName } from "../utils/format";
+import { formatStat, ordinal, shortName } from "../utils/format";
 import { StatTooltip, useStatTooltip } from "./StatTooltip";
-
-/** Tailwind-free tint for a percentile, diverging around the median. */
-function percentileColor(percentile) {
-  if (percentile === null || percentile === undefined) return undefined;
-  const distance = Math.abs(percentile - 50) / 50; // 0 at the median, 1 at the extremes
-  const strength = Math.round(distance * 100);
-  const hue = percentile >= 50 ? "var(--pos)" : "var(--neg)";
-  return `color-mix(in srgb, ${hue} ${strength}%, var(--faint))`;
-}
+import { percentileFill, percentileInk, rankPercentile } from "../utils/percentileScale";
 
 /** "2016 onwards", "1999-2025", or nothing when a metric spans the whole range. */
 function seasonWindow(metric) {
@@ -65,6 +61,17 @@ export function StatTable({
   // tooltip tells them something true about 2004.
   unavailableColumns = [],
   showPercentiles = true,
+  // How a cell is drawn: "shaded" | "percentile" | "rank" | "values" | "percentiles".
+  // "percentile" is what the table drew before the Display menu existed.
+  display = "percentile",
+  // Per position and metric, how many players a rank is out of (the API's rank_pools),
+  // for colouring "#12" by where it sits.
+  rankPools = null,
+  sortOrder = "desc",
+  // Columns a stat filter is on: their headers carry a small funnel.
+  filteredColumns = [],
+  // No card of its own, for a table drawn inside a card that also holds its toolbar.
+  bare = false,
   isLoading = false,
   isError = false,
   error = null,
@@ -73,6 +80,9 @@ export function StatTable({
 }) {
   const signed = new Set(signedColumns);
   const unavailable = new Set(unavailableColumns);
+  const filtered = new Set(filteredColumns);
+  const mode = showPercentiles ? display : "values";
+  const shaded = mode === "shaded" || mode === "percentiles";
   const tooltip = useStatTooltip();
 
   // Which column starts each section, so a divider can mark the boundary.
@@ -115,6 +125,7 @@ export function StatTable({
         }
         onBlur={tooltip.hide}
         tabIndex={isUnavailable ? -1 : 0}
+        aria-sort={sortMetric === key && !isUnavailable ? (sortOrder === "asc" ? "ascending" : "descending") : undefined}
         className={`whitespace-nowrap px-3 py-2.5 text-center align-bottom transition ${
           sectionStart.has(key) ? "border-l border-line" : ""
         } ${
@@ -123,10 +134,23 @@ export function StatTable({
             : `cursor-pointer hover:text-fg ${sortMetric === key ? "text-accent" : ""}`
         }`}
       >
-        {/* The id is the last resort, and only reachable with a stale /metrics
-            cache — but underscores in a header look like a crash, so soften it. */}
-        {metrics[key]?.short ?? key.replace(/_/g, " ")}
-        {sortMetric === key && !isUnavailable ? " ↓" : ""}
+        <span className="relative inline-block">
+          {filtered.has(key) && (
+            <span className="absolute right-full top-1/2 -translate-y-1/2 pr-1 text-accent" title="Filtered">
+              <svg viewBox="0 0 16 16" className="h-2.5 w-2.5" fill="currentColor" aria-hidden="true">
+                <path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z" />
+              </svg>
+            </span>
+          )}
+          {/* The id is the last resort, and only reachable with a stale /metrics
+              cache, but underscores in a header look like a crash, so soften it. */}
+          {metrics[key]?.short ?? key.replace(/_/g, " ")}
+          {sortMetric === key && !isUnavailable && (
+            <span className="absolute left-full top-0 pl-0.5 font-mono" aria-hidden="true">
+              {sortOrder === "asc" ? "\u2191" : "\u2193"}
+            </span>
+          )}
+        </span>
       </th>
     );
   };
@@ -135,9 +159,9 @@ export function StatTable({
   // team and games beneath), so the stats start on the first screen rather than after
   // ~330px of name and team. From md up it is the four columns it has always been.
   return (
-    <div className="glass-card overflow-x-auto">
+    <div className={bare ? "overflow-x-auto" : "glass-card overflow-x-auto"}>
       <StatTooltip tip={tooltip.tip} />
-      <table className="w-full text-left text-sm md:min-w-[720px]">
+      <table className={`w-full text-left text-sm md:min-w-[720px] ${shaded ? "board-shaded" : ""}`}>
         <thead>
           {sections && (
             <tr className="border-b border-line text-[10px] uppercase tracking-[0.11em] text-faint">
@@ -162,9 +186,9 @@ export function StatTable({
             </tr>
           )}
           <tr className="border-b border-line text-xs uppercase tracking-wide text-faint">
-            <th className="hidden px-3 py-2.5 text-right md:table-cell">#</th>
+            <th className="hidden px-3 py-2.5 text-center md:table-cell">#</th>
             <th className="pin-col px-3 py-2.5 max-md:pl-10">Player</th>
-            <th className="hidden px-3 py-2.5 md:table-cell">Team</th>
+            <th className="hidden px-3 py-2.5 text-center md:table-cell">Team</th>
             <th className="hidden px-3 py-2.5 text-center md:table-cell">G</th>
             {columns.map(headerCell)}
           </tr>
@@ -172,7 +196,7 @@ export function StatTable({
         <tbody className={dimmed ? "opacity-60 transition" : "transition"}>
           {rows.map((row, index) => (
             <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
-              <td className="stat-num hidden px-3 py-2 text-right text-faint md:table-cell">{offset + index + 1}</td>
+              <td className="stat-num hidden px-3 py-2 text-center text-faint md:table-cell">{offset + index + 1}</td>
               <td className="pin-col px-3 py-2 font-medium max-md:pl-2 max-md:pr-2.5">
                 {/* Phone: rank, then the name over position, team and games. */}
                 <span className="flex items-start gap-2 md:hidden">
@@ -215,7 +239,7 @@ export function StatTable({
                   position colours (shared with the draft room) make a mixed-position
                   board scannable by shape rather than by reading. */}
               <td className="hidden whitespace-nowrap px-3 py-2 md:table-cell">
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <PositionTag position={row.position} />
                   <span className="stat-num text-xs text-muted">
                     {row.team_abbreviation ?? "—"}
@@ -225,30 +249,48 @@ export function StatTable({
               <td className="stat-num hidden px-3 py-2 text-center text-muted md:table-cell">{row.games_played}</td>
               {columns.map((key) => {
                 const value = row[columnKey(key)];
-                const percentile = showPercentiles ? row.percentiles?.[key] : undefined;
+                const percentile = row.percentiles?.[key];
+                const hasPercentile = percentile !== undefined && percentile !== null;
+                const rank = row.ranks?.[key];
+                const pool = rankPools?.[row.position]?.[key];
+                const text = formatStat(value, metrics[key]?.format);
+                const tip = [
+                  `${metrics[key]?.label ?? key}: ${text}`,
+                  hasPercentile && `${ordinal(percentile)} percentile`,
+                  rank && `#${rank}${pool ? ` of ${pool}` : ""} ${row.position}s`,
+                ].filter(Boolean).join(" \u00b7 ");
+                const dash = (
+                  <span className="text-[10px] font-semibold text-faint" aria-hidden="true">
+                    &ndash;
+                  </span>
+                );
                 return (
                   <td
                     key={key}
-                    className={`stat-num px-3 py-2 text-center ${
+                    title={mode === "values" ? undefined : tip}
+                    className={`stat-cell stat-num px-3 py-2 text-center ${
                       sectionStart.has(key) ? "border-l border-line" : ""
                     } ${valueClass(key, value)}`}
+                    style={shaded && hasPercentile ? { background: percentileFill(percentile) } : undefined}
                   >
                     <span className="flex flex-col items-center leading-tight">
-                      <span>{formatStat(value, metrics[key]?.format)}</span>
-                      {showPercentiles &&
-                        (percentile === undefined || percentile === null ? (
-                          <span className="text-[10px] font-semibold text-faint" aria-hidden="true">
-                            &ndash;
-                          </span>
-                        ) : (
-                          <span
-                            className="text-[10px] font-semibold"
-                            style={{ color: percentileColor(percentile) }}
-                            title={`${percentile}th percentile among ${row.position}s this season`}
-                          >
+                      {mode === "percentiles" ? (
+                        hasPercentile ? <span className="font-semibold text-fg">{percentile}</span> : dash
+                      ) : (
+                        <span>{text}</span>
+                      )}
+                      {mode === "percentile" &&
+                        (hasPercentile ? (
+                          <span className="text-[10px] font-semibold" style={{ color: percentileInk(percentile) }}>
                             {percentile}
                           </span>
-                        ))}
+                        ) : dash)}
+                      {mode === "rank" &&
+                        (rank ? (
+                          <span className="text-[10px] font-semibold" style={{ color: percentileInk(rankPercentile(rank, pool)) }}>
+                            #{rank}
+                          </span>
+                        ) : dash)}
                     </span>
                   </td>
                 );

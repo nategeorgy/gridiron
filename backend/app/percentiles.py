@@ -119,6 +119,13 @@ class PercentileIndex:
             )
             for position in POSITIONS
         }
+        # How many qualified players each (position, metric) pool holds, which is what a
+        # rank is "out of". Smaller than ``pool_sizes`` wherever a stat is missing for some
+        # of the pool (tracking stats above all), so a board colouring "#40" by where it
+        # sits must read this rather than the position's head count.
+        self.metric_pool_sizes: dict[str, dict[str, int]] = {}
+        for (position, metric_id), pool in self._pools.items():
+            self.metric_pool_sizes.setdefault(position, {})[metric_id] = len(pool.values)
 
     def ranks_for_row(self, row: dict, metric_ids: tuple[str, ...]) -> dict[str, int]:
         """Positional rank for one row's metrics — 1 is always the best (M13).

@@ -847,7 +847,11 @@ GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / 
                                                same M12 percentiles=/team=/positions=/
                                                weeks= params, plus ranks= (M13): a
                                                positional rank per metric (1 = best),
-                                               from the same pool as the percentile
+                                               from the same pool as the percentile,
+                                               with rank_pools (what each rank is out
+                                               of). where=metric:min:max,... (November
+                                               2026) filters the rows after scoring,
+                                               never the pools; order=asc|desc
 GET /api/v1/stats/vegas                      ← M6 one week's market: players ranked by
                                                implied team total, or the slate.
                                                view=players|games
@@ -1006,6 +1010,15 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
     attempts repeat, as box score on Fantasy. **FPPG leads every preset**, unlabelled.
   - **Edit Columns** opens a slide-out that adds, removes, searches and drag-reorders,
     live; any edit turns the board into Custom.
+  - **The "Table toolbar" layout** (November 2026): tabs with **Save view** and **Views**
+    beside them, one row of filter pills, then a card holding the table and its toolbar:
+    **Filter** (a range on games, snaps, targets, carries, receptions, attempts, dropbacks
+    or completions), **Display** (values shaded by percentile, the percentile or the rank
+    "#12" beneath, values only, percentiles shaded), Edit Columns and Export. Each group
+    opens with a removable minimum: QB 30 dropbacks, RB, RB/WR/TE and All 30 snaps, WR 10
+    targets, TE and WR/TE 12 targets (`DEFAULT_FILTERS`).
+    Headers sort high to low, then low to high. The team boards use the same layout
+    with "#" ranks and no shading.
 
   Tab, group and a custom column list all live in the URL. The third, **Players**
   (November 2026), holds the **Player Dashboard** (`/players`) and **Player Comparison**
@@ -1515,6 +1528,13 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       `/schedule/sos`, the Vegas and By Team paths to `/schedule/games`, and the Insight boards
       to the Expected leaderboard tab at All. Frontend only: the backend endpoints stay
       (`/stats/vegas` uncalled by the site)
+- [x] Leaderboard toolbar (November 2026), from two rounds of mockups: the "Table toolbar"
+      layout and the Display menu above, on the player and team boards. **Stat filters**
+      (`where=` on `/stats/intelligence`), a **two-way sort** (`order=`), five display modes on
+      one smooth green-yellow-orange-red scale (`--pctl-*`), centred columns, and **saved views
+      for signed-out visitors** (in the browser, moved to the account on sign-in). Fixed
+      `SAVED_VIEW_SECTIONS`, which had refused every signed-in leaderboard save since the
+      September rebuilds. No migration
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is
@@ -1691,6 +1711,17 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   out of band is a fix that only one environment has. It belongs in a migration.
   `tests/test_rls.py` now enumerates the schema rather than a hand-maintained list, so
   the next missed table fails the suite instead of shipping
+- ⚠️ **A new top-level section needs adding to `SAVED_VIEW_SECTIONS`** in
+  `backend/app/schemas/account.py`, or saving a view there 422s. The September 2026 rebuilds
+  moved the boards to `/leaderboards`, `/teams`, `/schedule` and `/players` without it, and
+  every signed-in "Save view" on a leaderboard failed until November 2026
+- **A leaderboard stat filter narrows the board, never the pool** (`where=`, applied after
+  scoring like the team and watchlist filters), and it runs server-side because the board
+  pages 50 rows: filtering the page in the browser would miss everyone on later pages.
+  Shares are typed as percentages and stored as fractions, the Query Builder's grammar
+- **A rank is coloured by where it sits in its own pool** (`rank_pools`), never by the
+  percentile beside it: ties share a rank, so every receiver with no fumbles is #1 while his
+  percentile is a mid-rank in the high 60s
 - **Board filters belong in the URL** (`useUrlState`), not `useState` — that is what
   makes a board link shareable and a saved view worth saving. Keep defaults out of the
   query string, and pass a whitelist for anything the API would reject
