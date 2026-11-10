@@ -10,11 +10,12 @@
 // only says so in its tooltip.
 import { useQuery } from "@tanstack/react-query";
 import { Select } from "./ui/Select";
+import { PillSelect } from "./ui/PillSelect";
 import { getTeams } from "../services/teams";
 
 const ALL = { value: "", label: "All teams" };
 
-export function TeamFilter({ value, onChange }) {
+export function TeamFilter({ value, onChange, variant = "select" }) {
   const { data } = useQuery({
     queryKey: ["teams"],
     queryFn: getTeams,
@@ -27,6 +28,10 @@ export function TeamFilter({ value, onChange }) {
       .map((team) => ({ value: team.abbreviation, label: team.abbreviation }))
       .sort((a, b) => a.label.localeCompare(b.label)),
   ];
+
+  if (variant === "pill") {
+    return <PillSelect label="Team" value={value} onChange={onChange} options={options} changed={Boolean(value)} />;
+  }
 
   return (
     <Select

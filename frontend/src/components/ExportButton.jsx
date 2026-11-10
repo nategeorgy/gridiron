@@ -3,7 +3,7 @@
 // downloads is exactly what the user is looking at.
 import { downloadCsv, slugify, toCsv } from "../utils/csv";
 
-export function ExportButton({ filename, rows, columns, context = [], disabled = false }) {
+export function ExportButton({ filename, rows, columns, context = [], disabled = false, label = "Export CSV", className }) {
   const empty = !rows || rows.length === 0;
 
   const handleExport = () => {
@@ -17,9 +17,9 @@ export function ExportButton({ filename, rows, columns, context = [], disabled =
       onClick={handleExport}
       disabled={disabled || empty}
       title={empty ? "Nothing to export yet" : `Download ${rows.length} rows as CSV`}
-      className="btn-ghost px-3 py-2 text-sm transition enabled:hover:!text-accent disabled:opacity-40"
+      className={className ?? "btn-ghost px-3 py-2 text-sm transition enabled:hover:!text-accent disabled:opacity-40"}
     >
-      Export CSV
+      {label}
     </button>
   );
 }

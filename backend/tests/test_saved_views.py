@@ -66,7 +66,11 @@ def test_off_site_and_out_of_bounds_paths_are_rejected(client_a, path):
 
 @pytest.mark.parametrize(
     "path",
-    ["/fantasy/leaders", "/insight/vorp", "/nfl/passing", "/explore/scatter", "/explore"],
+    [
+        "/fantasy/leaders", "/insight/vorp", "/nfl/passing", "/explore/scatter", "/explore",
+        # The sections the September 2026 rebuilds moved the boards to.
+        "/leaderboards/usage", "/teams/leaderboards/passing", "/schedule/sos", "/players/compare",
+    ],
 )
 def test_real_app_routes_are_accepted(client_a, path):
     """The validator is an envelope around the app's own sections, not a blocklist."""

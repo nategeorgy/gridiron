@@ -4,10 +4,11 @@
 // still ranked among tight ends.
 import { POSITION_GROUPS } from "../../constants/leaderboards";
 
-export function PositionGroupPicker({ value, onChange }) {
+export function PositionGroupPicker({ value, onChange, bare = false }) {
   return (
     <div className="flex flex-col gap-1 max-md:!basis-full">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted">Position</span>
+      {/* The leaderboard's pill row leaves the label off: the picks say what they are. */}
+      <span className={`text-xs font-medium uppercase tracking-wide text-muted ${bare ? "md:hidden" : ""}`}>Position</span>
       {/* On a phone a four-column grid: the singles on one row, the groups under them,
           rather than seven pills wrapping wherever they happen to break. */}
       <div

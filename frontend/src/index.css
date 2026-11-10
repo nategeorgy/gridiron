@@ -49,6 +49,22 @@
        amber, and amber tinted over a dark card reads brown, not yellow. */
     --scale-mid: #facc15;
 
+    /* The leaderboard's percentile scale (November 2026): green at 100, yellow at the
+       median, orange at 25, red at 0. Fills are mixed with transparent over the card,
+       from --pctl-fill-lo at the median to --pctl-fill-hi at the ends, and stay dark
+       enough on this theme for --fg to clear 4.5:1 on every one. Ink is the small
+       percentile or rank under a value, readable on the bare card. */
+    --pctl-green: #16a34a;
+    --pctl-yellow: #eab308;
+    --pctl-orange: #ea580c;
+    --pctl-red: #dc2626;
+    --pctl-ink-green: #4ade80;
+    --pctl-ink-yellow: #facc15;
+    --pctl-ink-orange: #fb923c;
+    --pctl-ink-red: #f87171;
+    --pctl-fill-lo: 26%;
+    --pctl-fill-hi: 56%;
+
     /* Categorical chart series (M4). A fixed order, never cycled — a series keeps
        its hue when the set is filtered. Deliberately NOT the accent/pos/neg/warn
        tokens: those carry meaning ("good", "bad") that a series identity must not
@@ -133,6 +149,17 @@
     --neg: #dc4c4c;
     --warn: #b9770a;
     --scale-mid: #eab308;
+
+    --pctl-green: #22c55e;
+    --pctl-yellow: #facc15;
+    --pctl-orange: #f97316;
+    --pctl-red: #ef4444;
+    --pctl-ink-green: #15803d;
+    --pctl-ink-yellow: #946000;
+    --pctl-ink-orange: #c2410c;
+    --pctl-ink-red: #b91c1c;
+    --pctl-fill-lo: 34%;
+    --pctl-fill-hi: 62%;
 
     /* The same five hues, re-stepped for the light surface — not an automatic
        flip of the dark values. Validated independently against the light card. */
@@ -311,6 +338,12 @@
   .btn-ghost:disabled {
     opacity: 0.4;
   }
+}
+
+/* A shaded leaderboard (the Display menu's tinted modes): a hairline of the page colour
+   between tinted cells, so two neighbours of the same tint still read as two cells. */
+.board-shaded .stat-cell {
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--bg) 35%, transparent);
 }
 
 /* A table's first column, pinned on a phone while the stats scroll sideways under it.

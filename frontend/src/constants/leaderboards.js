@@ -86,6 +86,35 @@ export const POSITION_GROUPS = [
   { value: "all", label: "All", positions: ["QB", "RB", "WR", "TE"], divider: true },
 ];
 export const DEFAULT_GROUP = "RB,WR,TE";
+
+// The stats the leaderboard's Filter offers (November 2026): volume, the things a minimum
+// is set on. `label` is the word on the filter's chip and in its menu.
+export const FILTER_STATS = [
+  { id: "games_played", label: "Games" },
+  { id: "snap_count", label: "Snaps" },
+  { id: "targets", label: "Targets" },
+  { id: "carries", label: "Carries" },
+  { id: "receptions", label: "Receptions" },
+  { id: "attempts", label: "Attempts" },
+  { id: "dropbacks", label: "Dropbacks" },
+  { id: "completions", label: "Completions" },
+];
+export const FILTER_STAT_IDS = FILTER_STATS.map((stat) => stat.id);
+
+// The filter each position group opens with (Nate's, November 2026), a total over the
+// window. It shows as a chip like any other and can be removed; a board with no `where`
+// in its URL has its group's default, and an empty `where=` means the user removed it.
+const atLeast = (metric, min) => [{ metric, min, max: null }];
+export const DEFAULT_FILTERS = {
+  QB: atLeast("dropbacks", 30),
+  RB: atLeast("snap_count", 30),
+  WR: atLeast("targets", 10),
+  TE: atLeast("targets", 12),
+  "WR,TE": atLeast("targets", 12),
+  "RB,WR,TE": atLeast("snap_count", 30),
+  all: atLeast("snap_count", 30),
+};
+export const defaultFilters = (group) => DEFAULT_FILTERS[group] ?? [];
 export const GROUP_VALUES = POSITION_GROUPS.map((group) => group.value);
 export const groupFor = (value) =>
   POSITION_GROUPS.find((group) => group.value === value) ??
