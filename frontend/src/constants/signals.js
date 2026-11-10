@@ -22,7 +22,7 @@ export const SIGNALS_SEASON = 2026;
  * included; a pair the reader picks gets the whole season again.
  */
 export const FEATURED_MATCHUP = {
-  players: ["00-0040735", "00-0039919"], // Luther Burden III, Rome Odunze
+  players: ["00-0038124", "00-0040667"], // Christian Watson, Matthew Golden
   caption: `${SIGNALS_SEASON} season`,
 };
 
@@ -36,7 +36,7 @@ export const FEATURED_MATCHUP = {
  * total, so the week flipping before these are re-picked never shows last week's game.
  */
 export const FEATURED_GAMES = {
-  recap: "2026_07_GB_DET", // Packers 17 at Lions 20
+  recap: "2026_09_CIN_ATL", // Bengals 34 at Falcons 17
   preview: "2026_08_BAL_BUF", // Ravens at Bills, a 53.5 total
 };
 
@@ -67,33 +67,36 @@ export const HIGHLIGHTED_VIZ = {
  */
 export const RECORD_BOOK = {
   season: 2026,
-  week: 7,
+  week: 9,
   entries: [
     {
-      // A record in PPR, half-PPR and standard, ahead of Cooper Kupp's 2021 and Tyreek
-      // Hill's 2023. Wes Welker's 2011, ahead of him through Week 6, had its bye in Week 7.
-      kind: "leaders",
-      playerId: "00-0038543", // Jaxon Smith-Njigba
-      title: "Most fantasy points by a wide receiver through Week 7",
-      query: { grain: "seasons", positions: "WR", last_week: 7, where: "fantasy_points::", sort: "fantasy_points", order: "desc", limit: 3 },
-    },
-    {
-      // 59, a record ahead of Zach Ertz's 57 in 2018. His 78 targets tie Ertz's for the most.
+      // 73, a record by 12: Zach Ertz had 61 in 2018, Dallas Clark (2009) and T.J. Hockenson
+      // (2023) 60. His 94 targets are a record too, 10 clear of Ertz.
       kind: "leaders",
       playerId: "00-0037744", // Trey McBride
-      title: "Most catches by a tight end through Week 7",
+      title: "Most catches by a tight end through Week 9",
       stat: "receptions",
       format: 0,
-      query: { grain: "seasons", positions: "TE", last_week: 7, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
+      query: { grain: "seasons", positions: "TE", last_week: 9, where: "receptions::", sort: "receptions", order: "desc", limit: 3 },
     },
     {
-      // One of 15 such games since 2009, and the only one this season. The open ranges on
-      // catches and touchdowns are there so the rows carry them for the line.
+      // 384 yards and 5 touchdowns on 21 of 35 against the Chargers. The others are Drew
+      // Brees (Week 12, 2009), Andrew Luck (Week 13, 2014) and Mitchell Trubisky (Week 4,
+      // 2018). At 380+ yards it is the only one, which the card would print as "One of 1".
       kind: "count",
-      playerId: "00-0040735", // Luther Burden III
-      title: "130+ receiving yards on 4 or fewer targets",
-      query: { grain: "games", positions: "RB,WR,TE", where: "receiving_yards:130:,targets::4,receptions::,receiving_tds::", sort: "receiving_yards", order: "desc", limit: 50 },
-      line: (row) => `${row.receptions} catches on ${row.targets} targets, ${row.receiving_yards} yds, ${row.receiving_tds} TD`,
+      playerId: "00-0039163", // C.J. Stroud
+      title: "350+ passing yards and 5+ touchdown passes on 21 or fewer completions",
+      query: { grain: "games", positions: "QB", where: "passing_yards:350:,passing_tds:5:,completions::21,attempts::", sort: "passing_yards", order: "desc", limit: 50 },
+      line: (row) => `${row.completions} of ${row.attempts}, ${row.passing_yards} yds, ${row.passing_tds} TD`,
+    },
+    {
+      // 21 carries for 31 yards against Philadelphia. The fewest yards of the eight are
+      // Chris Ivory's 26 on 23 carries and Mike Gillislee's 28 on 24, both in 2015.
+      kind: "count",
+      playerId: "00-0035250", // Devin Singletary
+      title: "21+ carries and 31 or fewer rushing yards",
+      query: { grain: "games", positions: "RB", where: "carries:21:,rushing_yards::31", sort: "carries", order: "desc", limit: 50 },
+      line: (row) => `${row.carries} carries, ${row.rushing_yards} yds`,
     },
   ],
 };
