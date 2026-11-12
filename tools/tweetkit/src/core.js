@@ -103,7 +103,7 @@ function T(x, y, text, o = {}) {
 }
 const R = (x, y, w, h, o = {}) => `<rect x="${num(x, 1)}" y="${num(y, 1)}" width="${num(Math.max(0, w), 1)}" height="${num(Math.max(0, h), 1)}" rx="${o.rx ?? 0}" fill="${o.fill ?? "none"}"${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw ?? 1}"` : ""}${o.opacity != null ? ` opacity="${o.opacity}"` : ""}${o.dash ? ` stroke-dasharray="${o.dash}"` : ""}/>`;
 const L = (x1, y1, x2, y2, o = {}) => `<line x1="${num(x1, 1)}" y1="${num(y1, 1)}" x2="${num(x2, 1)}" y2="${num(y2, 1)}" stroke="${o.stroke ?? "var(--divider)"}" stroke-width="${o.sw ?? 1}"${o.dash ? ` stroke-dasharray="${o.dash}"` : ""}${o.cap ? ` stroke-linecap="${o.cap}"` : ""}${o.opacity != null ? ` opacity="${o.opacity}"` : ""}/>`;
-const C = (cx, cy, r, o = {}) => `<circle cx="${num(cx, 1)}" cy="${num(cy, 1)}" r="${num(r, 1)}" fill="${o.fill ?? "none"}"${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw ?? 1}"` : ""}${o.opacity != null ? ` opacity="${o.opacity}"` : ""}/>`;
+const C = (cx, cy, r, o = {}) => `<circle cx="${num(cx, 1)}" cy="${num(cy, 1)}" r="${num(r, 1)}" fill="${o.fill ?? "none"}"${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw ?? 1}"` : ""}${o.dash ? ` stroke-dasharray="${o.dash}"` : ""}${o.opacity != null ? ` opacity="${o.opacity}"` : ""}/>`;
 const mix = (color, amount, other = "transparent") => `color-mix(in srgb, ${color} ${amount}%, ${other})`;
 
 /** A headshot in a circle, ringed. Initials when the image is missing. */
@@ -166,6 +166,35 @@ function pill(text, x, cy, o = {}) {
 function pctColor(p) {
   if (p == null) return "var(--faint)";
   return p >= 50 ? mix("var(--pos)", Math.round(((p - 50) / 50) * 100), "var(--scale-mid)") : mix("var(--neg)", Math.round(((50 - p) / 50) * 100), "var(--scale-mid)");
+}
+/**
+ * A percentile's line from `x0` to `x1` and the bubble at its end holding the number.
+ * `open` is a percentile ranked as if qualified (the site's utils/qualifiers.js): a player
+ * below his position's minimum per team game is ranked against the qualified pool without
+ * being in it, so the line is dashed and the bubble an unfilled dashed ring.
+ */
+function pctMark(x0, x1, cy, pc, open, o = {}) {
+  const color = pctColor(pc), sw = o.sw ?? 8, r = o.r ?? 20;
+  let s = L(x0, cy, x1, cy, open ? { stroke: color, sw, dash: `${sw * 1.2} ${sw}` } : { stroke: color, sw, cap: "round" });
+  s += open
+    ? C(x1, cy, r, { fill: "var(--card)", stroke: color, sw: o.ring ?? 3, dash: `${r * 0.32} ${r * 0.22}` })
+    : C(x1, cy, r, { fill: mix(color, 30, "var(--card)"), stroke: color, sw: o.ring ?? 3 });
+  return s + T(x1, cy + (o.dy ?? r * 0.35), pc, { size: o.size ?? 18, weight: 800, anchor: "middle", mono: true, fill: open ? "var(--muted)" : "var(--fg)" });
+}
+/** Whether player `p`'s percentile for `id` is as if qualified. */
+const asIf = (p, id) => Boolean(p?.asif?.includes(id));
+/**
+ * The line under a card with open percentiles, or "" for none: "Below the minimum: 65 of
+ * 96 routes (12 per team game). Open bubbles: where Palmer would rank if qualified."
+ */
+function asIfNote(p) {
+  if (!p?.asif?.length) return "";
+  const last = String(p.name).replace(/\s+(Jr\.?|Sr\.?|II|III|IV|V)$/i, "").split(" ").slice(-1)[0];
+  const m = p.min;
+  const head = m && m.met === false
+    ? `Below the minimum: ${m.value.toLocaleString()} of ${m.needed.toLocaleString()} ${m.measure} (${m.per_team_game} per team game).`
+    : "Too few games to qualify.";
+  return `${head} Open bubbles: where ${last} would rank if qualified.`;
 }
 /** Rank of N to a colour: 1 green, N red. */
 function rankColor(rank, of = 32) {

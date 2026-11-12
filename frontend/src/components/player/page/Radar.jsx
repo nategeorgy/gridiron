@@ -4,7 +4,12 @@
 // card's red-to-green scale, and his number sits under each label. Two players: two
 // translucent shapes in the series colours, and both percentiles under each label.
 // `hot` / `onHot` link it to a list beside it, so hovering a stat lights it in both.
+//
+// A percentile ranked as if qualified (`row.as_if`, utils/qualifiers.js) is an open point:
+// an unfilled dashed ring, the card's open bubble. The shape still runs through it, since
+// it is where this player's rate would sit.
 import { formatSigned, formatStat } from "../../../utils/format";
+import { isAsIf } from "../../../utils/qualifiers";
 import { hoverProps } from "../../explore/ChartTooltip";
 import { pctColor } from "./common";
 
@@ -91,17 +96,29 @@ export function PercentileRadar({ stats, players, metrics, hot, onHot, tip, widt
               <div className="mt-1 text-muted">
                 {metrics[stat.id]?.label ?? stat.label}: <b className="stat-num text-fg">{valueText(metrics[stat.id] ? { ...metrics[stat.id], id: stat.id } : { id: stat.id }, player.row?.[stat.id])}</b>
               </div>
-              <div className="text-muted">{player.row?.percentiles?.[stat.id] ?? "-"} percentile</div>
+              <div className="text-muted">
+                {player.row?.percentiles?.[stat.id] ?? "-"} percentile{isAsIf(player.row, stat.id) ? ", as if qualified" : ""}
+              </div>
             </div>
           );
           const lit = hot === stat.id;
+          const open = isAsIf(player.row, stat.id);
           const events = tip ? hoverProps(tip, content, { onEnter: () => onHot?.(stat.id), onLeave: () => onHot?.(null) }) : {};
-          return pair ? (
-            <circle key={`${player.name}-${stat.id}`} cx={px} cy={py} r={lit ? 6 : 4} style={{ fill: player.color }} stroke="var(--surface-solid)" strokeWidth="1.5" {...events} />
-          ) : (
+          if (pair) {
+            return open ? (
+              <circle key={`${player.name}-${stat.id}`} cx={px} cy={py} r={lit ? 6 : 4.5} fill="var(--surface-solid)" style={{ stroke: player.color }} strokeWidth="1.6" strokeDasharray="2.2 1.6" {...events} />
+            ) : (
+              <circle key={`${player.name}-${stat.id}`} cx={px} cy={py} r={lit ? 6 : 4} style={{ fill: player.color }} stroke="var(--surface-solid)" strokeWidth="1.5" {...events} />
+            );
+          }
+          return (
             <g key={stat.id} {...events}>
-              <circle cx={px} cy={py} r={lit ? 13.5 : 11} style={{ fill: pctColor(percentile) }} stroke={lit ? "var(--fg)" : "var(--surface-solid)"} strokeWidth="2" />
-              <text x={px} y={py + 3.6} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#06110b" className="stat-num" pointerEvents="none">
+              {open ? (
+                <circle cx={px} cy={py} r={lit ? 13.5 : 11} fill="var(--surface-solid)" style={{ stroke: pctColor(percentile) }} strokeWidth="2" strokeDasharray="3.4 2.4" />
+              ) : (
+                <circle cx={px} cy={py} r={lit ? 13.5 : 11} style={{ fill: pctColor(percentile) }} stroke={lit ? "var(--fg)" : "var(--surface-solid)"} strokeWidth="2" />
+              )}
+              <text x={px} y={py + 3.6} textAnchor="middle" fontSize="9.5" fontWeight="800" fill={open ? "var(--muted)" : "#06110b"} className="stat-num" pointerEvents="none">
                 {percentile}
               </text>
             </g>

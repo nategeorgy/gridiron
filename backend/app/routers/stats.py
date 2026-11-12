@@ -49,6 +49,7 @@ from app.percentiles import (
     qualify_games,
 )
 from app.cache import VersionedCache, cached_response
+from app.qualifiers import Qualifier, describe_minimums, gated_metrics, is_gated
 from app.custom_metrics import (
     BUILTIN_COMPOSITES,
     CustomMetric,
@@ -388,9 +389,12 @@ def leaderboard(
         )
         for row in data:
             row["percentiles"] = index.for_row(row)
+            row["as_if"] = index.as_if(row)
         percentile_context = {
             "metrics": list(metric_ids),
             "pool_sizes": index.pool_sizes,
+            "qualified_sizes": index.qualified_sizes,
+            "minimums": describe_minimums(),
             "min_games": qualify_games(pool_weeks),
             "basis": "position, this season",
         }
@@ -624,7 +628,11 @@ def compare(
         }
         metric_ids = [*_compare_metrics(compared_positions), *custom_ids]
 
-    pools = _compare_pools(rows, metric_ids, window.default_min_games)
+    qualifier = Qualifier.for_window(
+        db, window.season, window.season_type,
+        week_from=window.week_from, week_to=window.week_to, week_in=window.week_list,
+    )
+    pools, members = _compare_pools(rows, metric_ids, window.default_min_games, qualifier)
     weekly = _compare_weekly(db, player_ids, window, config)
     photos = dict(
         db.execute(
@@ -649,6 +657,17 @@ def compare(
                     )
                     for metric in metric_ids
                 },
+                # Ranked against a pool this player is not in (an open bubble).
+                "as_if": [
+                    metric for metric in metric_ids
+                    if by_id[pid].get(metric) is not None
+                    and pools.get((by_id[pid].get("position"), metric))
+                    and pid not in members.get(
+                        (by_id[pid].get("position"), is_gated(metric, by_id[pid].get("position"))),
+                        (),
+                    )
+                ],
+                "minimum": qualifier.check(by_id[pid]),
                 "weekly": weekly.get(pid, []),
             }
             for pid in player_ids
@@ -659,6 +678,7 @@ def compare(
         "season_type": season_type,
         "window": window.as_dict(),
         "min_games": window.default_min_games,
+        "minimums": describe_minimums(),
         "scoring": config.model_dump(),
         "custom": _custom_payload(custom_metrics),
     }
@@ -684,27 +704,37 @@ def _compare_section_layout(metric_ids: list[str]) -> list[dict]:
 
 
 def _compare_pools(
-    rows: list[dict], metric_ids: list[str], min_games: int
-) -> dict[tuple[str, str], list[float]]:
+    rows: list[dict], metric_ids: list[str], min_games: int, qualifier: Qualifier
+) -> tuple[dict[tuple[str, str], list[float]], dict[tuple[str, bool], set[str]]]:
     """Sorted value lists per (position, metric), over qualified players only.
 
     Low-games players are excluded from the *pool* but can still be placed against it,
     so an early-season comparison degrades to a noisy percentile rather than a wrong one.
+    A rate (and the few gated shares) also needs the position's volume minimum, the
+    same rule as ``PercentileIndex``. Returns the pools and who is in them, keyed
+    (position, gated).
     """
     pools: dict[tuple[str, str], list[float]] = {}
+    members: dict[tuple[str, bool], set[str]] = {}
     for record in rows:
         if (record.get("games_played") or 0) < min_games:
             continue
         position = record.get("position")
         if position not in POSITIONS:
             continue
+        meets = qualifier.meets(record)
+        members.setdefault((position, False), set()).add(record.get("player_id"))
+        if meets:
+            members.setdefault((position, True), set()).add(record.get("player_id"))
         for metric in metric_ids:
+            if not meets and is_gated(metric, position):
+                continue
             value = record.get(metric)
             if value is not None:
                 pools.setdefault((position, metric), []).append(float(value))
     for values in pools.values():
         values.sort()
-    return pools
+    return pools, members
 
 
 def _percentile(sorted_values: list[float], value: float | None) -> float | None:
@@ -1054,6 +1084,12 @@ def intelligence(
     include_unqualified: bool = Query(
         False, description="Include players below the games threshold (never in the ranking pools)"
     ),
+    require_minimum: bool = Query(
+        False,
+        description="Only players at or above their position's volume minimum per team "
+                    "game (QB 7 dropbacks, RB 3 carries + targets, WR 12 routes, TE 2 "
+                    "targets): the leaderboard's Qualified filter. Narrows the output only.",
+    ),
     player_ids: str = Query(
         "", description="Comma-separated player ids to narrow to (the M5 watchlist filter)"
     ),
@@ -1107,6 +1143,16 @@ def intelligence(
     )
     scored_league = rows
 
+    # Every row's volume against its position's minimum, which decides who the rate
+    # pools hold and, with ``require_minimum``, who the board shows. The rows are copies
+    # (build_intelligence hands them out that way), so annotating them is safe.
+    qualifier = Qualifier.for_window(
+        db, window.season, window.season_type,
+        week_from=window.week_from, week_to=window.week_to, week_in=window.week_list,
+    )
+    for row in scored_league:
+        row["minimum"] = qualifier.check(row)
+
     position_list = _parse_positions(positions)
     if position_list:
         rows = [row for row in rows if row.get("position") in position_list]
@@ -1116,6 +1162,8 @@ def intelligence(
 
     if not include_unqualified:
         rows = [row for row in rows if row.get("qualified")]
+    if require_minimum:
+        rows = [row for row in rows if qualifier.meets(row)]
 
     # Applied after scoring, so percentiles stay relative to the full position pool.
     watchlist = _parse_player_ids(player_ids)
@@ -1161,7 +1209,9 @@ def intelligence(
         # One index over both lists, so a rank and a percentile for the same metric are
         # read from the identical pool rather than two that could drift apart.
         pooled = tuple(dict.fromkeys(metric_ids + rank_ids))
-        index = PercentileIndex(scored_league, pooled, qualify_games(window.weeks))
+        index = PercentileIndex(
+            scored_league, pooled, qualify_games(window.weeks), qualifier
+        )
         for row in page_rows:
             if metric_ids:
                 row["percentiles"] = {
@@ -1170,12 +1220,18 @@ def intelligence(
                 }
             if rank_ids:
                 row["ranks"] = index.ranks_for_row(row, rank_ids)
+            # The percentiles and ranks read against a pool this player is not in.
+            row["as_if"] = index.as_if(row, pooled)
         percentile_context = {
             "metrics": list(metric_ids),
             "pool_sizes": index.pool_sizes,
+            # Players at each position who also clear the volume minimum.
+            "qualified_sizes": index.qualified_sizes,
             # Per position and metric: what each rank is "out of", for colouring it.
             "rank_pools": index.metric_pool_sizes if rank_ids else None,
             "min_games": qualify_games(window.weeks),
+            "minimums": describe_minimums(),
+            "gated": gated_metrics(pooled),
             "basis": "position, this season",
         }
 
@@ -1191,6 +1247,8 @@ def intelligence(
             {"metric": metric_id, "min": low, "max": high} for metric_id, low, high in conditions
         ] or None,
         "positions": list(position_list) if position_list else None,
+        "require_minimum": require_minimum,
+        "minimums": describe_minimums(),
         "percentiles": percentile_context or None,
     }
 

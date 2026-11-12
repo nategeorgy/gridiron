@@ -147,7 +147,7 @@ rank on them is for the offense: 1st is the softest matchup.
 
 C10 to C13 are the presets in `frontend/src/constants/scatters.js`, mirrored in `SCATTERS` in
 `src/weekly.js`: add a chart to the site and it needs adding here too. Each plots the top 50
-qualified players in points by default (25, 100 or all), titled with the chart's question,
+qualified players in points by default (25, 100 or all; qualified includes the rate minimum), titled with the chart's question,
 dashed medians (or the scoring-as-expected diagonal) and the site's corner names. Quarterbacks
 also need 15+ pass attempts a game, since games played alone qualifies a backup with one throw.
 The timeframe (Oct 28) re-reads the qualified players for those weeks, as the site's timeframe filter does.
@@ -244,6 +244,13 @@ None of these uses fantasy points. Each takes a timeframe: the season, the last 
   they match the site. A quarterback's rushing yards per game has no registry metric; `build_data.py`
   derives it with the API's own rule (the qualified players at the position; rank = players strictly
   better + 1; percentile = mid-rank), which reproduces the API exactly on rushing yards (129 backs).
+- **Rate minimums** (Nov 11): a rate, and a few shares per position, is ranked only among players at the
+  position's minimum per team game (QB 7 dropbacks, RB 3 carries + targets, WR 12 routes, TE 2 targets;
+  backend `app/qualifiers.py`). A player below it still gets his percentile, as if qualified, drawn as an
+  **open bubble** (dashed, unfilled: `pctMark` in `src/core.js`) with a line under the card saying how far
+  short he is. The API names those percentiles (`as_if`, kept as `asif` on each player); the two QB stats
+  `build_data.py` derives use the same rule. The scatters, Most similar and the "qualified" counts use the
+  minimum too. The league leaders card (F3) keeps its own NFL minimums, which it states.
 - **Timeframes** add weeks up where the numbers are sums (the network, target analysis, leaders and the race:
   `pull.py` asks the Explore endpoints one week at a time), and read a window the API computed where they are not
   (the scatters and team cards: one `/stats/intelligence` and `/teams/stats` request per window). A rate leader needs

@@ -7,6 +7,7 @@ import { StatTooltip, useStatTooltip } from "../../StatTooltip";
 import { CARD_PERCENTILES, forPosition } from "../../../constants/playerPage";
 import { RADAR_STATS, ROLE_RULES, roleLabel } from "../../../constants/playerTabs";
 import { isMetricAvailable } from "../../../utils/availability";
+import { asIfNote, isAsIf } from "../../../utils/qualifiers";
 import { PercentileBar, cardValue, positionName, ringColors, statLabel, tint } from "../cardParts";
 import { metricTip } from "../metricTip";
 import { PercentileRadar } from "./Radar";
@@ -29,7 +30,7 @@ function Role({ position, row, season, color }) {
 }
 
 export function ProfileBox({ page }) {
-  const { position, row, metrics, season, scoring, poolSize, team, seasonQuery } = page;
+  const { position, row, metrics, season, scoring, team, seasonQuery } = page;
   const [hot, setHot] = useState(null);
   const tip = useChartTooltip();
   const tooltip = useStatTooltip();
@@ -45,7 +46,7 @@ export function ProfileBox({ page }) {
         <div className="text-right">
           <div className="text-[15px] font-bold tracking-tight text-fg">Percentile profile</div>
           <div className="text-xs text-muted">
-            {season} · among {poolSize ? `${poolSize} qualified` : "qualified"} {positionName(position)}
+            {season} · rate stats among qualified {position}s only · counting stats among all {position}s
           </div>
         </div>
       </div>
@@ -87,13 +88,16 @@ export function ProfileBox({ page }) {
                 {percentile == null ? (
                   <span className="text-right text-[11px] text-faint">{available ? "Not ranked" : "Not recorded"}</span>
                 ) : (
-                  <PercentileBar percentile={percentile} size={22} />
+                  <PercentileBar percentile={percentile} size={22} open={isAsIf(row, stat.id)} />
                 )}
               </div>
             );
           })}
         </div>
       </div>
+      {asIfNote(row, page.player.name, position) && (
+        <p className="mt-2 text-[11.5px] text-muted">{asIfNote(row, page.player.name, position)}</p>
+      )}
       <p className="mt-2 text-[11.5px] text-faint">Hover the role for how it is decided, and any stat to find it in both charts.</p>
       <ChartTooltip tip={tip} />
       <StatTooltip tip={tooltip.tip} />

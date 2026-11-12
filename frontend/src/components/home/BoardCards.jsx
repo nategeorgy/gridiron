@@ -5,6 +5,8 @@
 // point: the boards a manager checks every week should not be a second implementation
 // of the boards they can open in full. Each card links through to its own board with
 // the same filters already applied.
+import { AsIfNumber } from "../AsIfNumber";
+import { isAsIf } from "../../utils/qualifiers";
 import { Card, CardHead, CardLink, CardState, PlayerCell, ScrollTable, Tabs, Th } from "./primitives";
 import { formatStat, formatSigned } from "../../utils/format";
 import { percentileColor } from "../player/percentile";
@@ -163,7 +165,7 @@ export function QuarterbackCard({ season, result, isLoading, isError }) {
  * it. A missing percentile is a dash, so "not ranked at this position" (a quarterback's
  * target share) stays visibly different from a zero.
  */
-function PercentileCell({ value, format, percentile, position, tone = "text-muted" }) {
+function PercentileCell({ value, format, percentile, position, tone = "text-muted", open = false }) {
   return (
     <td className="stat-num py-2 text-right align-top">
       <span className="flex flex-col items-end leading-tight">
@@ -173,13 +175,14 @@ function PercentileCell({ value, format, percentile, position, tone = "text-mute
             &ndash;
           </span>
         ) : (
-          <span
+          <AsIfNumber
+            open={open}
             className="text-[9.5px] font-semibold"
-            style={{ color: percentileColor(percentile) }}
+            color={percentileColor(percentile)}
             title={`${percentile}th percentile among ${position}s this season`}
           >
             {percentile}
-          </span>
+          </AsIfNumber>
         )}
       </span>
     </td>
@@ -215,6 +218,7 @@ export function MyPlayersCard({ season, count, result, isLoading, isError }) {
                   percentile={row.percentiles?.[id]}
                   position={row.position}
                   tone={tone}
+                  open={isAsIf(row, id)}
                 />
               );
               return (

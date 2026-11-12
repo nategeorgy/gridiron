@@ -20,6 +20,12 @@
 // `higher_is_better` before reporting, so 95th percentile always means good — even for
 // drops and interceptions. Nothing here needs to know which way a metric points.
 //
+// **Below the minimum** (November 2026, utils/qualifiers.js). A row short of its
+// position's volume minimum carries a "Below min" tag, and each of its percentiles that
+// was ranked as if qualified (`row.as_if`) is drawn open: a dashed ring instead of a
+// fill, a dashed pill around the small number. Only seen with the leaderboard's
+// Qualified filter off, since with it on those rows are not on the board.
+//
 // Column headers are click-to-sort, and the page reverses the order on a second click;
 // the arrow says which way. Headers and values are centred over each other: the arrow
 // and the filter mark hang outside the label, so a sorted or filtered column's label
@@ -30,7 +36,36 @@ import { FavoriteStar } from "./FavoriteStar";
 import { PositionTag } from "./PositionTag";
 import { formatStat, ordinal, shortName } from "../utils/format";
 import { StatTooltip, useStatTooltip } from "./StatTooltip";
-import { percentileFill, percentileInk, rankPercentile } from "../utils/percentileScale";
+import { asIfRing, percentileFill, percentileInk, rankPercentile } from "../utils/percentileScale";
+import { belowMinimum, isAsIf, minimumProgress } from "../utils/qualifiers";
+
+/** The tag beside a player short of his position's minimum. */
+export function BelowMinTag({ minimum, className = "" }) {
+  return (
+    <span
+      title={minimum ? `Below the minimum: ${minimumProgress(minimum)}` : "Below the minimum"}
+      className={`inline-block whitespace-nowrap rounded-md px-1.5 py-px text-[10px] font-bold leading-4 ${className}`}
+      style={{
+        color: "color-mix(in srgb, var(--warn) 80%, var(--fg))",
+        background: "color-mix(in srgb, var(--warn) 16%, transparent)",
+      }}
+    >
+      Below min
+    </span>
+  );
+}
+
+/** The small number under a value, in a dashed pill when it is as if qualified. */
+function Beneath({ color, open, children }) {
+  return (
+    <span
+      className={`text-[10px] font-semibold ${open ? "mt-px rounded-full border border-dashed px-1 leading-[13px]" : ""}`}
+      style={{ color, borderColor: open ? color : undefined }}
+    >
+      {children}
+    </span>
+  );
+}
 
 /** "2016 onwards", "1999-2025", or nothing when a metric spans the whole range. */
 function seasonWindow(metric) {
@@ -194,7 +229,9 @@ export function StatTable({
           </tr>
         </thead>
         <tbody className={dimmed ? "opacity-60 transition" : "transition"}>
-          {rows.map((row, index) => (
+          {rows.map((row, index) => {
+            const below = belowMinimum(row);
+            return (
             <tr key={row.player_id} className="border-b border-line last:border-0 hover:bg-surface-2">
               <td className="stat-num hidden px-3 py-2 text-center text-faint md:table-cell">{offset + index + 1}</td>
               <td className="pin-col px-3 py-2 font-medium max-md:pl-2 max-md:pr-2.5">
@@ -208,7 +245,7 @@ export function StatTable({
                       <FavoriteStar playerId={row.player_id} size="h-3.5 w-3.5" />
                       <Link
                         to={`/players/${row.player_id}`}
-                        className="block max-w-[118px] truncate text-[13px] font-semibold text-fg"
+                        className={`block max-w-[118px] truncate text-[13px] font-semibold ${below ? "text-muted" : "text-fg"}`}
                       >
                         {shortName(row.name)}
                       </Link>
@@ -219,6 +256,7 @@ export function StatTable({
                         {row.team_abbreviation ?? "FA"} · {row.games_played}G
                       </span>
                     </span>
+                    {below && <BelowMinTag minimum={row.minimum} className="mt-1" />}
                   </span>
                 </span>
                 <span className="hidden items-center gap-1.5 md:flex">
@@ -227,10 +265,11 @@ export function StatTable({
                   <FavoriteStar playerId={row.player_id} size="h-3.5 w-3.5" />
                   <Link
                     to={`/players/${row.player_id}`}
-                    className="whitespace-nowrap text-fg hover:text-accent hover:underline"
+                    className={`whitespace-nowrap hover:text-accent hover:underline ${below ? "text-muted" : "text-fg"}`}
                   >
                     {row.name}
                   </Link>
+                  {below && <BelowMinTag minimum={row.minimum} />}
                 </span>
               </td>
               {/* Position first, then team. The tag is a fixed width where the team
@@ -254,10 +293,12 @@ export function StatTable({
                 const rank = row.ranks?.[key];
                 const pool = rankPools?.[row.position]?.[key];
                 const text = formatStat(value, metrics[key]?.format);
+                const open = isAsIf(row, key);
                 const tip = [
                   `${metrics[key]?.label ?? key}: ${text}`,
                   hasPercentile && `${ordinal(percentile)} percentile`,
                   rank && `#${rank}${pool ? ` of ${pool}` : ""} ${row.position}s`,
+                  open && (hasPercentile || rank) && "as if qualified",
                 ].filter(Boolean).join(" \u00b7 ");
                 const dash = (
                   <span className="text-[10px] font-semibold text-faint" aria-hidden="true">
@@ -271,7 +312,11 @@ export function StatTable({
                     className={`stat-cell stat-num px-3 py-2 text-center ${
                       sectionStart.has(key) ? "border-l border-line" : ""
                     } ${valueClass(key, value)}`}
-                    style={shaded && hasPercentile ? { background: percentileFill(percentile) } : undefined}
+                    style={
+                      shaded && hasPercentile
+                        ? open ? asIfRing(percentile) : { background: percentileFill(percentile) }
+                        : undefined
+                    }
                   >
                     <span className="flex flex-col items-center leading-tight">
                       {mode === "percentiles" ? (
@@ -281,22 +326,23 @@ export function StatTable({
                       )}
                       {mode === "percentile" &&
                         (hasPercentile ? (
-                          <span className="text-[10px] font-semibold" style={{ color: percentileInk(percentile) }}>
+                          <Beneath color={percentileInk(percentile)} open={open}>
                             {percentile}
-                          </span>
+                          </Beneath>
                         ) : dash)}
                       {mode === "rank" &&
                         (rank ? (
-                          <span className="text-[10px] font-semibold" style={{ color: percentileInk(rankPercentile(rank, pool)) }}>
+                          <Beneath color={percentileInk(rankPercentile(rank, pool))} open={open}>
                             #{rank}
-                          </span>
+                          </Beneath>
                         ) : dash)}
                     </span>
                   </td>
                 );
               })}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
 

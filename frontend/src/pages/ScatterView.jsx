@@ -4,6 +4,7 @@
 // at random usually make a meaningless cloud. The data is the leaderboard's own
 // (/stats/intelligence), so a timeframe re-aggregates exactly as the boards do, and each
 // tooltip's percentile is the same one the leaderboard prints under that value.
+import { MINIMUM_RULES, minimumRule } from "../utils/qualifiers";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Select } from "../components/ui/Select";
@@ -67,6 +68,9 @@ export function ScatterView({ board }) {
     league,
     limit: 200,
     percentiles: axisIds.join(","),
+    // Qualified means the position's minimum per team game too, as on the leaderboards:
+    // a part-timer's rate is the outlier a scatter is worst at.
+    require_minimum: true,
   }), [season, weeks, position, scoring, league, axisIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data, isLoading, isError, isPlaceholderData } = useIntelligence(params);
 
@@ -241,7 +245,7 @@ export function ScatterView({ board }) {
         {data && (
           <p className="mt-2 text-[11px] text-faint">
             {cap === "all" ? `All ${pool.length}` : `The ${points.length} with the most fantasy points of ${pool.length}`} qualified {position}s
-            ({data.min_games}+ games), {when}. Percentiles are within the position.
+            ({data.min_games}+ games and {minimumRule(data.minimums?.[position] ?? MINIMUM_RULES[position])}), {when}. Percentiles are within the position.
           </p>
         )}
       </section>

@@ -7,6 +7,7 @@
 //
 // Every chart takes the page's timeframe, and every one exports as an image. A combined
 // export places each player's chart inside one SVG through the charts' `nested` prop.
+import { isAsIf } from "../../utils/qualifiers";
 import { useQueries } from "@tanstack/react-query";
 import { Segmented } from "../team/Segmented";
 import { ExportImageButton } from "./ExportImageButton";
@@ -103,7 +104,7 @@ function CompareScatter({ slots, kind, weeks, scoring, league, metrics }) {
   const when = `${season} · ${weeks ? "selected weeks" : "full season"}`;
   const tipFor = (point) => (
     <TipCard player={point} sub={`${point.position} · ${point.slot.season}`}
-      rows={[preset.x, preset.y].map((id) => [metrics[id]?.label ?? id, formatStat(point.slot.row[id], metrics[id]?.format), point.slot.row.percentiles?.[id] ?? null])} />
+      rows={[preset.x, preset.y].map((id) => [metrics[id]?.label ?? id, formatStat(point.slot.row[id], metrics[id]?.format), point.slot.row.percentiles?.[id] ?? null, isAsIf(point.slot.row, id)])} />
   );
   const plot = (forExport = false) => (
     <ScatterPlot points={points} context={context} xMetric={metrics[preset.x]} yMetric={metrics[preset.y]}

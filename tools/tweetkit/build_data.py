@@ -389,10 +389,20 @@ LOG_KEYS = ["week", "game_id", "opponent_abbreviation", "team_abbreviation", "fa
             # The game chart (D12) and compare lines (D23) divide these per game, as the site does.
             "cpoe", "pass_adot", "rush_yards_after_contact"]
 
+def meets(row):
+    """In a rate's percentile pool: the games rule and the position's volume minimum per
+    team game (backend app/qualifiers.py: QB 7 dropbacks, RB 3 carries + targets, WR 12
+    routes, TE 2 targets). ``minimum`` rides on every /stats/intelligence row; a row from
+    an API older than the minimums has none and counts as meeting it."""
+    return bool(row.get("qualified")) and (row.get("minimum") or {}).get("met", True)
+
+
 # D1 and B7 ask for stats with no registry metric (a quarterback's rushing yards per game and sack %). They are ranked the way the API ranks
 # every other one (app/percentiles.py): within the qualified players at the position, rank
 # = players strictly better + 1, percentile = mid-rank (below + half the ties) / pool.
-# Sack % is sacks over dropbacks (attempts + sacks), the registry's own dropbacks.
+# Sack % is sacks over dropbacks (attempts + sacks), the registry's own dropbacks. Both are
+# gated by the minimum like the API's (a rate, and a quarterback's rushing per game), so a
+# player below it is ranked against a pool he is not in: as if qualified.
 def sack_rate(row):
     dropbacks = (row.get("attempts") or 0) + (row.get("sacks_suffered") or 0)
     return (row.get("sacks_suffered") or 0) / dropbacks if dropbacks else None
@@ -420,11 +430,11 @@ derived = {}
 for position, metrics in DERIVED.items():
     rows = intel[position]
     for metric, (value_of, higher) in metrics.items():
-        pool = sorted(v for row in rows if row.get("qualified") and (v := value_of(row)) is not None)
+        pool = sorted(v for row in rows if meets(row) and (v := value_of(row)) is not None)
         for row in rows:
             value = value_of(row)
             if value is not None and pool:
-                derived.setdefault(row["player_id"], {})[metric] = (value, *rank_and_percentile(value, pool, higher))
+                derived.setdefault(row["player_id"], {})[metric] = (value, *rank_and_percentile(value, pool, higher), not meets(row))
 
 def typical_line(line, position):
     """A game-log line from a week still in progress, its finish against a typical week."""
@@ -452,6 +462,10 @@ for pid, raw in players_raw.items():
         "pct": season.get("percentiles") or {},
         "ranks": season.get("ranks") or {},
         "qualified": season.get("qualified"),
+        # Percentiles ranked against a pool he is not in (drawn as an open bubble), and his
+        # volume against the minimum, for the note under the card.
+        "asif": list(season.get("as_if") or []),
+        "min": pick(m, ["met", "value", "needed", "measure", "per_team_game"]) if (m := season.get("minimum")) else None,
         "log": [typical_line(pick(g, LOG_KEYS), position) for g in raw["log"] if g["week"] <= NEWEST_WEEK],
         "career": [pick(c, ["season", "team_abbreviation", "games_played", "fantasy_points", "fantasy_ppg",
                             "position_rank", "position_rank_ppg", "pool_size", "ppg_pool_size", "ppg_qualified",
@@ -467,10 +481,12 @@ for pid, raw in players_raw.items():
         entry["runs"] = {"lanes": runs["lanes"], "outcomes": runs["outcomes"], "carries": runs["carries"],
                          "avg": {"lanes": runs["average"]["lanes"], "outcomes": runs["average"]["outcomes"],
                                  "carries": runs["average"]["carries"]}}
-    for metric, (value, rank, percentile) in derived.get(pid, {}).items():
+    for metric, (value, rank, percentile, as_if) in derived.get(pid, {}).items():
         entry["season"][metric] = r(value, 4)
         entry["ranks"][metric] = rank
         entry["pct"][metric] = percentile
+        if as_if and metric not in entry["asif"]:
+            entry["asif"].append(metric)
     players[pid] = entry
 
 # ------------------------------------------------- the player page (D11 to D24)
@@ -504,6 +520,8 @@ for pid, entry in players.items():
         # Aligned with DATA.radar_keys[pos] (RADAR in pull.py).
         row["rv"] = [r(c.get(k), 3) for k in RADAR[position]]
         row["rp"] = [(c.get("percentiles") or {}).get(k) for k in RADAR[position]]
+        # 1 where that season's percentile is as if qualified (below the minimum that year).
+        row["ra"] = [int(k in (c.get("as_if") or [])) for k in RADAR[position]]
         # The dashed lines are the position's, the same for every player: stored once.
         for k, v in (c.get("lines") or {}).items():
             pos_lines.setdefault(position, {}).setdefault(row["season"], {})[k] = [r(v.get("avg"), 4), r(v.get("rank"), 4)]
@@ -563,11 +581,12 @@ for pid, entry in players.items():
 
 # Who plays the most like him: every qualified player at the position with his
 # percentiles on SIMILARITY_STATS (constants/similarity.js), [id, name, team, [pct...]].
+# Qualified is the minimum too, as on the site's Compare tab.
 sim_pool = {}
 for position in POSITIONS:
     sim_pool[position] = [[row["player_id"], row["name"], row["team_abbreviation"],
                            [(row.get("percentiles") or {}).get(k) for k in SIMILAR[position]]]
-                          for row in intel[position] if row.get("qualified")]
+                          for row in intel[position] if meets(row)]
 
 
 def closeness(mine, theirs):
@@ -649,8 +668,8 @@ xva_pool = {position: [pick(row, ["player_id", "name", "team_abbreviation", "exp
                        for row in intel[position] if row.get("qualified") and (row.get("expected_fantasy_ppg") or 0) >= 5]
             for position in ("RB", "WR", "TE")}
 # C10 to C13: the app's Scatter page (frontend/src/constants/scatters.js), every qualified
-# player at the position, most fantasy points first. The fields are every axis and bubble
-# size that position's presets use.
+# player at the position (the minimum included, as on the site), most fantasy points
+# first. The fields are every axis and bubble size that position's presets use.
 SCATTER_FIELDS = {
     "QB": ["cpoe", "epa_per_play", "attempts", "expected_fantasy_ppg", "fantasy_ppg", "ngs_pass_intended_air_yards"],
     "RB": ["rush_attempt_share", "route_participation", "fantasy_ppg", "expected_fantasy_ppg", "rush_att_inside_5",
@@ -661,7 +680,7 @@ SCATTER_FIELDS = {
 SCATTER_FIELDS["TE"] = SCATTER_FIELDS["WR"]
 scatter_pool = {
     position: [pick(row, ["player_id", "name", "team_abbreviation", "games_played", "fantasy_points"] + fields)
-               for row in sorted((r for r in intel[position] if r.get("qualified")), key=lambda r: -(r.get("fantasy_points") or 0))]
+               for row in sorted((r for r in intel[position] if meets(r)), key=lambda r: -(r.get("fantasy_points") or 0))]
     for position, fields in SCATTER_FIELDS.items()
 }
 
@@ -685,9 +704,11 @@ for position, depth in FINISH_DEPTH.items():
 # 4, 3 and 2 weeks, and the newest week.
 windows = load("windows")
 intel_windows = load("intel_windows")
+# The scatters plot the players at the minimum for that window, as the site's Scatter does.
 scatter_windows = {
     key: {position: [pick(row, ["player_id", "name", "team_abbreviation", "games_played", "fantasy_points"] + fields)
-                     for row in sorted(intel_windows[key][position], key=lambda r: -(r.get("fantasy_points") or 0))]
+                     for row in sorted((r for r in intel_windows[key][position] if meets(r)),
+                                       key=lambda r: -(r.get("fantasy_points") or 0))]
           for position, fields in SCATTER_FIELDS.items()}
     for key in windows
 }

@@ -3,8 +3,14 @@
 //
 // The stats offered are the board's volume counts (FILTER_STATS in
 // constants/leaderboards.js: games, snaps, targets, carries, receptions, attempts,
-// dropbacks, completions), and each position group opens with one minimum already on
-// (DEFAULT_FILTERS), shown as a chip like any other so it can be edited or removed.
+// dropbacks, completions).
+//
+// Every board opens with the **Qualified** chip on (November 2026, replacing the
+// per-group default minimums): only players at their position's minimum per team game
+// (utils/qualifiers.js). Removing it brings back the players below it, tagged and with
+// open cells; "+ Qualified" puts it back. It is `minimum=off` in the URL, and sent as
+// `require_minimum` rather than through `where`, because the bar is per team game and
+// per position, which a total cannot say.
 //
 // The filters live in the URL as `where=metric:min:max,...`, the Query Builder's grammar,
 // and the backend applies them after scoring and before paging, so a filter counts every
@@ -180,12 +186,52 @@ function FilterEditor({ entry, stats, startOn, onApply, onRemove, onCancel }) {
 }
 
 /**
- * @param filters   parsed `where` entries, the group's default included
- * @param onChange  takes the next list of entries
- * @param stats     the stats the Filter offers: [{ id, label }]
- * @param inactive  { metric: reason } for filters that are off this season
+ * @param filters    parsed `where` entries
+ * @param onChange   takes the next list of entries
+ * @param stats      the stats the Filter offers: [{ id, label }]
+ * @param inactive   { metric: reason } for filters that are off this season
+ * @param qualified  { on, onChange, title } for the Qualified chip, or null for none
  */
-export function StatFilter({ filters, onChange, stats, inactive = {} }) {
+/**
+ * The Qualified chip: on by default, removable, and "+ Qualified" to put it back.
+ * @param title  what the minimum is for the positions on the board
+ */
+function QualifiedChip({ on, onChange, title }) {
+  if (!on) {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        title={`Show only qualified players: ${title}`}
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-edge px-3 py-1 text-[12.5px] font-semibold text-muted transition hover:text-fg"
+      >
+        + Qualified
+      </button>
+    );
+  }
+  return (
+    <span
+      title={`Qualified: ${title}`}
+      className="inline-flex items-center gap-1.5 rounded-full border py-1 pl-3 pr-1 text-[12.5px] font-semibold text-fg"
+      style={{
+        background: "color-mix(in srgb, var(--accent) 12%, var(--surface-2))",
+        borderColor: "color-mix(in srgb, var(--accent) 45%, transparent)",
+      }}
+    >
+      Qualified
+      <button
+        type="button"
+        aria-label="Remove the Qualified filter"
+        onClick={() => onChange(false)}
+        className="grid h-[18px] w-[18px] place-items-center rounded-full text-muted transition hover:bg-surface-2 hover:text-fg"
+      >
+        <CloseIcon />
+      </button>
+    </span>
+  );
+}
+
+export function StatFilter({ filters, onChange, stats, inactive = {}, qualified = null }) {
   // Which filter is open: "new", an index into `filters`, or null.
   const [editing, setEditing] = useState(null);
   const anchor = useRef(null);
@@ -227,6 +273,8 @@ export function StatFilter({ filters, onChange, stats, inactive = {} }) {
           </span>
         )}
       </button>
+
+      {qualified && <QualifiedChip {...qualified} />}
 
       {filters.map((filter, index) => {
         const off = inactive[filter.metric];

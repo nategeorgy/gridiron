@@ -1,6 +1,7 @@
 // The hover card for chart marks: follows the pointer, flips at the viewport edge, and
 // is portalled to document.body (a glass card's backdrop-filter would otherwise trap it,
 // the same reason StatTooltip and every popover here are portalled).
+import { AsIfNumber } from "../AsIfNumber";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Headshot } from "./common";
@@ -92,13 +93,16 @@ export function TipCard({ player, sub, rows = [], note }) {
       {rows.length > 0 && (
         <table className="w-full border-collapse">
           <tbody>
-            {rows.map(([label, value, percentile], index) => (
+            {/* A fourth entry marks a percentile ranked as if qualified (utils/qualifiers.js). */}
+            {rows.map(([label, value, percentile, open], index) => (
               <tr key={`${label}-${index}`}>
                 <td className="py-0.5 pr-3 text-left text-muted">{label}</td>
                 <td className="stat-num whitespace-nowrap py-0.5 text-right text-[11.5px]">{value}</td>
                 {percentile !== undefined && (
-                  <td className="stat-num w-8 py-0.5 text-right text-[10.5px]" style={{ color: percentileColor(percentile) }}>
-                    {percentile ?? ""}
+                  <td className="stat-num w-8 py-0.5 text-right text-[10.5px]">
+                    <AsIfNumber open={Boolean(open) && percentile != null} color={percentileColor(percentile)}>
+                      {percentile ?? ""}
+                    </AsIfNumber>
                   </td>
                 )}
               </tr>

@@ -101,20 +101,9 @@ export const FILTER_STATS = [
 ];
 export const FILTER_STAT_IDS = FILTER_STATS.map((stat) => stat.id);
 
-// The filter each position group opens with (Nate's, November 2026), a total over the
-// window. It shows as a chip like any other and can be removed; a board with no `where`
-// in its URL has its group's default, and an empty `where=` means the user removed it.
-const atLeast = (metric, min) => [{ metric, min, max: null }];
-export const DEFAULT_FILTERS = {
-  QB: atLeast("dropbacks", 30),
-  RB: atLeast("snap_count", 30),
-  WR: atLeast("targets", 10),
-  TE: atLeast("targets", 12),
-  "WR,TE": atLeast("targets", 12),
-  "RB,WR,TE": atLeast("snap_count", 30),
-  all: atLeast("snap_count", 30),
-};
-export const defaultFilters = (group) => DEFAULT_FILTERS[group] ?? [];
+// A board opens with no stat filter: the Qualified chip (StatFilter.jsx) replaced the
+// per-group default minimums in November 2026, since its bar is per team game and per
+// position. An old link's `where=` still applies as written.
 export const GROUP_VALUES = POSITION_GROUPS.map((group) => group.value);
 export const groupFor = (value) =>
   POSITION_GROUPS.find((group) => group.value === value) ??
