@@ -38,14 +38,14 @@ export function StatScatter({ page }) {
     id: row.player_id, name: row.name, position: row.position, team: row.team_abbreviation, games: row.games_played,
     headshot_url: row.player_id === playerId ? player.headshot_url : headshots[row.player_id],
     x: row[preset.x], y: row[preset.y], z: preset.size ? row[preset.size] : null, rank: index + 1,
-    percentiles: row.percentiles ?? {},
+    percentiles: row.percentiles ?? {}, asIf: row.as_if ?? [],
   }));
   const label = (id) => metrics[id]?.label ?? id;
   const tipFor = (point) => (
     <TipCard
       player={point}
       sub={`${point.position} · ${point.team} · ${point.games} games`}
-      rows={axisIds.map((id) => [label(id), formatStat(point[id === preset.x ? "x" : id === preset.y ? "y" : "z"], metrics[id]?.format), point.percentiles[id] ?? null])}
+      rows={axisIds.map((id) => [label(id), formatStat(point[id === preset.x ? "x" : id === preset.y ? "y" : "z"], metrics[id]?.format), point.percentiles[id] ?? null, point.asIf.includes(id)])}
     />
   );
   const mine = points.find((point) => point.id === playerId);

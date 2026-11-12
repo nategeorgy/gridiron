@@ -11,7 +11,8 @@ import { formatSigned, formatStat } from "../../../utils/format";
 import { StatTooltip, useStatTooltip } from "../../StatTooltip";
 import { forPosition } from "../../../constants/playerPage";
 import { positionName } from "../cardParts";
-import { Panel, heatFill, isHomeGame } from "./common";
+import { Panel, heatFill, isHomeGame, pctColor } from "./common";
+import { isAsIf } from "../../../utils/qualifiers";
 
 /** The stat tooltip wants a heading and a line beneath it. */
 const tipOf = (heading, line) => ({ label: heading, description: line });
@@ -40,7 +41,8 @@ export function WeekGrid({ page, rows: rowsByPosition, title, sub, showRank = fa
     const id = entry.season ?? entry.id;
     const value = seasonRow[id];
     const perGame = entry.perGame && !entry.season;
-    return { text: cellText(entry, perGame && value != null ? value / games : value), pct: seasonRow.percentiles?.[id] ?? null };
+    const pct = seasonRow.percentiles?.[id] ?? null;
+    return { text: cellText(entry, perGame && value != null ? value / games : value), pct, open: pct != null && isAsIf(seasonRow, id) };
   };
 
   const columns = `112px repeat(${Math.max(1, slots.length)}, minmax(54px, 1fr)) 70px`;
@@ -108,8 +110,9 @@ export function WeekGrid({ page, rows: rowsByPosition, title, sub, showRank = fa
                 <div
                   key={`${entry.id}-season`}
                   className="rounded-lg px-1 py-1.5 text-center"
-                  style={{ background: heatFill(season.pct) }}
-                  onMouseEnter={(event) => tooltip.show(event.currentTarget, tipOf(`${entry.label}: ${season.text} ${entry.perGame ? "a game" : "for the season"}`, `${season.pct ?? "-"} percentile among qualified ${positionName(position)}`))}
+                  // As if qualified (below the minimum): a dashed outline instead of the shade.
+                  style={season.open ? { outline: `1.5px dashed ${pctColor(season.pct)}`, outlineOffset: "-2px" } : { background: heatFill(season.pct) }}
+                  onMouseEnter={(event) => tooltip.show(event.currentTarget, tipOf(`${entry.label}: ${season.text} ${entry.perGame ? "a game" : "for the season"}`, `${season.pct ?? "-"} percentile among qualified ${positionName(position)}${season.open ? ", as if qualified" : ""}`))}
                   onMouseLeave={tooltip.hide}
                 >
                   <div className="stat-num text-[12px] font-extrabold text-fg">{season.text}</div>

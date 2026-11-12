@@ -17,10 +17,10 @@
 // The page is laid out as the "Table toolbar" mockup picked in November 2026: tabs with
 // the saved views beside them, one row of label-less filter pills, then a card holding
 // the table and its own toolbar (Filter, Display, Edit Columns, Export). Stat filters
-// (`where=`) and the sort direction (`order=`) are in the URL like everything else. Each
-// position group opens with a minimum already on (DEFAULT_FILTERS: dropbacks for
-// quarterbacks, snaps for backs and the mixed groups, targets for receivers and tight
-// ends), which the user can edit or remove like any filter.
+// (`where=`) and the sort direction (`order=`) are in the URL like everything else. Every
+// board opens with the Qualified chip on (`minimum=off` removes it): only players at their
+// position's minimum per team game, the same bar that decides who the rate percentiles
+// are ranked among (backend app/qualifiers.py).
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FilterBar, summarize } from "../components/ui/FilterBar";
@@ -37,7 +37,7 @@ import { ColumnEditor } from "../components/leaderboard/ColumnEditor";
 import { DisplayMenu, PercentileLegend } from "../components/leaderboard/DisplayMenu";
 import { LeaderboardTabs } from "../components/leaderboard/LeaderboardTabs";
 import { PositionGroupPicker } from "../components/leaderboard/PositionGroupPicker";
-import { StatFilter, filterLabel, parseWhere, sameFilter, writeWhere } from "../components/leaderboard/StatFilter";
+import { StatFilter, filterLabel, parseWhere, writeWhere } from "../components/leaderboard/StatFilter";
 import { useLiveSearchParams } from "../hooks/useLiveSearchParams";
 import { DEFAULT_DISPLAY, DISPLAY_IDS, displayMode } from "../constants/boardDisplay";
 import { buildBoardExport } from "../utils/csv";
@@ -46,6 +46,7 @@ import { useScoring } from "../hooks/useScoring";
 import { useLeague } from "../hooks/useLeague";
 import { useUrlState } from "../hooks/useUrlState";
 import { useMetrics } from "../hooks/useMetrics";
+import { rulesFor } from "../utils/qualifiers";
 import { useSeasons } from "../hooks/useSeasons";
 import { firstAvailableColumn, isMetricAvailable, unavailableColumns, unavailableReason } from "../utils/availability";
 import { SEASON_TYPES } from "../constants";
@@ -55,7 +56,6 @@ import {
   FILTER_STATS,
   FILTER_STAT_IDS,
   GROUP_VALUES,
-  defaultFilters,
   LEADERBOARD_TABS,
   TAB_IDS,
   customSections,
@@ -113,6 +113,7 @@ function Leaderboard({ tab }) {
   const [team, setTeam] = useUrlState("team", "");
   const [order, setOrder] = useUrlState("order", "desc", ["asc", "desc"]);
   const [display, setDisplay] = useUrlState("display", DEFAULT_DISPLAY, DISPLAY_IDS);
+  const [minimum, setMinimum] = useUrlState("minimum", "on", ["on", "off"]);
   const [, setLiveParams] = useLiveSearchParams();
   const [offset, setOffset] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -169,16 +170,11 @@ function Leaderboard({ tab }) {
     if (presetMissing) navigate(`/leaderboards/fantasy${search}`, { replace: true });
   }, [presetMissing, navigate, search]);
 
-  // Stat filters. `where` is read raw, like `cols`: absent means the group's default
-  // filter, and empty means the user removed every filter, the default included. Only the
-  // Filter's own stats are read from it.
+  // Stat filters. Only the Filter's own stats are read from `where`.
   const rawWhere = searchParams.get("where");
   const filters = useMemo(
-    () =>
-      rawWhere === null
-        ? defaultFilters(group)
-        : parseWhere(rawWhere).filter((entry) => FILTER_STAT_IDS.includes(entry.metric)),
-    [rawWhere, group],
+    () => parseWhere(rawWhere).filter((entry) => FILTER_STAT_IDS.includes(entry.metric)),
+    [rawWhere],
   );
   // A filter on a stat the season has no data for (snaps before 2013) would empty the
   // board, so it stays on screen, dimmed with the reason, and is not sent.
@@ -189,22 +185,23 @@ function Leaderboard({ tab }) {
   );
   const applied = filters.filter((entry) => !inactive[entry.metric]);
   const whereParam = writeWhere(applied);
-  // A list that is the group's default again goes back out of the URL.
+  // No filters is no `where` at all.
   const setFilters = (next) => {
     const text = writeWhere(next);
     setLiveParams(
       (previous) => {
         const params = new URLSearchParams(previous);
-        if (text === writeWhere(defaultFilters(group))) params.delete("where");
+        if (!text) params.delete("where");
         else params.set("where", text);
         return params;
       },
       { replace: true },
     );
   };
+  const qualifiedOnly = minimum !== "off";
 
   // A new tab, group or filter is a new board: back to the first page.
-  useEffect(() => setOffset(0), [tab, group, season, weeks, seasonType, team, sortMetric, order, whereParam]);
+  useEffect(() => setOffset(0), [tab, group, season, weeks, seasonType, team, sortMetric, order, whereParam, qualifiedOnly]);
 
   // Every stat the group has, not the columns on screen. See the note at the top.
   const params = useMemo(
@@ -220,12 +217,13 @@ function Leaderboard({ tab }) {
       ...watchlist.params,
       ...(team ? { team } : {}),
       ...(whereParam ? { where: whereParam } : {}),
+      ...(qualifiedOnly ? { require_minimum: true } : {}),
       percentiles: pool.join(","),
       ranks: pool.join(","),
       limit: PAGE_SIZE,
       offset,
     }),
-    [season, weeks, seasonType, group, sortMetric, order, scoring, league, team, whereParam, pool, offset, watchlist.params.player_ids],
+    [season, weeks, seasonType, group, sortMetric, order, scoring, league, team, whereParam, qualifiedOnly, pool, offset, watchlist.params.player_ids],
   );
 
   const { data, isLoading, isError, error, isPlaceholderData } = useIntelligence(params);
@@ -250,17 +248,7 @@ function Leaderboard({ tab }) {
   const hrefFor = (id) => `/leaderboards/${id}${withParams({ metric: null, order: null })}`;
 
   const changeGroup = (value) => {
-    const changes = { positions: value === DEFAULT_GROUP ? null : value };
-    // Filters someone changed stay, with the old group's default (if still on) swapped
-    // for the new group's. Untouched filters need nothing: the new group's default applies.
-    if (rawWhere !== null) {
-      const next = filters.flatMap((entry) =>
-        defaultFilters(group).some((fallback) => sameFilter(fallback, entry)) ? defaultFilters(value) : [entry],
-      );
-      const text = writeWhere(next);
-      changes.where = text === writeWhere(defaultFilters(value)) ? null : text;
-    }
-    const query = withParams(changes);
+    const query = withParams({ positions: value === DEFAULT_GROUP ? null : value });
     const target = !isCustom && !hasPreset(value, tab) ? "fantasy" : tab;
     navigate(`/leaderboards/${target}${query}`, { replace: target === tab });
   };
@@ -319,8 +307,10 @@ function Leaderboard({ tab }) {
     team,
     displayMode(display).label,
     `sorted by ${metrics[sortMetric]?.short ?? sortMetric} ${order === "asc" ? "\u2191" : "\u2193"}`,
+    qualifiedOnly ? "Qualified" : "All players",
     applied.map((entry) => filterLabel(entry, FILTER_STATS)),
   );
+  const minimumText = `${rulesFor(groupFor(group).positions, data?.minimums)} per team game`;
 
   return (
     <div className="space-y-4">
@@ -378,7 +368,13 @@ function Leaderboard({ tab }) {
 
       <div className="glass-card overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
-          <StatFilter filters={filters} onChange={setFilters} stats={FILTER_STATS} inactive={inactive} />
+          <StatFilter
+            filters={filters}
+            onChange={setFilters}
+            stats={FILTER_STATS}
+            inactive={inactive}
+            qualified={{ on: qualifiedOnly, onChange: (on) => setMinimum(on ? "on" : "off"), title: minimumText }}
+          />
           <span className="flex-1" />
           <DisplayMenu value={display} onChange={setDisplay} />
           <PercentileLegend mode={display} />
@@ -410,6 +406,7 @@ function Leaderboard({ tab }) {
               `${season} ${seasonType}${weeks ? ` · weeks ${weeks}` : " · full season"}${team ? ` · ${team}` : ""}`,
               `sorted by ${metrics[sortMetric]?.label ?? sortMetric}${order === "asc" ? ", low to high" : ""} · scoring: ${scoring}`,
               ...(applied.length ? [`filters: ${applied.map((entry) => filterLabel(entry, FILTER_STATS)).join(", ")}`] : []),
+              qualifiedOnly ? `qualified: ${minimumText}` : "all players, qualified or not",
             ]}
           />
         </div>
@@ -434,7 +431,7 @@ function Leaderboard({ tab }) {
             error={error}
             dimmed={isPlaceholderData}
             emptyMessage={
-              applied.length
+              applied.length || qualifiedOnly
                 ? "No players match these filters."
                 : "No players met the games threshold for these filters."
             }
@@ -456,7 +453,14 @@ function Leaderboard({ tab }) {
           <span className="text-muted">
             {data.min_games} game{data.min_games === 1 ? "" : "s"}
           </span>
+          {qualifiedOnly && (
+            <>
+              {" "}and <span className="text-muted">{minimumText}</span>
+            </>
+          )}
           . Percentiles and ranks are within each player's own position, with 100 and #1 the best.
+          Rates (and a few shares) are ranked among qualified players only
+          {qualifiedOnly ? "." : "; a dashed cell shows where a player below the minimum would rank."}
           {mixed ? " A dash means the stat does not apply to that player's position, or has no data." : ""}
         </p>
       )}

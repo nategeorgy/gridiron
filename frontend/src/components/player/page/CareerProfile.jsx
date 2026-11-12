@@ -2,6 +2,11 @@
 // table or as a small chart per stat. A chart opens bigger in a pop-out, zoomed to his
 // own range, with his number or his percentile (his number by default, his pick in November 2026), and
 // the arrow keys step through the stats.
+//
+// A season ranked as if qualified (below the position's minimum that year, `as_if`) is an
+// open point and a dashed cell rather than a filled one (utils/qualifiers.js).
+import { AsIfNumber } from "../../AsIfNumber";
+import { isAsIf } from "../../../utils/qualifiers";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "../../ui/Dialog";
 import { Segmented } from "../../team/Segmented";
@@ -68,9 +73,14 @@ function SeasonLine({ seasons, stat, metric, view, big = false }) {
       {values.map((value, index) => {
         if (value == null) return null;
         const pct = seasons[index].percentiles?.[stat.id];
+        const open = isAsIf(seasons[index], stat.id);
         return (
           <g key={seasons[index].season}>
-            <circle cx={x(index)} cy={y(value)} r={big ? 7 : 3} fill={pctColor(pct)} stroke="var(--surface-solid)" strokeWidth={big ? 2 : 1} />
+            {open ? (
+              <circle cx={x(index)} cy={y(value)} r={big ? 7 : 3} fill="var(--surface-solid)" stroke={pctColor(pct)} strokeWidth={big ? 2 : 1.2} strokeDasharray={big ? "3 2" : undefined} />
+            ) : (
+              <circle cx={x(index)} cy={y(value)} r={big ? 7 : 3} fill={pctColor(pct)} stroke="var(--surface-solid)" strokeWidth={big ? 2 : 1} />
+            )}
             {big && (
               <>
                 <text x={x(index)} y={y(value) - 13} textAnchor="middle" fontSize="12.5" fontWeight="800" fill="var(--fg)" className="stat-num">{text(value)}</text>
@@ -114,7 +124,11 @@ function ChartTile({ stat, seasons, metric, onOpen }) {
       </div>
       <div className="flex items-baseline gap-1.5">
         <span className="stat-num text-[17px] font-extrabold text-fg">{statText(metric, stat.id, latest?.[stat.id])}</span>
-        {pct != null && <span className="stat-num text-[11px] font-bold" style={{ color: pctColor(pct) }}>{pct}</span>}
+        {pct != null && (
+          <AsIfNumber open={isAsIf(latest, stat.id)} className="stat-num text-[11px] font-bold" color={pctColor(pct)}>
+            {pct}
+          </AsIfNumber>
+        )}
       </div>
       <SeasonLine seasons={seasons} stat={stat} metric={metric} view="value" />
     </button>
@@ -197,9 +211,14 @@ export function CareerProfile({ page, detail }) {
                   <td className="pin-col stat-num px-2 py-1 text-fg">{entry.season} <span className="text-faint">{entry.team_abbreviation}</span></td>
                   {stats.map((stat) => {
                     const pct = entry.percentiles?.[stat.id];
+                    const open = pct != null && isAsIf(entry, stat.id);
                     return (
                       <td key={stat.id} className="px-0.5 py-0.5">
-                        <div className="rounded-md px-1.5 py-1 text-right" style={{ background: heatFill(pct ?? null) }}>
+                        <div
+                          className="rounded-md px-1.5 py-1 text-right"
+                          title={open ? "As if qualified" : undefined}
+                          style={open ? { outline: `1.5px dashed ${pctColor(pct)}`, outlineOffset: "-2px" } : { background: heatFill(pct ?? null) }}
+                        >
                           <div className="stat-num text-fg">{statText(metrics[stat.id], stat.id, entry[stat.id])}</div>
                           <div className="stat-num text-[9.5px] text-muted">{pct ?? "-"}</div>
                         </div>

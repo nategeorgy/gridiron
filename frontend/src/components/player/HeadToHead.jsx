@@ -20,6 +20,7 @@ import { isMetricAvailable } from "../../utils/availability";
 import { FinishChip } from "./FinishChip";
 import { metricTip } from "./metricTip";
 import { PercentileBar, cardValue, positionName, ringColors, statLabel, tint } from "./cardParts";
+import { asIfNote, isAsIf } from "../../utils/qualifiers";
 
 // The label column sits between the two sides from sm; below it the label takes its own
 // line and the two sides split the width. `compact` is a card in a narrow column (the home
@@ -163,7 +164,12 @@ export function HeadToHead({ players, teams, position, season, scoring, metrics,
                 </span>
               ) : (
                 <span key={side} className="block w-full">
-                  <PercentileBar percentile={percentile} from={side === 0 ? "right" : "left"} size={compact ? 24 : 26} />
+                  <PercentileBar
+                    percentile={percentile}
+                    from={side === 0 ? "right" : "left"}
+                    size={compact ? 24 : 26}
+                    open={isAsIf(players[side], stat.id)}
+                  />
                 </span>
               ),
             )}
@@ -174,6 +180,9 @@ export function HeadToHead({ players, teams, position, season, scoring, metrics,
           />
         );
       })}
+      {players.map((player) => asIfNote(player, player.name, position)).filter(Boolean).map((note) => (
+        <p key={note} className="mt-2 text-center text-[11.5px] text-muted">{note}</p>
+      ))}
       <StatTooltip tip={tooltip.tip} />
     </div>
   );

@@ -41,6 +41,7 @@ from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
 from app.models.plays import PlayTarget
 from app.percentiles import PercentileIndex, qualify_games
+from app.qualifiers import Qualifier
 from app.scoring import ScoringConfig
 
 from sqlalchemy.dialects.postgresql import aggregate_order_by
@@ -232,10 +233,13 @@ def career_seasons(
         mine["ppg_pool_size"] = len(qualified)
         mine["ppg_qualified"] = player_id in ppg_ranks
         mine["min_games"] = min_games
+        qualifier = Qualifier.for_window(db, season, season_type)
+        mine["minimum"] = qualifier.check(mine)
         if percentile_ids:
-            index = PercentileIndex(rows, percentile_ids, min_games)
+            index = PercentileIndex(rows, percentile_ids, min_games, qualifier)
             mine["percentiles"] = index.for_row(mine)
             mine["ranks"] = index.ranks_for_row(mine, percentile_ids)
+            mine["as_if"] = index.as_if(mine, percentile_ids)
         if line_ids:
             lines = {}
             for metric in line_ids:

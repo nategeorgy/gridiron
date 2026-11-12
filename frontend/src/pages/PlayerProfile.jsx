@@ -139,7 +139,7 @@ export function PlayerProfile({ playerId: playerIdProp } = {}) {
   const team = teams[row?.team_abbreviation ?? player.team_abbreviation];
   const page = {
     player, playerId, position, season, setSeason: setChosenSeason, careerSeasons, careerLoading: careerQuery.isLoading,
-    scoring, league, metrics, row, seasonQuery, poolSize: seasonQuery.data?.percentiles?.pool_sizes?.[position],
+    scoring, league, metrics, row, seasonQuery,
     through, lastWeek, seasonLog, seasonGames, allGames, gameLogLoading: gameLogQuery.isLoading, teams, team,
     currentSeason, embedded, goTab,
   };

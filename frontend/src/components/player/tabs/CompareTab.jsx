@@ -50,6 +50,9 @@ export function CompareTab({ page }) {
   const poolQuery = useIntelligence({
     season, season_type: "REG", positions: position, metric: "fantasy_points", order: "desc",
     scoring, league, limit: 200, percentiles: wanted.join(","), ranks: cardRankColumns(position).join(","),
+    // The players who clear the position's minimum, like the leaderboard: a part-timer's
+    // rates are as if qualified, so he is matched on his own request instead.
+    require_minimum: true,
   });
   const pool = useMemo(() => poolQuery.data?.data ?? [], [poolQuery.data]);
   const mine = pool.find((entry) => entry.player_id === playerId) ?? row;

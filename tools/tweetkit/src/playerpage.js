@@ -110,7 +110,8 @@ const radarStats = (pos) => RADAR_DEF[pos].map(([id, label, f]) => ({ id, label,
 /**
  * A percentile radar. One player: a bubble at each point holding his percentile, coloured
  * red to green, his number under each label. Two: two translucent shapes, both percentiles
- * under each label. people: [{color, pct: {id: percentile}, val: {id: value}}].
+ * under each label. people: [{color, pct: {id: percentile}, val: {id: value}, asif: [ids]}],
+ * where `asif` names the percentiles ranked as if qualified, drawn as open dashed points.
  */
 function radar(cx, cy, radius, stats, people, o = {}) {
   const shown = stats.filter((st) => people.every((pp) => pp.pct[st.id] != null));
@@ -143,7 +144,9 @@ function radar(cx, cy, radius, stats, people, o = {}) {
   [...people].reverse().forEach((pp) => shown.forEach((st, i) => {
     const pc = pp.pct[st.id];
     const [px, py] = pt(i, pc);
-    if (pair) s += C(px, py, 6, { fill: pp.color, stroke: "var(--card)", sw: 2 });
+    const open = pp.asif?.includes(st.id);
+    if (pair) s += open ? C(px, py, 7, { fill: "var(--card)", stroke: pp.color, sw: 2.5, dash: "3 2.5" }) : C(px, py, 6, { fill: pp.color, stroke: "var(--card)", sw: 2 });
+    else if (open) s += C(px, py, br, { fill: "var(--card)", stroke: pctColor(pc), sw: 3, dash: `${br * 0.32} ${br * 0.22}` }) + T(px, py + br * 0.36, pc, { size: br * 0.86, weight: 800, anchor: "middle", mono: true, fill: "var(--muted)" });
     else s += C(px, py, br, { fill: pctColor(pc), stroke: "var(--card)", sw: 3 }) + T(px, py + br * 0.36, pc, { size: br * 0.86, weight: 800, anchor: "middle", mono: true, fill: "#06110b" });
   }));
   return s;
@@ -153,7 +156,7 @@ function radarOf(p, row) {
   const keys = DATA.radar_keys[p.pos];
   const val = {}, pc = {};
   keys.forEach((k, i) => { val[k] = row.rv?.[i] ?? null; pc[k] = row.rp?.[i] ?? null; });
-  return { val, pct: pc };
+  return { val, pct: pc, asif: keys.filter((_, i) => row.ra?.[i]) };
 }
 
 /** A percentile row as D1 draws it: label, value, then the bar with its bubble. */
@@ -166,8 +169,8 @@ function pctRow(s0, x0, x1, cy, rowH, label, value, pc, i, o = {}) {
   s += T(bx0 - 24, cy + 7, value, { size: (o.size ?? 19) + 1, weight: 800, anchor: "end", mono: true });
   s += L(bx0, cy, bx1, cy, { stroke: "var(--rule)", sw: 7, cap: "round" });
   if (pc != null) {
-    const bx = lin(0, 100, bx0, bx1)(pc), color = pctColor(pc), r = Math.min(17, rowH / 2 - 2);
-    s += L(bx0, cy, bx, cy, { stroke: color, sw: 7, cap: "round" }) + C(bx, cy, r, { fill: mix(color, 30, "var(--card)"), stroke: color, sw: 3 }) + T(bx, cy + r * 0.38, pc, { size: r * 0.95, weight: 800, anchor: "middle", mono: true });
+    const r = Math.min(17, rowH / 2 - 2);
+    s += pctMark(bx0, lin(0, 100, bx0, bx1)(pc), cy, pc, o.open, { sw: 7, r, size: r * 0.95, dy: r * 0.38 });
   } else s += T(bx1, cy + 6, "Not ranked", { size: 15, anchor: "end", fill: "var(--faint)" });
   return s;
 }
@@ -194,13 +197,12 @@ function roleOf(pos, row) {
   if (routes >= 0.55) return ["Rotational", `on ${pc(routes)} of the routes`];
   return ["Part-time", `on ${pc(routes)} of the routes`];
 }
-const qualifiedCount = (pos) => DATA.sim_pool[pos]?.length ?? 0;
 
 // D11 ---------------------------------------------------- Percentile profile
 function cardPercentileProfile(pid) {
   const p = DATA.players[pid];
   const fr = ppFrame(p, 1600, 900, `${DATA.season} · Percentile profile · PPR`, p.name,
-    `Through Week ${thru(p.team)}, among ${qualifiedCount(p.pos)} qualified ${posWord(p.pos)}`);
+    `Through Week ${thru(p.team)} · rate stats among qualified ${p.pos}s only · counting stats among all ${p.pos}s`);
   const { pad, w } = fr;
   const color = teamColor(p.team);
   const [role, why] = roleOf(p.pos, p.season);
@@ -209,17 +211,20 @@ function cardPercentileProfile(pid) {
   s += T(pad + 22, fr.top + 52, role, { size: 30, weight: 800 });
   s += T(pad + 22, fr.top + 80, fit(why, 516, 18), { size: 18, fill: "var(--muted)" });
   const cy = fr.top + 104 + (fr.bottom - fr.top - 104) / 2 + 8;
-  s += radar(pad + 330, cy, 160, radarStats(p.pos), [{ color: "var(--series-1)", pct: p.pct, val: p.season }]);
+  s += radar(pad + 330, cy, 160, radarStats(p.pos), [{ color: "var(--series-1)", pct: p.pct, val: p.season, asif: p.asif }]);
   // The player card's percentile list beside it (PCT_LIST, D1's rows).
   const list = PCT_LIST[p.pos];
   const x0 = 830, x1 = w - pad;
   s += T(x0, fr.top + 14, `Percentile among ${posWord(p.pos)}`, { size: 21, weight: 750 });
-  const rowH = Math.min(42, (fr.bottom - fr.top - 30) / list.length);
+  // The note under the card takes the list's last 28px, or it lands on the bottom row.
+  const note = asIfNote(p);
+  const rowH = Math.min(42, (fr.bottom - fr.top - 30 - (note ? 28 : 0)) / list.length);
   list.forEach((id, i) => {
     const [label, f] = STAT[id];
     const v = p.season[id];
-    s = pctRow(s, x0, x1, fr.top + 34 + i * rowH + rowH / 2, rowH, STAT_LABEL[p.pos]?.[id] ?? label, v == null ? "-" : f(v), p.pct[id], i, { bx0: x0 + 400, size: rowH < 38 ? 17 : 18 });
+    s = pctRow(s, x0, x1, fr.top + 34 + i * rowH + rowH / 2, rowH, STAT_LABEL[p.pos]?.[id] ?? label, v == null ? "-" : f(v), p.pct[id], i, { bx0: x0 + 400, size: rowH < 38 ? 17 : 18, open: asIf(p, id) });
   });
+  if (note) s += T(pad, fr.bottom + 4, fit(note, w - pad * 2, 16), { size: 16, fill: "var(--muted)" });
   return wrapCard(fr, s);
 }
 
@@ -482,7 +487,10 @@ function weekGrid(pid, rowsByPos, ranked) {
     const sv = p.season[sid];
     const spc = p.pct[sid];
     const text = cellText(format, perGame && !seasonId && sv != null ? sv / games : sv);
-    s += R(w - pad - seasonW + gap / 2, top + gap / 2, seasonW - gap, rowH - gap, { rx: 10, fill: heatFill(spc ?? null) });
+    // As if qualified (below the minimum): a dashed outline instead of the shade.
+    s += asIf(p, sid) && spc != null
+      ? R(w - pad - seasonW + gap / 2 + 1, top + gap / 2 + 1, seasonW - gap - 2, rowH - gap - 2, { rx: 10, fill: "none", stroke: pctColor(spc), sw: 2, dash: "6 4" })
+      : R(w - pad - seasonW + gap / 2, top + gap / 2, seasonW - gap, rowH - gap, { rx: 10, fill: heatFill(spc ?? null) });
     if (ranked) {
       s += T(sx, cy - 1, text, { size: 19, weight: 800, anchor: "middle", mono: true });
       s += T(sx, cy + 19, spc != null ? `${spc} pct` : "", { size: 14, weight: 650, anchor: "middle", mono: true, fill: "var(--muted)" });
@@ -882,7 +890,11 @@ function cardCareerProfile(pid) {
       s += `<path d="${smoothPath(pts)} L${num(pts[pts.length - 1][0], 1)},${num(ly1, 1)} L${num(pts[0][0], 1)},${num(ly1, 1)} Z" fill="${color}" fill-opacity="0.12"/>`;
       s += `<path d="${smoothPath(pts)}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round"/>`;
     }
-    vals.forEach((v, j) => { if (v != null) s += C(x(j), y(v), 6, { fill: pctColor(pcs[j]), stroke: "var(--card)", sw: 2 }); });
+    // A season below the minimum that year is an open dot: its percentile is as if qualified.
+    vals.forEach((v, j) => {
+      if (v == null) return;
+      s += rows[j].ra?.[k] ? C(x(j), y(v), 6, { fill: "var(--card)", stroke: pctColor(pcs[j]), sw: 2.5, dash: "3 2" }) : C(x(j), y(v), 6, { fill: pctColor(pcs[j]), stroke: "var(--card)", sw: 2 });
+    });
     s += T(lx0, ty + th - 10, `'${String(rows[0].season).slice(2)}`, { size: 14, mono: true, fill: "var(--faint)" }) + T(lx1, ty + th - 10, `'${String(rows[rows.length - 1].season).slice(2)}`, { size: 14, anchor: "end", mono: true, fill: "var(--faint)" });
   });
   // A spare slot holds the key.
@@ -913,7 +925,7 @@ function cardVsLastSeason(pid) {
   const NOW = "var(--series-1)", THEN = "var(--series-2)";
   const stats = radarStats(p.pos);
   const cy = (fr.top + fr.bottom) / 2 + 14;
-  let s = radar(pad + 300, cy, 172, stats, [{ color: NOW, pct: A.pct, val: A.val }, { color: THEN, pct: B.pct, val: B.val }]);
+  let s = radar(pad + 300, cy, 172, stats, [{ color: NOW, pct: A.pct, val: A.val, asif: A.asif }, { color: THEN, pct: B.pct, val: B.val, asif: B.asif }]);
   s += legendRow(pad, fr.bottom + 4, [
     [(x, y) => C(x, y, 8, { fill: THEN }), String(then.season)], [(x, y) => C(x, y, 8, { fill: NOW }), String(now.season)],
   ], 17).svg;

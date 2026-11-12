@@ -851,7 +851,12 @@ GET /api/v1/stats/intelligence               ← M3 Insight board (VORP / FOR / 
                                                with rank_pools (what each rank is out
                                                of). where=metric:min:max,... (November
                                                2026) filters the rows after scoring,
-                                               never the pools; order=asc|desc
+                                               never the pools; order=asc|desc;
+                                               require_minimum=true keeps only players
+                                               at their position's rate minimum (the
+                                               board's Qualified chip). Every row
+                                               carries `minimum` and, with percentiles,
+                                               `as_if` (see app/qualifiers.py)
 GET /api/v1/stats/vegas                      ← M6 one week's market: players ranked by
                                                implied team total, or the slate.
                                                view=players|games
@@ -1014,9 +1019,11 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
     beside them, one row of filter pills, then a card holding the table and its toolbar:
     **Filter** (a range on games, snaps, targets, carries, receptions, attempts, dropbacks
     or completions), **Display** (values shaded by percentile, the percentile or the rank
-    "#12" beneath, values only, percentiles shaded), Edit Columns and Export. Each group
-    opens with a removable minimum: QB 30 dropbacks, RB, RB/WR/TE and All 30 snaps, WR 10
-    targets, TE and WR/TE 12 targets (`DEFAULT_FILTERS`).
+    "#12" beneath, values only, percentiles shaded), Edit Columns and Export. Every board
+    opens with a removable **Qualified** chip (`minimum=off` removes it): only players at
+    their position's rate minimum per team game, which replaced the per-group default
+    minimums in November 2026. With it off, a player below the minimum is tagged "Below
+    min" and his as-if cells are dashed.
     Headers sort high to low, then low to high. The team boards use the same layout
     with "#" ranks and no shading.
 
@@ -1535,6 +1542,14 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       for signed-out visitors** (in the browser, moved to the account on sign-in). Fixed
       `SAVED_VIEW_SECTIONS`, which had refused every signed-in leaderboard save since the
       September rebuilds. No migration
+- [x] Percentile minimums (November 2026), from a mockup of three presets. A **rate** (and a
+      few shares per position) is ranked only among players at their position's minimum per
+      team game: QB 7 dropbacks, RB 3 carries + targets, WR 12 routes, TE 2 targets
+      (`app/qualifiers.py`). Counting totals keep the games rule. A player below it is not in
+      anyone's pool, but his own card still shows where he would rank: an **open bubble**
+      (dashed, unfilled) on the player card, radar, head-to-head, Compare, career profile and
+      the tweet kit. The leaderboards open with a **Qualified** chip in place of the old
+      default minimums. No migration
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is
@@ -1941,6 +1956,21 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
   would be worse than useless. It is the same rule the Insight boards already follow,
   and the pool qualifier is theirs too (`QUALIFY_FRACTION`) rather than the display
   filter — a pool containing every one-game call-up moves every percentile in it
+- ⚠️ **A rate's pool also needs volume** (November 2026, `app/qualifiers.py`, Nate's rules):
+  QB 7 dropbacks, RB 3 carries + targets, WR 12 routes, TE 2 targets, **per team game**, so
+  the bar grows with the season. Gated: every rate (read from the registry, so a new rate
+  is gated the day it lands: a weighted mean, a `derived` with `per`, a composite divided by
+  anything but games) plus `GATED_EXTRAS` per position (a QB's rushing yards per game; a
+  back's rush, target, route and opportunity shares; a receiver's or tight end's target,
+  route and air-yard shares and WOPR). **Counts are never gated.** A player below it is
+  still given a percentile, against the pool he is not in, and `as_if` on the row names
+  those, so every surface draws them open (`utils/qualifiers.js`, `AsIfNumber`,
+  `PercentileBar open`). Routes count only over team games that have routes (2026's are
+  hand-loaded days behind the stats), and a receiver uses 2 targets per team game before
+  2016. Team games come from `player_stats`, not the schedule, because a score lands hours
+  before its stat lines. Not gated on purpose: Insight scores' own pools
+  (`app/intelligence.py`), weekly ranks (one game, no sample) and the tweet kit's league
+  leaders card (F3, which states the NFL's own minimums)
 - **Direction is corrected before a percentile leaves the server.** The registry's
   `higher_is_better` is applied in `PercentileIndex.for_row`, so 95th percentile always
   reads as good — including for drops, interceptions and pressure rate. No UI should

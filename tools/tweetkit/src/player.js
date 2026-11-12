@@ -129,7 +129,8 @@ function cardProfile(pid, opts = {}, mode = "fantasy") {
   // The card is 1200x1500 when the rows fit at 50px or more; a long list (backs have 15)
   // grows the card rather than shrinking the type.
   const tilesH = 158;
-  const fixed = 326 + tilesH + 68 + 28 + (mode === "nfl" ? 180 : 96) + 120;
+  const note = asIfNote(p);
+  const fixed = 326 + tilesH + 68 + 28 + (mode === "nfl" ? 180 : 96) + 120 + (note ? 22 : 0);
   const rowH = Math.max(50, Math.min(56, (1500 - fixed) / list.length));
   const h = Math.max(1500, Math.round(fixed + rowH * list.length));
   const fr = frame(1200, h, { noHeader: true });
@@ -157,15 +158,14 @@ function cardProfile(pid, opts = {}, mode = "fantasy") {
     s += T(pad, cy + 7, lb.text, { size: lb.size, weight: 600, fill: "var(--muted)" });
     s += T(bx0 - 30, cy + 8, v == null ? "-" : f(v), { size: 22, weight: 800, anchor: "end", mono: true });
     s += L(bx0, cy, bx1, cy, { stroke: "var(--rule)", sw: 8, cap: "round" });
-    if (pc != null) {
-      const bx = lin(0, 100, bx0, bx1)(pc);
-      const color = pctColor(pc);
-      s += L(bx0, cy, bx, cy, { stroke: color, sw: 8, cap: "round" });
-      s += C(bx, cy, 20, { fill: mix(color, 30, "var(--card)"), stroke: color, sw: 3 });
-      s += T(bx, cy + 7, pc, { size: 18, weight: 800, anchor: "middle", mono: true });
-    } else s += T(bx1, cy + 7, "Not ranked", { size: 16, anchor: "end", fill: "var(--faint)" });
+    if (pc != null) s += pctMark(bx0, lin(0, 100, bx0, bx1)(pc), cy, pc, asIf(p, id), { sw: 8, r: 20, size: 18, dy: 7 });
+    else s += T(bx1, cy + 7, "Not ranked", { size: 16, anchor: "end", fill: "var(--faint)" });
   });
   y += list.length * rowH + 28;
+  if (note) {
+    s += T(pad, y - 6, fit(note, w - pad * 2, 15), { size: 15, fill: "var(--muted)" });
+    y += 22;
+  }
   const slots = weekSlots(p);
   const cw = (w - pad * 2 - 190) / slots.length;
   if (mode === "nfl") return wrapCard(fr, s + gameStrip(p, slots, pad + 190, y, cw, 180));
@@ -436,7 +436,8 @@ function cardH2H(pid, opts = {}, mode = "fantasy") {
   const list = (opts.list ?? M.list[a.pos]).filter((id) => !skip.includes(id));
   const tiles = M.tiles[a.pos].flatMap(([, cells]) => cells).filter(([, id]) => !skip.includes(id));
   const rowH = 48, top = 380;
-  const h = Math.max(1500, top + (tiles.length + list.length) * rowH + 70 + 120);
+  const notes = [a, b].map(asIfNote).filter(Boolean);
+  const h = Math.max(1500, top + (tiles.length + list.length) * rowH + 70 + 120 + notes.length * 24);
   const fr = frame(1200, h, { noHeader: true });
   const { pad, w } = fr;
   const ca = opts.colors?.[a.team] ?? teamColor(a.team), cb = opts.colors?.[b.team] ?? teamColor(b.team);
@@ -484,15 +485,18 @@ function cardH2H(pid, opts = {}, mode = "fantasy") {
     const better = pa != null && pb != null && pa !== pb ? (pa > pb ? "a" : "b") : null;
     row(i, STAT_LABEL[a.pos]?.[id] ?? label, a.season[id] == null ? "-" : f(a.season[id]), b.season[id] == null ? "-" : f(b.season[id]), better, (cy) => {
       let out = "";
-      for (const [pc, dir, color] of [[pa, -1, ca], [pb, 1, cb]]) {
+      for (const [pc, dir, who] of [[pa, -1, a], [pb, 1, b]]) {
         if (pc == null) continue;
         const x0 = mid + dir * (labelW / 2), x1 = x0 + dir * barMax * (pc / 100);
         out += L(x0, cy, x0 + dir * barMax, cy, { stroke: "var(--rule)", sw: 7, cap: "round" });
-        out += L(x0, cy, x1, cy, { stroke: pctColor(pc), sw: 7, cap: "round" });
-        out += C(x1, cy, 16, { fill: mix(pctColor(pc), 30, "var(--card)"), stroke: pctColor(pc), sw: 2.5 }) + T(x1, cy + 6, pc, { size: 15, weight: 800, anchor: "middle", mono: true });
+        out += pctMark(x0, x1, cy, pc, asIf(who, id), { sw: 7, r: 16, ring: 2.5, size: 15, dy: 6 });
       }
       return out;
     });
+  });
+  y += list.length * rowH + 20;
+  notes.forEach((text, i) => {
+    s += T(mid, y + 14 + i * 24, fit(text, w - pad * 2, 15), { size: 15, anchor: "middle", fill: "var(--muted)" });
   });
   return wrapCard(fr, s);
 }

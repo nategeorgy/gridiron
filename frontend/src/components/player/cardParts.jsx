@@ -46,8 +46,11 @@ export function ringColors(leftTeam, rightTeam) {
  * A percentile as a line from one end of its track, ending in a bubble with the number.
  * `from` is the end the line starts at: the card reads left to right, while each side of
  * the head-to-head grows outward from the label between them.
+ *
+ * `open` is a percentile ranked as if qualified (utils/qualifiers.js): the line dashed
+ * and the bubble an unfilled dashed ring, so it never passes for one he earned in a pool.
  */
-export function PercentileBar({ percentile, from = "left", size = 26 }) {
+export function PercentileBar({ percentile, from = "left", size = 26, open = false }) {
   const color = percentileScale(percentile);
   const half = size / 2;
   // How far the bubble's centre travels from the track's first end: none at 0, all of it at 100.
@@ -61,17 +64,24 @@ export function PercentileBar({ percentile, from = "left", size = 26 }) {
       />
       <i
         className="absolute top-1/2 block h-1.5 -translate-y-1/2 rounded-full"
-        style={{ [anchor]: half, width: travel, background: color }}
+        style={{
+          [anchor]: half,
+          width: travel,
+          background: open
+            ? `repeating-linear-gradient(90deg, ${color} 0 5px, transparent 5px 9px)`
+            : color,
+        }}
       />
       <span
-        className="stat-num absolute top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full font-extrabold text-fg"
+        className={`stat-num absolute top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full font-extrabold ${open ? "text-muted" : "text-fg"}`}
+        title={open ? "As if qualified" : undefined}
         style={{
           [anchor]: travel,
           width: size,
           height: size,
           fontSize: size * 0.42,
-          border: `2px solid ${color}`,
-          background: `color-mix(in srgb, ${color} 30%, var(--surface-solid))`,
+          border: `2px ${open ? "dashed" : "solid"} ${color}`,
+          background: open ? "var(--surface-solid)" : `color-mix(in srgb, ${color} 30%, var(--surface-solid))`,
         }}
       >
         {percentile}

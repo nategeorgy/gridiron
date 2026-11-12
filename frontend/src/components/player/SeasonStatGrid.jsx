@@ -19,6 +19,8 @@ import { isMetricAvailable } from "../../utils/availability";
 import { StatTooltip, useStatTooltip } from "../StatTooltip";
 import { metricTip } from "./metricTip";
 import { percentileColor } from "./percentile";
+import { AsIfNumber } from "../AsIfNumber";
+import { isAsIf } from "../../utils/qualifiers";
 
 // Row height is fixed so the static label column and the scrolling strips stay in step.
 const BOARD_ROW_HEIGHT = "h-[54px]";
@@ -52,11 +54,13 @@ function Headline({ stats, row, metrics, position, season, tooltip }) {
             <div className={`stat-num truncate text-[24px] font-bold leading-tight tracking-tight ${value === null ? "text-faint" : "text-fg"}`}>
               {value ?? "—"}
             </div>
-            <div
-              className="stat-num text-[11.5px] font-bold"
-              style={{ color: rank == null ? "var(--faint)" : percentileColor(percentile) }}
-            >
-              {rank == null ? "—" : `${position}${rank}`}
+            <div className="stat-num text-[11.5px] font-bold">
+              <AsIfNumber
+                open={rank != null && isAsIf(row, stat.id)}
+                color={rank == null ? "var(--faint)" : percentileColor(percentile)}
+              >
+                {rank == null ? "—" : `${position}${rank}`}
+              </AsIfNumber>
             </div>
           </div>
         );
@@ -81,11 +85,13 @@ function BoardCell({ column, row, metrics, season, sectionStart, tooltip }) {
       <div className={`stat-num whitespace-nowrap text-[13.5px] font-semibold leading-tight ${value === null ? "text-faint" : "text-fg"}`}>
         {value ?? "—"}
       </div>
-      <div
-        className="stat-num text-[9.5px] font-bold leading-tight"
-        style={{ color: percentile == null ? "var(--faint)" : percentileColor(percentile) }}
-      >
-        {percentile == null ? "—" : percentile}
+      <div className="stat-num text-[9.5px] font-bold leading-tight">
+        <AsIfNumber
+          open={percentile != null && isAsIf(row, column)}
+          color={percentile == null ? "var(--faint)" : percentileColor(percentile)}
+        >
+          {percentile == null ? "—" : percentile}
+        </AsIfNumber>
       </div>
     </div>
   );

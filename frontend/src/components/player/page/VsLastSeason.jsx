@@ -3,6 +3,7 @@
 // style of the tweet kit's risers and fallers card (C5): an open dot where he was and the
 // arrowhead where he is, green for a rise and red for a fall. Beside it, the stat itself
 // last season to this one, and the change in percentile points as a pill.
+import { isAsIf } from "../../../utils/qualifiers";
 import { ChartTooltip, useChartTooltip } from "../../explore/ChartTooltip";
 import { Legend } from "../../explore/common";
 import { forPosition } from "../../../constants/playerPage";
@@ -82,7 +83,8 @@ function Arrows({ stats, now, then, metrics }) {
             const tone = dir > 0 ? UP : DOWN;
             const ink = mix(tone, 80, "var(--fg)");
             const [rawThen, rawNow] = raw(stat);
-            const hover = `${stat.label}: ${then.season} ${rawThen} (${a} percentile), ${now.season} ${rawNow} (${b} percentile)`;
+            const asIf = (row) => (isAsIf(row, stat.id) ? ", as if qualified" : "");
+            const hover = `${stat.label}: ${then.season} ${rawThen} (${a} percentile${asIf(then)}), ${now.season} ${rawNow} (${b} percentile${asIf(now)})`;
             return (
               <g key={stat.id}>
                 <title>{hover}</title>

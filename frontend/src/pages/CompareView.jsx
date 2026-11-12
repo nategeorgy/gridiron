@@ -5,6 +5,8 @@
 // charts chosen by position (components/explore/CompareVisuals.jsx), the week-by-week
 // line and every weekly finish. The comparison is the URL (constants/compare.js), so a
 // link reopens exactly these players, seasons, weeks and tab.
+import { AsIfNumber } from "../components/AsIfNumber";
+import { asIfNote, isAsIf } from "../utils/qualifiers";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLiveSearchParams } from "../hooks/useLiveSearchParams";
@@ -390,7 +392,9 @@ function StatTable({ slots, sections, metrics }) {
                         style={wins ? { background: `color-mix(in srgb, ${slot.color} 13%, transparent)` } : undefined}>
                         <span className="stat-num inline-flex flex-col items-center leading-tight">
                           {wins ? <b className="text-fg">{formatStat(value, metric?.format)}</b> : formatStat(value, metric?.format)}
-                          <small className="text-[10px] font-semibold" style={{ color: percentileColor(percentile) }}>{percentile ?? ""}</small>
+                          <AsIfNumber open={percentile != null && isAsIf(slot.row, id)} className="text-[10px] font-semibold" color={percentileColor(percentile)}>
+                            {percentile ?? ""}
+                          </AsIfNumber>
                         </span>
                       </td>
                     );
@@ -426,6 +430,9 @@ function StatTable({ slots, sections, metrics }) {
           </span>
         ))}
       </div>
+      {slots.map((slot) => asIfNote(slot.row, slot.name, slot.row?.position, "Dashed percentiles")).filter(Boolean).map((note) => (
+        <p key={note} className="mt-1.5 text-xs text-muted">{note}</p>
+      ))}
     </div>
   );
 }

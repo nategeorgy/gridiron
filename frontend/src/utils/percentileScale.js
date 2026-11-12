@@ -47,3 +47,17 @@ export function rankPercentile(rank, poolSize) {
 
 /** Eleven stops for a legend bar, 0 to 100. */
 export const LEGEND_STOPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+/** The scale's full-strength colour at percentile `p`, for a line rather than a wash. */
+export function percentileColor(p) {
+  return p === null || p === undefined ? undefined : scaleColor(p, "fill");
+}
+
+/**
+ * An "as if qualified" cell (utils/qualifiers.js): no fill, a dashed ring in the
+ * percentile's colour instead, the board's version of the card's open bubble.
+ */
+export function asIfRing(p) {
+  if (p === null || p === undefined) return undefined;
+  return { outline: `1.5px dashed ${scaleColor(p, "fill")}`, outlineOffset: "-4px" };
+}
