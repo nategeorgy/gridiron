@@ -46,6 +46,7 @@ const GROUPS = {
     { id: "A11", name: "Passing charts", fn: cardGameThrows, wide: true, isNew: true, nfl: true, note: "Every targeted pass from both quarterbacks by depth and side: completions, incompletions, touchdowns and picks." },
     { id: "A12", name: "Standout", fn: cardStandout, wide: true, isNew: true, nfl: true, note: "One player's game: his line, then every touch on the game clock (a quarterback's throws on the field).",
       controls: [{ key: "who", type: "player", label: "Player", pool: (g) => gamePlayers(g), defaults: (g) => defaultStandout(g) }] },
+    { id: "A13", name: "Every touchdown", fn: cardTdGame, wide: true, isNew: true, note: "Each touchdown as an arc from the yard line the play started on into the end zone, passes above the line and runs below, in team colours, with the scorer's face and every touchdown in order." },
   ],
   preview: [
     { id: "B1", name: "Matchup", fn: cardMatchup, note: "Line, implied totals, each team's last five, and both offenses' matchups at every position (reworked Oct 28)." },
@@ -94,6 +95,22 @@ const GROUPS = {
     { id: "C9", name: "Weekly finishes", fn: cardFinishes, isNew: true, note: "A position's top scorers and where each finished every week, in starting-lineup colours.",
       controls: [{ key: "pos", type: "select", label: "Position", options: FINISH_OPTIONS, defaults: () => "WR" }] },
     scatterCard("QB", "C10"), scatterCard("RB", "C11"), scatterCard("WR", "C12"), scatterCard("TE", "C13"),
+    { id: "C14", name: "Every touchdown, the week", fn: cardTdWeek, wide: true, isNew: true, note: "All of the week's offensive touchdowns on one field, each from where the play started. Faces on everything from 30 yards out; the count from inside the 10 beside it." },
+    { id: "C15", name: "Start map", fn: cardStartMap, wide: true, isNew: true, note: "Next week: each player's season PPG against what his opponent allows to the position. Top right is the place to be. Green rings are top-8 matchups, red bottom-8. A player who sat out the latest game is left off.",
+      controls: [
+        { key: "pos", type: "select", label: "Position", options: FINISH_OPTIONS, defaults: () => "WR", resets: ["hl"] },
+        { key: "hl", type: "highlight", label: "Faces", pool: (_, o) => startRows(o.pos).rows.map((r) => ({ id: r.id, name: r.name, team: r.team })), defaults: (_, o) => defaultStartFaces(o.pos) },
+      ] },
+    { id: "C16", name: "Rank race", fn: cardRankRace, wide: true, isNew: true, note: "The position's leaders and where each ranked in season points after every week. Highlight any of them in colour, and spotlight one to fade the rest; the title follows the spotlight. Click a dot to highlight that player.",
+      controls: [
+        { key: "pos", type: "select", label: "Position", options: FINISH_OPTIONS, defaults: () => "WR", resets: ["hl", "spot"] },
+        COUNT([10, 12, 15], 12),
+        { key: "hl", type: "highlight", label: "Highlight", pool: (_, o) => raceRows(o).map((r) => ({ id: r.id, name: r.n, team: r.t })), defaults: (_, o) => defaultRaceHl(o) },
+        { key: "spot", type: "player", label: "Spotlight", pool: (_, o) => [{ id: "", name: "No spotlight", team: "" }, ...raceRows(o).map((r) => ({ id: r.id, name: r.n, team: r.t }))], defaults: () => "" },
+      ] },
+    { id: "C17", name: "Shootout meter", fn: cardShootout, wide: true, isNew: true, note: "Next week's slate on one scale: each game a line between its two teams' implied totals, sorted by the total, with the five best spots and who plays in them. The home page's Shootout Meter." },
+    { id: "C18", name: "Every game's win probability", fn: cardWpAll, wide: true, isNew: true, nfl: true, note: "Every game of the week as the winner's chance of winning, kickoff to final, in grey. Pick teams to colour their game from their side; click a line to add or remove its winner. Opens on the three closest calls.",
+      controls: [{ key: "hl", type: "highlight", label: "Teams", pool: () => wpTeamPool(), defaults: () => defaultWpTeams() }] },
   ],
   player: [
     { id: "D1", name: "Player profile", fn: cardProfile, pick: true, note: "Stat tiles grouped by phase, percentiles among his position, every week's finish." },
@@ -130,6 +147,7 @@ const GROUPS = {
     { id: "E2", name: "Who gets the work", fn: cardTeamShare, wide: true, isNew: true, note: "Each week's share of the targets and carries, by player." },
     { id: "E3", name: "EPA game by game", fn: cardTeamTrend, wide: true, isNew: true, note: "Offense and defense EPA per play in every game, with the result." },
     { id: "E4", name: "Red zone pecking order", fn: cardTeamRedZone, wide: true, isNew: true, note: "Who gets the targets and carries inside the 20, and each player's share." },
+    { id: "E5", name: "Every touchdown, the season", fn: cardTdTeam, wide: true, isNew: true, note: "Every offensive touchdown the team has scored this season, each from where the play started, coloured by who scored it (the top five; the rest in grey)." },
   ],
   league: [
     { id: "F1", name: "Passing network", fn: cardNetwork, wide: true, isNew: true, nfl: true, note: "The Explore tab's passing network for any quarterback, timeframe and situation. Hover a face for his numbers.",
@@ -169,6 +187,17 @@ const GROUPS = {
         { key: "chart", type: "select", label: "Chart", options: TEAM_SCATTERS.map((c) => [c.id, c.label]), defaults: () => TEAM_SCATTERS[0].id },
         tfControl(),
         { key: "hl", type: "highlight", label: "Highlight", pool: teamPool, defaults: () => [] },
+      ] },
+    { id: "F7", name: "Target share ring", fn: cardShareRing, wide: true, isNew: true, nfl: true, note: "A quarterback's targets as a ring split by receiver, coloured by position, with each receiver's share, yards, touchdowns and EPA per target beside it.",
+      controls: [
+        { key: "qb", type: "player", label: "Quarterback", pool: () => networkPassers(), defaults: () => networkPassers()[0].id },
+        tfControl(),
+        { key: "top", type: "select", label: "Receivers", options: [["5", "Top 5"], ["6", "Top 6"], ["7", "Top 7"], ["8", "Top 8"]], defaults: () => "7" },
+      ] },
+    { id: "F8", name: "Lineup cards", fn: cardLineupCards, wide: true, isNew: true, nfl: true, note: "The quarterback and his top six receivers as cards in the team's colours: share, line, EPA per target and a heat grid of where each is targeted.",
+      controls: [
+        { key: "qb", type: "player", label: "Quarterback", pool: () => networkPassers(), defaults: () => networkPassers()[0].id },
+        tfControl(),
       ] },
   ],
 };
@@ -217,7 +246,7 @@ function controlsHtml(card, arg, opts) {
       return `<label class="ctrl"><span>${c.label}</span><select data-key="${c.key}">${options.map(([v, label]) => `<option value="${v}"${opts[c.key] === v ? " selected" : ""}>${label}</option>`).join("")}</select></label>`;
     }
     if (c.type === "player") {
-      return `<label class="ctrl"><span>${c.label}</span><select data-key="${c.key}">${c.pool(arg).map((p) => `<option value="${p.id}"${opts[c.key] === p.id ? " selected" : ""}>${esc(p.name)} (${p.team})</option>`).join("")}</select></label>`;
+      return `<label class="ctrl"><span>${c.label}</span><select data-key="${c.key}">${c.pool(arg, opts).map((p) => `<option value="${p.id}"${opts[c.key] === p.id ? " selected" : ""}>${esc(p.name)}${p.team ? ` (${p.team})` : ""}</option>`).join("")}</select></label>`;
     }
     const pool = c.pool(arg, opts);
     const named = Object.fromEntries(pool.map((p) => [p.id, p]));

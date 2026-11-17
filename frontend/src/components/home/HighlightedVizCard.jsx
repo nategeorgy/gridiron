@@ -1,43 +1,53 @@
 // Highlighted Viz of the Week (October 2026): one Explore chart, large, at the top of the page.
 //
 // The pick is `HIGHLIGHTED_VIZ` in constants/signals.js. Only the selection is written
-// down: the passer's name and every number beside the chart are read from the same
+// down: the passer's name and every number on the card are read from the same
 // `/explore/network` response the Passing Network page draws, so the card cannot say
-// something the chart does not show. The chart is Explore's own `NetworkChart`, and it
-// exports through the same branded-image dialog.
-import { Link } from "react-router-dom";
+// something the chart does not show. Since November 2026 the network is drawn as a
+// broadcast graphic across the whole card (`BroadcastField`), with the five most-targeted
+// receivers as a lower third inside it and the passer's line as a row of numbers under it.
+import { Link, useNavigate } from "react-router-dom";
 import { Card, CardState } from "./primitives";
-import { PositionTag } from "../PositionTag";
-import { Headshot } from "../explore/common";
-import { NetworkChart, NetworkLegend } from "../explore/NetworkChart";
+import { BroadcastField } from "./BroadcastField";
 import { ExportImageButton } from "../explore/ExportImageButton";
-import { lastName, signed } from "../../utils/explore";
-import { usePhone } from "../../hooks/useMediaQuery";
-
-const shortName = (name) => `${name.split(" ")[0][0]}. ${lastName(name)}`;
-
-// The Passing Network page's receiver columns, so the two read the same.
-const COLUMNS = ["Receiver", "TGT", "TGT%", "REC", "YDS", "TD", "aDOT", "EPA/T"];
-const epaStyle = (value) => ({ color: value === null || value === undefined ? undefined : value >= 0 ? "var(--pos)" : "var(--neg)" });
+import { epaColor, signed } from "../../utils/explore";
+import { useTeamsList } from "../../hooks/useTeamStats";
 
 function Stat({ label, value }) {
   return (
-    <div className="rounded-xl border border-edge px-3.5 py-2.5" style={{ background: "color-mix(in srgb, var(--surface-2) 60%, transparent)" }}>
-      <div className="text-[10px] font-bold uppercase tracking-[0.07em] text-faint">{label}</div>
-      <div className="stat-num mt-1 text-[22px] font-bold text-fg">{value}</div>
+    <div className="flex items-baseline gap-2 rounded-xl border border-edge px-3 py-2" style={{ background: "color-mix(in srgb, var(--surface-2) 60%, transparent)" }}>
+      <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-faint">{label}</span>
+      <span className="stat-num text-[17px] font-bold text-fg">{value}</span>
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted">
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        <span className="inline-block h-2 w-16 rounded"
+          style={{ background: `linear-gradient(90deg, ${epaColor(-0.5, 0.5)}, ${epaColor(0, 0.5)}, ${epaColor(0.5, 0.5)})` }} />
+        Line colour: EPA per target
+      </span>
+      <span>Line width: targets</span>
+      <span>Across: average depth of target</span>
     </div>
   );
 }
 
 export function HighlightedVizCard({ pick, network, shape, isLoading, isError }) {
-  const phone = usePhone();
+  const navigate = useNavigate();
+  const teams = useTeamsList();
   const ready = network && shape.shown.length > 0;
   const passer = network?.passer;
   const totals = network?.totals;
+  const team = teams.data?.find((row) => row.abbreviation === (passer?.team ?? pick.team));
   const weekLabel = pick.weeks ? `Week ${pick.weeks} · ${pick.season}` : `${pick.season} season`;
   const subtitle = passer ? `${passer.team} · ${weekLabel}` : weekLabel;
+  const eyebrow = pick.weeks ? `Week ${pick.weeks} pass attempts` : "Season long pass attempts";
   const exploreLink = `/explore/network?season=${pick.season}${pick.weeks ? `&weeks=${pick.weeks}` : ""}&qb=${pick.passerId}${pick.team ? `&team=${pick.team}` : ""}`;
-  const rows = [...shape.shown, ...(shape.others ? [shape.others] : [])];
+  const chart = (props) => <BroadcastField passer={passer} shown={shape.shown} team={team} eyebrow={eyebrow} {...props} />;
 
   return (
     <Card className="!p-5">
@@ -51,7 +61,7 @@ export function HighlightedVizCard({ pick, network, shape, isLoading, isError })
             <ExportImageButton
               title={`${passer.name}'s passing network`}
               subtitle={subtitle}
-              render={() => <NetworkChart passer={passer} shown={shape.shown} interactive={false} />}
+              render={() => chart({ width: 1280, interactive: false })}
             />
             <Link
               to={exploreLink}
@@ -67,66 +77,21 @@ export function HighlightedVizCard({ pick, network, shape, isLoading, isError })
       <CardState isLoading={isLoading} isError={isError} isEmpty={!ready} empty="No targets for this pick yet." rows={8} />
 
       {ready && (
-        // The chart is square, so its width is also its height. Two fifths of the card
-        // (about 590px at full width), with the type on the right sized up to match it.
-        // Stacked, the headline leads: the chart answers it, so it reads after it.
-        <div className="grid items-start gap-6 min-[1100px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <div className="min-w-0 max-[1099px]:order-2">
-            <NetworkChart passer={passer} shown={shape.shown} compact={phone} />
-            <NetworkLegend layout="field" />
+        <>
+          {/* The name is drawn on the field; this is the heading for everyone not looking at it. */}
+          <h2 className="sr-only">{passer.name} {pick.weeks ? `Week ${pick.weeks}` : "Season Long"} Pass Attempts</h2>
+          {chart({ onSelect: (playerId) => navigate(`/players/${playerId}`) })}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Stat label="Targets" value={totals.targets} />
+            <Stat label="Cmp/Att" value={`${passer.completions}/${passer.attempts}`} />
+            <Stat label="Yards" value={passer.passing_yards.toLocaleString()} />
+            <Stat label="TD/INT" value={`${passer.passing_tds}/${passer.interceptions}`} />
+            <Stat label="aDOT" value={totals.adot?.toFixed(1) ?? "—"} />
+            <Stat label="EPA/target" value={signed(totals.epa_per_target, 2)} />
+            {passer.cpoe !== null && passer.cpoe !== undefined && <Stat label="CPOE" value={signed(passer.cpoe, 1)} />}
+            <div className="min-[1100px]:ml-auto"><Legend /></div>
           </div>
-
-          <div className="contents min-[1100px]:grid min-[1100px]:min-w-0 min-[1100px]:gap-5">
-            <div className="max-[1099px]:order-1">
-              <h2 className="text-[22px] font-bold leading-tight tracking-tight text-fg [text-wrap:balance] sm:text-[28px]">
-                {passer.name} {pick.weeks ? `Week ${pick.weeks}` : "Season Long"} Pass Attempts
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 max-[1099px]:order-3 sm:grid-cols-4">
-              <Stat label="Targets" value={totals.targets} />
-              <Stat label="Cmp/Att" value={`${passer.completions}/${passer.attempts}`} />
-              <Stat label="aDOT" value={totals.adot?.toFixed(1) ?? "—"} />
-              <Stat label="EPA/target" value={signed(totals.epa_per_target, 2)} />
-            </div>
-
-            <div className="overflow-x-auto max-[1099px]:order-4">
-              <table className="w-full min-w-[460px] border-collapse text-[14px]">
-                <thead>
-                  <tr>
-                    {COLUMNS.map((label, index) => (
-                      <th key={label} className={`pb-2 text-[10.5px] font-bold uppercase tracking-[0.07em] text-faint ${index ? "text-right" : "pin-col text-left"}`}>
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.player_id ?? "others"} className={`border-t border-line ${row.others ? "text-muted" : ""}`}>
-                      <td className="pin-col py-2.5 text-left max-md:pr-2">
-                        {row.others ? row.name : (
-                          <span className="flex items-center gap-2">
-                            <Headshot url={row.headshot_url} name={row.name} size={30} />
-                            <Link to={`/players/${row.player_id}`} className="truncate font-semibold text-fg hover:text-accent">{shortName(row.name)}</Link>
-                            {row.position && <PositionTag position={row.position} variant="quiet" className="max-sm:hidden" />}
-                          </span>
-                        )}
-                      </td>
-                      <td className="stat-num py-2.5 text-right font-semibold">{row.targets}</td>
-                      <td className="stat-num py-2.5 text-right">{(row.share * 100).toFixed(1)}%</td>
-                      <td className="stat-num py-2.5 text-right">{row.receptions}</td>
-                      <td className="stat-num py-2.5 text-right">{row.yards.toLocaleString()}</td>
-                      <td className="stat-num py-2.5 text-right">{row.touchdowns}</td>
-                      <td className="stat-num py-2.5 text-right">{row.adot === null ? "—" : row.adot.toFixed(1)}</td>
-                      <td className="stat-num py-2.5 text-right" style={epaStyle(row.epa_per_target)}>{signed(row.epa_per_target, 2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        </>
       )}
     </Card>
   );

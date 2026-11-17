@@ -1,7 +1,8 @@
 // The featured games (October 2026): one game just played and one coming up, drawn with
 // the game page's own charts. The recap is the row under the Highlighted Viz (targets and
-// carries, and every possession); the preview is the tale of the tape in the Week N
-// Preview. Chosen from the tweet kit's A4 ("Who got the ball"), A6 and B3 cards.
+// carries, and every possession). The preview's tale of the tape (`TaleOfTheTapeCard`) left
+// the Week N Preview in November 2026 for the Shootout Meter and is kept, unused. Chosen from
+// the tweet kit's A4 ("Who got the ball"), A6 and B3 cards.
 //
 // The games are `FEATURED_GAMES` in constants/signals.js; Home falls back to the closest
 // finish and the biggest total when a pick is not in the scoreboard's weeks. Each chart

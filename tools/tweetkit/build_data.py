@@ -776,7 +776,8 @@ for entry in receivers.values():
     del entry["tw"]
 
 # ------------------------------------------------------- passing networks
-# Per passer, per week, per situation: each receiver's tally as above (no histogram), and
+# Per passer, per week, per situation: each receiver's tally as above (no histogram) and
+# his targets by zone (behind, short, intermediate, deep, each left, middle, right), and
 # the passer's own line [completions, attempts, yards, TDs, INTs]. A receiver play-by-play
 # names but we do not track arrives with no id and is folded into "others" on the card.
 networks_raw = load("networks")
@@ -795,7 +796,9 @@ for pid, by_week in networks_raw.items():
             slot = entry["w"].setdefault(int(week), {})
             slot[situation] = {"line": [passer.get(k) or 0 for k in ("completions", "attempts", "passing_yards", "passing_tds", "interceptions")]
                                if situation == "all" else None,
-                               "rec": [[rec.get("player_id")] + tally(rec) for rec in net["receivers"]]}
+                               # The tally, then for all targets the 12 depth-by-side zones (F8's heat grids).
+                               "rec": [[rec.get("player_id")] + tally(rec) + (list(rec.get("zones") or [0] * 12) if situation == "all" else [])
+                                       for rec in net["receivers"]]}
             if passer.get("team"):
                 entry["tw"][int(week)] = passer["team"]
             for rec in net["receivers"]:
@@ -893,6 +896,36 @@ for boards in (weekly_boards, weekly_qb):
 allowed = {defense: {week: {position: [r(v, 2) for v in slot["sum"]] + [slot["top"]] for position, slot in by_pos.items()}
                      for week, by_pos in by_week.items()} for defense, by_week in allowed.items()}
 
+# ------------------------------------------------ touchdowns and the rank race
+# Every offensive touchdown this season as one array per play under TD_KEYS (the page
+# rebuilds the rows), and who scored or threw them. Faces only where a card draws one:
+# every scorer in the recap games, each team's top four scorers, and anything from 30+.
+TD_KEYS = ["game_id", "week", "quarter", "clock", "team", "opponent", "home", "kind", "from", "yards", "scorer_id",
+           "passer_id", "air_yards", "yards_after_catch", "location", "gap", "play_id"]
+td_raw = load("touchdowns")
+touchdowns = [[t.get(k) for k in TD_KEYS] for t in td_raw["data"]]
+td_people = {pid: {"n": p["name"], "pos": p["position"]} for pid, p in td_raw["players"].items()}
+recap_games = set(recaps_raw)
+by_team_scorer = {}
+for t in td_raw["data"]:
+    by_team_scorer.setdefault(t["team"], {}).setdefault(t["scorer_id"], 0)
+    by_team_scorer[t["team"]][t["scorer_id"]] += 1
+faces_for = {t["scorer_id"] for t in td_raw["data"] if t["game_id"] in recap_games or (t["from"] or 0) >= 30}
+for team, counts in by_team_scorer.items():
+    faces_for |= {pid for pid, _ in sorted(counts.items(), key=lambda kv: -kv[1])[:4]}
+for pid in faces_for:
+    if pid in td_raw["players"] and td_raw["players"][pid].get("headshot_url"):
+        headshots[pid] = td_raw["players"][pid]["headshot_url"]
+
+# The rank race: each position's top 30 in season points and their rank after every week.
+rank_race = {}
+for position, race in load("rank_race").items():
+    rank_race[position] = {"weeks": race["weeks"], "pool": race.get("pool"), "rows": [
+        {"id": row["player_id"], "n": row["name"], "t": row["team"], "r": row["ranks"], "c": [r(v, 1) for v in row["totals"]],
+         "g": row["games"]} for row in race["data"]]}
+    for row in race["data"][:20]:
+        note_face(row)
+
 # The newest week each team has played: a Thursday team's cards run a week further.
 team_through = {team: NEWEST_WEEK if NEWEST_WEEK in weeks else RECAP_WEEK for team, weeks in results.items()}
 
@@ -916,6 +949,7 @@ data = {
     "weekly_lines": weekly_lines, "receivers": receivers, "networks": networks, "people": people, "results": results,
     "passers": [p["player_id"] for p in load("passers")],
     "allowed": allowed, "allowed_keys": ALLOWED,
+    "td_keys": TD_KEYS, "touchdowns": touchdowns, "td_people": td_people, "rank_race": rank_race,
     "tape_meta": {m["id"]: {"label_o": m["label_o"], "label_d": m["label_d"], "better": m["better"]} for m in team_stats["metrics"]},
 }
 with open(os.path.join(HERE, "data.json"), "w") as handle:

@@ -22,11 +22,13 @@ function epaColor(epa, span = 0.5) {
 const DEPTH_NAMES = [["Behind", "under 0"], ["Short", "0-9 yds"], ["Intermediate", "10-19 yds"], ["Deep", "20+ yds"]];
 const DEPTH_FILL = [0, 1, 2, 3].map((i) => `var(--depth${i})`);
 
-/** A receiver tally ([targets, catches, yards, TDs, INTs, first downs, EPA, air yards, charted, l, m, r, d0-d3]) as an object. */
+/** A receiver tally ([targets, catches, yards, TDs, INTs, first downs, EPA, air yards, charted, l, m, r, d0-d3, and for a network z0-z11]) as an object. */
 function tallyObject(t, extra = {}) {
   const [targets, receptions, yards, touchdowns, interceptions, first_downs, epa, air_yards, charted, l0, l1, l2, d0, d1, d2, d3] = t;
   return { ...extra, targets, receptions, yards, touchdowns, interceptions, first_downs, epa, air_yards, charted,
-    locations: [l0, l1, l2], depth: [d0, d1, d2, d3], adot: charted ? air_yards / charted : null, epa_per_target: targets ? epa / targets : null };
+    locations: [l0, l1, l2], depth: [d0, d1, d2, d3], adot: charted ? air_yards / charted : null, epa_per_target: targets ? epa / targets : null,
+    // A network tally carries its 12 zones after the depths (depth-major: behind L/M/R, short, ...).
+    zones: t.length >= 28 ? t.slice(16, 28) : null };
 }
 const addInto = (acc, t) => { t.forEach((v, i) => { acc[i] = (acc[i] || 0) + v; }); return acc; };
 

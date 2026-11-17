@@ -928,8 +928,10 @@ GET /api/v1/stats/trending                   ← M10 who is gaining or losing wo
 GET /api/v1/stats/weekly-finishes            ← a position's top scorers by total points with their
                                                finish every week, byes from the schedule
                                                (the home page grid). position= (or FLEX for
-                                               RB/WR/TE together, Floor and Ceiling's pool),
-                                               min_games=, sort=total|ppg
+                                               RB/WR/TE together), min_games=, sort=total|ppg
+GET /api/v1/stats/rank-race                  ← a position's leaders in season points and their rank
+                                               after every week, everyone at the position counted
+                                               (the home page's Rank Race). position=, limit=
 
 # Explore (September 2026). Play-level views, all public, all but the Query Builder
 # served through cached_response. weeks= and situation=all|red_zone|late_downs apply.
@@ -942,6 +944,8 @@ GET /api/v1/explore/players/{id}/targets     ← every target he drew (role=rece
                                                threw (role=passer), + the average
 GET /api/v1/explore/teams/{id}/targets       ← every target a team threw, + league average
 GET /api/v1/explore/players/{id}/runs        ← designed runs by lane, how each ended
+GET /api/v1/explore/touchdowns               ← every offensive touchdown from the yard line the play
+                                               started on (2025 on). weeks=, team=, game_id=
 GET /api/v1/explore/query                    ← the Query Builder: grain=games|seasons,
                                                mode=list|count, where=field:min:max,...
                                                last_week= cuts every season at one week,
@@ -993,12 +997,13 @@ Three per-request configs shape fantasy output, all parsed from compact spec str
   Fantasy Desk, and a Bento grid before that), in bands: a score ticker and a large
   **Highlighted Viz of the Week**; a **featured game recap** (targets and carries beside every
   possession, which replaced the team landscape and air-yard cards in October 2026); the week's
-  players (Floor and Ceiling, which replaced Expected
-  vs Actual in October 2026, and a reader-picked head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
+  players (the **Rank Race**, a bump chart of a position's leaders, which replaced Floor and
+  Ceiling in November 2026, and a reader-picked head-to-head); **Weekly Finishes** (a position's top scorers week by week, green to yellow to
   red, which replaced Trending Players and Last Week's Scoring in October 2026), cut at the coming
   week and sharing its band with the **Record Book**; and a **Week N
   Preview** (the slate,
-  matchups by position, and the featured game's tale of the tape, which replaced implied totals).
+  matchups by position, and the **Shootout Meter**, every game's implied team totals on one scale,
+  which replaced the featured game's tale of the tape in November 2026).
   The arrangement is data, in `constants/homeLayout.js`.
   The visible heading reads **"Highlighted Data"**; "Command Center" is the page's name
   in the code and in these docs. The nav holds **five dropdowns**: **Schedule**
@@ -1550,6 +1555,23 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       (dashed, unfilled) on the player card, radar, head-to-head, Compare, career profile and
       the tweet kit. The leaderboards open with a **Qualified** chip in place of the old
       default minimums. No migration
+- [x] Rank Race and the Highlighted Viz options (November 2026). Nate picked from seven mockups for the
+      Highlighted Viz of the Week (https://claude.ai/artifact/JwXNiAPFvEZK37dUiuG4gY): the **Rank Race**
+      (a position's leaders and their rank after every week) **replaces Floor and Ceiling** on the home page
+      (`components/home/RankRaceCard.jsx`, `GET /stats/rank-race`, `app/rank_race.py`), and Every Touchdown,
+      the Start Map and the Rank Race join the tweet kit (A13, C14, C15, C16, E5 in `tools/tweetkit/src/viz.js`,
+      touchdowns from `GET /explore/touchdowns`, `app/touchdowns.py`). Every Touchdown is kept as a candidate
+      for the hero slot. A week's rank counts everyone at the position who had played. From a second round,
+      the **Shootout Meter** replaced the Tale of the Tape in the Week N Preview
+      (`components/home/ShootoutMeterCard.jsx`, read from the scoreboard's `next` window) and joined the kit as
+      C17, with C18 every game's win probability. No migration
+- [x] The Highlighted Viz as a broadcast graphic (November 2026), from six restyles of the live passing network
+      (https://claude.ai/artifact/LBQsMgDXgGDJ5RXz8h1E48, Nate picked A): the field on its side across the whole
+      card with the passer's name on it (`components/home/BroadcastField.jsx`), the quarterback on the -5, and the
+      five most-targeted receivers as a lower third of team-colour tiles inside the graphic (option D of
+      https://claude.ai/artifact/DJJTHi6no9fhzdh45qjh2Z), so they export with it. The numbered callouts it
+      launched with were cut at Nate's ask. Two other restyles joined the tweet kit as F7 (target share ring) and F8 (lineup cards).
+      Frontend and kit only
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is

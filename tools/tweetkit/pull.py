@@ -331,6 +331,13 @@ def main():
     print("target weeks", len(out["target_weeks"]), "networks", len(network_ids), "x", len(jobs) // max(1, len(network_ids)),
           "recap throws", len(out["recap_throws"]), file=sys.stderr)
 
+    # Every offensive touchdown this season (the touchdown cards: a game, a week, a team's
+    # season), and each position's rank race (the bump chart).
+    out["touchdowns"] = get("/explore/touchdowns", season=SEASON)
+    out["rank_race"] = {position: get("/stats/rank-race", season=SEASON, position=position, scoring="ppr", limit=30)
+                        for position in POSITIONS}
+    print("touchdowns", out["touchdowns"]["total"], file=sys.stderr)
+
     for key, value in out.items():
         save(key, value)
 
