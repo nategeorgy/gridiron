@@ -102,6 +102,7 @@ means Nate chose it to post. **Controls** are what the page and `render.mjs` let
 | A10 | Passing networks | 1600x900 | Titled "Away at Home: targets distribution". Both quarterbacks' networks for the game: each receiver's depth and side, coloured by EPA per target, with his targets, share and EPA per target written under him | | Added Oct 28, no fantasy |
 | A11 | Passing charts | 1600x900 | Every targeted pass from both quarterbacks by depth and side, with completions, touchdowns and picks, under each quarterback's face | | Added Oct 28, no fantasy |
 | A12 | Standout | 1600x900 | One player's line, then every touch on the game clock (a quarterback's throws on the field) | Player | Added Oct 28, no fantasy |
+| A13 | Every touchdown | 1600x900 | The game's offensive touchdowns as arcs from the yard line each play started on into the end zone (passes above the line, runs below), in team colours, the scorer's face on each, and every touchdown in order | | Added Nov 12 |
 
 On every chart, hovering a dot on the page shows who it is and his numbers, and clicking it
 adds or removes his face (on C1, highlights the team). The hover targets draw nothing in a PNG.
@@ -144,6 +145,17 @@ rank on them is for the offense: 1st is the softest matchup.
 | C11 | RB scatter plots | 1600x900 | Carry share vs route %, expected vs actual, inside-5 carries vs TDs, yards after contact vs RYOE, target share vs YPRR | Chart, timeframe, players, faces | Added Oct 21 |
 | C12 | WR scatter plots | 1600x900 | aDOT vs target share, expected vs actual, target share vs YPRR, TPRR vs YPRR, red zone targets vs TDs, route % vs TPRR | Chart, timeframe, players, faces | Added Oct 21 |
 | C13 | TE scatter plots | 1600x900 | The same six charts as C12, for tight ends | Chart, timeframe, players, faces | Added Oct 21 |
+| C14 | Every touchdown, the week | 1600x900 | All of the week's offensive touchdowns on one field (A13's arcs, passes blue and runs orange), faces on the eight longest from 30+, and how many came from inside the 10 | | Added Nov 12 |
+| C15 | Start map | 1600x900 | Next week: every startable player's season PPG against what his opponent allows to the position per game, above or below the league average. Rings green for a top-8 matchup, red for bottom-8. Leaves off a player who sat out his team's latest game | Position, faces | Added Nov 12 |
+| C16 | Rank race | 1600x900 | The position's top 10, 12 or 15 in season points and where each ranked after every week (everyone at the position counted). Highlighted names get a colour each; a spotlit one turns accent green, fades the rest and sets the title | Position, players, highlight, spotlight | Added Nov 12 |
+| C17 | Shootout meter | 1600x900 | Next week's slate on one scale: each game a line between its two teams' implied totals (team-coloured rings, the favourite's bigger), sorted by the total, with the five highest implied totals and their top three players. The home page's Shootout Meter | | Added Nov 12 |
+| C18 | Every game's win probability | 1600x900 | Every game of the recap week as the winner's chance from kickoff to final, in grey; each picked team's game drawn from its side in its colour, with its logo at the end and a winner's lowest point marked. Beside it, the games by how close the winner came to losing | Teams | Added Nov 12, no fantasy |
+
+C14 to C18 and E5 are options from the home page's Highlighted Viz mockups
+(https://claude.ai/artifact/JwXNiAPFvEZK37dUiuG4gY). The touchdowns come from the API's
+`/explore/touchdowns` (2025 on, like the game pages) and the race from `/stats/rank-race`, which also
+draws the home page's Rank Race card, so a tweet and the site agree. C15 reads `DATA.allowed`, the same
+sums as B9 to B13.
 
 C10 to C13 are the presets in `frontend/src/constants/scatters.js`, mirrored in `SCATTERS` in
 `src/weekly.js`: add a chart to the site and it needs adding here too. Each plots the top 50
@@ -206,6 +218,7 @@ D4 (season by season) was removed on Oct 21. The reply-card pool is the top 36 Q
 | E2 | Who gets the work | 1600x900 | Each week's share of the targets and carries, by player | | Added Oct 21 |
 | E3 | EPA game by game | 1600x900 | Offense and defense EPA per play in every game, with the result | | Added Oct 21 |
 | E4 | Red zone pecking order | 1600x900 | Targets and carries inside the 20 by player, and each one's share | | Added Oct 21 |
+| E5 | Every touchdown, the season | 1600x900 | Every offensive touchdown the team has scored this season on A13's field, coloured by who scored (the top five, the rest grey), with each scorer's receiving and rushing split | | Added Nov 12 |
 
 ### F. League and Explore (no argument)
 
@@ -219,6 +232,8 @@ None of these uses fantasy points. Each takes a timeframe: the season, the last 
 | F4 | The race | 1600x900 | Season totals after every week for the leaders in a stat | Stat, position, players | Added Oct 28 |
 | F5 | Team rankings | 1200x1500 | All 32 teams in one team stat, as bars in team colours | Stat, timeframe | Added Oct 28 |
 | F6 | Team scatter plots | 1600x900 | Six team questions as logo scatters: passing vs running, pass vs run defense, PROE vs EPA, points for vs against, success vs explosive, pace vs pass rate | Chart, timeframe, highlight | Added Oct 28 |
+| F7 | Target share ring | 1600x900 | A quarterback's targets as a ring split by receiver (coloured by position, faces on the slices, his face in the middle), beside every receiver's share bar, yards, touchdowns and EPA per target | Quarterback, timeframe, receivers | Added Nov 13, no fantasy |
+| F8 | Lineup cards | 1600x900 | The quarterback and his top six receivers as cards in the team's colours: share of targets, the line, a 4x3 heat grid of where each is targeted (deep at the top, left to right as he sees it), aDOT and EPA per target | Quarterback, timeframe | Added Nov 13, no fantasy |
 
 ## Rules the cards follow
 

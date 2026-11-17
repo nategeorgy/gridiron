@@ -73,6 +73,12 @@ export async function getWeeklyFinishes(params) {
   return data;
 }
 
+/** A position's leaders in season points with their rank after every week (the home page's Rank Race). */
+export async function getRankRace(params) {
+  const { data } = await api.get("/stats/rank-race", { params });
+  return data;
+}
+
 /** The week's top scorers at each position (the Player Dashboard). Omit week for the week just played. */
 export async function getWeekLeaders(params) {
   const { data } = await api.get("/stats/week-leaders", { params });

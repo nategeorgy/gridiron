@@ -63,7 +63,8 @@ export function shapeNetwork(network, limit, floor = 1) {
   return { total, shown, others, all: named };
 }
 
-function receiverTip(receiver, passer) {
+/** The hover card for one receiver (the home page's Broadcast Field shares it). */
+export function receiverTip(receiver, passer) {
   const sided = receiver.locations[0] + receiver.locations[1] + receiver.locations[2];
   return (
     <TipCard

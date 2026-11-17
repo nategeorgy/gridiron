@@ -27,17 +27,16 @@ export const FEATURED_MATCHUP = {
 };
 
 /**
- * The featured games (October 2026): a game just played, drawn as who got the ball and
- * every possession in the row under the Highlighted Viz, and a game coming up, drawn as
- * the tale of the tape in the Week N Preview. Game ids as /games names them.
+ * The featured game (October 2026): a game just played, drawn as who got the ball and
+ * every possession in the row under the Highlighted Viz. Game ids as /games names them.
  *
- * A pick only shows while its game is in the week the scoreboard calls last (the recap)
- * or next (the preview). Otherwise the page takes the closest finish and the biggest
- * total, so the week flipping before these are re-picked never shows last week's game.
+ * The pick only shows while its game is in the week the scoreboard calls last. Otherwise
+ * the page takes the closest finish, so the week flipping before this is re-picked never
+ * shows last week's game. (A `preview` pick drew the tale of the tape in the Week N
+ * Preview until November 2026, when the Shootout Meter took its place.)
  */
 export const FEATURED_GAMES = {
   recap: "2026_09_CIN_ATL", // Bengals 34 at Falcons 17
-  preview: "2026_08_BAL_BUF", // Ravens at Bills, a 53.5 total
 };
 
 /**

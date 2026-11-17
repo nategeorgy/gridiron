@@ -5,10 +5,11 @@
 //   1. the week's scores as a ticker, then the Highlighted Viz of the Week, a large
 //      Explore chart;
 //   2. the featured game recap: targets and carries beside every possession;
-//   3. the season: the watchlist across the top when signed in, then Floor and Ceiling
-//      and Weekly Finishes beside a reader-picked Head to Head and the Record Book;
-//   4. the Week N Preview: the slate, then matchups by position and the featured game's
-//      tale of the tape.
+//   3. the season: the watchlist across the top when signed in, then the Rank Race
+//      (November 2026, replacing Floor and Ceiling) and Weekly Finishes beside a
+//      reader-picked Head to Head and the Record Book;
+//   4. the Week N Preview: the slate, then matchups by position beside the Shootout Meter
+//      (November 2026, replacing the featured game's tale of the tape).
 //
 // **No band ends with a gap under one column** (October 2026). Both columns stretch to
 // the taller one, and one card in each band (Every possession, Weekly Finishes, Matchups)
@@ -19,12 +20,13 @@
 // runs a year ahead. Every card names its own season rather than the page claiming one.
 import { cloneElement, useMemo, useState } from "react";
 
-import { useGame, useGamePreview, useGameRecap, useScoreboard } from "../hooks/useGames";
+import { useGame, useGameRecap, useScoreboard } from "../hooks/useGames";
 import { useIntelligence } from "../hooks/useInsight";
 import { useNetwork, usePlayersById } from "../hooks/useExplore";
 import { usePlayerSeason } from "../hooks/usePlayer";
 import { useSos } from "../hooks/useDraftBoard";
 import { useWeeklyFinishes } from "../hooks/useWeeklyFinishes";
+import { useRankRace } from "../hooks/useRankRace";
 import { useTeamsList } from "../hooks/useTeamStats";
 import { useAuth } from "../hooks/useAuth";
 import { useFavorites } from "../hooks/useAccount";
@@ -42,12 +44,13 @@ import { shapeNetwork } from "../components/explore/NetworkChart";
 
 import { ScoreTicker } from "../components/home/ScoreTicker";
 import { HighlightedVizCard } from "../components/home/HighlightedVizCard";
-import { PossessionsCard, TaleOfTheTapeCard, TargetsAndCarriesCard } from "../components/home/FeaturedGameCards";
+import { PossessionsCard, TargetsAndCarriesCard } from "../components/home/FeaturedGameCards";
+import { ShootoutMeterCard } from "../components/home/ShootoutMeterCard";
 import { RecordBookCard } from "../components/home/RecordBookCard";
 import { FINISH_FETCH, FINISH_POSITIONS, WeeklyFinishesCard } from "../components/home/WeeklyFinishesCard";
 import { HeadToHeadCard } from "../components/home/HeadToHeadCard";
 import { cardPercentileColumns, cardRankColumns } from "../constants/playerPage";
-import { FloorCeilingCard } from "../components/home/FloorCeilingCard";
+import { RACE_LIMIT, RankRaceCard } from "../components/home/RankRaceCard";
 import { MATCHUP_POSITIONS, MatchupsCard } from "../components/home/MatchupsCard";
 import { SlateCard } from "../components/home/SlateCard";
 import { BandHeading } from "../components/home/BandHeading";
@@ -99,7 +102,6 @@ function featuredGame(pick, games, fallback) {
 }
 const closestFinish = (games) =>
   games.filter((game) => game.played).sort((a, b) => Math.abs(a.home_score - a.away_score) - Math.abs(b.home_score - b.away_score))[0];
-const biggestTotal = (games) => [...games].sort((a, b) => (b.total_line ?? -1) - (a.total_line ?? -1))[0];
 
 export function Home() {
   const [scoring, setScoring] = useScoring();
@@ -109,6 +111,7 @@ export function Home() {
   const pointsKey = supportsScoring ? "fantasy_points" : FANTASY_FALLBACK.fantasy_points;
 
   const [finishPosition, setFinishPosition] = useState(FINISH_POSITIONS[1]);
+  const [racePosition, setRacePosition] = useState("WR");
   // The two-column bands start here (homeLayout.js); below it every card is its natural height.
   const twoColumns = useMediaQuery(`(min-width: ${HOME_LAYOUT.columns[0].from}px)`);
 
@@ -127,25 +130,17 @@ export function Home() {
   });
   const networkShape = useMemo(() => shapeNetwork(network.data, 7, 1), [network.data]);
 
-  // --- The featured games: a recap of one just played and a preview of one coming up.
-  //     Every request is one the game page makes, so opening the game is a cache hit. ---
+  // --- The featured game: a recap of one just played. Every request is one the game
+  //     page makes, so opening the game is a cache hit. ---
   const recapId = featuredGame(FEATURED_GAMES.recap, lastPlayed?.games, closestFinish);
-  const previewId = featuredGame(FEATURED_GAMES.preview, upcoming?.games, biggestTotal);
   const recapGame = useGame(recapId);
   const recap = useGameRecap(recapId, scoring);
-  const previewGame = useGame(previewId);
-  const preview = useGamePreview(previewId, scoring);
   const recapLoading = scoreboard.isLoading || recapGame.isLoading || recap.isLoading;
   const recapError = scoreboard.isError || recapGame.isError || recap.isError;
 
-  // --- Floor and Ceiling: every game of the top FLEX scorers by points per game. The
-  //     games floor is stated for a full season (12 of 18) and scaled to the weeks played.
-  const minRangeGames = scaledMinGames(12, weeksPlayed(season, lastPlayed));
-  const ranges = useWeeklyFinishes(
-    useMemo(
-      () => ({ season, position: "FLEX", scoring, min_games: minRangeGames, limit: 14, sort: "ppg" }),
-      [season, scoring, minRangeGames],
-    ),
+  // --- Rank Race: a position's leaders in season points and their rank after every week.
+  const race = useRankRace(
+    useMemo(() => ({ season, position: racePosition, scoring, limit: RACE_LIMIT }), [season, racePosition, scoring]),
     { enabled: Boolean(season) },
   );
 
@@ -277,14 +272,15 @@ export function Home() {
           isError={watchlist.isError}
         />
       ) : null,
-    floorCeiling: (
-      <FloorCeilingCard
-        season={ranges.data?.season ?? season}
+    rankRace: (
+      <RankRaceCard
+        season={race.data?.season ?? season}
         scoring={scoring}
-        minGames={minRangeGames}
-        result={ranges.data}
-        isLoading={ranges.isLoading}
-        isError={ranges.isError}
+        position={racePosition}
+        onPositionChange={setRacePosition}
+        result={race.data}
+        isLoading={race.isLoading}
+        isError={race.isError}
       />
     ),
     headToHead: (
@@ -332,13 +328,8 @@ export function Home() {
         isError={MATCHUP_POSITIONS.every((position) => sosBoards[position].isError)}
       />
     ),
-    taleOfTheTape: (
-      <TaleOfTheTapeCard
-        game={previewGame.data}
-        preview={preview.data}
-        isLoading={scoreboard.isLoading || previewGame.isLoading || preview.isLoading}
-        isError={scoreboard.isError || previewGame.isError || preview.isError}
-      />
+    shootoutMeter: (
+      <ShootoutMeterCard upcoming={upcoming} teams={teamsByAbbreviation} isLoading={scoreboard.isLoading} isError={scoreboard.isError} />
     ),
   };
 

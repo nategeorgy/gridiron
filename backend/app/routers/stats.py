@@ -65,6 +65,7 @@ from app.league import FLEX_ELIGIBLE, parse_league
 from app.metrics import REGISTRY_BY_ID
 from app.models import Player, PlayerStats, Team
 from app.player_page import week_leaders
+from app.rank_race import build_rank_race
 from app.seasons import current_season, latest_scheduled_season, newest_played_week, week_bounds
 from app.sos import POSITIONS as SOS_POSITIONS, WINDOWS as SOS_WINDOWS, build_sos
 from app.weekly_finishes import POOLS as FINISH_POOLS, build_weekly_finishes
@@ -1465,6 +1466,41 @@ def weekly_finishes(
     result = build_weekly_finishes(
         db, config, target, upper, season_type=season_type, min_games=min_games, limit=limit, sort=sort,
     )
+    return {**result, "scoring": config.model_dump()}
+
+
+# --- Rank race (November 2026) -------------------------------------------------------
+
+_RACE_RESPONSES: VersionedCache[bytes] = VersionedCache(max_entries=32)
+
+
+@router.get("/rank-race")
+@cached_response(_RACE_RESPONSES)
+def rank_race(
+    request: Request,
+    season: int | None = Query(None, description="Defaults to the newest season with stats"),
+    season_type: str = Query("REG", pattern="^(REG|POST)$"),
+    position: str = Query("WR", description="QB, RB, WR or TE"),
+    scoring: str = Query("ppr", description="League scoring, e.g. 'ppr' or 'half'"),
+    limit: int = Query(12, ge=1, le=40, description="How many leaders to return"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """A position's leaders in season points, with each one's rank after every week.
+
+    A week's rank counts everyone at the position who has played by then, in the
+    request's scoring; ties share a rank.
+    """
+    upper = position.upper()
+    if upper not in ("QB", "RB", "WR", "TE"):
+        raise HTTPException(status_code=400, detail=f"Unknown position '{position}'")
+    try:
+        config = parse_scoring(scoring)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    target = season if season is not None else current_season(db)
+    if target is None:
+        raise HTTPException(status_code=404, detail="No seasons are loaded")
+    result = build_rank_race(db, config, target, upper, season_type=season_type, limit=limit)
     return {**result, "scoring": config.model_dump()}
 
 

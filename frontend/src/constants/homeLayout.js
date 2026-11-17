@@ -7,13 +7,14 @@
 //   2. the featured game recap: targets and carries in the wide column, every possession
 //      in the narrow one. It replaced the team landscape and air yards cards in October
 //      2026;
-//   3. the season: Floor and Ceiling over Weekly Finishes on the left, the head-to-head
-//      over the record book on the right (the watchlist across the top when signed in).
+//   3. the season: the Rank Race (November 2026, replacing Floor and Ceiling) over Weekly
+//      Finishes on the left, the head-to-head over the record book on the right (the
+//      watchlist across the top when signed in).
 //      Weekly Finishes stops at the coming week rather than running to eighteen, and late
 //      in a season it scrolls inside its card;
 //   4. the Week N Preview, from mockup B: a heading, the slate full width, then matchups
-//      beside the featured game's tale of the tape (which replaced implied totals in
-//      October 2026).
+//      beside the Shootout Meter (November 2026, which replaced the featured game's tale
+//      of the tape, which replaced implied totals in October 2026).
 //
 // The arrangement is data rather than JSX for the same reason it always was: it is
 // chosen by measuring, and a config is cheaper to rearrange than a page.
@@ -28,9 +29,9 @@
 //
 // Two measurements hold:
 //
-// - **Floor and Ceiling (October 2026, replacing Expected vs Actual) keeps its height.**
-//   Fourteen rows of fixed height, so it reads the same in the wide column at any width;
-//   its strips stretch, its rows do not.
+// - **The Rank Race (November 2026, replacing Floor and Ceiling) keeps its height.** Its
+//   chart is 430px tall at any width and only stretches sideways, so Weekly Finishes under
+//   it fills the same space Floor and Ceiling's fourteen fixed rows left.
 // - ⚠️ **Cards in the narrow column were built for about 500px** (Last Week's Scoring's
 //   400px table set it, until that card left in October 2026; Head to Head and the
 //   tale of the tape still read at that width), so it never goes narrower above 1,024.
@@ -51,11 +52,10 @@ export const HOME_LAYOUT = {
     // The watchlist only renders signed in with something starred, and runs across the top
     // of the season band then, so it never unbalances the columns below it.
     { kind: "full", cards: ["myPlayers"] },
-    // Weekly Finishes fills what Head to Head and the Record Book leave under Floor and
-    // Ceiling: about 14 rows beside a receiver pair, 19 beside backs.
-    { kind: "columns", cards: [["floorCeiling", "weeklyFinishes"], ["headToHead", "recordBook"]] },
+    // Weekly Finishes fills what Head to Head and the Record Book leave under the Rank Race.
+    { kind: "columns", cards: [["rankRace", "weeklyFinishes"], ["headToHead", "recordBook"]] },
     { kind: "full", cards: ["previewHeading"] },
     { kind: "full", cards: ["slate"] },
-    { kind: "columns", cards: [["matchups"], ["taleOfTheTape"]] },
+    { kind: "columns", cards: [["matchups"], ["shootoutMeter"]] },
   ],
 };

@@ -28,7 +28,7 @@ from app.explore import (
     target_board,
     target_detail,
 )
-from app.models import Player, Team
+from app.models import Game, Player, Team
 from app.query_builder import (
     GRAINS,
     MAX_LIMIT,
@@ -44,6 +44,7 @@ from app.query_builder import (
 )
 from app.scoring import parse_scoring
 from app.seasons import current_season
+from app.touchdowns import touchdown_list
 
 router = APIRouter(prefix="/explore", tags=["explore"])
 
@@ -250,6 +251,33 @@ def player_runs(
     week_list = _weeks(weeks)
     return {**run_lanes(db, player_id, season, season_type, week_list),
             "average": league_run_average(db, season, season_type, week_list)}
+
+
+# --- touchdowns (November 2026) --------------------------------------------------------------
+
+@router.get("/touchdowns")
+@cached_response(_TARGET_RESPONSES)
+def touchdowns(
+    request: Request,
+    season: int | None = Query(None, description="Season year. Defaults to the newest season with stats."),
+    season_type: str = SEASON_TYPE,
+    weeks: str = WEEKS,
+    team: str = Query("", description="Only this offense's touchdowns, e.g. 'DET'"),
+    game_id: str = Query("", description="Only this game's touchdowns"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Every offensive touchdown, from the yard line the play started on.
+
+    Passes carry the air yards and the side of the field, runs the gap from play-by-play.
+    Starts with the game pages (2025): earlier seasons hold no plays.
+    """
+    season = season or current_season(db)
+    if game_id and db.get(Game, game_id) is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    week_list = _weeks(weeks)
+    return {"season": season, "season_type": season_type, "weeks": list(week_list or []),
+            "team": team.strip().upper() or None, "game_id": game_id or None,
+            **touchdown_list(db, season, season_type, week_list, _team_id(db, team), game_id or None)}
 
 
 # --- query builder -------------------------------------------------------------------------

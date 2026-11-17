@@ -113,6 +113,10 @@
     --depth2: color-mix(in srgb, var(--series-1) 72%, #ffffff);
     --depth3: color-mix(in srgb, var(--series-1) 40%, #ffffff);
 
+    /* Field green, only ever mixed into the surface (the home page's Broadcast Field),
+       so one value serves both themes: the light theme inherits it. */
+    --turf: #1d7a4c;
+
     --shadow: 0 20px 55px -22px rgba(0, 0, 0, 0.7);
     --radius: 20px;
     --blur: 24px;
