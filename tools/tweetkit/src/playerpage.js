@@ -108,9 +108,11 @@ RADAR_DEF.TE = RADAR_DEF.WR;
 const radarStats = (pos) => RADAR_DEF[pos].map(([id, label, f]) => ({ id, label, f }));
 
 /**
- * A percentile radar. One player: a bubble at each point holding his percentile, coloured
- * red to green, his number under each label. Two: two translucent shapes, both percentiles
- * under each label. people: [{color, pct: {id: percentile}, val: {id: value}, asif: [ids]}],
+ * A percentile radar. One player: a bubble at each point holding the percentile, coloured
+ * red to green, the number under each label. Two: two translucent shapes, both numbers
+ * under each label in each one's colour (the site's Radar.jsx, November 2026: the numbers
+ * sit outside, the percentiles are the shape). people: [{color, pct: {id: percentile},
+ * val: {id: value}, asif: [ids]}],
  * where `asif` names the percentiles ranked as if qualified, drawn as open dashed points.
  */
 function radar(cx, cy, radius, stats, people, o = {}) {
@@ -130,7 +132,7 @@ function radar(cx, cy, radius, stats, people, o = {}) {
     s += L(cx, cy, ex, ey, { stroke: "var(--divider)", sw: 1.5 });
     s += T(lx, base, st.label, { size: ls, weight: 700, anchor });
     if (pair) {
-      const parts = people.map((pp) => `<tspan fill="${pp.color}" font-weight="800">${pp.pct[st.id]}</tspan>`).join(`<tspan fill="var(--faint)" font-weight="400"> · </tspan>`);
+      const parts = people.map((pp) => `<tspan fill="${teamText(pp.color)}" font-weight="750">${pp.val[st.id] == null ? "-" : st.f(pp.val[st.id])}</tspan>`).join(`<tspan fill="var(--faint)" font-weight="400"> · </tspan>`);
       s += `<text x="${num(lx, 1)}" y="${num(base + ls + 2, 1)}" font-size="${ls - 1}" font-family="${MONO}" text-anchor="${anchor}">${parts}</text>`;
     } else {
       const v = people[0].val[st.id];

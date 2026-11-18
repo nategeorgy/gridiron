@@ -1572,6 +1572,22 @@ python ingest_stats.py --seasons 2020 2021 2022 2023 2024 2025
       https://claude.ai/artifact/DJJTHi6no9fhzdh45qjh2Z), so they export with it. The numbered callouts it
       launched with were cut at Nate's ask. Two other restyles joined the tweet kit as F7 (target share ring) and F8 (lineup cards).
       Frontend and kit only
+- [x] Radars, pizzas and Player Comparison (November 2026), from the mockups at
+      https://claude.ai/artifact/DHznB1dxof45Z2zR7SJ3Q1, Nate's picks. **Every radar prints the number outside,
+      never the percentile**: the Career and Compare radars now put each player's own number under every label in
+      that player's colour, as the Dashboard always did (the shape is the percentile; hover has both). **Player
+      Comparison** is rebuilt on the player page's look: team banners, the percentile profile as three cards (a
+      pizza per player in the tweet kit's D25 style with the headshot in the middle, one radar with a player in
+      front, the strips), rolling lines (`?window=`) and the weekly finishes on
+      the finish bands (`components/compare/`). The strips (`components/player/PercentileStrips.jsx`) also join the
+      player page's Compare tab. The pizza is a **tweet card only** on the player page for now (Dashboard stays a
+      radar); the kit's D25 (identity rose with The Athletic's labels) and D26 (back to back) read
+      `PIZZA_STATS` in `constants/playerTabs.js` through `PIZZA_DEF` in `tools/tweetkit/src/pizza.js`: change both
+      together. The comparison stat table is **S4**, picked from seven: the leaderboard turned on its side (players
+      as rows, the tab's stats as columns, shaded by percentile with the percentile beneath, sortable,
+      `components/compare/CompareTable.jsx`). The receivers' Depth of target card was removed from the page, and
+      the kit's D27 to D29 (`tools/tweetkit/src/trio.js`) are the three profile cards for one to three players.
+      Frontend and kit only
 - [x] Deployed: Vercel (frontend) + Render (backend) + Supabase (database)
   - Frontend: https://secondlevel.app, served from `www.secondlevel.app` (the bare domain
     and the old https://gridiron-livid.vercel.app redirect there). The browser's origin is

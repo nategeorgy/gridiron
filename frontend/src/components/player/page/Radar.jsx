@@ -1,8 +1,10 @@
 // A radar of percentiles among the position: one player, or two overlaid.
 //
-// One player: each point is a bubble holding his percentile, coloured on the player
-// card's red-to-green scale, and his number sits under each label. Two players: two
-// translucent shapes in the series colours, and both percentiles under each label.
+// One player: each point is a bubble holding the percentile, coloured on the player
+// card's red-to-green scale, and the player's number sits under each label. Two players:
+// two translucent shapes, and both numbers under each label, each in its player's colour.
+// The numbers, not the percentiles, sit outside on every radar: the shape already says
+// where each one ranks, and a percentile is on hover.
 // `hot` / `onHot` link it to a list beside it, so hovering a stat lights it in both.
 //
 // A percentile ranked as if qualified (`row.as_if`, utils/qualifiers.js) is an open point:
@@ -11,6 +13,7 @@
 import { formatSigned, formatStat } from "../../../utils/format";
 import { isAsIf } from "../../../utils/qualifiers";
 import { hoverProps } from "../../explore/ChartTooltip";
+import { teamText } from "../../game/colors";
 import { pctColor } from "./common";
 
 function valueText(metric, value) {
@@ -19,6 +22,11 @@ function valueText(metric, value) {
   if (format === "pct") return `${(value * 100).toFixed(1)}%`;
   const signed = ["epa", "receiving_epa", "rushing_epa", "cpoe", "ngs_rush_yards_over_expected_per_att"].includes(metric?.id);
   return signed ? formatSigned(value, format) : formatStat(value, format);
+}
+
+/** A stat's own number as every radar and pizza prints it: the registry's format, signed for the EPA family. */
+export function statText(metrics, id, value) {
+  return valueText(metrics?.[id] ? { ...metrics[id], id } : { id }, value);
 }
 
 /**
@@ -60,11 +68,13 @@ export function PercentileRadar({ stats, players, metrics, hot, onHot, tip, widt
               {stat.label}
             </text>
             {pair ? (
-              <text x={lx} y={base + 14} textAnchor={anchor} fontSize="11.5" className="stat-num">
+              <text x={lx} y={base + 14} textAnchor={anchor} fontSize="11" className="stat-num">
                 {players.map((player, which) => (
-                  <tspan key={which} style={{ fill: player.color }} fontWeight="800">
+                  <tspan key={which}>
                     {which ? <tspan fill="var(--faint)" fontWeight="400"> · </tspan> : null}
-                    {player.row?.percentiles?.[stat.id] ?? "-"}
+                    <tspan style={{ fill: teamText(player.color) }} fontWeight="700">
+                      {valueText(metrics[stat.id] ? { ...metrics[stat.id], id: stat.id } : { id: stat.id }, player.row?.[stat.id])}
+                    </tspan>
                   </tspan>
                 ))}
               </text>

@@ -141,6 +141,13 @@ const GROUPS = {
     { id: "D23", name: "Compare lines", fn: cardCompareLines, wide: true, isNew: true, note: "Compare: two players on one stat, the season to date week by week or season by season.",
       controls: [rivalControl, statControl, { key: "range", type: "select", label: "Range", options: [["season", "This season"], ["career", "By season"]], defaults: () => "season" }] },
     { id: "D24", name: "Most similar", fn: cardMostSimilar, wide: true, isNew: true, note: "Compare: every qualified player at the position by how close the percentiles are, the five closest as faces, and their percentiles beside the player's." },
+    // Pizza charts (November 2026).
+    { id: "D25", name: "Pizza profile", fn: cardPizza, isNew: true, note: "The radar's stats as a pizza: one slice per stat grouped by category, its length the percentile, the percentile on a badge at its end and the number beside each label." },
+    { id: "D26", name: "Back to back", fn: cardPizzaPair, isNew: true, note: "Two players at one position as half pizzas back to back: the same stats mirrored, percentiles on the slices, each number in that player's colour.", controls: [rivalControl] },
+    // Up to three players at one position (November 2026): Player Comparison's three profile cards.
+    { id: "D27", name: "Percentile pizzas", fn: cardTrioPizzas, wide: true, isNew: true, note: "One to three players at one position as D25's pizzas side by side, each headshot in the middle. Set a player to None to drop it.", controls: TRIO_CONTROLS },
+    { id: "D28", name: "Percentile radar", fn: cardTrioRadar, wide: true, isNew: true, note: "One to three players on one radar, every number under each label in its player's colour, and how many stats each has the best percentile on.", controls: TRIO_CONTROLS },
+    { id: "D29", name: "Percentile strips", fn: cardTrioStrips, isNew: true, note: "One to three players with each radar stat as a track from 0 to 100, every face at its percentile and the numbers at the end, the best bold.", controls: TRIO_CONTROLS },
   ],
   team: [
     { id: "E1", name: "Team profile", fn: cardTeamProfile, isNew: true, note: "Scoring, EPA, offense against defense, how they play and fantasy points by position, all ranked." },
@@ -349,7 +356,7 @@ function subjectFor(group, card, arg) {
   const base = group === "player" ? playerName(arg) : group === "team" ? arg : arg?.id ?? `week-${DATA.recap_week}`;
   const o = optsFor(card, arg);
   const extra = (card.controls || []).filter((c) => c.type !== "highlight").map((c) => (c.type === "player"
-    ? `${c.key === "vs" ? "vs " : ""}${c.pool(arg, o).find((p) => p.id === o[c.key])?.name ?? playerName(o[c.key])}` : o[c.key]));
+    ? (o[c.key] === "" ? "" : `${c.key === "vs" ? "vs " : ""}${c.pool(arg, o).find((p) => p.id === o[c.key])?.name ?? playerName(o[c.key])}`) : o[c.key]));
   return [base, ...extra].join(" ");
 }
 function fileName(group, card) {

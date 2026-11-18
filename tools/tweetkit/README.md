@@ -65,6 +65,9 @@ node render.mjs D1,D3 --player "Jaxon Smith-Njigba"
 node render.mjs D6 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba"
 node render.mjs D12,D20 --player "Jahmyr Gibbs" --opt stat=epa
 node render.mjs D23 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba" --opt range=career
+node render.mjs D25 --player "Puka Nacua"
+node render.mjs D26 --player "Jahmyr Gibbs" --opt vs="Christian McCaffrey"
+node render.mjs D27,D28,D29 --player "Puka Nacua" --opt vs="Jaxon Smith-Njigba" --opt vs2="Ja'Marr Chase"
 node render.mjs E1,E2,E3,E4 --team DET
 node render.mjs A12 --game 2026_07_GB_DET --opt who="Jahmyr Gibbs"
 node render.mjs F1 --opt qb="Jared Goff" --opt tf=last4 --opt sit=red_zone
@@ -196,9 +199,26 @@ tab. Each mirrors a component in `frontend/src/components/player/page/` and its 
 | D19 | Game splits | 1600x900 | Splits: PPG at home and away, in wins and losses, favoured or not, by implied total, roof, division and quarterback | | Added Nov 5 |
 | D20 | Career arc | 1600x900 | Career: every career game as a dot, a column per season (last ten), with the median, the middle half and that season's dashed line | Stat | Added Nov 5 |
 | D21 | Career profile | 1600x900 | Career: the radar's stats every season, a small chart each, dots coloured by that season's percentile | | Added Nov 5 |
-| D22 | This season against last | 1600x900 | Career: both seasons on one radar, and each stat as an arrow from last season's percentile to this one's | | Added Nov 5 |
+| D22 | This season against last | 1600x900 | Career: both seasons on one radar (each season's number under every label since Nov 17, like the site), and each stat as an arrow from last season's percentile to this one's | | Added Nov 5 |
 | D23 | Compare lines | 1600x900 | Compare: two players on one game chart stat, season to date week by week or season by season | Opponent, stat, range | Added Nov 5 |
 | D24 | Most similar | 1600x900 | Compare: every qualified player at the position by closeness (the site's placeholder formula), the five closest as faces, and a heat table of their percentiles beside his | | Added Nov 5 |
+
+**Pizza charts (added Nov 17).** From the radar and pizza mockups
+(https://claude.ai/artifact/DHznB1dxof45Z2zR7SJ3Q1). The slices are the radar's stats grouped by
+category, `PIZZA_DEF` in `src/pizza.js`, mirroring `PIZZA_STATS` in `frontend/src/constants/playerTabs.js`:
+change both together.
+
+| Card | Name | Size | What it shows | Controls | Status |
+|---|---|---|---|---|---|
+| D25 | Pizza profile | 1200x1500 | One slice per stat, its length the percentile, in category colours on tinted quadrants with the team logo in the middle (NFL.com's identity chart, option P4), labelled like The Athletic's pizza (P1): the percentile on a badge at each slice's end, the stat and its number outside. The categories are tinted pills in the header rather than a key under the chart | | Picked Nov 17 |
+| D26 | Back to back | 1200x1500 | Two players at one position as half pizzas back to back (P8): the same stats mirrored, percentiles on the slices, each number in that player's colour, and how many stats each has the better percentile on | Opponent | Picked Nov 17 |
+| D27 | Percentile pizzas | 1600x900 | One to three players at one position as D25's pizzas side by side, each headshot in the middle ringed in that player's colour, the categories as pills under the header | Second player, third player (either can be None) | Added Nov 17 |
+| D28 | Percentile radar | 1600x900 | One to three players on one radar, every number under each label in its player's colour, and a card per player with how many of the radar's stats they have the best percentile on | Second player, third player | Added Nov 17 |
+| D29 | Percentile strips | 1200x1500 | One to three players, each radar stat a track from 0 to 100 with every face at its percentile (faces on the same spot step above and below the track), the numbers at the end of the row with the best bold | Second player, third player | Added Nov 17 |
+
+D27 to D29 are Player Comparison's three profile cards (`frontend/src/components/compare/CompareProfiles.jsx`)
+as tweets, in `src/trio.js`. Each player draws in a team colour; a team whose colour is too close to one
+already used takes its second colour, then a series colour.
 
 D1 and D6 are also on the site (Oct 21): the player page's player card and head-to-head, and the
 home page's Head to Head (`frontend/src/components/player/PlayerCard.jsx` and `HeadToHead.jsx`).
@@ -286,7 +306,7 @@ None of these uses fantasy points. Each takes a timeframe: the season, the last 
 | `fetch_img.py` | Downloads headshots (220px WebP from the NFL CDN), both ESPN logo variants and the Inter and JetBrains Mono fonts |
 | `build.py` | Inlines the brand mark (from `components/Brand.jsx`), the fonts, data, images and `src/` into `index.html` and `preview.html` |
 | `src/core.js` | Frame, text, faces, logos, chips, grouped tiles, the shared scatter plot, team colours, formats |
-| `src/recap.js`, `preview.js`, `weekly.js`, `player.js`, `playerpage.js`, `team.js`, `explore.js` | One function per card, each returning an SVG string. `explore.js` also holds the timeframe windows and the network and target sums |
+| `src/recap.js`, `preview.js`, `weekly.js`, `player.js`, `playerpage.js`, `pizza.js`, `trio.js`, `team.js`, `explore.js` | One function per card, each returning an SVG string. `explore.js` also holds the timeframe windows and the network and target sums |
 | `src/app.js` | The page: pickers, each card's controls (`GROUPS`), theme, Save PNG and Copy image, the lightbox, and the solo mode `render.mjs` uses (`?card=C8&theme=dark&opt.pos=RB&hl=...`) |
 | `render.mjs` | Headless Chrome over its DevTools protocol: one PNG per card and theme, and warns about text outside the card |
 | `check.mjs` | Runs every card against every game, player, team and option |
