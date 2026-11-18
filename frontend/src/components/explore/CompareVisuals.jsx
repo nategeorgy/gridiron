@@ -1,6 +1,7 @@
 // Player Comparison's charts, chosen by the positions being compared.
 //
-//   receivers (WR/TE)  the scatter, where they're targeted, depth mix + air-yard curves
+//   receivers (WR/TE)  the scatter, where they're targeted (the depth of target card was
+//                      removed in November 2026)
 //   backs              the scatter, run lanes, how each carry ended
 //   quarterbacks       the scatter, where they throw, EPA per attempt by depth
 //   mixed              where they're targeted (the one chart every position shares)
@@ -22,9 +23,7 @@ import { useUrlState } from "../../hooks/useUrlState";
 import { usePhone } from "../../hooks/useMediaQuery";
 import { getPlayerRuns, getPlayerTargets } from "../../services/explore";
 import { formatStat } from "../../utils/format";
-import {
-  DEPTHS, DEPTH_COLORS, airYardDensity, airYardHistogram, niceTicks, sideHistograms, signed, zoneCounts,
-} from "../../utils/explore";
+import { DEPTHS, niceTicks, sideHistograms, signed, zoneCounts } from "../../utils/explore";
 
 const TITLES = {
   receivers: ["Receiving profile", "Charts for receivers and tight ends."],
@@ -58,15 +57,16 @@ export function CompareVisuals({ slots, kind, weeks, scoring, league, metrics })
   const loading = (kind === "backs" ? runQueries : targetQueries).some((query) => query.isLoading);
   const [title, blurb] = TITLES[kind];
 
+  // grid-cols-1 is minmax(0, 1fr): without it a card holding a wide scrolling chart
+  // stretches the column to the chart's minimum width and the page scrolls sideways.
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <div className="mt-1">
         <h2 className="text-lg font-bold tracking-tight text-fg">{title}</h2>
         <p className="text-sm text-muted">{blurb}</p>
       </div>
       {kind !== "mixed" && <CompareScatter slots={slots} kind={kind} weeks={weeks} scoring={scoring} league={league} metrics={metrics} />}
       {kind !== "backs" && <TargetMaps slots={slots} targets={targets} passer={kind === "quarterbacks"} loading={loading} />}
-      {kind === "receivers" && <DepthCard slots={slots} targets={targets} loading={loading} />}
       {kind === "backs" && <RunLanes slots={slots} runs={runs} loading={loading} />}
       {kind === "backs" && <CarryOutcomes slots={slots} runs={runs} loading={loading} />}
       {kind === "quarterbacks" && <EpaByDepth slots={slots} targets={targets} loading={loading} />}
@@ -197,116 +197,6 @@ function TargetMaps({ slots, targets, passer, loading }) {
           ? "Every targeted throw. Throwaways and spikes have no target, so they are left out."
           : "Depth is air yards; side is the left, middle or right third play-by-play records."}
       </Foot>
-    </section>
-  );
-}
-
-// --- receivers: depth mix and air-yard curves -------------------------------------------------
-
-function DepthBars({ rows, nested }) {
-  const width = 620;
-  const rowHeight = 34;
-  const height = rows.length * rowHeight + 8;
-  const barLeft = 150;
-  const barWidth = 300;
-  return (
-    <svg {...chartRoot(nested, `0 0 ${width} ${height}`, "Depth of target mix")}>
-      {rows.map(({ slot, summary }, index) => {
-        const y = index * rowHeight + 6;
-        let x = barLeft;
-        return (
-          <g key={slot.key}>
-            <circle cx={8} cy={y + 11} r={5} fill={slot.color} />
-            <text x={20} y={y + 15} style={{ fontSize: 13, fontWeight: 600, fill: "var(--fg)" }}>{slot.label}</text>
-            {summary.depth.map((count, depth) => {
-              const segment = (count / summary.charted) * barWidth;
-              const rect = segment > 0 ? (
-                <rect key={depth} x={x + (depth ? 1 : 0)} y={y + 3} width={Math.max(0, segment - 2)} height={16} rx={3} fill={DEPTH_COLORS[depth]} />
-              ) : null;
-              x += segment;
-              return rect;
-            })}
-            <text x={barLeft + barWidth + 12} y={y + 15} className="mono" style={{ fontSize: 12.5, fill: "var(--fg)" }}>
-              {summary.adot?.toFixed(1) ?? "—"} aDOT
-            </text>
-            <text x={width - 4} y={y + 15} textAnchor="end" className="mono" style={{ fontSize: 12.5, fill: "var(--muted)" }}>
-              {Math.round((summary.depth[3] / summary.charted) * 100)}% deep
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function DepthCurves({ rows, nested }) {
-  const width = 620;
-  const height = 250;
-  const margin = { left: 34, right: 12, top: 12, bottom: 30 };
-  const curves = rows.map(({ targets }) => airYardDensity(airYardHistogram(targets)));
-  const max = Math.max(1e-9, ...curves.flat());
-  const X = (yards) => margin.left + ((yards + 10) / 50) * (width - margin.left - margin.right);
-  const Y = (value) => height - margin.bottom - (value / max) * (height - margin.top - margin.bottom);
-  return (
-    <svg {...chartRoot(nested, `0 0 ${width} ${height}`, "Air yards per target, overlaid")}>
-      {[-10, 0, 10, 20, 30, 40].map((yards) => (
-        <g key={yards}>
-          <line className="grid" x1={X(yards)} x2={X(yards)} y1={margin.top} y2={height - margin.bottom}
-            style={yards === 0 ? { stroke: "var(--plot-rule)" } : undefined} />
-          <text className="axis-t" x={X(yards)} y={height - margin.bottom + 15} textAnchor="middle">
-            {yards === 0 ? "LOS" : yards > 0 ? `+${yards}` : yards}
-          </text>
-        </g>
-      ))}
-      <text className="axis-t" x={width - margin.right} y={height - 2} textAnchor="end">air yards</text>
-      {rows.map(({ slot, summary }, index) => {
-        const line = curves[index].map((value, step) => `${step ? "L" : "M"} ${X(step - 10).toFixed(1)} ${Y(value).toFixed(1)}`).join(" ");
-        return (
-          <g key={slot.key}>
-            <path d={`${line} L ${X(40)} ${Y(0)} L ${X(-10)} ${Y(0)} Z`} fill={slot.color} opacity={0.1} />
-            <path d={line} fill="none" stroke={slot.color} strokeWidth={2} />
-            {summary.adot !== null && (
-              <path d={`M ${X(Math.max(-10, Math.min(40, summary.adot)))} ${height - margin.bottom} l -5 8 l 10 0 Z`} fill={slot.color} />
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function DepthCard({ slots, targets, loading }) {
-  const rows = slots.map((slot, index) => ({ slot, summary: targets[index]?.summary, targets: targets[index]?.targets }))
-    .filter(({ summary }) => summary && summary.charted);
-  const combined = () => {
-    const barsHeight = rows.length * 34 + 8;
-    return (
-      <svg className="chart" viewBox={`0 0 620 ${barsHeight + 270}`}>
-        <DepthBars rows={rows} nested={{ x: 0, y: 0, width: 620, height: barsHeight }} />
-        <DepthCurves rows={rows} nested={{ x: 0, y: barsHeight + 16, width: 620, height: 250 }} />
-      </svg>
-    );
-  };
-  return (
-    <section className="glass-card p-4">
-      <CardTitle title="Depth of target">
-        <ExportImageButton title="Depth of target" subtitle={rows.map(({ slot }) => slot.label).join(" · ")}
-          render={combined} sizes={["fit", "square"]} disabled={!rows.length} />
-      </CardTitle>
-      <div className="mb-2">
-        <Legend items={DEPTHS.map((depth, index) => ({ key: depth.key, color: DEPTH_COLORS[index], label: `${depth.short} ${depth.range}`, size: 12 }))} />
-      </div>
-      {loading ? <ChartState isLoading height={260} /> : !rows.length ? <ChartState isEmpty /> : (
-        <div className="grid items-start gap-4 min-[900px]:grid-cols-2">
-          <DepthBars rows={rows} />
-          <div>
-            <DepthCurves rows={rows} />
-            <Legend items={rows.map(({ slot }) => ({ key: slot.key, color: slot.color, label: slot.label, round: true }))}>
-              <span>Triangles mark each aDOT</span>
-            </Legend>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

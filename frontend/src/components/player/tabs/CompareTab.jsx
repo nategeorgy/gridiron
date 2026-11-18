@@ -1,6 +1,7 @@
-// Compare: head to head and both players' percentile radar in one box (his pick,
-// November 2026), both players' lines, the closeness line of who he plays most like, and a
-// way into Player Comparison.
+// Compare: head to head and both players' percentile radar in one box (Nate's pick,
+// November 2026), the radar's stats as percentile strips (V3, the same chart Player
+// Comparison uses for five), both players' lines, the closeness line of who the player
+// is most like, and a way into Player Comparison.
 //
 // The opponent defaults to the closest match, so the tab opens on a comparison rather
 // than an empty picker. Every row here comes from one `/stats/intelligence` request for the
@@ -21,6 +22,8 @@ import { SIMILARITY_STATS } from "../../../constants/similarity";
 import { scoringLabel } from "../../../constants/scoring";
 import { positionName, ringColors } from "../cardParts";
 import { PercentileRadar } from "../page/Radar";
+import { PercentileStrips } from "../PercentileStrips";
+import { lastName } from "../../../utils/explore";
 import { CompareLines } from "../page/CompareLines";
 import { MostSimilar, rankSimilar } from "../page/MostSimilar";
 import { Panel } from "../page/common";
@@ -123,6 +126,19 @@ export function CompareTab({ page }) {
         )}
         <ChartTooltip tip={tip} />
       </Panel>
+
+      {ready && (
+        <Panel title="Percentile strips" sub={`Each stat from 0 to 100 among qualified ${positionName(position)}, both numbers at the end. Hover a face for the percentile`}>
+          <PercentileStrips
+            stats={forPosition(RADAR_STATS, position)}
+            players={[
+              { key: "mine", name: player.name, short: lastName(player.name), color: leftRing, headshot: player.headshot_url, row: mine },
+              { key: "other", name: opponentRow.name, short: lastName(opponentRow.name), color: rightRing, headshot: opponentProfile.data.headshot_url, row: opponentRow },
+            ]}
+            metrics={metrics}
+          />
+        </Panel>
+      )}
 
       <CompareLines page={page} other={ready ? { player: opponentProfile.data, games: opponentLog.data?.data ?? [] } : null} />
 

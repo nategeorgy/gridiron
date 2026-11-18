@@ -90,6 +90,64 @@ export const RADAR_STATS = {
 RADAR_STATS.TE = RADAR_STATS.WR;
 
 // ---------------------------------------------------------------------------------------
+// Pizza charts (November 2026): the radar's stats grouped into categories, one slice each
+// ---------------------------------------------------------------------------------------
+// The same stats as the radar, reordered so a category's slices sit together, clockwise
+// from 12 o'clock. A category's colour is a series token, so a slice never borrows the
+// meaning of --accent, --pos or --neg. Player Comparison draws one per player (V1); the
+// tweet kit's pizza card (D25) mirrors these lists in tools/tweetkit/src/player.js.
+export const PIZZA_CATEGORIES = {
+  Fantasy: "var(--series-4)",
+  Opportunity: "var(--series-1)",
+  Workload: "var(--series-1)",
+  Efficiency: "var(--series-3)",
+  Running: "var(--series-3)",
+  "Passing game": "var(--series-5)",
+  Passing: "var(--series-1)",
+  "Ball security": "var(--series-2)",
+};
+
+const slice = (id, label, category) => ({ id, label, category, color: PIZZA_CATEGORIES[category] });
+
+export const PIZZA_STATS = {
+  WR: [
+    slice("fantasy_ppg", "PPG", "Fantasy"),
+    slice("fantasy_points_per_route_run", "FP / route", "Fantasy"),
+    slice("target_share", "Target share", "Opportunity"),
+    slice("air_yards_share", "Air yard share", "Opportunity"),
+    slice("red_zone_targets", "RZ targets", "Opportunity"),
+    slice("adot", "aDOT", "Opportunity"),
+    slice("targets_per_route_run", "TPRR", "Efficiency"),
+    slice("yards_per_route_run", "YPRR", "Efficiency"),
+    slice("receiving_epa", "Rec EPA", "Efficiency"),
+  ],
+  RB: [
+    slice("fantasy_ppg", "PPG", "Fantasy"),
+    slice("rush_attempt_share", "Rush share", "Workload"),
+    slice("opportunity_share", "Opp share", "Workload"),
+    slice("rush_att_inside_5", "Carries inside 5", "Workload"),
+    slice("target_share", "Target share", "Passing game"),
+    slice("route_participation", "Route share", "Passing game"),
+    slice("targets_per_route_run", "TPRR", "Passing game"),
+    slice("rushing_epa", "Rush EPA", "Running"),
+    slice("ngs_rush_yards_over_expected_per_att", "RYOE / att", "Running"),
+    slice("rush_yac_per_att", "YAC / att", "Running"),
+  ],
+  QB: [
+    slice("fantasy_ppg", "PPG", "Fantasy"),
+    slice("epa_per_play", "EPA / play", "Efficiency"),
+    slice("epa", "EPA", "Efficiency"),
+    slice("cpoe", "CPOE", "Efficiency"),
+    slice("yards_per_attempt", "Y/A", "Passing"),
+    slice("yards_per_completion", "Y/C", "Passing"),
+    slice("pass_td_rate", "TD%", "Passing"),
+    slice("ngs_pass_intended_air_yards", "aDOT", "Passing"),
+    slice("interception_rate", "INT%", "Ball security"),
+  ],
+};
+PIZZA_STATS.TE = PIZZA_STATS.WR;
+
+// ---------------------------------------------------------------------------------------
 // Role: what his job is, from his share of the team's work
 // ---------------------------------------------------------------------------------------
 // Proposed in round five so the labels follow the same lines as the scatter's corners
