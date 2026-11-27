@@ -147,7 +147,7 @@ function cardImplied() {
 // C3 ------------------------------------------------------- Matchup map
 function cardMatchupMap() {
   const wk = DATA.preview_week;
-  const fr = frame(1200, 1500, { kicker: `Week ${wk} · PPR`, title: `Week ${wk} matchups by position`, subtitle: "Fantasy points per game the opponent allows to each position. Green: allows the most." });
+  const fr = frame(1200, 1500, { kicker: `Week ${wk} · PPR`, title: `Week ${wk} matchups by position`, subtitle: "Fantasy points per game the opponent allows to each position." });
   const { pad, w } = fr;
   const rows = slateOffenses().filter((r) => r.implied != null).sort((a, b) => b.implied - a.implied);
   let y = fr.top + 4;
@@ -293,7 +293,7 @@ const defaultBackfield = () => [...DATA.rb_work].sort((a, b) => b.expected_fanta
 function cardRoutes(_, opts = {}) {
   const wk = DATA.recap_week;
   const pool = DATA.routes_pool;
-  const fr = frame(1600, 900, { kicker: `Weeks 1-${wk} \u00b7 Receivers`, title: "Who is earning targets", subtitle: "Route participation against targets per route run" });
+  const fr = frame(1600, 900, { kicker: `Weeks 1-${wk} \u00b7 Receivers`, title: "Opportunity Chart", subtitle: "Route participation against targets per route run" });
   const s = scatterPlot(fr, {
     points: pool.map((p) => ({ id: p.player_id, x: p.route_participation, y: p.targets_per_route_run, name: p.name, team: p.team_abbreviation, face: p.player_id, color: teamColor(p.team_abbreviation) })),
     highlight: opts.hl ?? defaultRoutes(), xstep: 0.1, ystep: 0.05, xfmt: pct, yfmt: pct,
@@ -394,7 +394,7 @@ const SM = {
 const XVA = (id) => ({ id, label: "Expected vs actual PPG", question: "Who is scoring what his opportunity was worth?", x: "expected_fantasy_ppg", y: "fantasy_ppg", identity: true,
   corners: { topLeft: "Scoring above his opportunity", bottomRight: "Opportunity says more is coming" } });
 const RECEIVER_SCATTERS = (p) => [
-  { id: `${p}-adot`, label: "aDOT vs target share", question: "Deep threat or high-volume underneath target?", x: "adot", y: "target_share", size: "fantasy_ppg", corners: { topLeft: "Volume underneath", topRight: "Volume downfield" } },
+  { id: `${p}-adot`, label: "aDOT vs target share", question: "Deep threat or high-volume underneath target?", title: "aDOT vs Target Share", bare: true, x: "adot", y: "target_share", size: "fantasy_ppg", corners: { topLeft: "Volume underneath", topRight: "Volume downfield" } },
   XVA(`${p}-expected`),
   { id: `${p}-yprr`, label: "Target share vs YPRR", question: "Who earns targets, and who does the most with them?", x: "target_share", y: "yards_per_route_run", size: "fantasy_ppg", corners: { topRight: "Volume and efficiency", bottomRight: "Volume, less efficient", topLeft: "Efficient in a smaller role" } },
   { id: `${p}-tprr`, label: "TPRR vs YPRR", question: "Who wins his routes, and turns that into yards?", x: "targets_per_route_run", y: "yards_per_route_run", corners: { topRight: "Open often, productive", bottomLeft: "Rarely the read" } },
@@ -403,12 +403,12 @@ const RECEIVER_SCATTERS = (p) => [
 ];
 const SCATTERS = {
   QB: [
-    { id: "qb-cpoe", label: "CPOE vs EPA per play", question: "Who completes more than expected, and who adds value per play?", x: "cpoe", y: "epa_per_play", size: "attempts", corners: { topRight: "Accurate and efficient", bottomRight: "Accurate, less efficient", topLeft: "Efficient, less accurate", bottomLeft: "Neither" } },
+    { id: "qb-cpoe", label: "CPOE vs EPA per play", question: "Who completes more than expected, and who adds value per play?", title: "QB Efficiency", x: "cpoe", y: "epa_per_play", size: "attempts", corners: { topRight: "Accurate and efficient", bottomRight: "Accurate, less efficient", topLeft: "Efficient, less accurate", bottomLeft: "Neither" } },
     XVA("qb-expected"),
     { id: "qb-depth", label: "Depth vs CPOE", question: "Who throws deep without giving up accuracy?", x: "ngs_pass_intended_air_yards", y: "cpoe", size: "attempts", corners: { topRight: "Deep and accurate", bottomLeft: "Short and inaccurate" } },
   ],
   RB: [
-    { id: "rb-role", label: "Carry share vs route %", question: "Who gets the carries and stays on the field on passing downs?", x: "rush_attempt_share", y: "route_participation", size: "fantasy_ppg", corners: { topRight: "Three-down back", bottomRight: "Early-down back", topLeft: "Passing-down back" } },
+    { id: "rb-role", label: "Carry share vs route %", question: "Who gets the carries and stays on the field on passing downs?", title: "RB Opportunity", x: "rush_attempt_share", y: "route_participation", size: "fantasy_ppg", corners: { topRight: "Three-down back", bottomRight: "Early-down back", topLeft: "Passing-down back" } },
     XVA("rb-expected"),
     { id: "rb-goal-line", label: "Carries inside the 5 vs TDs", question: "Are his touchdowns coming from goal-line work?", x: "rush_att_inside_5", y: "rushing_tds", corners: { topLeft: "Scoring without goal-line carries", bottomRight: "Goal-line carries, touchdowns to come" } },
     { id: "rb-contact", label: "Yards after contact vs RYOE", question: "Who creates yards on his own?", x: "rush_yac_per_att", y: "ngs_rush_yards_over_expected_per_att", corners: { topRight: "Creates his own yards", bottomLeft: "Needs the blocking" } },
@@ -447,7 +447,7 @@ function cardScatter(pos, opts) {
   const [xl, xfmt, xtip] = SM[preset.x], [yl, yfmt, ytip] = SM[preset.y];
   const who = (opts.cap === "all" ? `all ${rows.length} qualified ${POS_PLURAL[pos]}` : `the top ${rows.length} ${POS_PLURAL[pos]} in points`)
     + (pos === "QB" ? ` with ${QB_ATTEMPTS_PER_GAME}+ attempts a game` : "");
-  const fr = frame(1600, 900, { kicker: `${weeksLabel(tfWeeks(opts.tf))} · ${POS_PLURAL[pos]}`, title: preset.question, subtitle: `${xl} against ${lowerFirst(yl)}${preset.size ? `. Dot size: ${lowerFirst(SM[preset.size][0])}` : ""}` });
+  const fr = frame(1600, 900, { kicker: `${weeksLabel(tfWeeks(opts.tf))} · ${POS_PLURAL[pos]}`, title: preset.title ?? preset.question, subtitle: preset.bare ? null : `${xl} against ${lowerFirst(yl)}${preset.size ? `. Dot size: ${lowerFirst(SM[preset.size][0])}` : ""}` });
   const c = preset.corners || {};
   const xs = rows.map((r) => r[preset.x]), ys = rows.map((r) => r[preset.y]);
   const s = scatterPlot(fr, {

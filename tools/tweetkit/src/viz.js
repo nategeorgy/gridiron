@@ -96,11 +96,11 @@ function cardTdGame(g) {
   const cols = gameColors(away, home);
   const fr = frame(1600, 900, {
     kicker: `Week ${h.week} · every touchdown`, title: `${nickname(away)} at ${nickname(home)}`,
-    subtitle: `${nickname(away)} ${h.away.score}, ${nickname(home)} ${h.home.score}. ${tds.length} offensive touchdown${tds.length === 1 ? "" : "s"}, each from the yard line the play started on.`,
+    subtitle: `${tds.length} offensive touchdown${tds.length === 1 ? "" : "s"}.`,
   });
   const { pad, w } = fr;
-  const side = 390;
-  const box = { x0: pad, x1: w - pad - side - 30, y0: fr.top + 4, y1: fr.bottom - 44 };
+  const side = 270;
+  const box = { x0: pad, x1: w - pad - side - 24, y0: fr.top + 4, y1: fr.bottom - 44 };
   let s = tds.length ? tdField(box, tds, { color: (t) => cols[t.team], faces: tds, label: (t) => `${lastName(tdName(t.scorer_id))} ${t.from}`, r: 21 })
     : T((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, "No offensive touchdowns", { size: 26, anchor: "middle", fill: "var(--muted)" });
   s += legendRow(box.x0, fr.bottom - 12, [
@@ -109,15 +109,15 @@ function cardTdGame(g) {
   ], 18).svg;
   // Every touchdown in game order.
   const lx = w - pad - side;
-  s += T(lx, box.y0 + 14, "IN ORDER", { size: 15, weight: 800, fill: "var(--faint)", ls: 1.6 });
+  s += T(lx, box.y0 + 14, "ALL TOUCHDOWNS", { size: 15, weight: 800, fill: "var(--faint)", ls: 1.6 });
   const rows = [...tds].sort((a, b) => a.quarter - b.quarter || b.clock.localeCompare(a.clock));
-  const rowH = Math.min(58, (box.y1 - box.y0 - 36) / Math.max(1, rows.length));
+  const rowH = Math.min(54, (box.y1 - box.y0 - 36) / Math.max(1, rows.length));
   rows.slice(0, 14).forEach((t, i) => {
-    const y = box.y0 + 40 + i * rowH;
-    s += logo(t.team, lx, y, 30);
-    s += T(lx + 42, y + 13, `${t.quarter > 4 ? "OT" : `Q${t.quarter}`} ${t.clock}`, { size: 14, weight: 650, mono: true, fill: "var(--faint)" });
+    const y = box.y0 + 38 + i * rowH;
+    s += logo(t.team, lx, y + 2, 26);
+    s += T(lx + 36, y + 12, `${t.quarter > 4 ? "OT" : `Q${t.quarter}`} ${t.clock}`, { size: 13, weight: 650, mono: true, fill: "var(--faint)" });
     const what = t.kind === "pass" ? `${lastName(tdName(t.scorer_id))}, ${t.from}-yd catch` : `${lastName(tdName(t.scorer_id))}, ${t.from}-yd run`;
-    s += T(lx + 42, y + 34, fit(what, side - 50, 19, 700), { size: 19, weight: 700 });
+    s += T(lx + 36, y + 31, fit(what, side - 38, 17, 700), { size: 17, weight: 700 });
   });
   return wrapCard(fr, s);
 }
@@ -134,7 +134,7 @@ function cardTdWeek() {
     subtitle: `${passes} passing, ${n - passes} rushing, each from the yard line the play started on. The longest: ${longest ? `${tdName(longest.scorer_id)}, ${longest.from} yds` : "none"}.`,
   });
   const { pad, w } = fr;
-  const side = 330;
+  const side = 240;
   const box = { x0: pad, x1: w - pad - side - 30, y0: fr.top + 4, y1: fr.bottom - 44 };
   // Faces on the eight longest from 30+, names on the four longest; hover names the rest.
   const long = [...tds].filter((t) => t.from >= 30).sort((a, b) => b.from - a.from).slice(0, 8);
@@ -149,20 +149,8 @@ function cardTdWeek() {
   bins.forEach(([label, f], i) => {
     const y = box.y0 + 120 + i * 36, c = tds.filter(f).length;
     s += T(lx, y + 6, label, { size: 17, fill: "var(--muted)" });
-    s += R(lx + 118, y - 7, 160, 14, { rx: 4, fill: "var(--divider)" }) + R(lx + 118, y - 7, (160 * c) / most, 14, { rx: 4, fill: "var(--accent)" });
+    s += R(lx + 108, y - 7, 96, 14, { rx: 4, fill: "var(--divider)" }) + R(lx + 108, y - 7, (96 * c) / most, 14, { rx: 4, fill: "var(--accent)" });
     s += T(w - pad, y + 7, c, { size: 18, weight: 800, anchor: "end", mono: true });
-  });
-  const counts = {};
-  for (const t of tds) counts[t.scorer_id] = (counts[t.scorer_id] || 0) + 1;
-  const multi = Object.entries(counts).filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const my = box.y0 + 290;
-  s += T(lx, my, "MORE THAN ONE", { size: 15, weight: 800, fill: "var(--faint)", ls: 1.6 });
-  multi.forEach(([pid, c], i) => {
-    const y = my + 38 + i * 52;
-    const t = tds.find((x) => x.scorer_id === pid);
-    s += face(pid, lx + 20, y, 20, "var(--border-strong)", tdName(pid));
-    s += T(lx + 52, y - 2, fit(tdName(pid), side - 110, 19, 750), { size: 19, weight: 750 }) + T(lx + 52, y + 18, `${t.team}`, { size: 14, weight: 650, fill: "var(--muted)" });
-    s += T(w - pad, y + 7, `${c} TD`, { size: 19, weight: 800, anchor: "end", mono: true });
   });
   return wrapCard(fr, s);
 }
@@ -259,10 +247,10 @@ function defaultStartFaces(pos) {
 }
 function cardStartMap(_, opts = {}) {
   const pos = opts.pos || "WR";
-  const { rows, league } = startRows(pos);
+  const { rows } = startRows(pos);
   const fr = frame(1600, 900, {
-    kicker: `Week ${DATA.preview_week} · PPR`, title: `Week ${DATA.preview_week} start map: ${POS_PLURAL[pos]}`,
-    subtitle: `Season PPG against what this week's opponent allows to ${POS_PLURAL[pos]} per game, against the league's ${num(league, 1)}`,
+    kicker: `Week ${DATA.preview_week} · PPR · ${POS_PLURAL[pos]}`, title: `Week ${DATA.preview_week} Matchups`,
+    subtitle: "Season PPG against what their opponent allows per game",
   });
   const color = (r) => (r.rank <= 8 ? "var(--pos)" : r.rank > r.of - 8 ? "var(--neg)" : "var(--muted)");
   const ppgs = rows.map((r) => r.ppg).sort((a, b) => a - b);
@@ -274,7 +262,7 @@ function cardStartMap(_, opts = {}) {
     })),
     xstep: "auto", ystep: "auto", xfmt: (v) => num(v, 0), yfmt: (v) => signed(v, 0), xtip: (v) => num(v, 1), ytip: (v) => signed(v, 1),
     xlabel: "Season PPG →", ylabel: `${pos}s: opponent allows vs average ↑`, refX: ppgs[ppgs.length >> 1], refY: 0,
-    quadrants: [["Start with confidence", mix("var(--pos)", 72, "var(--fg)")], ["Streaming spot"], ["Tougher spot"], ["Look elsewhere", mix("var(--neg)", 72, "var(--fg)")]],
+    quadrants: [["High scorer in a plus matchup", mix("var(--pos)", 72, "var(--fg)")], ["Low scorer in a plus matchup"], ["High scorer in a tougher matchup"], ["Low scorer in a tougher matchup", mix("var(--neg)", 72, "var(--fg)")]],
     highlight: opts.hl ?? defaultStartFaces(pos), r: 24,
   }));
 }
@@ -311,23 +299,7 @@ function cardRankRace(_, opts = {}) {
   const weeks = race.weeks, last = weeks.length - 1;
   const hl = (opts.hl ?? defaultRaceHl(opts)).filter((id) => rows.some((r) => r.id === id));
   const spot = rows.find((r) => r.id === opts.spot) || null;
-  const { leader, since, climb } = raceStory(rows, weeks);
-  const L1 = (row) => lastName(row.n);
-  let title;
-  if (spot) {
-    const now = spot.r[last], seen = spot.r.filter((v) => v != null), first = seen[0];
-    const worst = Math.max(...seen), best = Math.min(...seen);
-    title = spot === leader && since === weeks[0] ? `${L1(spot)} has been ${pos}1 every week`
-      : now < first ? `${L1(spot)} has climbed from ${pos}${worst} to ${pos}${now}`
-      : now > first ? `${L1(spot)} has slid from ${pos}${best} to ${pos}${now}` : `${L1(spot)} is ${pos}${now}, where he started`;
-  } else {
-    title = since === weeks[0] ? `${L1(leader)} has been ${pos}1 every week` : since < weeks[last] ? `${L1(leader)} has been ${pos}1 since Week ${since}` : `${L1(leader)} takes over at ${pos}1`;
-  }
-  const climbLine = climb && climb.gain > 0 ? ` ${climb.row.n} climbed from ${pos}${climb.worst} in Week ${climb.week} to ${pos}${climb.row.r[last]}.` : "";
-  const fr = frame(1600, 900, {
-    kicker: `${DATA.season} · Weeks ${weeks[0]}-${weeks[last]} · PPR`, title,
-    subtitle: spot ? `Rank in season points after every week, among every ${POS_NAME_ONE[pos]} who had played.` : `Rank in season points after every week, the top ${rows.length} now.${climbLine}`,
-  });
+  const fr = frame(1600, 900, { kicker: `${DATA.season} · Weeks ${weeks[0]}-${weeks[last]} · PPR`, title: "Season-Long Ranking" });
   const { pad, w } = fr;
   const px0 = pad + 74, px1 = w - pad - 330, py0 = fr.top + 18, py1 = fr.bottom - 44;
   const x = lin(0, last, px0 + 16, px1);
@@ -377,7 +349,6 @@ function cardRankRace(_, opts = {}) {
   }
   return wrapCard(fr, s + hits);
 }
-const POS_NAME_ONE = { QB: "quarterback", RB: "running back", WR: "receiver", TE: "tight end" };
 
 // C17 ---------------------------------------------------------- Shootout meter
 // The home page's Shootout Meter (November 2026): next week's slate on one scale, each game
@@ -391,10 +362,6 @@ const kickoffEt = (h) => {
 function slateTeams() {
   return DATA.previews.filter((pv) => pv.header.away_implied != null && pv.header.home_implied != null);
 }
-function teamTopPlayers(team, n = 3) {
-  return Object.values(DATA.players).filter((p) => p.team === team && (p.season.games_played ?? 0) >= 3)
-    .sort((a, b) => (b.season.fantasy_ppg ?? 0) - (a.season.fantasy_ppg ?? 0)).slice(0, n);
-}
 function cardShootout() {
   const games = slateTeams().map((pv) => pv.header).sort((a, b) => b.total_line - a.total_line);
   const imps = games.flatMap((h) => [h.away_implied, h.home_implied]);
@@ -405,8 +372,7 @@ function cardShootout() {
     subtitle: top ? `Each game a line between its two teams' implied totals, by the total. ${nickname(top.away.abbreviation)} at ${nickname(top.home.abbreviation)} leads at ${top.total_line}.` : "No lines yet.",
   });
   const { pad, w } = fr;
-  const side = 400;
-  const x0 = pad, x1 = w - pad - side - 40;
+  const x0 = pad, x1 = w - pad;
   const y0 = fr.top + 30, rowH = Math.min(44, (fr.bottom - y0) / Math.max(1, games.length));
   const lo = Math.floor(Math.min(...imps) - 1.5), hi = Math.ceil(Math.max(...imps) + 1.5);
   const kx = 120, tx = 70;
@@ -434,19 +400,6 @@ function cardShootout() {
     s += T(x1, cy + 7, h.total_line, { size: 21, weight: 800, anchor: "end", mono: true });
     s += `<rect class="hit" x="${num(x0, 1)}" y="${num(cy - rowH / 2, 1)}" width="${num(x1 - x0, 1)}" height="${num(rowH, 1)}" fill="transparent" data-tip="${esc([`${nickname(a)} at ${nickname(hm)}`, `${a} ${implied(h.away_implied)}, ${hm} ${implied(h.home_implied)} implied`, `Total ${h.total_line}`].join("|"))}"/>`;
   });
-  // The best and worst spots, with who plays in them.
-  const lx = w - pad - side;
-  const teamsRanked = games.flatMap((h) => [[h.away.abbreviation, h.away_implied, h.home.abbreviation], [h.home.abbreviation, h.home_implied, h.away.abbreviation]]).sort((p, q) => q[1] - p[1]);
-  s += T(lx, fr.top + 14, "HIGHEST IMPLIED TOTALS", { size: 15, weight: 800, fill: "var(--faint)", ls: 1.6 });
-  teamsRanked.slice(0, 5).forEach(([team, imp, opp], i) => {
-    const cy = fr.top + 66 + i * 88;
-    s += logo(team, lx, cy - 22, 44);
-    s += T(lx + 58, cy - 4, `${nickname(team)}`, { size: 21, weight: 750 }) + T(lx + 58 + textWidth(nickname(team), 21, 750) + 8, cy - 4, `vs ${opp}`, { size: 15, weight: 600, fill: "var(--muted)" });
-    s += T(w - pad, cy + 2, implied(imp), { size: 26, weight: 800, anchor: "end", mono: true });
-    teamTopPlayers(team).forEach((p, j) => { s += face(p.id, lx + 70 + j * 44, cy + 30, 17, "var(--border-strong)", p.name); });
-  });
-  const low = teamsRanked.slice(-1)[0];
-  if (low) s += T(lx, fr.bottom - 6, `Lowest: ${nickname(low[0])} ${implied(low[1])} vs ${low[2]}`, { size: 17, fill: "var(--muted)" });
   return wrapCard(fr, s);
 }
 
@@ -471,8 +424,7 @@ function cardWpAll(_, opts = {}) {
   const hl = (opts.hl ?? defaultWpTeams()).filter((t) => games.some((d) => d.winner === t || d.loser === t));
   const drama = [...games].sort((a, b) => a.low - b.low);
   const fr = frame(1600, 900, {
-    kicker: `Week ${DATA.recap_week} · win probability`, title: `Every Week ${DATA.recap_week} game, one chart`,
-    subtitle: drama.length ? `Grey: each winner's chance from kickoff to final. The ${nickname(drama[0].winner)} were down to ${Math.round(drama[0].low * 100)}% and won.${hl.length ? " Coloured: the teams picked, from their side." : ""}` : "",
+    kicker: `Week ${DATA.recap_week} · win probability`, title: `Week ${DATA.recap_week} Win Probabilities`,
   });
   const { pad, w } = fr;
   const side = 380;
@@ -545,7 +497,7 @@ function cardShareRing(_, opts = {}) {
   const net = windowNetwork(pid, weeks, "all");
   const { shown, others, total } = shapeNet(net.receivers, Number(opts.top) || 7);
   const [cmp, att, yards] = net.line;
-  const fr = frame(1600, 900, { kicker: weeksLabel(weeks), title: `${net.name}: who gets the ball`, subtitle: `His ${total} targets, split by receiver` });
+  const fr = frame(1600, 900, { kicker: weeksLabel(weeks), title: `${net.name}: Target Distribution`, subtitle: `All ${total} targets, split by receiver` });
   const { pad, w } = fr;
   const H = fr.bottom - fr.top;
   const R1 = Math.min(300, H / 2 - 30), R0 = R1 * 0.6;
@@ -576,7 +528,7 @@ function cardShareRing(_, opts = {}) {
   // The table: receiver, share bar, yards, touchdowns, EPA per target.
   const tx = cx + R1 + 80, right = w - pad;
   const col = { yds: right - 196, td: right - 128, epa: right - 46 };
-  const nameW = 250, bx = tx + 56 + nameW, barW = col.yds - 120 - bx;
+  const nameW = 310, bx = tx + 56 + nameW, barW = col.yds - 120 - bx;
   let y = fr.top + 18;
   [["RECEIVER", tx + 56, "start"], ["SHARE OF TARGETS", bx, "start"], ["YDS", col.yds, "end"], ["TD", col.td, "end"], ["EPA/T", col.epa, "middle"]]
     .forEach(([k, x, anchor]) => { s += T(x, y, k, { size: 13, weight: 750, anchor, fill: "var(--faint)", ls: 1.1 }); });
@@ -589,7 +541,7 @@ function cardShareRing(_, opts = {}) {
     if (r.others) s += C(tx + 22, my, 18, { fill: "var(--chip)", stroke: "var(--border-strong)", sw: 2 }) + T(tx + 22, my + 6, "+", { size: 19, weight: 800, anchor: "middle", fill: "var(--muted)" });
     else s += face(r.player_id, tx + 22, my, 20, posColor(r.position || "WR"), r.name);
     s += T(tx + 56, my - (r.others ? -6 : 3), fit(r.others ? r.name : r.name, nameW, 19, 700), { size: 19, weight: 700, fill: r.others ? "var(--muted)" : "var(--fg)" });
-    if (!r.others) s += T(tx + 56, my + 19, fit(`${r.position ?? ""} · ${r.receptions} of ${r.targets} · ${r.adot == null ? "-" : num(r.adot, 1)} aDOT`, nameW, 14.5), { size: 14.5, fill: "var(--muted)" });
+    if (!r.others) s += T(tx + 56, my + 19, fit(`${r.receptions} reception${r.receptions === 1 ? "" : "s"} on ${r.targets} target${r.targets === 1 ? "" : "s"} · ${r.adot == null ? "-" : num(r.adot, 1)} aDOT`, nameW, 14.5), { size: 14.5, fill: "var(--muted)" });
     const bw = barW * (r.share / top);
     s += R(bx, my - 5, barW, 10, { rx: 5, fill: mix("var(--fg)", 8) });
     s += R(bx, my - 5, bw, 10, { rx: 5, fill: r.others ? "var(--faint)" : posColor(r.position || "WR") });
@@ -613,12 +565,12 @@ function cardLineupCards(_, opts = {}) {
   const pid = DATA.networks[opts.qb] ? opts.qb : networkPassers()[0].id;
   const weeks = tfWeeks(opts.tf);
   const net = windowNetwork(pid, weeks, "all");
-  const { shown, total } = shapeNet(net.receivers, 6);
+  const { shown, total } = shapeNet(net.receivers, Number(opts.top) || 6);
   const [cmp, att, yards, tdsN, ints] = net.line;
   const team = net.team;
   const base = parseHex(TEAMS[team]?.color) ? TEAMS[team].color : "#30343c";
   const accent = teamColor(team);
-  const fr = frame(1600, 900, { kicker: weeksLabel(weeks), title: `${net.name} and his receivers`, subtitle: "Share of his targets, each line, and where each is targeted: deep at the top, left to right as he sees it" });
+  const fr = frame(1600, 900, { kicker: weeksLabel(weeks), title: `${net.name} by Pass Catcher`, subtitle: "Grid indicates target location" });
   const { pad, w } = fr;
   const sum = (key) => net.receivers.reduce((acc, r) => acc + (r[key] ?? 0), 0);
   const charted = sum("charted");
@@ -628,7 +580,7 @@ function cardLineupCards(_, opts = {}) {
   const cards = [qbCard, ...shown.map((r) => ({ ...r, big: pct(r.share), bigLabel: "OF TARGETS",
     line: `${r.receptions}/${r.targets} · ${r.yards} yds${r.touchdowns ? ` · ${r.touchdowns} TD` : ""}` }))];
   const gap = 16;
-  const cw = Math.min(230, (w - 2 * pad - gap * (cards.length - 1)) / cards.length);
+  const cw = Math.min(260, (w - 2 * pad - gap * (cards.length - 1)) / cards.length);
   const x0 = (w - (cw * cards.length + gap * (cards.length - 1))) / 2;
   const y0 = fr.top - 4, ch = fr.bottom - y0, th = 236;
   const ink = inkOn(base);

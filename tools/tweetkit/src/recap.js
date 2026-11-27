@@ -235,7 +235,7 @@ function cardWp(g) {
 // A4 ------------------------------------------------------ Who got the ball
 function cardTouches(g) {
   const [away, home] = sidesOf(g);
-  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Every target and carry`, title: `${nickname(away)} at ${nickname(home)}`, subtitle: "Each player's targets and carries on the game clock" });
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Every target and carry`, title: `${nickname(away)} at ${nickname(home)}`, subtitle: "Each player's targets and carries" });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const byId = Object.fromEntries(g.players.map((p) => [p.player_id, p]));
@@ -375,7 +375,7 @@ function cardTeamStats(g) {
 const DRIVE_SHORT = { Touchdown: "TD", "Field goal": "FG", "Missed field goal": "Missed FG", Turnover: "Turnover", "Turnover on downs": "Downs", "End of half": "Half", "End of game": "End", "Opp touchdown": "Opp TD", Punt: "Punt", Safety: "Safety" };
 function cardDrives(g) {
   const [away, home] = sidesOf(g);
-  const fr = frame(1200, 1500, { kicker: `${g.header.week_label} · Every possession`, title: `${nickname(away)} at ${nickname(home)}`, subtitle: "Each drive from where it started toward the end zone. Solid: points." });
+  const fr = frame(1200, 1500, { kicker: `${g.header.week_label} · Every possession`, title: `${nickname(away)} at ${nickname(home)}` });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const drives = g.drives;
@@ -383,7 +383,7 @@ function cardDrives(g) {
   const lead = 150, tail = 290;
   const x = lin(0, 100, pad + lead, w - pad - tail);
   let y = fr.top + 6;
-  const rowH = Math.min(54, (fr.bottom - y - 40) / drives.length);
+  const rowH = Math.min(54, (fr.bottom - y - 28) / drives.length);
   let s2 = R(x(100), y + 18, x(106) - x(100), rowH * drives.length + 8, { fill: mix("var(--accent)", 14) });
   for (let yard = 10; yard < 100; yard += 10) {
     s2 += L(x(yard), y + 18, x(yard), y + 26 + rowH * drives.length, { stroke: yard === 50 ? "var(--plot-rule)" : "var(--divider)" });
@@ -407,7 +407,6 @@ function cardDrives(g) {
     s2 += T(x(106) + 14, cy + 6, label, { size: 17, weight: scored ? 800 : 600, fill: scored ? "var(--fg)" : "var(--muted)" });
     s2 += T(w - pad, cy + 6, `${d.plays} pl, ${d.yards} yd`, { size: 15, anchor: "end", mono: true, fill: "var(--faint)" });
   });
-  s2 += T(pad, fr.bottom - 2, "Right: plays and yards on the drive. Yard lines count up to midfield and back down.", { size: 16, fill: "var(--muted)" });
   return wrapCard(fr, s2);
 }
 
@@ -415,14 +414,14 @@ function cardDrives(g) {
 function cardGameExpected(g, opts = {}) {
   const [away, home] = sidesOf(g);
   const colors = gameColors(away, home);
-  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · PPR`, title: `${scoreTitle(g)}: points against expected`, subtitle: "Each player's points against what his targets and carries were worth" });
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · PPR`, title: `${scoreTitle(g)}: points against expected`, subtitle: "Each player's points against their expected points" });
   const pool = g.players.filter((p) => (p.expected_fantasy_points ?? 0) >= 1 || p.fantasy_points >= 1);
   const s = scatterPlot(fr, {
     points: pool.map((p) => ({ id: p.player_id, x: p.expected_fantasy_points ?? 0, y: p.fantasy_points, name: p.name, face: p.player_id, color: colors[p.team] })),
     highlight: opts.hl ?? defaultGameExpected(g), xstep: 5, ystep: 5, xfmt: (v) => num(v, 0), yfmt: (v) => num(v, 0), diagonal: true,
     xlabel: "Expected points →", ylabel: "Points →", r: 27,
-    key: `Dashed: points equal to expected. ${nickname(away)} and ${nickname(home)} in their colours`,
-    quadrants: [null, ["Beat his expected", mix("var(--pos)", 72, "var(--fg)")], ["Fell short", mix("var(--neg)", 72, "var(--fg)")], null],
+    key: "Dashed: expected points",
+    quadrants: [null, ["Above expected", mix("var(--pos)", 72, "var(--fg)")], ["Below expected", mix("var(--neg)", 72, "var(--fg)")], null],
   });
   return wrapCard(fr, s);
 }
@@ -571,7 +570,7 @@ function cardGameNetworks(g) {
     s += logo(team, x0, fr.top - 8, 36);
     if (!qb) { s += T(x0 + 46, fr.top + 18, "No passer", { size: 20, fill: "var(--faint)" }); return; }
     s += T(x0 + 46, fr.top + 18, qb.name, { size: 23, weight: 800, fill: teamText(colors[team]) });
-    s += T(x0 + panelW, fr.top + 18, passLine(qb), { size: 17, anchor: "end", mono: true, fill: "var(--muted)" });
+    s += T(x0 + panelW, fr.top + 18, `${passLine(qb)}${qb.epa == null ? "" : `, ${signed(qb.epa, 1)} EPA`}`, { size: 17, anchor: "end", mono: true, fill: "var(--muted)" });
     const net = windowNetwork(qb.player_id, [g.header.week], "all");
     if (!net) return;
     const { shown } = shapeNet(net.receivers, 6);
@@ -618,7 +617,7 @@ function cardGameThrows(g) {
   const [away, home] = sidesOf(g);
   const colors = gameColors(away, home);
   const qbs = mainPassers(g);
-  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Every throw`, title: `${nickname(away)} at ${nickname(home)}: passing charts`, subtitle: "Each targeted pass by depth past the line and side of the field" });
+  const fr = frame(1600, 900, { kicker: `${g.header.week_label} · Every Pass`, title: `${nickname(away)} at ${nickname(home)}: passing charts`, subtitle: "Each target based on depth and side of field" });
   const { pad, w } = fr;
   const panelW = (w - pad * 2 - 40) / 2;
   let s = throwLegend(w - pad - 600, fr.top - 66, "var(--muted)");

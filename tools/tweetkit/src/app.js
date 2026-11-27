@@ -151,7 +151,7 @@ const GROUPS = {
   ],
   team: [
     { id: "E1", name: "Team profile", fn: cardTeamProfile, isNew: true, note: "Scoring, EPA, offense against defense, how they play and fantasy points by position, all ranked." },
-    { id: "E2", name: "Who gets the work", fn: cardTeamShare, wide: true, isNew: true, note: "Each week's share of the targets and carries, by player." },
+    { id: "E2", name: "Opportunity by team", fn: cardTeamShare, wide: true, isNew: true, note: "Each week's share of the targets and carries, by player." },
     { id: "E3", name: "EPA game by game", fn: cardTeamTrend, wide: true, isNew: true, note: "Offense and defense EPA per play in every game, with the result." },
     { id: "E4", name: "Red zone pecking order", fn: cardTeamRedZone, wide: true, isNew: true, note: "Who gets the targets and carries inside the 20, and each player's share." },
     { id: "E5", name: "Every touchdown, the season", fn: cardTdTeam, wide: true, isNew: true, note: "Every offensive touchdown the team has scored this season, each from where the play started, coloured by who scored it (the top five; the rest in grey)." },
@@ -201,10 +201,11 @@ const GROUPS = {
         tfControl(),
         { key: "top", type: "select", label: "Receivers", options: [["5", "Top 5"], ["6", "Top 6"], ["7", "Top 7"], ["8", "Top 8"]], defaults: () => "7" },
       ] },
-    { id: "F8", name: "Lineup cards", fn: cardLineupCards, wide: true, isNew: true, nfl: true, note: "The quarterback and his top six receivers as cards in the team's colours: share, line, EPA per target and a heat grid of where each is targeted.",
+    { id: "F8", name: "Lineup cards", fn: cardLineupCards, wide: true, isNew: true, nfl: true, note: "The quarterback and his top pass catchers as cards in the team's colours: share, line, EPA per target and a heat grid of where each is targeted.",
       controls: [
         { key: "qb", type: "player", label: "Quarterback", pool: () => networkPassers(), defaults: () => networkPassers()[0].id },
         tfControl(),
+        { key: "top", type: "select", label: "Pass catchers", options: [["3", "Top 3"], ["4", "Top 4"], ["5", "Top 5"], ["6", "Top 6"], ["7", "Top 7"]], defaults: () => "6" },
       ] },
   ],
 };
