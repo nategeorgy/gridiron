@@ -1,6 +1,7 @@
 // Shared pieces for every card: the frame, text, faces, logos, chips, colours, formats.
 const DATA = JSON.parse(document.getElementById("data").textContent);
-const IMG = JSON.parse(document.getElementById("img").textContent);
+// Headshots and logos ride in img.js (window.KIT_IMG), so the page stays under its 16 MB cap.
+const IMG = window.KIT_IMG || JSON.parse(document.getElementById("img").textContent);
 const TEAMS = DATA.teams;
 // Game logs arrive as arrays under one key list (build_data.py); rebuild the rows once.
 for (const p of Object.values(DATA.players)) {

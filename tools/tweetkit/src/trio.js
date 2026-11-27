@@ -58,27 +58,30 @@ function cardTrioPizzas(pid, opts = {}) {
   const fr = trioFrame(people, 1600, 900, "percentile pizzas");
   const { pad, w } = fr;
   let s = "";
-  let x = pad;
-  pizzaCats(stats).forEach(([cat, color]) => {
-    const chip = pill(cat, x, fr.top + 2, { tone: color, size: 18, weight: 700 });
+  // The category chips sit at the right end of the subheading's line.
+  let x = w - pad;
+  [...pizzaCats(stats)].reverse().forEach(([cat, color]) => {
+    const chip = pill(cat, x, fr.top - 46, { tone: color, size: 18, weight: 700, anchor: "end" });
     s += chip.svg;
-    x += chip.w + 10;
+    x -= chip.w + 10;
   });
   const notes = people.filter((p) => asIfNote(p)).length;
   const bottom = fr.bottom - notes * 22;
-  const top = fr.top + 30;
+  const top = fr.top - 4;
   const n = people.length;
-  const slot = (w - pad * 2) / n;
+  // The outer labels may use the side margins.
+  const edge = 24;
+  const slot = (w - edge * 2) / n;
   const k = n === 3 ? 1.05 : 1.25;
-  const gap = 28;
+  const gap = 22;
   // Above and below the rim: the gap, two label lines and the number.
   const reach = gap * k + 12 * k * 1.15 * 2 + 12 * k;
   // The labels beside the rim limit the radius across; the names and the labels limit it down.
-  const radius = Math.min(slot / 2 - gap * k - 88 * k, (bottom - top - 60) / 2 - reach);
+  const radius = Math.min(slot / 2 - gap * k - 78 * k, (bottom - top - 60) / 2 - reach);
   const groupH = 60 + 2 * (radius + reach);
   const groupTop = top + (bottom - top - groupH) / 2;
   people.forEach((p, i) => {
-    const cx = pad + slot * (i + 0.5);
+    const cx = edge + slot * (i + 0.5);
     s += T(cx, groupTop + 22, p.name, { size: 26, weight: 800, anchor: "middle", fill: teamText(colors[i]) });
     s += T(cx, groupTop + 48, `${p.team} · ${p.season.games_played} games · ${num(p.season.fantasy_ppg, 1)} PPG`, { size: 17, anchor: "middle", fill: "var(--muted)" });
     const cy = groupTop + 60 + reach + radius;

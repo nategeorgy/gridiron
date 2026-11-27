@@ -77,7 +77,7 @@ function cardTeamProfile(abbr) {
 // E2 --------------------------------------------------------- Share of the work
 function cardTeamShare(abbr) {
   const t = DATA.teams_cards[abbr];
-  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${thru(abbr)}`, title: "Who gets the work", subtitle: "Each week's share of the team's targets and carries" });
+  const fr = frame(1600, 900, { kicker: `${TEAMS[abbr]?.name || abbr} · Weeks 1-${thru(abbr)}`, title: "Opportunity by Team", subtitle: "Each week's share of the team's targets and carries" });
   const { pad, w } = fr;
   const weeks = teamWeeks(abbr);
   // One colour per player across both panels, so a back in both reads as one person.
@@ -138,7 +138,7 @@ function cardTeamTrend(abbr) {
     const rows = (t.trend[key] || []).filter((r) => r.value != null);
     const all = rows.flatMap((r) => [r.value, r.league_q25, r.league_q75]).filter((v) => v != null);
     const max = Math.max(0.3, Math.ceil(Math.max(...all.map(Math.abs)) * 10) / 10);
-    const py0 = fr.top + 40, py1 = fr.bottom - 74, lx0 = x0 + 60, lx1 = x0 + panelW - 10;
+    const py0 = fr.top + 40, py1 = fr.bottom - 58, lx0 = x0 + 60, lx1 = x0 + panelW - 10;
     const weeks = rows.map((r) => r.week);
     const x = weeks.length > 1 ? lin(weeks[0], weeks[weeks.length - 1], lx0 + 30, lx1 - 30) : () => (lx0 + lx1) / 2;
     const y = lin(-max, max, py1, py0);
@@ -150,9 +150,9 @@ function cardTeamTrend(abbr) {
       const good = key === "off" ? r.value > 0 : r.value < 0;
       s += C(x(r.week), y(r.value), 9, { fill: color, stroke: "var(--card)", sw: 2.5 });
       s += T(x(r.week), y(r.value) + (r.value >= 0 ? -16 : 28), signed(r.value, 2), { size: 15, weight: 700, anchor: "middle", mono: true, fill: mix(good ? "var(--pos)" : "var(--neg)", 70, "var(--fg)") });
-      s += T(x(r.week), py1 + 28, `W${r.week} ${r.home ? "vs" : "@"} ${r.opponent}`, { size: 15, weight: 700, anchor: "middle", fill: "var(--muted)" });
+      s += T(x(r.week), py1 + 28, `${r.home ? "" : "@"}${r.opponent}`, { size: 15, weight: 700, anchor: "middle", fill: "var(--muted)" });
       const won = r.points_for > r.points_against, tied = r.points_for === r.points_against;
-      s += T(x(r.week), py1 + 50, `${won ? "W" : tied ? "T" : "L"} ${r.points_for}-${r.points_against}`, { size: 15, weight: 700, anchor: "middle", mono: true, fill: mix(won ? "var(--pos)" : tied ? "var(--muted)" : "var(--neg)", 70, "var(--fg)") });
+      s += T(x(r.week), py1 + 50, won ? "W" : tied ? "T" : "L", { size: 17, weight: 800, anchor: "middle", mono: true, fill: won ? "var(--pos)" : tied ? "var(--muted)" : "var(--neg)" });
     });
   });
   return wrapCard(fr, s);

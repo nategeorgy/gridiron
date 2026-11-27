@@ -204,7 +204,7 @@ function rankTracks(x0, y0, W, H, rows, teams, colors, n, o = {}) {
 }
 function cardTape(pv) {
   const [away, home] = pvSides(pv);
-  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: `Offense against offense, defense against defense. Season ranks of ${pv.teams_ranked}, the best on the right.` });
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: pvTitle(pv), subtitle: "Season ranks" });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const panelW = (w - pad * 2 - 56) / 2;
@@ -339,7 +339,7 @@ const STYLE_ROWS = {
 };
 function cardStyle(pv) {
   const [away, home] = pvSides(pv);
-  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: `${pvTitle(pv)}: how they play`, subtitle: `Tendencies, not grades. Rank of ${pv.teams_ranked}: the most on the right, and on pace the fastest.` });
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview`, title: `${pvTitle(pv)}: Tendencies`, subtitle: "Season ranks" });
   const colors = gameColors(away, home);
   const { pad, w } = fr;
   const panelW = (w - pad * 2 - 56) / 2;
@@ -354,7 +354,7 @@ function cardStyle(pv) {
       return t && { label, a: t[side][away], b: t[side][home], fmt: t.fmt };
     }).filter((r) => r && (r.a || r.b));
     const H = Math.min(fr.bottom - y - 84, rows.length * 62);
-    s += rankTracks(x0, y + 84, panelW, H, rows, [away, home], colors, pv.teams_ranked, { best: "Most", worst: "Least", labelW: 282 });
+    s += rankTracks(x0, y + 84, panelW, H, rows, [away, home], colors, pv.teams_ranked, { labelW: 282 });
   });
   s += L(w / 2, fr.top + 20, w / 2, fr.bottom, { stroke: "var(--rule)" });
   return wrapCard(fr, s);
@@ -514,7 +514,7 @@ function cardPlayerMatchup(pv, opts = {}) {
     const said = fitSize(`${TEAMS[opp]?.name || opp} allow the ${m.rank === 1 ? "most" : `${ord(m.rank)} most`} PPR points to ${POS_PLURAL[pos]}`, w - pad * 2 - 148 - 170, [22, 20, 19], 600);
     s += T(pad + 148, y + 110, said.text, { size: said.size, weight: 600 });
     s += T(pad + 148, y + 144, `${num(m.points_allowed)} a game, league ${num(lg)} (${signed((m.points_allowed / lg - 1) * 100, 0)}%)`, { size: 20, mono: true, fill: "var(--muted)" });
-    if (xp) s += T(pad + 148, y + 174, `Expected from the work they allow: ${num(xp.value)} a game, ${ord(xp.rank)}`, { size: 18, fill: "var(--faint)" });
+    if (xp) s += T(pad + 148, y + 174, `Expected: ${num(xp.value)} a game, ${ord(xp.rank)}`, { size: 18, fill: "var(--faint)" });
     s += T(w - pad - 30, y + 74, ord(m.rank), { size: 64, weight: 800, anchor: "end", mono: true, fill: mix(color, 58, "var(--fg)") });
     s += T(w - pad - 30, y + 106, `of ${m.teams}`, { size: 18, weight: 650, anchor: "end", fill: "var(--muted)" });
   }
@@ -663,8 +663,8 @@ function cardGameEnvironment(pv, opts = {}, layout = "panel") {
   const min = envMins(opts);
   const minLabel = [min.ppg ? `${min.ppg}+ PPG` : null, min.games > 1 ? `${min.games}+ games` : null].filter(Boolean).join(", ");
   const subtitle = { panel: "The game against the week's others, then every player by his points and his matchup",
-    chart: "Every player on both teams by his points and his matchup" }[layout];
-  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview · PPR${minLabel ? ` · ${minLabel}` : ""}`, title: pvTitle(pv), subtitle });
+    chart: null }[layout];
+  const fr = frame(1600, 900, { kicker: `${pv.header.week_label} preview · PPR${minLabel && layout !== "chart" ? ` · ${minLabel}` : ""}`, title: pvTitle(pv), subtitle });
   const { pad } = fr;
   let s = "", sub = fr;
   if (layout === "panel") {

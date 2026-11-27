@@ -184,7 +184,7 @@ function cardNetwork(_, opts = {}) {
   const team = net.team;
   const fr = frame(1600, 900, {
     kicker: [weeksLabel(weeks), SITUATION_WORDS[opts.sit || "all"]].filter(Boolean).join(" · "),
-    title: `${net.name}: passing network`, subtitle: "Where his targets go: each receiver's share, depth and side of the field",
+    title: `${net.name}: passing network`, subtitle: "All targets, each receiver's share, with depth and side of the field",
     headshot: { pid, name: net.name, ring: teamColor(team) },
   });
   const { pad, w } = fr;
@@ -429,13 +429,15 @@ function cardLeaders(_, opts = {}) {
 }
 
 // F4 -------------------------------------------------------------- The race
+/** "Rushing and receiving TDs" to "Rushing and Receiving TDs": small words stay lower case. */
+const titleCase = (text) => text.split(" ").map((word, i) => (i && ["and", "per", "of", "vs"].includes(word) ? word : word[0].toUpperCase() + word.slice(1))).join(" ");
 function cardRace(_, opts = {}) {
   const stat = LEADER_STATS[opts.stat] || LEADER_STATS.rec_yds;
   const W = DATA.recap_week;
   const weeks = Array.from({ length: W }, (_, i) => i + 1);
   const rows = leaderRows({ stat: opts.stat, tf: "season", pos: opts.pos }).rows.slice(0, Number(opts.n) || 8);
   const posWord = opts.pos && opts.pos !== "all" ? `, ${POS_PLURAL[opts.pos]}` : "";
-  const fr = frame(1600, 900, { kicker: `${DATA.season} · Weeks 1-${W}`, title: `The ${lowerFirst(stat.label)} race${posWord}`, subtitle: `Season total after each week, the top ${rows.length}. Flat steps are byes and missed games.` });
+  const fr = frame(1600, 900, { kicker: `${DATA.season} · Weeks 1-${W}`, title: `${titleCase(stat.label)} Race${posWord}` });
   const { pad, w } = fr;
   const px0 = pad + 70, px1 = w - pad - 330, py0 = fr.top + 14, py1 = fr.bottom - 46;
   const series = rows.map((p) => {
@@ -541,17 +543,17 @@ function cardTeamRankings(_, opts = {}) {
 // Each axis is [metric, side, flip]: flip draws lower values further right or higher up,
 // so the good corner is always top right where the metric has a better direction.
 const TEAM_SCATTERS = [
-  { id: "pass-run", label: "Passing vs running offense", title: "Who moves the ball, and how", x: ["p_epa", "o"], y: ["r_epa", "o"], xl: "EPA per dropback", yl: "EPA per designed run",
+  { id: "pass-run", heading: "EPA per Dropback vs EPA per Designed Run", label: "Passing vs running offense", title: "Who moves the ball, and how", x: ["p_epa", "o"], y: ["r_epa", "o"], xl: "EPA per dropback", yl: "EPA per designed run",
     q: ["Passes and runs well", "Runs well", "Passes well", "Struggles at both"] },
-  { id: "def-pass-run", label: "Pass defense vs run defense", title: "Which defenses stop the pass, and which stop the run", x: ["p_epa", "d", true], y: ["r_epa", "d", true], xl: "EPA per dropback allowed (better →)", yl: "EPA per run allowed (better ↑)",
+  { id: "def-pass-run", heading: "EPA per Dropback Allowed vs EPA per Run Allowed", label: "Pass defense vs run defense", title: "Which defenses stop the pass, and which stop the run", x: ["p_epa", "d", true], y: ["r_epa", "d", true], xl: "EPA per dropback allowed (better →)", yl: "EPA per run allowed (better ↑)",
     q: ["Stops both", "Stops the run", "Stops the pass", "Stops neither"] },
-  { id: "proe", label: "Pass rate over expected vs EPA per dropback", title: "Who throws more than expected, and does it work", x: ["proe", "o"], y: ["p_epa", "o"], xl: "Pass rate over expected", yl: "EPA per dropback",
+  { id: "proe", heading: "Pass Rate Over Expected vs EPA per Dropback", label: "Pass rate over expected vs EPA per dropback", title: "Who throws more than expected, and does it work", x: ["proe", "o"], y: ["p_epa", "o"], xl: "Pass rate over expected", yl: "EPA per dropback",
     q: ["Throws more, and it works", "Runs more, passes well", "Throws more, and it doesn't work", "Runs more, passes poorly"] },
-  { id: "points", label: "Points scored vs allowed", title: "Points scored against points allowed", x: ["ppg", "o"], y: ["ppg", "d", true], xl: "Points per game", yl: "Points allowed per game (better ↑)",
+  { id: "points", heading: "Points per Game vs Points Allowed per Game", label: "Points scored vs allowed", title: "Points scored against points allowed", x: ["ppg", "o"], y: ["ppg", "d", true], xl: "Points per game", yl: "Points allowed per game (better ↑)",
     q: ["Scores and stops", "Wins with defense", "Wins shootouts", "Neither"] },
-  { id: "explosive", label: "Success rate vs explosive play rate", title: "Steady or explosive offenses", x: ["suc", "o"], y: ["explosive", "o"], xl: "Success rate", yl: "Explosive play rate",
+  { id: "explosive", heading: "Success Rate vs Explosive Play Rate", label: "Success rate vs explosive play rate", title: "Steady or explosive offenses", x: ["suc", "o"], y: ["explosive", "o"], xl: "Success rate", yl: "Explosive play rate",
     q: ["Steady and explosive", "Big plays, little else", "Steady, few big plays", "Neither"] },
-  { id: "pace", label: "Pace vs neutral pass rate", title: "Who plays fast, and who throws", x: ["sec_snap", "o", true], y: ["n_pass", "o"], xl: "Seconds per snap, neutral (faster →)", yl: "Neutral pass rate",
+  { id: "pace", heading: "Seconds per Snap vs Neutral Pass Rate", label: "Pace vs neutral pass rate", title: "Who plays fast, and who throws", x: ["sec_snap", "o", true], y: ["n_pass", "o"], xl: "Seconds per snap, neutral (faster →)", yl: "Neutral pass rate",
     q: ["Fast and pass-heavy", "Slow and pass-heavy", "Fast and run-heavy", "Slow and run-heavy"] },
 ];
 function cardTeamScatter(_, opts = {}) {
@@ -562,7 +564,7 @@ function cardTeamScatter(_, opts = {}) {
   const read = ([m, side]) => win[m]?.[side] || {};
   const xs = read(cfg.x), ys = read(cfg.y);
   const teams = Object.keys(xs).filter((t) => xs[t]?.[0] != null && ys[t]?.[0] != null);
-  const fr = frame(1600, 900, { kicker: weeksLabel(weeks), title: cfg.title, subtitle: `${cfg.xl.replace(/ \(.*\)$/, "")} against ${lowerFirst(cfg.yl.replace(/ \(.*\)$/, ""))}, all 32 teams` });
+  const fr = frame(1600, 900, { kicker: weeksLabel(weeks), title: cfg.heading });
   const { pad, w } = fr;
   const fx = DATA.team_window_meta[cfg.x[0]].fmt, fy = DATA.team_window_meta[cfg.y[0]].fmt;
   const xv = teams.map((t) => xs[t][0]), yv = teams.map((t) => ys[t][0]);

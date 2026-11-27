@@ -208,12 +208,21 @@ function cardPercentileProfile(pid) {
   const { pad, w } = fr;
   const color = teamColor(p.team);
   const [role, why] = roleOf(p.pos, p.season);
-  let s = R(pad, fr.top - 6, 560, 104, { rx: 20, fill: mix(color, 20), stroke: mix(color, 45), sw: 1.5 });
-  s += T(pad + 22, fr.top + 20, `${DATA.season} ROLE`, { size: 14, weight: 750, fill: "var(--faint)", ls: 1.6 });
-  s += T(pad + 22, fr.top + 52, role, { size: 30, weight: 800 });
-  s += T(pad + 22, fr.top + 80, fit(why, 516, 18), { size: 18, fill: "var(--muted)" });
-  const cy = fr.top + 104 + (fr.bottom - fr.top - 104) / 2 + 8;
-  s += radar(pad + 330, cy, 160, radarStats(p.pos), [{ color: "var(--series-1)", pct: p.pct, val: p.season, asif: p.asif }]);
+  // The role rides in a pill beside his name, so the radar gets the whole left column.
+  const tx = pad + 150, titleBase = pad + 34 + 38;
+  const px = tx + textWidth(p.name, 44, 750) + 26, pxEnd = w - pad - 46 * MARK_ASPECT - 30;
+  const roleW = textWidth(role, 22, 800), label = `${DATA.season} ROLE`, labelW = textWidth(label, 12, 750) + label.length * 1.4;
+  const whyText = fit(why, pxEnd - px - 40 - labelW - roleW - 24, 17);
+  const pillW = 40 + labelW + 12 + roleW + 12 + textWidth(whyText, 17, 400);
+  let s = R(px, titleBase - 33, pillW, 44, { rx: 22, fill: mix(color, 20), stroke: mix(color, 45), sw: 1.5 });
+  s += T(px + 20, titleBase - 6, label, { size: 12, weight: 750, fill: "var(--faint)", ls: 1.4 });
+  s += T(px + 20 + labelW + 12, titleBase - 3, role, { size: 22, weight: 800 });
+  s += T(px + 20 + labelW + 12 + roleW + 12, titleBase - 4, whyText, { size: 17, fill: "var(--muted)" });
+  // Labels sit at 1.21x the radius, two lines each: about 2.42r + 60 tall in all.
+  const ry0 = fr.top - 10, ry1 = fr.bottom - (asIfNote(p) ? 22 : 0);
+  const rr = Math.min(200, (ry1 - ry0 - 60) / 2.42);
+  const cy = (ry0 + ry1) / 2 + 6;
+  s += radar(pad + 380, cy, rr, radarStats(p.pos), [{ color: "var(--series-1)", pct: p.pct, val: p.season, asif: p.asif }]);
   // The player card's percentile list beside it (PCT_LIST, D1's rows).
   const list = PCT_LIST[p.pos];
   const x0 = 830, x1 = w - pad;
@@ -251,8 +260,7 @@ function cardGameChart(pid, opts = {}) {
   const l3 = opts.line === "l3";
   const ref = refLine(p.pos, DATA.season, key);
   const refName = lineName(p.pos, kind, cfg.rank);
-  const fr = ppFrame(p, 1600, 900, `${DATA.season} · Game by game${key === "ppg" ? " · PPR" : ""}`, `${p.name}: ${lowerFirst(stat.label)}`,
-    `Every game hanging from the ${refName}. The line is ${l3 ? "the average over the last three games" : "the average to date"}`);
+  const fr = ppFrame(p, 1600, 900, `${DATA.season} · Game by game${key === "ppg" ? " · PPR" : ""}`, `${p.name}: ${lowerFirst(stat.label)}`);
   const { pad, w } = fr;
   const last = thru(p.team);
   const games = [...p.log].sort((a, b) => a.week - b.week);
@@ -266,14 +274,16 @@ function cardGameChart(pid, opts = {}) {
     const before = points.filter((pt) => pt.x < wk).pop() ?? points[0];
     missed.push({ x: wk, v: before.v });
   }
-  const px0 = pad + 70, px1 = w - pad - 150, py0 = fr.top + 50, py1 = fr.bottom - 44;
+  // With no subheading the body would start beside the headshot: keep it below the circle.
+  const top = Math.max(fr.top, pad + 62 + 60 + 22);
+  const px0 = pad + 70, px1 = w - pad - 150, py0 = top + 50, py1 = fr.bottom - 44;
   const x = lin(0.5, last + 0.5, px0, px1);
   const [d0, d1] = stat.axis;
   const y = lin(d0, d1, py1, py0);
   const yc = (v) => clampTo(y(v), py0, py1);
   const F = (v) => gsFmt(stat, v);
   const series = "var(--series-1)";
-  let s = legendRow(pad, fr.top + 6, [
+  let s = legendRow(pad, top + 6, [
     [(cx, cy) => L(cx - 12, cy, cx + 12, cy, { stroke: series, sw: 5, cap: "round" }), l3 ? "Last 3 games" : "Season to date"],
     [(cx, cy) => L(cx, cy + 10, cx, cy - 4, { stroke: "var(--muted)", sw: 2 }) + C(cx, cy - 6, 6, { fill: "var(--muted)" }), "One game"],
     [(cx, cy) => L(cx - 12, cy, cx + 12, cy, { stroke: "var(--muted)", sw: 2, dash: "7 5" }), `${refName} this season`],
@@ -622,8 +632,8 @@ function cardByQuarterback(pid, opts = {}) {
   const p = DATA.players[pid];
   const both = opts.scope !== "one";
   const seasons = both ? [DATA.season, DATA.season - 1, DATA.season - 2] : [DATA.season];
-  const fr = ppFrame(p, 1600, 900, `${both ? `${DATA.season - 2} to ${DATA.season}` : DATA.season} · By quarterback · PPR`, `${p.name}: who threw the ball`,
-    "In each quarterback's starts. Green beats the overall number (the tick), red falls short of it");
+  const fr = ppFrame(p, 1600, 900, `${both ? `${DATA.season - 2} to ${DATA.season}` : DATA.season} · By quarterback · PPR`, `${p.name}: by Quarterback`,
+    "Quarterbacks by start. Green = above his average, red = below");
   if (p.pos === "QB" || !(p.byqb || []).length) return wrapCard(fr, emptyBody(fr, p.pos === "QB" ? "For quarterbacks, the passing network (F1) shows the other side" : "No games this season"));
   const { pad, w } = fr;
   const rows = p.byqb.filter((x) => seasons.includes(x[0]));
@@ -812,7 +822,7 @@ function cardCareerArc(pid, opts = {}) {
     return { season, all: games, games: games.map((g) => ({ g, v: gameValue(stat, g) })).filter((e) => e.v != null && Number.isFinite(e.v)) };
   }).filter((c) => c.games.length).slice(-10);
   const fr = ppFrame(p, 1600, 900, `Career · ${columns.length ? `${columns[0].season} to ${columns[columns.length - 1].season}` : ""}${key === "ppg" ? " · PPR" : ""}`, `${p.name}: career arc`,
-    `Every game as a dot, a column per season: the median, the middle half, and that season's ${lineName(p.pos, kind, cfg.rank)} (dashed)`);
+    "Solid line represents that season's median");
   if (!columns.length) return wrapCard(fr, emptyBody(fr, `No games with ${lowerFirst(stat.label)}`));
   const { pad, w } = fr;
   const teamOf = Object.fromEntries((p.career || []).map((c) => [c.season, c.team_abbreviation]));
@@ -920,7 +930,7 @@ function cardVsLastSeason(pid) {
   const now = rows.find((row) => row.season === DATA.season);
   const then = [...rows].reverse().find((row) => row.season < DATA.season);
   const fr = ppFrame(p, 1600, 900, `${DATA.season} against ${then ? then.season : "last season"}`, `${p.name}: ${DATA.season} against ${then ? then.season : "last season"}`,
-    `Percentiles among qualified ${posWord(p.pos)}: the radar for the shape, the arrows for the detail`);
+    `Percentiles among qualified ${posWord(p.pos)}`);
   if (!now || !then) return wrapCard(fr, emptyBody(fr, "No earlier season to compare"));
   const { pad, w } = fr;
   const A = radarOf(p, now), B = radarOf(p, then);

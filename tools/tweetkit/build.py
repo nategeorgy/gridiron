@@ -1,4 +1,4 @@
-"""src/* + data.json + img.json -> index.html (one self-contained page)."""
+"""src/* + data.json + img.json -> index.html + img.js (the page and its images, published together)."""
 import json, os, re
 HERE = os.path.dirname(os.path.abspath(__file__))
 BRAND = os.path.join(HERE, "..", "..", "frontend", "src", "components", "Brand.jsx")
@@ -16,10 +16,12 @@ def face(family, file, weights):
     return f'@font-face{{font-family:"{family}";src:url(data:font/woff2;base64,{data}) format("woff2");font-weight:{weights};font-style:normal;}}'
 fonts = face("Inter", "Inter-latin.woff2", "400 800") + face("JetBrains Mono", "JetBrainsMono-latin.woff2", "500 800")
 page = page.replace("__FONTS_JSON__", json.dumps(fonts)).replace("__FONTS__", fonts)
-page = page.replace("__MARK__", json.dumps(paths)).replace("__DATA__", data).replace("__IMG__", img).replace("__JS__", js)
+page = page.replace("__MARK__", json.dumps(paths)).replace("__DATA__", data).replace("__JS__", js)
+# The images go in their own file beside the page (published with it): together they pass 16 MB.
+open(os.path.join(HERE, "img.js"), "w").write("window.KIT_IMG = " + img + ";\n")
 out = os.path.join(HERE, "index.html")
 open(out, "w").write(page)
 # The publish wraps the page in a skeleton; local checks need one of their own.
 open(os.path.join(HERE, "preview.html"), "w").write(
     '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"></head><body>' + page + "</body></html>")
-print("index.html", os.path.getsize(out) // 1024, "kB")
+print("index.html", os.path.getsize(out) // 1024, "kB; img.js", os.path.getsize(os.path.join(HERE, "img.js")) // 1024, "kB")

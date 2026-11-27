@@ -20,8 +20,10 @@ API = "http://localhost:8000/api/v1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join(HERE, "raw")
 POSITIONS = ["QB", "RB", "WR", "TE"]
-# How many players per position the reply cards can switch between.
+# The reply-card pool: the top N per position by total points, plus anyone else with at
+# least CARD_FLOOR points, so a star who missed games (A.J. Brown, 4 games) can still be picked.
 CARD_DEPTH = {"QB": 36, "RB": 64, "WR": 90, "TE": 36}
+CARD_FLOOR = 15
 
 # D1's percentile rows, per position, in the order the card draws them.
 PERCENTILES = {
@@ -241,11 +243,12 @@ def main():
     out["team_weeks"] = {week: get("/teams/stats", season=SEASON, weeks=str(week)) for week in range(1, RECAP_WEEK + 1)}
     print("breakdowns", len(out["breakdowns"]), "weekly boards", len(out["weekly_boards"]), file=sys.stderr)
 
-    # The reply-card pool: the top N at each position by total points.
+    # The reply-card pool (CARD_DEPTH and CARD_FLOOR above).
     pool_ids = []
     for position in POSITIONS:
         ranked = sorted(out["intel"][position], key=lambda r: -(r.get("fantasy_points") or 0))
-        pool_ids += [(r["player_id"], position) for r in ranked[: CARD_DEPTH[position]]]
+        pool_ids += [(r["player_id"], position) for i, r in enumerate(ranked)
+                     if i < CARD_DEPTH[position] or (r.get("fantasy_points") or 0) >= CARD_FLOOR]
 
     def player(entry):
         pid, position = entry

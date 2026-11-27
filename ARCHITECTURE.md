@@ -17,7 +17,7 @@
 > Think of it this way: **README = how to run it. CLAUDE.md = the rules and the spec.
 > ROADMAP = where we're going. ARCHITECTURE (this file) = where everything lives.**
 
-Last updated: 2026-11-17 (Player Comparison rebuilt: team banners, pizzas, a radar and strips, rolling lines, finishes by band; radar numbers outside on Career and Compare; percentile strips on the Compare tab; tweet kit D25 and D26 pizzas. Earlier: the Highlighted Viz's lower third; the broadcast field; tweet kit F7, F8; Rank Race, Shootout Meter)
+Last updated: 2026-11-27 (tweet kit: images move to `img.js` beside the page, the reply-card pool takes anyone with 15+ points, shorter card titles. Earlier: Player Comparison rebuilt: team banners, pizzas, a radar and strips, rolling lines, finishes by band; radar numbers outside on Career and Compare; percentile strips on the Compare tab; tweet kit D25 and D26 pizzas. Earlier: the Highlighted Viz's lower third; the broadcast field; tweet kit F7, F8; Rank Race, Shootout Meter)
 
 ---
 
@@ -73,7 +73,7 @@ This is what you see when you open the `gridiron/` folder. Every item explained:
 | `frontend/` | app | The React web app (what users see). See [§4](#4-frontend--the-react-web-app). |
 | `backend/` | app | The FastAPI JSON API, and its test suite in `backend/tests/`. See [§5](#5-backend--the-fastapi-api). |
 | `pipeline/` | app | The data-ingestion scripts. See [§6](#6-pipeline--data-ingestion). |
-| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 82 card templates (game recaps, previews with matchup environment cards, weekly series including every Scatter page chart, player reply cards with the player page's visuals in `src/playerpage.js`, teams, and league cards with the Explore tab's passing network and target analysis) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. |
+| `tools/tweetkit/` | tooling | Tweet images for @SecondLevelFF: 82 card templates (game recaps, previews with matchup environment cards, weekly series including every Scatter page chart, player reply cards with the player page's visuals in `src/playerpage.js`, teams, and league cards with the Explore tab's passing network and target analysis) drawn as SVG from the **local** API and rendered to PNG by headless Chrome. Not part of the app; nothing imports it. Its README is the catalog of every card and the weekly commands. Pulled data, images and the built pages are git-ignored, and the PNGs land in `tweets/`, which `.git/info/exclude` keeps out. The built page is two files, `index.html` and the headshots and logos in `img.js` beside it, published together because one file would pass the 16 MB page cap. |
 | `docker-compose.yml` | config | Defines the **local** PostgreSQL database (Postgres 16 in a Docker container). `docker compose up -d` starts it. Data persists in a named volume `gridiron_pgdata`. |
 | `render.yaml` | config | "Blueprint" telling **Render** how to build and run the backend in production. ⭐ Its `buildCommand` runs **`scripts/migrate.sh`** after installing dependencies — `preDeployCommand` is paid-only on the free plan. See the file's comments: a bare `alembic upgrade head` failed there on a pooler **checkout timeout**, not connectivity, because a build competes with the still-running previous version for connections. |
 | `.env.example` | config | Template for environment variables. You copy sections of it into `backend/.env` and `frontend/.env`. Real `.env` files are **never** committed. |
@@ -852,6 +852,11 @@ repo. Update it in the *same change* that alters the project's structure — spe
 
 ### Changelog
 
+- **2026-11-27**: **Tweet kit deck tweaks.** `tools/tweetkit/build.py` writes the headshots and logos to
+  `img.js` (`window.KIT_IMG`) beside `index.html` instead of inlining them, since the page passed the 16 MB
+  cap, and the README's publish step sends both. The reply-card pool adds anyone with 15 or more PPR points
+  (`CARD_FLOOR` in `pull.py`), F8 gains a Pass catchers control, and most cards get shorter titles with fewer
+  subheadings. Tools only; the app is unchanged.
 - **2026-11-17**: **Radars, pizzas and Player Comparison**, from the mockups at
   https://claude.ai/artifact/DHznB1dxof45Z2zR7SJ3Q1. The Career and Compare radars print each player's own
   number under every label in that player's colour (R1), matching the Dashboard, where both percentiles sat

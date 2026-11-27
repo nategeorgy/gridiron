@@ -24,7 +24,8 @@ week only when it is rebuilt and published again.
    other team, and the cards say so. Both Thursday teams' player and team cards run a week
    further; the weekly series (C) stay on the last full week.
 3. Ask Claude to publish `tools/tweetkit/index.html` to the review page below with
-   `capabilities: {downloads: true}`. Publishing to the same link keeps it; publishing
+   `capabilities: {downloads: true}` and `files: {"img.js": "tools/tweetkit/img.js"}` (the
+   headshots and logos, which would take the page past its 16 MB cap). Publishing to the same link keeps it; publishing
    without the link makes a new page.
 
 For a change to the cards themselves, ask Claude in any session; the code is here and
@@ -33,7 +34,7 @@ this README is the catalog.
 ## Two ways to make an image
 
 **The page.** https://claude.ai/artifact/4L9cX5h9qxcWZnysXjVTG4 (private; publish `index.html`
-with `capabilities: {downloads: true}` to update it). Pick the game, player or team, set the
+with `img.js` beside it and `capabilities: {downloads: true}` to update it). Pick the game, player or team, set the
 card's controls (the faces on a chart, a position, an opponent), then **Save PNG** (the viewer
 asks you to confirm the file) or **Copy image** (paste straight into a post). The image is the
 theme you are viewing, at 2x. Where saving is not available, Save PNG shows the image to save
@@ -228,7 +229,8 @@ quarterback rushing yards per game is a registry metric (`rushing_yards_per_game
 derived copy could read it from the API instead.
 
 D4 (season by season) was removed on Oct 21. The reply-card pool is the top 36 QBs, 64 RBs,
-90 WRs and 36 TEs by points (`CARD_DEPTH` in `pull.py`).
+90 WRs and 36 TEs by points (`CARD_DEPTH` in `pull.py`), plus anyone else with 15 or more PPR
+points (`CARD_FLOOR`), so a starter who missed games, like A.J. Brown, can still be picked.
 
 ### E. Teams (`--team`)
 
@@ -304,7 +306,7 @@ None of these uses fantasy points. Each takes a timeframe: the season, the last 
 | `pull.py` | Calls the local API for the week's recaps, previews, team stats and breakdowns, every week's player board, Insight boards and the reply-card players (with the player page's endpoints: career detail, weekly ranks, splits, next game, by quarterback, carries), each timeframe window, and the Explore target boards and passing networks one week at a time. Writes `raw/*.json` |
 | `build_data.py` | Trims `raw/` into `data.json`: risers and fallers, bye weeks, team cards, scatter pools, weekly finishes, and the images needed |
 | `fetch_img.py` | Downloads headshots (220px WebP from the NFL CDN), both ESPN logo variants and the Inter and JetBrains Mono fonts |
-| `build.py` | Inlines the brand mark (from `components/Brand.jsx`), the fonts, data, images and `src/` into `index.html` and `preview.html` |
+| `build.py` | Inlines the brand mark (from `components/Brand.jsx`), the fonts, data and `src/` into `index.html` and `preview.html`, and writes the images to `img.js` beside them |
 | `src/core.js` | Frame, text, faces, logos, chips, grouped tiles, the shared scatter plot, team colours, formats |
 | `src/recap.js`, `preview.js`, `weekly.js`, `player.js`, `playerpage.js`, `pizza.js`, `trio.js`, `team.js`, `explore.js` | One function per card, each returning an SVG string. `explore.js` also holds the timeframe windows and the network and target sums |
 | `src/app.js` | The page: pickers, each card's controls (`GROUPS`), theme, Save PNG and Copy image, the lightbox, and the solo mode `render.mjs` uses (`?card=C8&theme=dark&opt.pos=RB&hl=...`) |
